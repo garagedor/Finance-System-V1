@@ -1,0 +1,153 @@
+.filters-inline {
+    position: relative;
+}
+
+.filters-popup {
+    position: absolute;
+    top: 110%;
+    right: 0;
+    width: max-content;
+    min-width: 560px;
+    max-width: 90vw;
+    background: #111827;
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 16px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.04);
+    padding: 14px;
+    z-index: 1000;
+}
+
+.filters-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.filters-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.filters-title {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.filters-label {
+    font-size: 14px;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+.filters-warning {
+    color: #f59e0b;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 0;
+}
+
+.logic-toggle {
+    display: flex;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 3px;
+    border-radius: 8px;
+    gap: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.logic-toggle button {
+    border: none;
+    background: transparent;
+    font-size: 11px;
+    font-weight: 700;
+    color: #475569;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logic-toggle button.active {
+    background: #6366f1;
+    color: white;
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+}
+
+.filters-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 0 2px 0;
+    max-height: 320px;
+    overflow-y: auto;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    margin-top: 10px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.03);
+    padding: 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.filter-field,
+.filter-input {
+    min-width: 110px;
+}
+
+.filter-date-range {
+    display: flex;
+    align-items: center;
+    flex: 1;
+}
+
+.apply-btn {
+    min-width: 80px;
+    justify-content: center;
+}
+
+.apply-btn.disabled {
+    background: rgba(255, 255, 255, 0.07);
+    color: #475569;
+    box-shadow: none;
+    cursor: not-allowed;
+}
+
+.refresh-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #475569;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.refresh-btn:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.07);
+    color: #6366f1;
+}
+
+.spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+}
+
+@media (max-width: 700px) {
+    .filter-row { flex-wrap: wrap; }
+    .filters-popup { width: 100%; right: auto; left: 0; min-width: unset; }
+}
