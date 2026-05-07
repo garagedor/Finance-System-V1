@@ -24,6 +24,7 @@ export default function RootLayout({
     { href: "/stats", label: "Stats" },
     { href: "/balance-report", label: "Balance Report" },
     { href: "/report", label: "Report" },
+    { href: "/finance", label: "Finance" },
   ];
 
   return (

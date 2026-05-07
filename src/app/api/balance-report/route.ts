@@ -10,6 +10,9 @@ import {
   calcTipsTotal,
   calcFinalBalance,
   calcStandardShare,
+  calcTechOwedToLm,
+  calcLmOwedFromTech,
+  calcLmOwesCompany,
   toNumber,
 } from '../utils/calculations';
 
@@ -120,6 +123,9 @@ export async function GET(req: NextRequest) {
       const shareAmount = calcStandardShare(totalProfit, sharePct);
       const tips = calcTipsTotal(job, { includeCheck: true, includeCompanyCashBonus: true });
       const balance = calcFinalBalance(shareAmount, job.techParts, job.techPaidCash);
+      const techOwedToLm = calcTechOwedToLm(job);
+      const lmOwedFromTech = calcLmOwedFromTech(job);
+      const lmOwesCompany = calcLmOwesCompany(job);
 
       const approvalsRaw = Array.isArray(job.approvals) ? job.approvals : (typeof job.approvals === 'string' ? job.approvals.split(',') : []);
       const approvals = [...new Set(approvalsRaw.map((a: any) => String(a).trim()).filter(Boolean))].map((name: any) => ({
@@ -133,6 +139,8 @@ export async function GET(req: NextRequest) {
         { key: 'totalPaidCompanyCheck', label: 'Company Check', value: toNumber(job.totalPaidCompanyCheck || 0) },
         { key: 'totalPaidFinance', label: 'Finance', value: toNumber(job.totalPaidFinance || 0) },
         { key: 'totalPaidCompanyCash', label: 'Company Cash', value: toNumber(job.totalPaidCompanyCash || 0) },
+        { key: 'lmCash', label: 'LM Cash', value: toNumber(job.lmCash || 0) },
+        { key: 'lmCheck', label: 'LM Check', value: toNumber(job.lmCheck || 0) },
       ];
       const usedPayments = paymentFields.filter((p) => p.value > 0);
       let paymentMethod = '-';
@@ -154,6 +162,9 @@ export async function GET(req: NextRequest) {
         totalPaidCompanyCash: toNumber(job.totalPaidCompanyCash || 0),
         techParts: toNumber(job.techParts || 0),
         companyParts: toNumber(job.companyParts || 0),
+        lmParts: toNumber(job.lmParts || 0),
+        lmCash: toNumber(job.lmCash || 0),
+        lmCheck: toNumber(job.lmCheck || 0),
         tipsCard: toNumber(job.tipsCard || 0),
         tipsFinance: toNumber(job.tipsFinance || 0),
         tipsCompanyCash: toNumber(job.tipsCompanyCash || 0),
@@ -166,6 +177,9 @@ export async function GET(req: NextRequest) {
         approvals,
         paymentMethod,
         balance: toNumber(balance),
+        techOwedToLm: toNumber(techOwedToLm),
+        lmOwedFromTech: toNumber(lmOwedFromTech),
+        lmOwesCompany: toNumber(lmOwesCompany),
       };
     });
 

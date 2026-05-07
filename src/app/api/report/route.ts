@@ -12,6 +12,8 @@ import {
   calcTipsTotal,
   calcTechShare,
   calcProviderShare,
+  calcTechOwedToLm,
+  calcLmOwesCompany,
   toNumber,
 } from '../utils/calculations';
 
@@ -252,6 +254,11 @@ export async function GET(req: NextRequest) {
           jobProfit,
           totalLoss,
           amLoss,
+          lmParts: toNumber(job.lmParts || 0),
+          lmCash: toNumber(job.lmCash || 0),
+          lmCheck: toNumber(job.lmCheck || 0),
+          techOwedToLm: calcTechOwedToLm(job),
+          lmOwesCompany: calcLmOwesCompany(job),
         };
       };
 
@@ -301,6 +308,11 @@ export async function GET(req: NextRequest) {
           totalParts,
           totalProfit,
           providerShare,
+          lmParts: toNumber(job.lmParts || 0),
+          lmCash: toNumber(job.lmCash || 0),
+          lmCheck: toNumber(job.lmCheck || 0),
+          techOwedToLm: calcTechOwedToLm(job),
+          lmOwesCompany: calcLmOwesCompany(job),
         };
       };
 
@@ -378,6 +390,11 @@ export async function GET(req: NextRequest) {
             techShare,
             locationManagerShare,
             providerShare,
+            lmParts: toNumber(job?.lmParts || 0),
+            lmCash: toNumber(job?.lmCash || 0),
+            lmCheck: toNumber(job?.lmCheck || 0),
+            techOwedToLm: calcTechOwedToLm(job!),
+            lmOwesCompany: calcLmOwesCompany(job!),
           },
         ];
       });
@@ -468,6 +485,11 @@ export async function GET(req: NextRequest) {
           techShare,
           locationManagerShare,
           providerShare,
+          lmParts: toNumber(job?.lmParts || 0),
+          lmCash: toNumber(job?.lmCash || 0),
+          lmCheck: toNumber(job?.lmCheck || 0),
+          techOwedToLm: calcTechOwedToLm(job!),
+          lmOwesCompany: calcLmOwesCompany(job!),
         },
       ];
     });

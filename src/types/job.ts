@@ -13,6 +13,9 @@ export type JobRow = {
     totalPaidCompanyCash?: number;
     techParts?: number;
     companyParts?: number;
+    lmParts?: number;
+    lmCash?: number;
+    lmCheck?: number;
     provider?: string;
     tipsCard?: number;
     tipsFinance?: number;

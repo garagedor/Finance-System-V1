@@ -8,7 +8,8 @@ import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
 import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
-import { FiBriefcase, FiTrendingUp, FiDollarSign, FiCheckCircle, FiPercent, FiAlertCircle } from 'react-icons/fi';
+import { useClickOutside } from '@/hooks/useClickOutside';
+import { FiBriefcase, FiTrendingUp, FiDollarSign, FiCheckCircle, FiPercent, FiAlertCircle, FiChevronDown } from 'react-icons/fi';
 import {
   PieChart,
   Pie,
@@ -28,6 +29,9 @@ type BalanceRow = {
   paidSum: number;
   techParts: number;
   companyParts: number;
+  lmParts: number;
+  lmCash: number;
+  lmCheck: number;
   paymentFee: number;
   totalProfit: number;
   shareAmount: number;
@@ -38,6 +42,9 @@ type BalanceRow = {
   totalPaidCompanyCash: number;
   tipsTotal: number;
   balance: number;
+  techOwedToLm: number;
+  lmOwedFromTech: number;
+  lmOwesCompany: number;
   approvals: Array<{ name: string; role: string }>;
   paymentMethod: string;
 };
@@ -63,6 +70,161 @@ const formatDateInput = (d: Date) => d.toISOString().slice(0, 10);
 const defaultEndDate = formatDateInput(new Date());
 const defaultStartDate = formatDateInput(new Date(Date.now() - 6 * 24 * 60 * 60 * 1000));
 type PieDatum = { name: string; value: number; percent: number; color: string };
+
+// ─── Closed Jobs Breakdown — column visibility (display-only) ────────────────
+// Hiding columns affects the rendered table rows + totals row only.
+// The closedTotals reducer keeps summing every field across every closed row,
+// so any visible total cell still reflects the full underlying data.
+type ColKey =
+  | 'date' | 'address' | 'paymethod' | 'approvals'
+  | 'job-total' | 'tech-parts' | 'company-parts' | 'payment-fee' | 'total-profit'
+  | 'lm-parts' | 'lm-cash' | 'lm-check'
+  | 'tech-payout' | 'cash'
+  | 'co-tech' | 'tech-lm' | 'lm-co' | 'tips' | 'net-tips';
+
+type PresetId = 'admin' | 'tech' | 'lm' | 'custom';
+
+type ClosedTotalsShape = {
+  paidSum: number;
+  techParts: number;
+  companyParts: number;
+  lmParts: number;
+  lmCash: number;
+  lmCheck: number;
+  paymentFee: number;
+  totalProfit: number;
+  shareAmount: number;
+  techPaidCash: number;
+  balance: number;
+  tipsTotal: number;
+  techOwedToLm: number;
+  lmOwesCompany: number;
+};
+
+type ColDef = {
+  key: ColKey;
+  label: string;
+  renderBody: (job: BalanceRow) => ReactNode;
+  renderTotal: ((t: ClosedTotalsShape) => ReactNode) | null;
+};
+
+type ColGroupId = 'meta' | 'cost' | 'lm' | 'payout' | 'settle';
+type ColGroup = { id: ColGroupId; label: string; cssClass: string; cols: ColDef[] };
+
+const renderApprovalsCell = (job: BalanceRow): ReactNode => {
+  if (!job.approvals.length) return null;
+  const names = job.approvals.map((a) => a.name).join(', ');
+  const hasAdmin = job.approvals.some((a) => a.role === 'admin');
+  const hasOffice = job.approvals.some((a) => a.role === 'office');
+  const style = hasAdmin
+    ? { background: 'rgba(16,185,129,0.15)', color: '#34d399' }
+    : hasOffice
+      ? { background: 'rgba(245,158,11,0.15)', color: '#fbbf24' }
+      : { background: 'rgba(255,255,255,0.08)', color: '#94a3b8' };
+  return (
+    <span title={names} style={{ ...style, padding: '2px 6px', borderRadius: '8px', fontSize: '12px', fontWeight: 500, whiteSpace: 'nowrap', display: 'inline-block' }}>
+      {names}
+    </span>
+  );
+};
+
+const COLUMN_GROUPS: ColGroup[] = [
+  {
+    id: 'meta', label: 'Job Info', cssClass: 'bp-group-meta',
+    cols: [
+      { key: 'date',      label: 'Date',       renderBody: (j) => <td key="date">{formatDisplayDate(j.date)}</td>,                                  renderTotal: null },
+      { key: 'address',   label: 'Address',    renderBody: (j) => <td key="address" className="truncate" title={j.address}>{j.address || '-'}</td>, renderTotal: null },
+      { key: 'paymethod', label: 'Pay Method', renderBody: (j) => <td key="paymethod">{j.paymentMethod}</td>,                                       renderTotal: null },
+      { key: 'approvals', label: 'Approvals',  renderBody: (j) => <td key="approvals">{renderApprovalsCell(j)}</td>,                                renderTotal: null },
+    ],
+  },
+  {
+    id: 'cost', label: 'Costs & Profit', cssClass: 'bp-group-cost',
+    cols: [
+      { key: 'job-total',     label: 'Job Total',     renderBody: (j) => <td key="job-total">{formatCurrency(j.paidSum)}</td>,         renderTotal: (t) => <td key="job-total">{formatCurrency(t.paidSum)}</td> },
+      { key: 'tech-parts',    label: 'Tech Parts',    renderBody: (j) => <td key="tech-parts">{formatCurrency(j.techParts)}</td>,      renderTotal: (t) => <td key="tech-parts">{formatCurrency(t.techParts)}</td> },
+      { key: 'company-parts', label: 'Company Parts', renderBody: (j) => <td key="company-parts">{formatCurrency(j.companyParts)}</td>, renderTotal: (t) => <td key="company-parts">{formatCurrency(t.companyParts)}</td> },
+      { key: 'payment-fee',   label: 'Payment Fee',   renderBody: (j) => <td key="payment-fee">{formatCurrency(j.paymentFee)}</td>,    renderTotal: (t) => <td key="payment-fee">{formatCurrency(t.paymentFee)}</td> },
+      { key: 'total-profit',  label: 'Total Profit',  renderBody: (j) => <td key="total-profit">{formatCurrency(j.totalProfit)}</td>,  renderTotal: (t) => <td key="total-profit">{formatCurrency(t.totalProfit)}</td> },
+    ],
+  },
+  {
+    id: 'lm', label: 'LM', cssClass: 'bp-group-meta',
+    cols: [
+      { key: 'lm-parts', label: 'LM Parts', renderBody: (j) => <td key="lm-parts">{formatCurrency(j.lmParts)}</td>, renderTotal: (t) => <td key="lm-parts">{formatCurrency(t.lmParts)}</td> },
+      { key: 'lm-cash',  label: 'LM Cash',  renderBody: (j) => <td key="lm-cash">{formatCurrency(j.lmCash)}</td>,   renderTotal: (t) => <td key="lm-cash">{formatCurrency(t.lmCash)}</td> },
+      { key: 'lm-check', label: 'LM Check', renderBody: (j) => <td key="lm-check">{formatCurrency(j.lmCheck)}</td>, renderTotal: (t) => <td key="lm-check">{formatCurrency(t.lmCheck)}</td> },
+    ],
+  },
+  {
+    id: 'payout', label: 'Tech Payout', cssClass: 'bp-group-payout',
+    cols: [
+      { key: 'tech-payout', label: 'Tech Payout', renderBody: (j) => <td key="tech-payout">{formatCurrency(j.shareAmount)}</td>, renderTotal: (t) => <td key="tech-payout">{formatCurrency(t.shareAmount)}</td> },
+      { key: 'cash',        label: 'Cash',        renderBody: (j) => <td key="cash">{formatCurrency(j.techPaidCash)}</td>,       renderTotal: (t) => <td key="cash">{formatCurrency(t.techPaidCash)}</td> },
+    ],
+  },
+  {
+    id: 'settle', label: 'Settlements', cssClass: 'bp-group-balance',
+    cols: [
+      {
+        key: 'co-tech', label: 'Co.↔Tech',
+        renderBody: (j) => <td key="co-tech" style={{ color: j.balance * -1 < 0 ? '#f87171' : j.balance * -1 > 0 ? '#34d399' : undefined, fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance * -1)}</td>,
+        renderTotal: (t) => <td key="co-tech" style={{ color: t.balance * -1 < 0 ? '#f87171' : t.balance * -1 > 0 ? '#34d399' : undefined }}>{formatCurrency(t.balance * -1)}</td>,
+      },
+      {
+        key: 'tech-lm', label: 'Tech→LM',
+        renderBody: (j) => <td key="tech-lm" style={{ color: j.techOwedToLm > 0 ? '#fbbf24' : undefined, fontWeight: j.techOwedToLm > 0 ? 600 : undefined }}>{formatCurrency(j.techOwedToLm)}</td>,
+        renderTotal: (t) => <td key="tech-lm" style={{ color: t.techOwedToLm > 0 ? '#fbbf24' : undefined }}>{formatCurrency(t.techOwedToLm)}</td>,
+      },
+      {
+        key: 'lm-co', label: 'LM→Co.',
+        renderBody: (j) => <td key="lm-co" style={{ color: j.lmOwesCompany > 0 ? '#22d3ee' : undefined, fontWeight: j.lmOwesCompany > 0 ? 600 : undefined }}>{formatCurrency(j.lmOwesCompany)}</td>,
+        renderTotal: (t) => <td key="lm-co" style={{ color: t.lmOwesCompany > 0 ? '#22d3ee' : undefined }}>{formatCurrency(t.lmOwesCompany)}</td>,
+      },
+      {
+        key: 'tips', label: 'Tips',
+        renderBody: (j) => <td key="tips">{formatCurrency(j.tipsTotal)}</td>,
+        renderTotal: (t) => <td key="tips">{formatCurrency(t.tipsTotal)}</td>,
+      },
+      {
+        key: 'net-tips', label: 'Net + Tips',
+        renderBody: (j) => <td key="net-tips" style={{ color: (j.balance + j.tipsTotal) * -1 < 0 ? '#f87171' : (j.balance + j.tipsTotal) * -1 > 0 ? '#34d399' : undefined, fontWeight: (j.balance + j.tipsTotal) !== 0 ? 600 : undefined }}>{formatCurrency((j.balance + j.tipsTotal) * -1)}</td>,
+        renderTotal: (t) => <td key="net-tips" style={{ color: (t.balance + t.tipsTotal) * -1 < 0 ? '#f87171' : (t.balance + t.tipsTotal) * -1 > 0 ? '#34d399' : undefined }}>{formatCurrency((t.balance + t.tipsTotal) * -1)}</td>,
+      },
+    ],
+  },
+];
+
+const ALL_COL_KEYS: ColKey[] = COLUMN_GROUPS.flatMap((g) => g.cols.map((c) => c.key));
+
+const PRESET_VISIBLE: Record<Exclude<PresetId, 'custom'>, ColKey[]> = {
+  admin: ALL_COL_KEYS,
+  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'tech-payout', 'cash', 'co-tech', 'tech-lm', 'tips', 'net-tips'],
+  lm:    ['date', 'address', 'job-total', 'lm-parts', 'lm-cash', 'lm-check', 'tech-lm', 'lm-co'],
+};
+
+const PRESET_LABELS: Record<PresetId, string> = {
+  admin:  'Full Admin View',
+  tech:   'Technician View',
+  lm:     'LM View',
+  custom: 'Custom',
+};
+
+const COLUMNS_STORAGE_KEY = 'balance-report-column-preset-v1';
+
+const visibilityFromPreset = (id: Exclude<PresetId, 'custom'>): Record<ColKey, boolean> => {
+  const visibleSet = new Set(PRESET_VISIBLE[id]);
+  return Object.fromEntries(ALL_COL_KEYS.map((k) => [k, visibleSet.has(k)])) as Record<ColKey, boolean>;
+};
+
+const matchesPreset = (vis: Record<ColKey, boolean>, id: Exclude<PresetId, 'custom'>): boolean => {
+  const target = visibilityFromPreset(id);
+  return ALL_COL_KEYS.every((k) => target[k] === vis[k]);
+};
+
+const detectPreset = (vis: Record<ColKey, boolean>): PresetId => {
+  return (['admin', 'tech', 'lm'] as const).find((p) => matchesPreset(vis, p)) ?? 'custom';
+};
 
 export default function BalanceReportPage() {
   const [rows, setRows] = useState<BalanceRow[]>([]);
@@ -95,6 +257,76 @@ export default function BalanceReportPage() {
   const [appliedPct, setAppliedPct] = useState(0);
   const [activeTechs, setActiveTechs] = useState<string[]>([]);
   const lastFetchRef = useRef<string | null>(null);
+
+  // Closed Jobs Breakdown — column visibility state (display-only)
+  const [columnsPreset, setColumnsPreset] = useState<PresetId>('admin');
+  const [columnsVisibility, setColumnsVisibility] = useState<Record<ColKey, boolean>>(() => visibilityFromPreset('admin'));
+  const [columnsOpen, setColumnsOpen] = useState(false);
+  const columnsMenuRef = useRef<HTMLDivElement>(null);
+  useClickOutside(columnsMenuRef, () => setColumnsOpen(false));
+
+  // Load persisted preset/visibility on mount
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(COLUMNS_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { preset?: PresetId; visibility?: Partial<Record<ColKey, boolean>> };
+      if (parsed.preset && parsed.preset !== 'custom' && PRESET_VISIBLE[parsed.preset as Exclude<PresetId, 'custom'>]) {
+        const vis = visibilityFromPreset(parsed.preset as Exclude<PresetId, 'custom'>);
+        setColumnsPreset(parsed.preset);
+        setColumnsVisibility(vis);
+        return;
+      }
+      if (parsed.visibility) {
+        const merged = { ...visibilityFromPreset('admin'), ...parsed.visibility } as Record<ColKey, boolean>;
+        setColumnsVisibility(merged);
+        setColumnsPreset(detectPreset(merged));
+      }
+    } catch (err) {
+      console.error('Failed to load column preset', err);
+    }
+  }, []);
+
+  // Persist preset/visibility on change
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify({ preset: columnsPreset, visibility: columnsVisibility }));
+    } catch (err) {
+      console.error('Failed to persist column preset', err);
+    }
+  }, [columnsPreset, columnsVisibility]);
+
+  const visibleByGroup = useMemo(
+    () => COLUMN_GROUPS.map((g) => ({ ...g, visibleCount: g.cols.filter((c) => columnsVisibility[c.key]).length })),
+    [columnsVisibility]
+  );
+  const visibleCols = useMemo(
+    () => COLUMN_GROUPS.flatMap((g) => g.cols.filter((c) => columnsVisibility[c.key])),
+    [columnsVisibility]
+  );
+  const totalVisibleCount = visibleCols.length;
+
+  const selectColumnsPreset = (id: Exclude<PresetId, 'custom'>) => {
+    setColumnsPreset(id);
+    setColumnsVisibility(visibilityFromPreset(id));
+  };
+  const toggleColumn = (key: ColKey) => {
+    setColumnsVisibility((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      setColumnsPreset(detectPreset(next));
+      return next;
+    });
+  };
+  const showAllInGroup = (groupId: ColGroupId) => {
+    setColumnsVisibility((prev) => {
+      const next = { ...prev };
+      const grp = COLUMN_GROUPS.find((g) => g.id === groupId);
+      if (grp) grp.cols.forEach((c) => { next[c.key] = true; });
+      setColumnsPreset(detectPreset(next));
+      return next;
+    });
+  };
+  const resetToFullAdmin = () => selectColumnsPreset('admin');
 
   useEffect(() => {
     // Restore from sessionStorage on mount
@@ -206,24 +438,34 @@ export default function BalanceReportPage() {
           acc.paidSum += r.paidSum || 0;
           acc.techParts += r.techParts || 0;
           acc.companyParts += r.companyParts || 0;
+          acc.lmParts += r.lmParts || 0;
+          acc.lmCash += r.lmCash || 0;
+          acc.lmCheck += r.lmCheck || 0;
           acc.paymentFee += r.paymentFee || 0;
           acc.totalProfit += r.totalProfit || 0;
           acc.shareAmount += r.shareAmount || 0;
           acc.techPaidCash += r.techPaidCash || 0;
           acc.balance += r.balance || 0;
           acc.tipsTotal += r.tipsTotal || 0;
+          acc.techOwedToLm += r.techOwedToLm || 0;
+          acc.lmOwesCompany += r.lmOwesCompany || 0;
           return acc;
         },
         {
           paidSum: 0,
           techParts: 0,
           companyParts: 0,
+          lmParts: 0,
+          lmCash: 0,
+          lmCheck: 0,
           paymentFee: 0,
           totalProfit: 0,
           shareAmount: 0,
           techPaidCash: 0,
           balance: 0,
           tipsTotal: 0,
+          techOwedToLm: 0,
+          lmOwesCompany: 0,
         }
       ),
     [closedRows]
@@ -369,6 +611,8 @@ export default function BalanceReportPage() {
           <BpKpi label="Avg Ticket" value={formatCurrency(totals.avgTicket)} icon={<FiPercent size={14} />} accent="cyan" />
           <BpKpi label="Job Profit" value={formatCurrency(totals.profit)} icon={<FiTrendingUp size={14} />} accent="emerald" />
           <BpKpi label="Avg Closed Job" value={formatCurrency(totals.avgClosedJob)} icon={<FiCheckCircle size={14} />} accent="violet" />
+          <BpKpi label="Tech Owes LM" value={formatCurrency(closedTotals.techOwedToLm)} icon={<FiAlertCircle size={14} />} accent="amber" />
+          <BpKpi label="LM Owes Company" value={formatCurrency(closedTotals.lmOwesCompany)} icon={<FiDollarSign size={14} />} accent="cyan" />
           {mode === 'location' && (
             <>
               <BpKpi label="Profit on Tech" value={formatCurrency(locationVsTech.diff)} icon={<FiDollarSign size={14} />} accent="emerald" />
@@ -485,6 +729,19 @@ export default function BalanceReportPage() {
                     {formatCurrency((closedTotals.balance + closedTotals.tipsTotal) * -1)}
                   </span>
                 </li>
+                <li className="bp-snap-divider" />
+                <li>
+                  <span className="bp-snap-label">Tech Owes LM</span>
+                  <span className="bp-snap-value" style={{ color: closedTotals.techOwedToLm > 0 ? '#fbbf24' : undefined }}>
+                    {formatCurrency(closedTotals.techOwedToLm)}
+                  </span>
+                </li>
+                <li>
+                  <span className="bp-snap-label">LM Owes Company</span>
+                  <span className="bp-snap-value" style={{ color: closedTotals.lmOwesCompany > 0 ? '#22d3ee' : undefined }}>
+                    {formatCurrency(closedTotals.lmOwesCompany)}
+                  </span>
+                </li>
               </ul>
             ) : (
               <EmptyState size="sm" title="No closed jobs" message="Apply filters or change date range." />
@@ -499,116 +756,124 @@ export default function BalanceReportPage() {
               <p className="bp-section-kicker">Detail</p>
               <h3>Closed Jobs Breakdown</h3>
             </div>
-            <span className="bp-pill">{closedRows.length} rows</span>
+            <div ref={columnsMenuRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={() => setColumnsOpen((o) => !o)}
+                className="bp-pill"
+                aria-haspopup="menu"
+                aria-expanded={columnsOpen}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0' }}
+              >
+                <span>View: <strong>{PRESET_LABELS[columnsPreset]}</strong></span>
+                <span style={{ opacity: 0.6 }}>· {totalVisibleCount}/{ALL_COL_KEYS.length}</span>
+                <FiChevronDown size={12} />
+              </button>
+              <span className="bp-pill">{closedRows.length} rows</span>
+              {columnsOpen && (
+                <div
+                  role="menu"
+                  style={{
+                    position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30,
+                    minWidth: 320, maxHeight: '70vh', overflowY: 'auto',
+                    background: '#0f172a', border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 12, boxShadow: '0 12px 30px rgba(0,0,0,0.5)', padding: 12, fontSize: 13,
+                    color: '#e2e8f0',
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.6, marginBottom: 6 }}>Preset</div>
+                  {(['admin', 'tech', 'lm'] as const).map((p) => (
+                    <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 6 }}>
+                      <input type="radio" name="bp-preset" checked={columnsPreset === p} onChange={() => selectColumnsPreset(p)} />
+                      {PRESET_LABELS[p]}
+                    </label>
+                  ))}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', borderRadius: 6, opacity: columnsPreset === 'custom' ? 1 : 0.5 }}>
+                    <input type="radio" name="bp-preset" checked={columnsPreset === 'custom'} readOnly disabled />
+                    {PRESET_LABELS.custom} <span style={{ fontSize: 11, color: '#94a3b8' }}>(auto when you change a checkbox)</span>
+                  </label>
+
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '10px 0' }} />
+
+                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.6, marginBottom: 6 }}>Columns</div>
+                  {COLUMN_GROUPS.map((g) => (
+                    <div key={g.id} style={{ marginBottom: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <strong style={{ fontSize: 12 }}>{g.label}</strong>
+                        <button type="button" onClick={() => showAllInGroup(g.id)} style={{ fontSize: 11, color: '#94a3b8', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>
+                          Show all
+                        </button>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px' }}>
+                        {g.cols.map((c) => (
+                          <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
+                            <input type="checkbox" checked={columnsVisibility[c.key]} onChange={() => toggleColumn(c.key)} />
+                            {c.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+
+                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '10px 0' }} />
+
+                  <button
+                    type="button"
+                    onClick={resetToFullAdmin}
+                    style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0', cursor: 'pointer', fontSize: 12 }}
+                  >
+                    Reset to Full Admin View
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="balance-table" style={{ position: 'relative' }}>
             {loading && closedRows.length === 0 && <LoadingOverlay message="Loading balance report..." />}
             <table>
               <thead>
                 <tr className="bp-group-row">
-                  <th colSpan={4} className="bp-group bp-group-meta">Job Info</th>
-                  <th colSpan={5} className="bp-group bp-group-cost">Costs &amp; Profit</th>
-                  <th colSpan={2} className="bp-group bp-group-payout">Tech Payout</th>
-                  <th colSpan={3} className="bp-group bp-group-balance">Balance</th>
+                  {visibleByGroup.filter((g) => g.visibleCount > 0).map((g) => (
+                    <th key={g.id} colSpan={g.visibleCount} className={`bp-group ${g.cssClass}`}>{g.label}</th>
+                  ))}
                 </tr>
                 <tr>
-                  <th>Date</th>
-                  <th>Address</th>
-                  <th>Pay Method</th>
-                  <th>Approvals</th>
-                  <th>Job Total</th>
-                  <th>Tech Parts</th>
-                  <th>Company Parts</th>
-                  <th>Payment Fee</th>
-                  <th>Total Profit</th>
-                  <th>Tech Payout</th>
-                  <th>Cash</th>
-                  <th>Balance</th>
-                  <th>Tips</th>
-                  <th>Balance + Tips</th>
+                  {visibleCols.map((c) => (
+                    <th key={c.key}>{c.label}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {closedRows.map((job) => (
-                      <tr key={job.id}>
-                        <td>{formatDisplayDate(job.date)}</td>
-                        <td className="truncate" title={job.address}>
-                          {job.address || '-'}
-                        </td>
-                        <td>{job.paymentMethod}</td>
-                        <td>
-                          {(() => {
-                            if (!job.approvals.length) return null;
-                            const names = job.approvals.map((a) => a.name).join(', ');
-                            const hasAdmin = job.approvals.some((a) => a.role === 'admin');
-                            const hasOffice = job.approvals.some((a) => a.role === 'office');
-                            const style = hasAdmin
-                              ? { background: 'rgba(16,185,129,0.15)', color: '#34d399' }
-                              : hasOffice
-                                ? { background: 'rgba(245,158,11,0.15)', color: '#fbbf24' }
-                                : { background: 'rgba(255,255,255,0.08)', color: '#94a3b8' };
-                            return (
-                              <span
-                                title={names}
-                                style={{
-                                  ...style,
-                                  padding: '2px 6px',
-                                  borderRadius: '8px',
-                                  fontSize: '12px',
-                                  fontWeight: 500,
-                                  whiteSpace: 'nowrap',
-                                  display: 'inline-block',
-                                }}
-                              >
-                                {names}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td>{formatCurrency(job.paidSum)}</td>
-                        <td>{formatCurrency(job.techParts)}</td>
-                        <td>{formatCurrency(job.companyParts)}</td>
-                        <td>{formatCurrency(job.paymentFee)}</td>
-                        <td>{formatCurrency(job.totalProfit)}</td>
-                        <td>{formatCurrency(job.shareAmount)}</td>
-                        <td>{formatCurrency(job.techPaidCash)}</td>
-                        <td style={{ color: job.balance * -1 < 0 ? '#f87171' : job.balance * -1 > 0 ? '#34d399' : undefined, fontWeight: job.balance !== 0 ? 600 : undefined }}>{formatCurrency(job.balance * -1)}</td>
-                        <td>{formatCurrency(job.tipsTotal)}</td>
-                        <td style={{ color: (job.balance + job.tipsTotal) * -1 < 0 ? '#f87171' : (job.balance + job.tipsTotal) * -1 > 0 ? '#34d399' : undefined, fontWeight: (job.balance + job.tipsTotal) !== 0 ? 600 : undefined }}>{formatCurrency((job.balance + job.tipsTotal) * -1)}</td>
-                      </tr>
-                    ))}
-                    {!closedRows.length && !loading && (
-                      <tr className="empty-row">
-                        <td colSpan={14}>
-                          <EmptyState
-                            size="md"
-                            title="No closed jobs"
-                            message="Try a different date range or technician."
-                          />
-                        </td>
-                      </tr>
+                  <tr key={job.id}>
+                    {visibleCols.map((c) => c.renderBody(job))}
+                  </tr>
+                ))}
+                {!closedRows.length && !loading && (
+                  <tr className="empty-row">
+                    <td colSpan={Math.max(1, totalVisibleCount)}>
+                      <EmptyState
+                        size="md"
+                        title="No closed jobs"
+                        message="Try a different date range or technician."
+                      />
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {closedRows.length > 0 && totalVisibleCount > 0 && (
+                <tfoot>
+                  <tr className="totals-row">
+                    {visibleByGroup[0].visibleCount > 0 && (
+                      <td className="totals-cell" colSpan={visibleByGroup[0].visibleCount}>Totals</td>
                     )}
-                  </tbody>
-                  {closedRows.length > 0 && (
-                    <tfoot>
-                      <tr className="totals-row">
-                        <td className="totals-cell" colSpan={4}>
-                          Totals
-                        </td>
-                        <td>{formatCurrency(closedTotals.paidSum)}</td>
-                        <td>{formatCurrency(closedTotals.techParts)}</td>
-                        <td>{formatCurrency(closedTotals.companyParts)}</td>
-                        <td>{formatCurrency(closedTotals.paymentFee)}</td>
-                        <td>{formatCurrency(closedTotals.totalProfit)}</td>
-                        <td>{formatCurrency(closedTotals.shareAmount)}</td>
-                        <td>{formatCurrency(closedTotals.techPaidCash)}</td>
-                        <td style={{ color: closedTotals.balance * -1 < 0 ? '#f87171' : closedTotals.balance * -1 > 0 ? '#34d399' : undefined }}>{formatCurrency(closedTotals.balance * -1)}</td>
-                        <td>{formatCurrency(closedTotals.tipsTotal)}</td>
-                        <td style={{ color: (closedTotals.balance + closedTotals.tipsTotal) * -1 < 0 ? '#f87171' : (closedTotals.balance + closedTotals.tipsTotal) * -1 > 0 ? '#34d399' : undefined }}>{formatCurrency((closedTotals.balance + closedTotals.tipsTotal) * -1)}</td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
+                    {visibleCols.slice(visibleByGroup[0].visibleCount).map((c) => (
+                      c.renderTotal ? c.renderTotal(closedTotals) : <td key={c.key} />
+                    ))}
+                  </tr>
+                </tfoot>
+              )}
+            </table>
           </div>
         </div>
 
