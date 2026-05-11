@@ -1,7 +1,8 @@
 'use client';
 
 import { FiChevronDown, FiPlus, FiX, FiTrash2, FiRefreshCw } from 'react-icons/fi';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import type { ColumnConfig } from '@/app/utils/jobUtils';
 import { EntityFilterRule } from './types';
@@ -49,17 +50,64 @@ export function EntityTableFilters<T>({
     loading = false,
 }: EntityTableFiltersProps<T>) {
     const filtersRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const popupRef = useRef<HTMLDivElement>(null);
+    // See ColumnsOrder for why we use fixed-positioning here: the table page
+    // has `overflow: hidden` ancestors that clip absolute children.
+    const [popupPos, setPopupPos] = useState<{ top: number; right: number } | null>(null);
 
-    useClickOutside(filtersRef, () => {
-        if (filtersOpen) setFiltersOpen(false);
-    });
+    // Custom outside-click that respects BOTH the trigger container and the
+    // portaled popup (since the popup is no longer a DOM child of the trigger).
+    useEffect(() => {
+        if (!filtersOpen) return;
+        const handler = (event: MouseEvent | TouchEvent) => {
+            const target = event.target as Node;
+            if (filtersRef.current?.contains(target)) return;
+            if (popupRef.current?.contains(target)) return;
+            setFiltersOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        document.addEventListener('touchstart', handler);
+        return () => {
+            document.removeEventListener('mousedown', handler);
+            document.removeEventListener('touchstart', handler);
+        };
+    }, [filtersOpen]);
+
+    const computePos = () => {
+        const rect = triggerRef.current?.getBoundingClientRect();
+        if (!rect) return null;
+        return { top: rect.bottom + 8, right: window.innerWidth - rect.right };
+    };
+
+    useEffect(() => {
+        if (!filtersOpen) return;
+        const reposition = () => {
+            const next = computePos();
+            if (next) setPopupPos(next);
+        };
+        window.addEventListener('resize', reposition);
+        window.addEventListener('scroll', reposition, true);
+        return () => {
+            window.removeEventListener('resize', reposition);
+            window.removeEventListener('scroll', reposition, true);
+        };
+    }, [filtersOpen]);
+
+    const handleToggle = () => {
+        if (!filtersOpen) {
+            setPopupPos(computePos());
+        }
+        setFiltersOpen((v) => !v);
+    };
 
     return (
         <div className="filters-inline relative" ref={filtersRef}>
             <button
+                ref={triggerRef}
                 className={`flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-medium text-sm text-slate-600 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all ${filtersOpen ? 'bg-blue-50 border-blue-200 text-blue-600' : ''
                     }`}
-                onClick={() => setFiltersOpen((v) => !v)}
+                onClick={handleToggle}
             >
                 Filters {activeFiltersCount > 0 ? `(${activeFiltersCount})` : '(0)'}
                 <FiChevronDown
@@ -67,9 +115,16 @@ export function EntityTableFilters<T>({
                         }`}
                 />
             </button>
-            {filtersOpen && (
+            {filtersOpen && typeof document !== 'undefined' && createPortal((
                 <div
-                    className="filters-popup absolute top-full right-0 mt-2 z-50"
+                    ref={popupRef}
+                    className="filters-popup"
+                    style={{
+                        position: 'fixed',
+                        top: popupPos?.top ?? 80,
+                        right: popupPos?.right ?? 20,
+                        zIndex: 9999,
+                    }}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' && !applyDisabled) {
                             handleApplyFilters();
@@ -202,7 +257,7 @@ export function EntityTableFilters<T>({
                         )}
                     </div>
                 </div>
-            )}
+            ), document.body)}
         </div>
     );
 }
