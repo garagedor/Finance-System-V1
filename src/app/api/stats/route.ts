@@ -63,11 +63,13 @@ export async function GET(req: NextRequest) {
     const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     if (techs.length > 0) {
-      // Case-insensitive match — Job.tech values can differ in case/whitespace
-      // from Technician._id values returned by /api/techs.
+      // Use contains-style case-insensitive regex (mirrors /api/jobs filter
+      // rule for tech). Anchored `^name$` was missing matches because some
+      // Job.tech values differ from the Technician._id by trailing whitespace
+      // or extra characters that the user-facing filter on /jobs ignores.
       matchStage.$and = [
         ...(matchStage.$and || []),
-        { tech: { $in: techs.map((t) => new RegExp(`^${escapeRegex(t)}$`, 'i')) } },
+        { tech: { $in: techs.map((t) => new RegExp(escapeRegex(t), 'i')) } },
       ];
     }
     if (location) {
