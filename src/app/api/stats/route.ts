@@ -63,9 +63,11 @@ export async function GET(req: NextRequest) {
     const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
     if (techs.length > 0) {
+      // Case-insensitive match — Job.tech values can differ in case/whitespace
+      // from Technician._id values returned by /api/techs.
       matchStage.$and = [
         ...(matchStage.$and || []),
-        { tech: { $in: techs } },
+        { tech: { $in: techs.map((t) => new RegExp(`^${escapeRegex(t)}$`, 'i')) } },
       ];
     }
     if (location) {
