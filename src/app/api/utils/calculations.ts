@@ -12,27 +12,37 @@ export const calcPaidSum = (job: Partial<JobRow>) => {
     toNumber(job.totalPaidCard) +
     toNumber(job.totalPaidCompanyCheck) +
     toNumber(job.totalPaidFinance) +
-    toNumber(job.totalPaidCompanyCash);
+    toNumber(job.totalPaidCompanyCash) +
+    toNumber(job.lmCash) +
+    toNumber(job.lmCheck);
 };
 
 export const calcPaymentFee = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.05 +
   toNumber(job.totalPaidFinance) * 0.1 +
-  toNumber(job.totalPaidCompanyCheck) * 0.1;
+  toNumber(job.totalPaidCompanyCheck) * 0.1 +
+  toNumber(job.lmCheck) * 0.1;
 
+// lmCheck fee is included here too — per business rule (2026-05-07): lmCheck
+// must always carry the 10% check fee, even in variants that exclude
+// companyCheck fee. (companyCheck/no-check inconsistency is a pre-existing
+// bug not fixed in this scope.)
 export const calcPaymentFeeNoCheck = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.05 +
-  toNumber(job.totalPaidFinance) * 0.1;
+  toNumber(job.totalPaidFinance) * 0.1 +
+  toNumber(job.lmCheck) * 0.1;
 
 export const calcTotalAfterFee = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.95 +
   toNumber(job.totalPaidFinance) * 0.9 +
   toNumber(job.totalPaidCompanyCheck) * 0.9 +
   toNumber(job.techPaidCash) +
-  toNumber(job.totalPaidCompanyCash);
+  toNumber(job.totalPaidCompanyCash) +
+  toNumber(job.lmCash) +
+  toNumber(job.lmCheck) * 0.9;
 
 export const calcParts = (job: Partial<JobRow>) =>
-  toNumber(job.techParts) + toNumber(job.companyParts);
+  toNumber(job.techParts) + toNumber(job.companyParts) + toNumber(job.lmParts);
 
 type TipsOptions = {
   includeCheck?: boolean;
@@ -96,22 +106,29 @@ export const calcFinalBalance = (shareAmount: number, techParts: number, techPai
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LM (Location Manager) extension — STRICTLY isolated from Company↔Tech math.
+// LM (Location Manager) extension — accounting model (locked 2026-05-07).
 //
-// Three independent settlement views (locked with user 2026-05-07):
-//   View 1 — Company ↔ Tech: uses ORIGINAL helpers above. LM fields play
-//            zero role. The displayed Tech balance is byte-identical to
-//            baseline regardless of LM data on the job.
-//   View 2 — Tech ↔ LM: per job = lmParts. Tech owes LM. Never combined
-//            with View 1.
-//   View 3 — LM ↔ Company: per job = lmCash + lmCheck. LM owes Company,
-//            externally collected revenue not yet remitted. Never combined
-//            with View 1 (does NOT enter calcPaidSum / calcTotalAfterFee /
-//            tech share / company profit).
+// Recognition (in the original revenue/cost helpers above):
+//   - lmCash and lmCheck ARE recognized job revenue. They flow into
+//     calcPaidSum and calcTotalAfterFee like any other payment method.
+//     lmCheck always carries a 10% fee in BOTH calcPaymentFee and
+//     calcPaymentFeeNoCheck (no exceptions, even where companyCheck fee
+//     is excluded for legacy reasons).
+//   - lmParts IS a job-profit cost. calcParts includes it alongside
+//     techParts and companyParts. The parts were consumed on the job, so
+//     their cost is real to the company's profit pool regardless of who
+//     fronted the cash.
 //
-// Per-job pure-LM accounting helpers below. There are deliberately NO
-// `*WithLm` wrappers — the original revenue functions must not be combined
-// with LM money under any circumstance.
+// Settlement views (orthogonal — separate accounting layer):
+//   View 1 — Company ↔ Tech: Tech share/balance computed off the recognized
+//            profit. calcFinalBalance formula itself unchanged.
+//   View 2 — LM ↔ Company: per job = lmCash + lmCheck. LM owes Company the
+//            money they collected on its behalf (a receivable; settles when
+//            LM remits cash). Note this is intentional double-bookkeeping:
+//            the same dollars are both recognized revenue (View 1 inputs)
+//            and a pending receivable (View 2) until the LM pays over.
+//
+// (Tech ↔ LM was removed 2026-05-11: settlement is strictly Company ↔ LM.)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const calcLmRevenue = (job: Partial<JobRow>) =>
@@ -120,8 +137,6 @@ export const calcLmRevenue = (job: Partial<JobRow>) =>
 export const calcLmCheckFee = (job: Partial<JobRow>) =>
   toNumber(job.lmCheck) * 0.1;
 
-export const calcTechOwedToLm = (job: Partial<JobRow>) => toNumber(job.lmParts);
-export const calcLmOwedFromTech = (job: Partial<JobRow>) => toNumber(job.lmParts);
 export const calcLmOwesCompany = (job: Partial<JobRow>) =>
   toNumber(job.lmCash) + toNumber(job.lmCheck);
 export const calcCompanyReceivableFromLm = (job: Partial<JobRow>) =>

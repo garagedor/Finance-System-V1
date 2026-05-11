@@ -19,7 +19,8 @@ import {
     useSortable,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { FiGrid, FiChevronDown, FiX } from 'react-icons/fi';
 import { useClickOutside } from '@/hooks/useClickOutside';
 
@@ -139,17 +140,69 @@ export function ColumnsOrder<T>({
     };
 
     const containerRef = useRef<HTMLDivElement>(null);
+    const triggerRef = useRef<HTMLButtonElement>(null);
+    const popoverRef = useRef<HTMLDivElement>(null);
+    // Track viewport-relative coords so the popover can be `position: fixed`
+    // and escape any ancestor `overflow: hidden` (the table page uses that).
+    const [popoverPos, setPopoverPos] = useState<{ top: number; right: number } | null>(null);
 
-    useClickOutside(containerRef, () => {
-        if (isOpen) setIsOpen(false);
-    });
+    // Custom outside-click that respects BOTH the trigger container and the
+    // portaled popover (since the popover is no longer a DOM child of the
+    // trigger after createPortal).
+    useEffect(() => {
+        if (!isOpen) return;
+        const handler = (event: MouseEvent | TouchEvent) => {
+            const target = event.target as Node;
+            if (containerRef.current?.contains(target)) return;
+            if (popoverRef.current?.contains(target)) return;
+            setIsOpen(false);
+        };
+        document.addEventListener('mousedown', handler);
+        document.addEventListener('touchstart', handler);
+        return () => {
+            document.removeEventListener('mousedown', handler);
+            document.removeEventListener('touchstart', handler);
+        };
+    }, [isOpen]);
+
+    const computePos = () => {
+        const rect = triggerRef.current?.getBoundingClientRect();
+        if (!rect) return null;
+        return { top: rect.bottom + 8, right: window.innerWidth - rect.right };
+    };
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const reposition = () => {
+            const next = computePos();
+            if (next) setPopoverPos(next);
+        };
+        // Recompute on scroll/resize while open. The initial position is set
+        // synchronously inside the click handler so there's no first-frame gap.
+        window.addEventListener('resize', reposition);
+        window.addEventListener('scroll', reposition, true);
+        return () => {
+            window.removeEventListener('resize', reposition);
+            window.removeEventListener('scroll', reposition, true);
+        };
+    }, [isOpen]);
+
+    const handleToggle = () => {
+        if (!isOpen) {
+            // Set position before flipping state so the popover is rendered
+            // with valid coords on the very next paint.
+            setPopoverPos(computePos());
+        }
+        setIsOpen((v) => !v);
+    };
 
     return (
-        <div className="relative z-20" ref={containerRef}>
+        <div className="relative" ref={containerRef}>
             <button
+                ref={triggerRef}
                 className={`flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-medium text-sm text-slate-600 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all ${isOpen ? 'bg-blue-50 border-blue-200 text-blue-600' : ''
                     }`}
-                onClick={() => setIsOpen(!isOpen)}
+                onClick={handleToggle}
             >
                 Columns
                 <FiChevronDown
@@ -158,8 +211,17 @@ export function ColumnsOrder<T>({
                 />
             </button>
 
-            {isOpen && (
-                <div className="absolute top-full right-0 mt-2 w-72 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 flex flex-col max-h-[500px]">
+            {isOpen && typeof document !== 'undefined' && createPortal((
+                <div
+                    ref={popoverRef}
+                    className="w-72 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[500px]"
+                    style={{
+                        position: 'fixed',
+                        top: popoverPos?.top ?? 80,
+                        right: popoverPos?.right ?? 20,
+                        zIndex: 9999,
+                    }}
+                >
                     <div className="flex justify-between items-center p-3 border-b border-slate-100 bg-slate-50 shrink-0">
                         <span className="text-sm font-semibold text-slate-900">
                             Manage Columns
@@ -212,7 +274,7 @@ export function ColumnsOrder<T>({
                         </DragOverlay>
                     </DndContext>
                 </div>
-            )}
+            ), document.body)}
         </div>
     );
 }

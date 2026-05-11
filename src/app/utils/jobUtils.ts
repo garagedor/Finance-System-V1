@@ -10,6 +10,17 @@ export type ColumnConfig<T = JobRow> = {
   editable?: boolean;
   minWidth?: number;
   maxWidth?: number;
+  // Optional custom cell renderer. When present, EntityTable uses this instead
+  // of its default render-by-type logic. `defaultActions` is the JSX for the
+  // entity's edit/delete buttons (already wired with their handlers); pass it
+  // through if you want to render those actions inline in this cell.
+  renderCell?: (args: {
+    row: T;
+    value: unknown;
+    data: any;
+    user: any;
+    defaultActions: import('react').ReactNode;
+  }) => import('react').ReactNode;
 };
 
 export const numberFields: Array<keyof JobRow> = [

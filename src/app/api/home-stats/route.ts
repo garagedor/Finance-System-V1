@@ -108,16 +108,19 @@ export async function GET(req: NextRequest) {
                             toNumber('$totalPaidCompanyCheck'),
                             toNumber('$totalPaidFinance'),
                             toNumber('$totalPaidCompanyCash'),
+                            toNumber('$lmCash'),
+                            toNumber('$lmCheck'),
                         ],
                     },
                     valPaymentFee: {
                         $add: [
                             { $multiply: [toNumber('$totalPaidCard'), 0.05] },
                             { $multiply: [toNumber('$totalPaidFinance'), 0.1] },
-                            { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.1] }
+                            { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.1] },
+                            { $multiply: [toNumber('$lmCheck'), 0.1] }
                         ]
                     },
-                    valParts: { $add: [toNumber('$techParts'), toNumber('$companyParts')] },
+                    valParts: { $add: [toNumber('$techParts'), toNumber('$companyParts'), toNumber('$lmParts')] },
                     valTotalAmount: {
                         $cond: [
                             { $gt: [toNumber('$totalAmount'), 0] },
@@ -129,6 +132,8 @@ export async function GET(req: NextRequest) {
                                     toNumber('$totalPaidCompanyCheck'),
                                     toNumber('$totalPaidFinance'),
                                     toNumber('$totalPaidCompanyCash'),
+                                    toNumber('$lmCash'),
+                                    toNumber('$lmCheck'),
                                 ]
                             }
                         ]
@@ -164,7 +169,14 @@ export async function GET(req: NextRequest) {
                             $group: {
                                 _id: '$tech',
                                 count: { $sum: 1 },
-                                sumTotalAmount: { $sum: '$valTotalAmount' },
+                                // Match Balance Report's avgTicket: sum of
+                                // totalProfit across non-X-close jobs, divided
+                                // by ALL assigned jobs (X-close still in count).
+                                sumProfitExclXClose: {
+                                    $sum: {
+                                        $cond: [{ $ne: ['$status', 'X close'] }, '$valTotalProfit', 0]
+                                    }
+                                },
                                 closedCount: {
                                     $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] }
                                 }
@@ -173,7 +185,7 @@ export async function GET(req: NextRequest) {
                         {
                             $project: {
                                 tech: '$_id',
-                                avgTicket: { $cond: [{ $gt: ['$count', 0] }, { $divide: ['$sumTotalAmount', '$count'] }, 0] },
+                                avgTicket: { $cond: [{ $gt: ['$count', 0] }, { $divide: ['$sumProfitExclXClose', '$count'] }, 0] },
                                 closedPct: { $cond: [{ $gt: ['$count', 0] }, { $multiply: [{ $divide: ['$closedCount', '$count'] }, 100] }, 0] },
                                 count: 1
                             }
@@ -185,7 +197,14 @@ export async function GET(req: NextRequest) {
                             $group: {
                                 _id: '$location',
                                 count: { $sum: 1 },
-                                sumTotalAmount: { $sum: '$valTotalAmount' },
+                                // Match Balance Report's avgTicket: sum of
+                                // totalProfit across non-X-close jobs, divided
+                                // by ALL assigned jobs (X-close still in count).
+                                sumProfitExclXClose: {
+                                    $sum: {
+                                        $cond: [{ $ne: ['$status', 'X close'] }, '$valTotalProfit', 0]
+                                    }
+                                },
                                 closedCount: {
                                     $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] }
                                 }
@@ -194,7 +213,7 @@ export async function GET(req: NextRequest) {
                         {
                             $project: {
                                 location: '$_id',
-                                avgTicket: { $cond: [{ $gt: ['$count', 0] }, { $divide: ['$sumTotalAmount', '$count'] }, 0] },
+                                avgTicket: { $cond: [{ $gt: ['$count', 0] }, { $divide: ['$sumProfitExclXClose', '$count'] }, 0] },
                                 closedPct: { $cond: [{ $gt: ['$count', 0] }, { $multiply: [{ $divide: ['$closedCount', '$count'] }, 100] }, 0] },
                                 count: 1
                             }
@@ -210,7 +229,8 @@ export async function GET(req: NextRequest) {
                         {
                             $group: {
                                 _id: '$location',
-                                totalPenaltyLoss: { $sum: { $divide: ['$penaltyBase', 4] } }
+                                totalPenaltyLoss: { $sum: { $divide: ['$penaltyBase', 4] } },
+                                count: { $sum: 1 }
                             }
                         },
                         { $sort: { _id: 1 } }
@@ -235,7 +255,8 @@ export async function GET(req: NextRequest) {
                         {
                             $group: {
                                 _id: '$location',
-                                totalNetProfit: { $sum: '$netProfitCalc' }
+                                totalNetProfit: { $sum: '$netProfitCalc' },
+                                count: { $sum: 1 }
                             }
                         },
                         { $sort: { _id: 1 } }
@@ -245,10 +266,28 @@ export async function GET(req: NextRequest) {
                         {
                             $group: {
                                 _id: '$location',
-                                totalParts: { $sum: '$valCompanyParts' }
+                                totalParts: { $sum: '$valCompanyParts' },
+                                count: { $sum: 1 }
                             }
                         },
                         { $sort: { _id: 1 } }
+                    ],
+                    // Card-fee margin: tech is charged 5%, processor takes 3%,
+                    // so the company keeps 2% of every closed-job card payment.
+                    cardFeeProfit: [
+                        { $match: { status: 'Closed' } },
+                        {
+                            $group: {
+                                _id: null,
+                                totalCardFeeProfit: { $sum: { $multiply: [toNumber('$totalPaidCard'), 0.02] } },
+                                // Count of closed jobs that actually had card payment.
+                                count: {
+                                    $sum: {
+                                        $cond: [{ $gt: [toNumber('$totalPaidCard'), 0] }, 1, 0]
+                                    }
+                                }
+                            }
+                        }
                     ]
                 },
             },

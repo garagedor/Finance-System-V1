@@ -59,4 +59,8 @@ export type EntityTablePageProps<T, D extends GenericTableData<T>> = {
     renderActions?: (args: RenderActionsArgs<T, D>) => ReactNode;
     topbarAddon?: ReactNode;
     hideAddRowButton?: boolean;
+    // When true, the right-side actions column (header + cells) is suppressed.
+    // Useful when an entity renders its row actions inline within a column
+    // via `ColumnConfig.renderCell`.
+    hideActionsColumn?: boolean;
 };

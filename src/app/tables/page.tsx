@@ -95,6 +95,7 @@ export default function TablesPage() {
         renderActions={activeConfig.renderActions}
         topbarAddon={selector}
         hideAddRowButton={activeConfig.hideAddRowButton}
+        hideActionsColumn={activeConfig.hideActionsColumn}
       />
     ) : null
   );

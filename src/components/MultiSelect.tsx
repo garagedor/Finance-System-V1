@@ -16,6 +16,12 @@ export default function MultiSelect({
   placeholder = 'Select...',
   allLabel = 'All',
 }: MultiSelectProps) {
+  // Defensive: tolerate callers that hand us a stale string (e.g. legacy
+  // single-select state surviving an HMR after this filter went multi).
+  const safeSelected: string[] = Array.isArray(selected)
+    ? selected
+    : (typeof selected === 'string' && selected ? [selected] : []);
+  selected = safeSelected;
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 

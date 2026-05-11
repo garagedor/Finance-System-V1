@@ -26,6 +26,7 @@ type StatsResponse = {
     count: number;
     totalAmount: number;
     totalPaid: number;
+    totalProfit: number;
     avgTicket: number;
     avgTicketWithoutPenalty: number;
     avgClosedTicket: number;
@@ -42,6 +43,7 @@ const emptyStats: StatsResponse = {
     count: 0,
     totalAmount: 0,
     totalPaid: 0,
+    totalProfit: 0,
     avgTicket: 0,
     avgTicketWithoutPenalty: 0,
     avgClosedTicket: 0,
@@ -80,13 +82,13 @@ export default function StatsPage() {
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(defaultEndDate);
   const [techs, setTechs] = useState<string[]>([]);
-  const [locationFilter, setLocationFilter] = useState('');
-  const [providerFilter, setProviderFilter] = useState('');
-  
+  const [locationFilter, setLocationFilter] = useState<string[]>([]);
+  const [providerFilter, setProviderFilter] = useState<string[]>([]);
+
   const [activeFilters, setActiveFilters] = useState({
     techs: [] as string[],
-    location: '',
-    provider: '',
+    locations: [] as string[],
+    providers: [] as string[],
     startDate: defaultStartDate,
     endDate: defaultEndDate,
   });
@@ -107,12 +109,12 @@ export default function StatsPage() {
     const saved = sessionStorage.getItem('stats-filters');
     if (saved) {
       try {
-        const { start, end, techs: savedTechs, location, provider } = JSON.parse(saved);
-        
+        const { start, end, techs: savedTechs, locations: savedLocs, providers: savedProvs, location, provider } = JSON.parse(saved);
+
         const active = {
           techs: [] as string[],
-          location: '',
-          provider: '',
+          locations: [] as string[],
+          providers: [] as string[],
           startDate: defaultStartDate,
           endDate: defaultEndDate,
         };
@@ -129,13 +131,16 @@ export default function StatsPage() {
           setTechs(savedTechs);
           active.techs = savedTechs;
         }
-        if (location) {
-          setLocationFilter(location);
-          active.location = location;
+        // Accept new array shape, fall back to legacy single-string for migration.
+        const locs = Array.isArray(savedLocs) ? savedLocs : (location ? [location] : []);
+        if (locs.length) {
+          setLocationFilter(locs);
+          active.locations = locs;
         }
-        if (provider) {
-          setProviderFilter(provider);
-          active.provider = provider;
+        const provs = Array.isArray(savedProvs) ? savedProvs : (provider ? [provider] : []);
+        if (provs.length) {
+          setProviderFilter(provs);
+          active.providers = provs;
         }
 
         setActiveFilters(active);
@@ -151,13 +156,13 @@ export default function StatsPage() {
   const handleApply = () => {
     const nextActive = {
       techs,
-      location: locationFilter,
-      provider: providerFilter,
+      locations: locationFilter,
+      providers: providerFilter,
       startDate,
       endDate,
     };
     setActiveFilters(nextActive);
-    
+
     // Force fetch for refresh icon
     lastFetchRef.current = null;
     fetchStats();
@@ -167,8 +172,8 @@ export default function StatsPage() {
       start: startDate,
       end: endDate,
       techs,
-      location: locationFilter,
-      provider: providerFilter
+      locations: locationFilter,
+      providers: providerFilter,
     }));
   };
 
@@ -176,9 +181,9 @@ export default function StatsPage() {
     const params = new URLSearchParams();
     if (activeFilters.startDate) params.set('startDate', activeFilters.startDate);
     if (activeFilters.endDate) params.set('endDate', activeFilters.endDate);
-    activeFilters.techs.forEach(t => params.append('tech', t));
-    if (activeFilters.location) params.set('location', activeFilters.location);
-    if (activeFilters.provider) params.set('provider', activeFilters.provider);
+    (activeFilters.techs || []).forEach(t => params.append('tech', t));
+    (activeFilters.locations || []).forEach((l) => params.append('location', l));
+    (activeFilters.providers || []).forEach((p) => params.append('provider', p));
     
     const fetchKey = params.toString();
 
@@ -385,36 +390,28 @@ export default function StatsPage() {
             />
           </FilterField>
           <FilterField label="Location">
-            <select
-              value={locationFilter}
-              onChange={(e) => {
-                setLocationFilter(e.target.value);
+            <MultiSelect
+              options={lookups.locations.map((l) => l._id)}
+              selected={locationFilter}
+              onChange={(v) => {
+                setLocationFilter(v);
                 setFiltersDirty(true);
               }}
-            >
-              <option value="">All</option>
-              {lookups.locations.map((l) => (
-                <option key={l._id} value={l._id}>
-                  {l._id}
-                </option>
-              ))}
-            </select>
+              placeholder="All"
+              allLabel="All"
+            />
           </FilterField>
           <FilterField label="Provider">
-            <select
-              value={providerFilter}
-              onChange={(e) => {
-                setProviderFilter(e.target.value);
+            <MultiSelect
+              options={lookups.providers.map((p) => p._id)}
+              selected={providerFilter}
+              onChange={(v) => {
+                setProviderFilter(v);
                 setFiltersDirty(true);
               }}
-            >
-              <option value="">All</option>
-              {lookups.providers.map((p) => (
-                <option key={p._id} value={p._id}>
-                  {p._id}
-                </option>
-              ))}
-            </select>
+              placeholder="All"
+              allLabel="All"
+            />
           </FilterField>
         </FiltersPanel>
 
@@ -442,8 +439,8 @@ export default function StatsPage() {
               </div>
             </div>
             <div className="metric-card metric-card-feature">
-              <div className="muted small">Total Balance</div>
-              <div className="metric-value metric-value-feature">{formatCurrency(stats.summary.totalPaid || 0)}</div>
+              <div className="muted small">Total Profit</div>
+              <div className="metric-value metric-value-feature">{formatCurrency(stats.summary.totalProfit || 0)}</div>
             </div>
           </div>
 

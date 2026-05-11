@@ -33,12 +33,17 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
     renderActions,
     topbarAddon,
     hideAddRowButton = false,
+    hideActionsColumn = false,
 }: EntityTablePageProps<T, D>) {
     const { user } = useAuth();
     const canEdit = user?.type === 'admin' || user?.type === 'office';
     const showAddRowButton = canEdit && !hideAddRowButton;
     const [snackbar, setSnackbar] = useState<SnackbarState>(null);
     const persistenceKey = `table-filters-${title.replace(/\s+/g, '-').toLowerCase()}`;
+    // Column layout (order/widths/visibility) persists in localStorage so it
+    // survives page navigation and tab close — filters/search live in
+    // sessionStorage above and reset between sessions.
+    const columnsKey = `table-columns-${title.replace(/\s+/g, '-').toLowerCase()}`;
 
     // Read initial state from sessionStorage to avoid redundant re-fetches
     const initialState = useMemo(() => {
@@ -50,6 +55,15 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
         } catch { return null; }
     }, [persistenceKey]);
 
+    const initialColumns = useMemo(() => {
+        if (typeof window === 'undefined') return null;
+        const saved = localStorage.getItem(columnsKey);
+        if (!saved) return null;
+        try {
+            return JSON.parse(saved) as { order?: string[]; widths?: Record<string, number>; hidden?: string[] };
+        } catch { return null; }
+    }, [columnsKey]);
+
     const [sortBy, setSortBy] = useState<keyof T | null>(initialState?.sortBy ?? null);
     const [sortDir, setSortDir] = useState<'asc' | 'desc'>(initialState?.sortDir ?? 'asc');
     const [filters, setFilters] = useState<EntityFilterRule<T>[]>(initialState?.filters ?? []);
@@ -58,8 +72,10 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
     const [filtersOpen, setFiltersOpen] = useState(false);
     const [editModalRow, setEditModalRow] = useState<T | null>(null);
     const [isAddingNew, setIsAddingNew] = useState(false);
-    const [columnOrder, setColumnOrder] = useState<(keyof T)[]>([]);
-    const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+    const [columnOrder, setColumnOrder] = useState<(keyof T)[]>(
+        (initialColumns?.order as (keyof T)[]) ?? []
+    );
+    const [columnWidths, setColumnWidths] = useState<Record<string, number>>(initialColumns?.widths ?? {});
     const resizingRef = useRef<{ key: string; startX: number; startWidth: number } | null>(null);
     const data = useDataHook(user, setSnackbar, sortBy, sortDir);
     const [localSearch, setLocalSearch] = useState(data.search);
@@ -86,6 +102,11 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
                 .map((f: any) => ({ field: f.field, value: f.value, operator: f.operator }));
             data.applyFilters(usable, initialState.logic || 'AND', { skipFetch: true });
         }
+        // Restore previously-hidden columns (the order/widths state was already
+        // seeded synchronously via useState initializers above).
+        if (initialColumns?.hidden && initialColumns.hidden.length > 0) {
+            data.setHiddenColumns(initialColumns.hidden);
+        }
         data.setIsInitialized(true);
     }, [persistenceKey]); // Run once when persistenceKey changes (mount or entity switch)
 
@@ -94,6 +115,16 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
         const stateToSave = { filters, logic, sortBy, sortDir, search: data.search };
         sessionStorage.setItem(persistenceKey, JSON.stringify(stateToSave));
     }, [persistenceKey, filters, logic, sortBy, sortDir, data.search]);
+
+    useEffect(() => {
+        // Persist column layout to localStorage so it survives navigation.
+        const payload = {
+            order: columnOrder as string[],
+            widths: columnWidths,
+            hidden: data.hiddenColumns,
+        };
+        localStorage.setItem(columnsKey, JSON.stringify(payload));
+    }, [columnsKey, columnOrder, columnWidths, data.hiddenColumns]);
 
     useEffect(() => {
         if (snackbar) {
@@ -204,7 +235,7 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
 
     const canPrev = data.page > 1;
     const canNext = data.page < data.totalPages;
-    const showActions = canEdit;
+    const showActions = canEdit && !hideActionsColumn;
     const orderedColumns = columnOrder
         .map((key) => columns.find((c) => c.key === key))
         .filter(Boolean) as ColumnConfig<T>[];
@@ -682,7 +713,9 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
                                                             ...(col.maxWidth ? { maxWidth: `${col.maxWidth}px` } : {}),
                                                         }}
                                                     >
-                                                        {renderCellValue(col, (row as any)[col.key])}
+                                                        {col.renderCell
+                                                            ? col.renderCell({ row, value: (row as any)[col.key], data, user, defaultActions })
+                                                            : renderCellValue(col, (row as any)[col.key])}
                                                     </td>
                                                 );
                                             })}
