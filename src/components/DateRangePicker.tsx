@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import { FiCalendar } from 'react-icons/fi';
@@ -13,38 +13,43 @@ interface DateRangePickerProps {
     className?: string;
 }
 
+const formatDate = (d: Date | null): string => {
+    if (!d) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+};
+
+const parseDate = (s: string): Date | null => (s ? new Date(s) : null);
+
 export default function DateRangePicker({
     startDate,
     endDate,
     onChange,
     className = '',
 }: DateRangePickerProps) {
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
+    // Keep Date refs stable across renders so react-datepicker's selectsRange
+    // doesn't lose its in-progress range after the first click.
+    const [range, setRange] = useState<[Date | null, Date | null]>(() => [
+        parseDate(startDate),
+        parseDate(endDate),
+    ]);
+
+    useEffect(() => {
+        setRange((prev) => {
+            const [prevStart, prevEnd] = prev;
+            if (formatDate(prevStart) === startDate && formatDate(prevEnd) === endDate) {
+                return prev;
+            }
+            return [parseDate(startDate), parseDate(endDate)];
+        });
+    }, [startDate, endDate]);
 
     const handleChange = (dates: [Date | null, Date | null]) => {
-        const [newStart, newEnd] = dates;
-
-        // Convert to YYYY-MM-DD string, preserving local date by avoiding UTC conversion if possible
-        // or simply using toISOString() slice if that's the project convention.
-        // The project uses d.toISOString().slice(0, 10) which implies UTC dates or ignoring timezone offsets.
-        // However, DatePicker returns local date objects.
-        // Let's use a safe local-to-string conversion:
-
-        const formatDate = (d: Date | null) => {
-            if (!d) return '';
-            // Create a date string in YYYY-MM-DD format using local time
-            const year = d.getFullYear();
-            const month = String(d.getMonth() + 1).padStart(2, '0');
-            const day = String(d.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        };
-
-        if (newStart || newEnd) {
-            onChange(formatDate(newStart), formatDate(newEnd));
-        } else {
-            onChange('', '');
-        }
+        setRange(dates);
+        const [s, e] = dates;
+        onChange(formatDate(s), formatDate(e));
     };
 
     return (
@@ -53,8 +58,8 @@ export default function DateRangePicker({
                 <FiCalendar className="calendar-icon" />
                 <DatePicker
                     selectsRange={true}
-                    startDate={start}
-                    endDate={end}
+                    startDate={range[0] ?? undefined}
+                    endDate={range[1] ?? undefined}
                     onChange={handleChange}
                     className="custom-date-input"
                     placeholderText="Select date range"
