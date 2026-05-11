@@ -3,8 +3,8 @@
 import { useState } from 'react';
 import { FiCheck, FiLoader, FiX } from 'react-icons/fi';
 import type { ColumnConfig } from '@/app/utils/jobUtils';
-import { normalizeApprovals } from '@/app/utils/jobUtils';
-import type { EntityTablePageProps, RenderActionsArgs } from '@/components/EntityTable';
+import { getRowId, normalizeApprovals } from '@/app/utils/jobUtils';
+import type { EntityTablePageProps } from '@/components/EntityTable';
 import { DisputeRefundModal } from '@/components/DisputeRefundModal';
 import { useDisputeData } from '@/app/utils/useDisputeData';
 import { useJobData } from '@/app/utils/useJobData';
@@ -42,10 +42,95 @@ type EntityConfig = {
   ) => any;
   renderActions?: EntityTablePageProps<any, any>['renderActions'];
   hideAddRowButton?: boolean;
+  hideActionsColumn?: boolean;
 };
 
+// Approvals cell: chip showing existing approvers + ALL row actions inline
+// (approve/unapprove toggle, create dispute, edit, delete). Used to render
+// these as the right-side actions column; they now sit next to the chip so
+// every interactive bit of the row lives on the left under "Approvals".
+const ApprovalsCell = ({
+  row, value, data, user, defaultActions,
+}: {
+  row: JobRow; value: unknown; data: any; user: any; defaultActions: React.ReactNode;
+}) => {
+  const [showDisputeModal, setShowDisputeModal] = useState(false);
+
+  const approvals = normalizeApprovals(value);
+  const adminNames: Set<string> = data?.adminNames instanceof Set ? data.adminNames : new Set();
+  const officeNames: Set<string> = data?.officeNames instanceof Set ? data.officeNames : new Set();
+  const hasAdmin = approvals.some((a) => adminNames.has(a));
+  const hasOffice = approvals.some((a) => officeNames.has(a));
+  const approvalStyle: React.CSSProperties = hasAdmin
+    ? { background: 'rgba(16,185,129,0.15)', color: '#34d399', padding: '2px 7px', borderRadius: '6px' }
+    : hasOffice
+      ? { background: 'rgba(245,158,11,0.15)', color: '#fbbf24', padding: '2px 7px', borderRadius: '6px' }
+      : { background: 'rgba(255,255,255,0.08)', color: '#94a3b8', padding: '2px 7px', borderRadius: '6px' };
+
+  const alreadyConfirmed = user?.name ? approvals.includes(user.name) : false;
+  const hasAdminApproval = approvals.some((a) => adminNames.has(a));
+  const rowId = getRowId(row);
+  const confirmingIds: string[] = data?.approvalIdsRef?.current ?? data?.approvalIds ?? [];
+  const confirming = confirmingIds.includes(rowId);
+  const savingIds: string[] = data?.savingIdsRef?.current ?? [];
+  const saving = savingIds.includes(rowId);
+  const showApproveButton = user?.type === 'admin' || (user?.type === 'office' && !hasAdminApproval);
+  const confirmDisabled = confirming || saving || !showApproveButton;
+  const canDispute = user?.type === 'admin' || user?.type === 'office';
+
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+      {approvals.length > 0 && (
+        <span className="approval-text" title={approvals.join(', ')} style={approvalStyle}>
+          {approvals.join(', ')}
+        </span>
+      )}
+      {showApproveButton && (
+        <button
+          type="button"
+          className={`icon-btn ${alreadyConfirmed ? 'warn' : 'success'}`}
+          disabled={confirmDisabled}
+          onClick={(e) => { e.stopPropagation(); data.confirmRow?.(row); }}
+          title={
+            confirmDisabled
+              ? 'Save the row before confirming'
+              : alreadyConfirmed
+                ? 'Remove my approval'
+                : 'Confirm this row'
+          }
+          aria-label={alreadyConfirmed ? 'Unconfirm row' : 'Confirm row'}
+        >
+          {confirming ? <FiLoader className="spin" /> : alreadyConfirmed ? <FiX /> : <FiCheck />}
+        </button>
+      )}
+      {canDispute && (
+        <button
+          type="button"
+          className="icon-btn success"
+          onClick={(e) => { e.stopPropagation(); setShowDisputeModal(true); }}
+          title="Create Dispute or Refund"
+          aria-label="Create Dispute or Refund"
+        >
+          <FiPlus />
+        </button>
+      )}
+      {defaultActions}
+      {showDisputeModal && (
+        <DisputeRefundModal
+          jobId={rowId}
+          onClose={() => setShowDisputeModal(false)}
+        />
+      )}
+    </span>
+  );
+};
+
+const renderApprovalsCell = (args: {
+  row: JobRow; value: unknown; data: any; user: any; defaultActions: React.ReactNode;
+}) => <ApprovalsCell {...args} />;
+
 const jobColumns = (data: ReturnType<typeof useJobData>): ColumnConfig<JobRow>[] => [
-  { key: 'approvals', label: 'Approvals', type: 'chip', minWidth: 100 },
+  { key: 'approvals', label: 'Approvals', type: 'chip', minWidth: 220, renderCell: renderApprovalsCell },
   { key: 'clientName', label: 'Client Name', type: 'text' },
   { key: 'tech', label: 'Tech', type: 'select', options: data.lookups.techs.map((t) => t._id ?? ''), minWidth: 80 },
   { key: 'status', label: 'Status', type: 'select', options: data.lookups.statuses.map((s) => s._id ?? '') },
@@ -57,11 +142,11 @@ const jobColumns = (data: ReturnType<typeof useJobData>): ColumnConfig<JobRow>[]
   { key: 'totalPaidCompanyCheck', label: 'Paid Company Check', type: 'currency', minWidth: 60 },
   { key: 'totalPaidFinance', label: 'Paid Finance', type: 'currency', minWidth: 60 },
   { key: 'totalPaidCompanyCash', label: 'Paid Company Cash', type: 'currency', minWidth: 60 },
+  { key: 'lmCash', label: 'Paid LM Cash', type: 'currency', minWidth: 60 },
+  { key: 'lmCheck', label: 'Paid LM Check', type: 'currency', minWidth: 60 },
   { key: 'techParts', label: 'Tech Parts', type: 'currency', minWidth: 60 },
   { key: 'companyParts', label: 'Company Parts', type: 'currency', minWidth: 60 },
   { key: 'lmParts', label: 'LM Parts', type: 'currency', minWidth: 60 },
-  { key: 'lmCash', label: 'LM Cash', type: 'currency', minWidth: 60 },
-  { key: 'lmCheck', label: 'LM Check', type: 'currency', minWidth: 60 },
   { key: 'provider', label: 'Provider', type: 'select', options: data.lookups.providers.map((p) => p._id ?? '') },
   { key: 'tipsCard', label: 'Tips Card', type: 'currency', minWidth: 60 },
   { key: 'tipsFinance', label: 'Tips Finance', type: 'currency', minWidth: 60 },
@@ -128,73 +213,6 @@ const refundColumns: ColumnConfig<Refund>[] = [
   { key: 'isTechOffset', label: 'Tech Offset', type: 'boolean' },
   { key: 'isPrOffset', label: 'PR Offset', type: 'boolean' },
 ];
-// Proper React component for job actions (allows using hooks)
-const JobActionsRow = ({
-  row,
-  rowId,
-  saving,
-  defaultActions,
-  data,
-  user,
-}: RenderActionsArgs<JobRow, ReturnType<typeof useJobData>>) => {
-  const [showDisputeModal, setShowDisputeModal] = useState(false);
-
-  const approvals = normalizeApprovals((row as any).approvals);
-  const alreadyConfirmed = user?.name ? approvals.includes(user.name) : false;
-  const hasAdminApproval =
-    data.adminNames instanceof Set ? approvals.some((a) => data.adminNames.has(a)) : false;
-  const confirmingIds = data.approvalIdsRef?.current ?? data.approvalIds ?? [];
-  const confirming = confirmingIds.includes(rowId);
-  const canApprove = user?.type === 'admin' || user?.type === 'office';
-  const showApproveButton = user?.type === 'admin' || (user?.type === 'office' && !hasAdminApproval);
-  const confirmDisabled = confirming || saving || !showApproveButton;
-  const canDispute = user?.type === 'admin' || user?.type === 'office';
-
-  return (
-    <>
-      {showApproveButton && (
-        <button
-          className={`icon-btn ${alreadyConfirmed ? 'warn' : 'success'}`}
-          disabled={confirmDisabled}
-          onClick={() => data.confirmRow?.(row)}
-          title={
-            confirmDisabled
-              ? 'Save the row before confirming'
-              : alreadyConfirmed
-                ? 'Remove my approval'
-                : 'Confirm this row'
-          }
-          aria-label={alreadyConfirmed ? 'Unconfirm row' : 'Confirm row'}
-        >
-          {confirming ? <FiLoader className="spin" /> : alreadyConfirmed ? <FiX /> : <FiCheck />}
-        </button>
-      )}
-      {canDispute && (
-        <button
-          className="icon-btn success"
-          onClick={() => setShowDisputeModal(true)}
-          title="Create Dispute or Refund"
-          aria-label="Create Dispute or Refund"
-        >
-          <FiPlus />
-        </button>
-      )}
-      {defaultActions}
-      {showDisputeModal && (
-        <DisputeRefundModal
-          jobId={rowId}
-          onClose={() => setShowDisputeModal(false)}
-        />
-      )}
-    </>
-  );
-};
-
-// Wrapper function that returns the component
-const jobRenderActions = (args: RenderActionsArgs<JobRow, ReturnType<typeof useJobData>>) => (
-  <JobActionsRow {...args} />
-);
-
 export const entityOrder: EntityKey[] = [
   'job',
   'refund',
@@ -213,7 +231,10 @@ export const entityConfigs: Record<EntityKey, EntityConfig> = {
     title: 'Jobs Table',
     buildColumns: jobColumns,
     useDataHook: useJobData,
-    renderActions: jobRenderActions,
+    // All row actions (approve, dispute, edit, delete) render inline inside
+    // the Approvals cell via ApprovalsCell — the right-side actions column
+    // is suppressed entirely for Jobs.
+    hideActionsColumn: true,
   },
   refund: {
     key: 'refund',

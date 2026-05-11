@@ -1,35 +1,42 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { FiBriefcase, FiDollarSign, FiAlertCircle } from 'react-icons/fi';
+import { FiBriefcase, FiDollarSign, FiFileText, FiPackage } from 'react-icons/fi';
 import { useAuth } from '@/components/AuthShell';
 import DateRangePicker from '@/components/DateRangePicker';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
+import MultiSelect from '@/components/MultiSelect';
 import EmptyState from '@/components/EmptyState';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { formatCurrency } from '../utils/jobUtils';
+import type { Technician, Location } from '@/types/job';
 import '../balance-report/styles.css';
 
 type TechBalanceRow = { tech: string; jobs: number; balance: number };
-type TechLmRow = { tech: string; jobsWithLmParts: number; techOwesLm: number };
 type LmCompanyRow = {
   location: string;
-  jobsWithLmRevenue: number;
+  jobsTouched: number;
   lmCashTotal: number;
   lmCheckTotal: number;
   lmOwesCompany: number;
+  fortyPctPayout: number;
+  lmPartsTotal: number;
+  companyOwesLm: number;
+  netLmOwesCompany: number;
 };
 
 type FinanceResponse = {
   techBalances: TechBalanceRow[];
-  techLmSettlement: TechLmRow[];
   lmCompanySettlement: LmCompanyRow[];
   totals: {
     grandCompanyTechBalance: number;
-    grandTechOwesLm: number;
+    grandTechCommission: number;
     grandLmOwesCompany: number;
+    grandCompanyOwesLm: number;
+    grandNetLmOwesCompany: number;
+    grandFortyPctPayout: number;
   };
-  meta: { startDate: string; endDate: string; location: string; jobsScanned: number };
+  meta: { startDate: string; endDate: string; techs?: string[]; locations?: string[]; jobsScanned: number };
 };
 
 const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
@@ -41,13 +48,19 @@ export default function FinancePage() {
 
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
+  const [techs, setTechs] = useState<string[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
   const [appliedStart, setAppliedStart] = useState(defaultStart);
   const [appliedEnd, setAppliedEnd] = useState(defaultEnd);
+  const [appliedTechs, setAppliedTechs] = useState<string[]>([]);
+  const [appliedLocations, setAppliedLocations] = useState<string[]>([]);
   const [filtersDirty, setFiltersDirty] = useState(false);
   const [data, setData] = useState<FinanceResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lookups, setLookups] = useState<{ techs: Technician[]; locations: Location[] }>({ techs: [], locations: [] });
   const lastFetchRef = useRef<string | null>(null);
+  const lookupsFetchedRef = useRef(false);
 
   if (!user || user.type !== 'admin') {
     return (
@@ -68,10 +81,45 @@ export default function FinancePage() {
     );
   }
 
+  // Restore filters from sessionStorage on mount.
+  useEffect(() => {
+    const saved = sessionStorage.getItem('finance-filters');
+    if (!saved) return;
+    try {
+      const { start, end, techs: t, locations: l } = JSON.parse(saved);
+      if (start) { setStartDate(start); setAppliedStart(start); }
+      if (end)   { setEndDate(end);     setAppliedEnd(end); }
+      if (Array.isArray(t)) { setTechs(t); setAppliedTechs(t); }
+      if (Array.isArray(l)) { setLocations(l); setAppliedLocations(l); }
+    } catch (e) {
+      console.error('Failed to parse saved finance filters', e);
+    }
+  }, []);
+
+  // Fetch tech & location lookups for the multi-selects.
+  useEffect(() => {
+    if (lookupsFetchedRef.current) return;
+    lookupsFetchedRef.current = true;
+    const fetchList = async (url: string) => {
+      try {
+        const res = await fetch(`${url}?page=1&pageSize=500`);
+        if (!res.ok) return [];
+        const j = await res.json();
+        if (Array.isArray(j?.rows)) return j.rows;
+        if (Array.isArray(j)) return j;
+        return [];
+      } catch { return []; }
+    };
+    Promise.all([fetchList('/api/techs'), fetchList('/api/locations')])
+      .then(([techs, locations]) => setLookups({ techs, locations }));
+  }, []);
+
   useEffect(() => {
     const search = new URLSearchParams();
     search.set('startDate', appliedStart);
     search.set('endDate', appliedEnd);
+    appliedTechs.forEach((t) => search.append('tech', t));
+    appliedLocations.forEach((l) => search.append('location', l));
     const key = search.toString();
     if (lastFetchRef.current === key) return;
     lastFetchRef.current = key;
@@ -93,13 +141,18 @@ export default function FinancePage() {
       }
     };
     fetchData();
-  }, [appliedStart, appliedEnd]);
+  }, [appliedStart, appliedEnd, appliedTechs, appliedLocations]);
 
   const apply = () => {
     setAppliedStart(startDate);
     setAppliedEnd(endDate);
+    setAppliedTechs(techs);
+    setAppliedLocations(locations);
     lastFetchRef.current = null;
     setFiltersDirty(false);
+    sessionStorage.setItem('finance-filters', JSON.stringify({
+      start: startDate, end: endDate, techs, locations,
+    }));
   };
 
   const totals = data?.totals;
@@ -145,9 +198,27 @@ export default function FinancePage() {
               }}
             />
           </FilterField>
+          <FilterField label="Tech">
+            <MultiSelect
+              options={lookups.techs.map((t) => t._id)}
+              selected={techs}
+              onChange={(v) => { setTechs(v); setFiltersDirty(true); }}
+              placeholder="All techs"
+              allLabel="All techs"
+            />
+          </FilterField>
+          <FilterField label="Location">
+            <MultiSelect
+              options={lookups.locations.map((l) => l._id)}
+              selected={locations}
+              onChange={(v) => { setLocations(v); setFiltersDirty(true); }}
+              placeholder="All locations"
+              allLabel="All locations"
+            />
+          </FilterField>
         </FiltersPanel>
 
-        {/* KPI Strip — 3 independent settlement totals, never combined */}
+        {/* KPI Strip — settlement totals + raw LM activity breakdown */}
         <section className="bp-kpi-strip stagger">
           <FinanceKpi
             label="Company ↔ Tech (closed)"
@@ -156,16 +227,36 @@ export default function FinancePage() {
             accent="indigo"
           />
           <FinanceKpi
-            label="Tech ↔ LM (parts)"
-            value={formatCurrency(totals?.grandTechOwesLm || 0)}
-            icon={<FiAlertCircle size={14} />}
+            label="LM ↔ Company (net)"
+            value={formatCurrency(totals?.grandNetLmOwesCompany || 0)}
+            icon={<FiDollarSign size={14} />}
+            accent="cyan"
+          />
+          <FinanceKpi
+            label="LM Cash (collected)"
+            value={formatCurrency((data?.lmCompanySettlement || []).reduce((s, r) => s + r.lmCashTotal, 0))}
+            icon={<FiDollarSign size={14} />}
+            accent="emerald"
+          />
+          <FinanceKpi
+            label="LM Check (collected)"
+            value={formatCurrency((data?.lmCompanySettlement || []).reduce((s, r) => s + r.lmCheckTotal, 0))}
+            icon={<FiFileText size={14} />}
             accent="amber"
           />
           <FinanceKpi
-            label="LM ↔ Company (cash + check)"
-            value={formatCurrency(totals?.grandLmOwesCompany || 0)}
-            icon={<FiDollarSign size={14} />}
-            accent="cyan"
+            label="LM Parts"
+            value={formatCurrency((data?.lmCompanySettlement || []).reduce((s, r) => s + r.lmPartsTotal, 0))}
+            icon={<FiPackage size={14} />}
+            accent="violet"
+          />
+          <FinanceKpi
+            label="LM Commission"
+            value={formatCurrency(
+              (totals?.grandFortyPctPayout || 0) - (totals?.grandTechCommission || 0)
+            )}
+            icon={<FiBriefcase size={14} />}
+            accent="red"
           />
         </section>
 
@@ -219,61 +310,15 @@ export default function FinancePage() {
           </div>
         </div>
 
-        {/* Panel 2 — Tech ↔ LM (View 2: lmParts, all jobs with LM parts) */}
+        {/* Panel 2 — LM ↔ Company net settlement.
+            LM owes Co.: lmCash + lmCheck (collected on company's behalf).
+            Co.  owes LM: 40% (locationPct) of profit on closed jobs + lmParts.
+            Net = LM owes − Co. owes (positive = LM still owes; negative = Co. owes LM). */}
         <div className="panel bp-table-panel animate-fade-up" style={{ animationDelay: '120ms' }}>
           <div className="panel-header">
             <div>
-              <p className="bp-section-kicker">View 2 · Tech ↔ LM</p>
-              <h3>Tech Owes LM (parts supplied by Location Manager)</h3>
-            </div>
-            <span className="bp-pill">{data?.techLmSettlement.length ?? 0} techs</span>
-          </div>
-          <div className="balance-table" style={{ position: 'relative' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Tech</th>
-                  <th>Jobs w/ LM Parts</th>
-                  <th>Tech Owes LM</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data?.techLmSettlement ?? []).map((r) => (
-                  <tr key={r.tech}>
-                    <td>{r.tech}</td>
-                    <td>{r.jobsWithLmParts}</td>
-                    <td style={{ color: r.techOwesLm > 0 ? '#fbbf24' : undefined, fontWeight: r.techOwesLm > 0 ? 600 : undefined }}>
-                      {formatCurrency(r.techOwesLm)}
-                    </td>
-                  </tr>
-                ))}
-                {!data?.techLmSettlement.length && !loading && (
-                  <tr className="empty-row">
-                    <td colSpan={3}>
-                      <EmptyState size="md" title="No LM parts activity" message="No jobs in this range have LM Parts." />
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-              {!!data?.techLmSettlement.length && (
-                <tfoot>
-                  <tr className="totals-row">
-                    <td className="totals-cell">Totals</td>
-                    <td>{data.techLmSettlement.reduce((s, r) => s + r.jobsWithLmParts, 0)}</td>
-                    <td style={{ fontWeight: 700 }}>{formatCurrency(totals?.grandTechOwesLm || 0)}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
-        </div>
-
-        {/* Panel 3 — LM ↔ Company (View 3: lmCash + lmCheck, all jobs with LM revenue) */}
-        <div className="panel bp-table-panel animate-fade-up" style={{ animationDelay: '180ms' }}>
-          <div className="panel-header">
-            <div>
-              <p className="bp-section-kicker">View 3 · LM ↔ Company</p>
-              <h3>LM Owes Company (cash + check collected on company's behalf)</h3>
+              <p className="bp-section-kicker">View 2 · LM ↔ Company (net)</p>
+              <h3>LM Settlement</h3>
             </div>
             <span className="bp-pill">{data?.lmCompanySettlement.length ?? 0} locations</span>
           </div>
@@ -282,28 +327,43 @@ export default function FinancePage() {
               <thead>
                 <tr>
                   <th>Location</th>
-                  <th>Jobs w/ LM Revenue</th>
+                  <th>Jobs</th>
                   <th>LM Cash</th>
                   <th>LM Check</th>
-                  <th>LM Owes Company</th>
+                  <th>LM → Co.</th>
+                  <th>40% Payout</th>
+                  <th>LM Parts</th>
+                  <th>Co. → LM</th>
+                  <th>Net (LM owes Co.)</th>
                 </tr>
               </thead>
               <tbody>
                 {(data?.lmCompanySettlement ?? []).map((r) => (
                   <tr key={r.location}>
                     <td>{r.location}</td>
-                    <td>{r.jobsWithLmRevenue}</td>
+                    <td>{r.jobsTouched}</td>
                     <td>{formatCurrency(r.lmCashTotal)}</td>
                     <td>{formatCurrency(r.lmCheckTotal)}</td>
-                    <td style={{ color: r.lmOwesCompany > 0 ? '#22d3ee' : undefined, fontWeight: r.lmOwesCompany > 0 ? 600 : undefined }}>
+                    <td style={{ color: r.lmOwesCompany > 0 ? '#22d3ee' : undefined }}>
                       {formatCurrency(r.lmOwesCompany)}
+                    </td>
+                    <td>{formatCurrency(r.fortyPctPayout)}</td>
+                    <td>{formatCurrency(r.lmPartsTotal)}</td>
+                    <td style={{ color: r.companyOwesLm > 0 ? '#a78bfa' : undefined }}>
+                      {formatCurrency(r.companyOwesLm)}
+                    </td>
+                    <td style={{
+                      color: r.netLmOwesCompany > 0 ? '#34d399' : r.netLmOwesCompany < 0 ? '#f87171' : undefined,
+                      fontWeight: r.netLmOwesCompany !== 0 ? 700 : undefined,
+                    }}>
+                      {formatCurrency(r.netLmOwesCompany)}
                     </td>
                   </tr>
                 ))}
                 {!data?.lmCompanySettlement.length && !loading && (
                   <tr className="empty-row">
-                    <td colSpan={5}>
-                      <EmptyState size="md" title="No LM revenue activity" message="No jobs in this range have LM Cash or LM Check." />
+                    <td colSpan={9}>
+                      <EmptyState size="md" title="No LM activity" message="No jobs in this range have LM cash, check, parts, or 40% payout." />
                     </td>
                   </tr>
                 )}
@@ -315,6 +375,10 @@ export default function FinancePage() {
                     <td>{formatCurrency(data.lmCompanySettlement.reduce((s, r) => s + r.lmCashTotal, 0))}</td>
                     <td>{formatCurrency(data.lmCompanySettlement.reduce((s, r) => s + r.lmCheckTotal, 0))}</td>
                     <td style={{ fontWeight: 700 }}>{formatCurrency(totals?.grandLmOwesCompany || 0)}</td>
+                    <td>{formatCurrency(data.lmCompanySettlement.reduce((s, r) => s + r.fortyPctPayout, 0))}</td>
+                    <td>{formatCurrency(data.lmCompanySettlement.reduce((s, r) => s + r.lmPartsTotal, 0))}</td>
+                    <td style={{ fontWeight: 700 }}>{formatCurrency(totals?.grandCompanyOwesLm || 0)}</td>
+                    <td style={{ fontWeight: 700 }}>{formatCurrency(totals?.grandNetLmOwesCompany || 0)}</td>
                   </tr>
                 </tfoot>
               )}

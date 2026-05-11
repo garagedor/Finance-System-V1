@@ -22,8 +22,8 @@ export async function GET(req: NextRequest) {
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
     const techs = searchParams.getAll('tech').map(t => t.trim()).filter(Boolean);
-    const location = searchParams.get('location');
-    const provider = searchParams.get('provider');
+    const locations = searchParams.getAll('location').map((l) => l.trim()).filter(Boolean);
+    const providers = searchParams.getAll('provider').map((p) => p.trim()).filter(Boolean);
 
     const client = await getClient();
     const collection = client.db(DB_NAME).collection<JobRow>(COLLECTION_NAME);
@@ -40,6 +40,8 @@ export async function GET(req: NextRequest) {
         toNumberAgg('$totalPaidCompanyCheck'),
         toNumberAgg('$totalPaidFinance'),
         toNumberAgg('$totalPaidCompanyCash'),
+        toNumberAgg('$lmCash'),
+        toNumberAgg('$lmCheck'),
       ],
     };
 
@@ -72,16 +74,20 @@ export async function GET(req: NextRequest) {
         { tech: { $in: techs.map((t) => new RegExp(escapeRegex(t), 'i')) } },
       ];
     }
-    if (location) {
-      const regex = new RegExp(`^${escapeRegex(location)}$`, 'i');
+    if (locations.length > 0) {
+      // Match exact value OR case-insensitive equality across the selected list.
+      const regexes = locations.map((l) => new RegExp(`^${escapeRegex(l)}$`, 'i'));
       matchStage.$and = [
         ...(matchStage.$and || []),
-        { $or: [{ location }, { location: { $regex: regex } }] },
+        { $or: [{ location: { $in: locations } }, { location: { $in: regexes } }] },
       ];
     }
-    if (provider) {
-      const regex = new RegExp(`^${escapeRegex(provider)}$`, 'i');
-      matchStage.provider = { $regex: regex };
+    if (providers.length > 0) {
+      const regexes = providers.map((p) => new RegExp(`^${escapeRegex(p)}$`, 'i'));
+      matchStage.$and = [
+        ...(matchStage.$and || []),
+        { provider: { $in: regexes } },
+      ];
     }
     if (Object.keys(matchStage).length) {
       pipeline.push({ $match: matchStage });
@@ -103,7 +109,25 @@ export async function GET(req: NextRequest) {
             toNumberAgg('$totalAmount'),
             paidSum
           ]
-        }
+        },
+        // Used by avg-ticket calculation below — mirrors the report page's
+        // provider-tab columns: Total Payment − Total Fees − Total Parts.
+        // calcPaymentFeeNoCheck (excludes companyCheck fee but charges
+        // lmCheck fee per business rule). calcParts includes lmParts.
+        valFeeNoCheck: {
+          $add: [
+            { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
+            { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
+            { $multiply: [toNumberAgg('$lmCheck'), 0.1] },
+          ],
+        },
+        valParts: {
+          $add: [
+            toNumberAgg('$techParts'),
+            toNumberAgg('$companyParts'),
+            toNumberAgg('$lmParts'),
+          ],
+        },
       },
     });
 
@@ -119,20 +143,22 @@ export async function GET(req: NextRequest) {
               closedCount: {
                 $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] },
               },
-              totalAmountClosedOrXClose: {
+              // Profit per job = totalPaid − feeNoCheck − parts
+              // (matches the report page provider-tab column subtraction)
+              profitClosedOrXClose: {
                 $sum: {
                   $cond: [
                     { $or: [{ $eq: ['$status', 'Closed'] }, { $eq: ['$status', 'X close'] }] },
-                    '$valTotalAmount',
+                    { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
                     0,
                   ],
                 },
               },
-              totalAmountClosedOnly: {
+              profitClosedOnly: {
                 $sum: {
                   $cond: [
                     { $eq: ['$status', 'Closed'] },
-                    '$valTotalAmount',
+                    { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
                     0,
                   ],
                 },
@@ -213,16 +239,23 @@ export async function GET(req: NextRequest) {
     const totalAmount = summaryDoc.totalAmount || 0;
     const totalPaid = summaryDoc.totalPaid || 0;
     const closedCount = summaryDoc.closedCount || 0;
-    const totalAmountClosedOrXClose = summaryDoc.totalAmountClosedOrXClose || 0;
-    const totalAmountClosedOnly = summaryDoc.totalAmountClosedOnly || 0;
+    const profitClosedOrXClose = summaryDoc.profitClosedOrXClose || 0;
+    const profitClosedOnly = summaryDoc.profitClosedOnly || 0;
 
     return NextResponse.json({
       summary: {
         count,
         totalAmount,
         totalPaid,
-        avgTicket: count ? totalAmountClosedOrXClose / count : 0,
-        avgTicketWithoutPenalty: count ? totalAmountClosedOnly / count : 0,
+        // Total profit = Σ (Total Payment − Total Fees − Total Parts) across
+        // Closed + X close jobs. Same scope and definition as the avg ticket
+        // numerator, just not divided.
+        totalProfit: profitClosedOrXClose,
+        // Avg ticket = (Total Payment − Total Fees − Total Parts) / jobs
+        // sourced from the same payment/fees/parts breakdown shown on the
+        // report page provider tab.
+        avgTicket: count ? profitClosedOrXClose / count : 0,
+        avgTicketWithoutPenalty: count ? profitClosedOnly / count : 0,
         avgClosedTicket: closedCount ? totalAmount / closedCount : 0,
         closedRatio: count ? closedCount / count : 0,
       },

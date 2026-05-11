@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   FiLogOut, FiUser, FiHome, FiGrid, FiBarChart2,
-  FiDollarSign, FiFileText, FiChevronLeft, FiChevronRight, FiMenu, FiPieChart,
+  FiDollarSign, FiFileText, FiChevronLeft, FiChevronRight, FiMenu, FiPieChart, FiCreditCard, FiCheckSquare,
 } from 'react-icons/fi';
 import LoginPage from './LoginPage';
 import type { AuthUser } from '@/types/user';
@@ -33,15 +33,21 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number; className?:
   '/balance-report': FiDollarSign,
   '/report': FiFileText,
   '/finance': FiPieChart,
+  '/payment-method-report': FiCreditCard,
+  '/verify-reports': FiCheckSquare,
 };
 
 const PAGE_TITLES: Record<string, { title: string; section: string }> = {
-  '/':                { title: 'Dashboard',      section: 'Overview' },
-  '/tables':          { title: 'Tables',         section: 'Data' },
-  '/stats':           { title: 'Statistics',     section: 'Analytics' },
-  '/balance-report':  { title: 'Balance Report', section: 'Reports' },
-  '/report':          { title: 'Reports',        section: 'Reports' },
-  '/finance':         { title: 'Finance',        section: 'Reports' },
+  '/':                       { title: 'Dashboard',             section: 'Overview' },
+  '/tables':                 { title: 'Tables',                section: 'Data' },
+  '/stats':                  { title: 'Statistics',            section: 'Analytics' },
+  '/balance-report':         { title: 'Balance Report',        section: 'Reports' },
+  '/report':                 { title: 'Reports',               section: 'Reports' },
+  '/finance':                { title: 'Finance',               section: 'Reports' },
+  '/payment-method-report':  { title: 'Payment Method Report', section: 'Reports' },
+  '/verify-reports':         { title: 'Verify Reports',        section: 'Verification' },
+  '/verify-reports/mappings':{ title: 'Identity Mappings',     section: 'Verification' },
+  '/verify-reports/week-control':{ title: 'Week Control',     section: 'Verification' },
 };
 
 export function AuthShell({ children, navLinks }: { children: React.ReactNode; navLinks: NavLink[] }) {

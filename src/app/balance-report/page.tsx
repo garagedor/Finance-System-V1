@@ -42,9 +42,8 @@ type BalanceRow = {
   totalPaidCompanyCash: number;
   tipsTotal: number;
   balance: number;
-  techOwedToLm: number;
-  lmOwedFromTech: number;
   lmOwesCompany: number;
+  companyOwesLm: number;
   approvals: Array<{ name: string; role: string }>;
   paymentMethod: string;
 };
@@ -80,7 +79,7 @@ type ColKey =
   | 'job-total' | 'tech-parts' | 'company-parts' | 'payment-fee' | 'total-profit'
   | 'lm-parts' | 'lm-cash' | 'lm-check'
   | 'tech-payout' | 'cash'
-  | 'co-tech' | 'tech-lm' | 'lm-co' | 'tips' | 'net-tips';
+  | 'co-tech' | 'lm-co' | 'co-lm' | 'tips' | 'net-tips';
 
 type PresetId = 'admin' | 'tech' | 'lm' | 'custom';
 
@@ -97,8 +96,8 @@ type ClosedTotalsShape = {
   techPaidCash: number;
   balance: number;
   tipsTotal: number;
-  techOwedToLm: number;
   lmOwesCompany: number;
+  companyOwesLm: number;
 };
 
 type ColDef = {
@@ -144,6 +143,7 @@ const COLUMN_GROUPS: ColGroup[] = [
       { key: 'job-total',     label: 'Job Total',     renderBody: (j) => <td key="job-total">{formatCurrency(j.paidSum)}</td>,         renderTotal: (t) => <td key="job-total">{formatCurrency(t.paidSum)}</td> },
       { key: 'tech-parts',    label: 'Tech Parts',    renderBody: (j) => <td key="tech-parts">{formatCurrency(j.techParts)}</td>,      renderTotal: (t) => <td key="tech-parts">{formatCurrency(t.techParts)}</td> },
       { key: 'company-parts', label: 'Company Parts', renderBody: (j) => <td key="company-parts">{formatCurrency(j.companyParts)}</td>, renderTotal: (t) => <td key="company-parts">{formatCurrency(t.companyParts)}</td> },
+      { key: 'lm-parts',      label: 'LM Parts',      renderBody: (j) => <td key="lm-parts">{formatCurrency(j.lmParts)}</td>,          renderTotal: (t) => <td key="lm-parts">{formatCurrency(t.lmParts)}</td> },
       { key: 'payment-fee',   label: 'Payment Fee',   renderBody: (j) => <td key="payment-fee">{formatCurrency(j.paymentFee)}</td>,    renderTotal: (t) => <td key="payment-fee">{formatCurrency(t.paymentFee)}</td> },
       { key: 'total-profit',  label: 'Total Profit',  renderBody: (j) => <td key="total-profit">{formatCurrency(j.totalProfit)}</td>,  renderTotal: (t) => <td key="total-profit">{formatCurrency(t.totalProfit)}</td> },
     ],
@@ -151,9 +151,8 @@ const COLUMN_GROUPS: ColGroup[] = [
   {
     id: 'lm', label: 'LM', cssClass: 'bp-group-meta',
     cols: [
-      { key: 'lm-parts', label: 'LM Parts', renderBody: (j) => <td key="lm-parts">{formatCurrency(j.lmParts)}</td>, renderTotal: (t) => <td key="lm-parts">{formatCurrency(t.lmParts)}</td> },
-      { key: 'lm-cash',  label: 'LM Cash',  renderBody: (j) => <td key="lm-cash">{formatCurrency(j.lmCash)}</td>,   renderTotal: (t) => <td key="lm-cash">{formatCurrency(t.lmCash)}</td> },
-      { key: 'lm-check', label: 'LM Check', renderBody: (j) => <td key="lm-check">{formatCurrency(j.lmCheck)}</td>, renderTotal: (t) => <td key="lm-check">{formatCurrency(t.lmCheck)}</td> },
+      { key: 'lm-cash',  label: 'Paid LM Cash',  renderBody: (j) => <td key="lm-cash">{formatCurrency(j.lmCash)}</td>,   renderTotal: (t) => <td key="lm-cash">{formatCurrency(t.lmCash)}</td> },
+      { key: 'lm-check', label: 'Paid LM Check', renderBody: (j) => <td key="lm-check">{formatCurrency(j.lmCheck)}</td>, renderTotal: (t) => <td key="lm-check">{formatCurrency(t.lmCheck)}</td> },
     ],
   },
   {
@@ -172,14 +171,26 @@ const COLUMN_GROUPS: ColGroup[] = [
         renderTotal: (t) => <td key="co-tech" style={{ color: t.balance * -1 < 0 ? '#f87171' : t.balance * -1 > 0 ? '#34d399' : undefined }}>{formatCurrency(t.balance * -1)}</td>,
       },
       {
-        key: 'tech-lm', label: 'Tech→LM',
-        renderBody: (j) => <td key="tech-lm" style={{ color: j.techOwedToLm > 0 ? '#fbbf24' : undefined, fontWeight: j.techOwedToLm > 0 ? 600 : undefined }}>{formatCurrency(j.techOwedToLm)}</td>,
-        renderTotal: (t) => <td key="tech-lm" style={{ color: t.techOwedToLm > 0 ? '#fbbf24' : undefined }}>{formatCurrency(t.techOwedToLm)}</td>,
-      },
-      {
         key: 'lm-co', label: 'LM→Co.',
         renderBody: (j) => <td key="lm-co" style={{ color: j.lmOwesCompany > 0 ? '#22d3ee' : undefined, fontWeight: j.lmOwesCompany > 0 ? 600 : undefined }}>{formatCurrency(j.lmOwesCompany)}</td>,
         renderTotal: (t) => <td key="lm-co" style={{ color: t.lmOwesCompany > 0 ? '#22d3ee' : undefined }}>{formatCurrency(t.lmOwesCompany)}</td>,
+      },
+      {
+        key: 'co-lm', label: 'Co.→LM',
+        renderBody: (j) => (
+          <td key="co-lm"
+              title={`40% payout: ${formatCurrency(j.shareAmount)} · LM parts: ${formatCurrency(j.lmParts)}`}
+              style={{ color: j.companyOwesLm > 0 ? '#a78bfa' : undefined, fontWeight: j.companyOwesLm > 0 ? 600 : undefined }}>
+            {formatCurrency(j.companyOwesLm)}
+          </td>
+        ),
+        renderTotal: (t) => (
+          <td key="co-lm"
+              title={`40% payout: ${formatCurrency(t.shareAmount)} · LM parts: ${formatCurrency(t.lmParts)}`}
+              style={{ color: t.companyOwesLm > 0 ? '#a78bfa' : undefined }}>
+            {formatCurrency(t.companyOwesLm)}
+          </td>
+        ),
       },
       {
         key: 'tips', label: 'Tips',
@@ -199,14 +210,21 @@ const ALL_COL_KEYS: ColKey[] = COLUMN_GROUPS.flatMap((g) => g.cols.map((c) => c.
 
 const PRESET_VISIBLE: Record<Exclude<PresetId, 'custom'>, ColKey[]> = {
   admin: ALL_COL_KEYS,
-  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'tech-payout', 'cash', 'co-tech', 'tech-lm', 'tips', 'net-tips'],
-  lm:    ['date', 'address', 'job-total', 'lm-parts', 'lm-cash', 'lm-check', 'tech-lm', 'lm-co'],
+  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'tech-payout', 'cash', 'co-tech', 'tips', 'net-tips'],
+  lm:    ['date', 'address', 'job-total', 'lm-parts', 'lm-cash', 'lm-check', 'lm-co', 'co-lm'],
 };
 
 const PRESET_LABELS: Record<PresetId, string> = {
   admin:  'Full Admin View',
   tech:   'Technician View',
   lm:     'LM View',
+  custom: 'Custom',
+};
+
+const PRESET_TAB_LABELS: Record<PresetId, string> = {
+  admin:  'Admin',
+  tech:   'Tech',
+  lm:     'LM',
   custom: 'Custom',
 };
 
@@ -225,6 +243,42 @@ const matchesPreset = (vis: Record<ColKey, boolean>, id: Exclude<PresetId, 'cust
 const detectPreset = (vis: Record<ColKey, boolean>): PresetId => {
   return (['admin', 'tech', 'lm'] as const).find((p) => matchesPreset(vis, p)) ?? 'custom';
 };
+
+// ─── KPI strip — visibility (display-only) ──────────────────────────────────
+// Reuses PresetId + tab styles from the column-visibility system.
+// Independent state, independent localStorage key. Calculations untouched.
+type KpiKey = 'assignedJobs' | 'avgTicket' | 'jobProfit' | 'avgClosedJob' | 'lmOwesCompany' | 'coOwesLm';
+
+const KPI_DEFS: { key: KpiKey; label: string }[] = [
+  { key: 'assignedJobs',  label: 'Assigned Jobs' },
+  { key: 'avgTicket',     label: 'Avg Ticket' },
+  { key: 'jobProfit',     label: 'Job Profit' },
+  { key: 'avgClosedJob',  label: 'Avg Closed Job' },
+  { key: 'lmOwesCompany', label: 'LM Owes Company' },
+  { key: 'coOwesLm',      label: 'Co. Owes LM' },
+];
+const ALL_KPI_KEYS: KpiKey[] = KPI_DEFS.map((d) => d.key);
+
+const KPI_PRESET_VISIBLE: Record<Exclude<PresetId, 'custom'>, KpiKey[]> = {
+  admin: ALL_KPI_KEYS,
+  tech:  ['assignedJobs', 'avgTicket', 'avgClosedJob'],
+  lm:    ['assignedJobs', 'avgClosedJob', 'lmOwesCompany', 'coOwesLm'],
+};
+
+const KPI_STORAGE_KEY = 'balance-report-kpi-preset-v1';
+
+const kpiVisibilityFromPreset = (id: Exclude<PresetId, 'custom'>): Record<KpiKey, boolean> => {
+  const visibleSet = new Set(KPI_PRESET_VISIBLE[id]);
+  return Object.fromEntries(ALL_KPI_KEYS.map((k) => [k, visibleSet.has(k)])) as Record<KpiKey, boolean>;
+};
+
+const matchesKpiPreset = (vis: Record<KpiKey, boolean>, id: Exclude<PresetId, 'custom'>): boolean => {
+  const target = kpiVisibilityFromPreset(id);
+  return ALL_KPI_KEYS.every((k) => target[k] === vis[k]);
+};
+
+const detectKpiPreset = (vis: Record<KpiKey, boolean>): PresetId =>
+  (['admin', 'tech', 'lm'] as const).find((p) => matchesKpiPreset(vis, p)) ?? 'custom';
 
 export default function BalanceReportPage() {
   const [rows, setRows] = useState<BalanceRow[]>([]);
@@ -296,13 +350,15 @@ export default function BalanceReportPage() {
     }
   }, [columnsPreset, columnsVisibility]);
 
+  // `co-lm` is location-mode only; hide it elsewhere regardless of preset state.
+  const isColAllowed = (key: ColKey) => key !== 'co-lm' || mode === 'location';
   const visibleByGroup = useMemo(
-    () => COLUMN_GROUPS.map((g) => ({ ...g, visibleCount: g.cols.filter((c) => columnsVisibility[c.key]).length })),
-    [columnsVisibility]
+    () => COLUMN_GROUPS.map((g) => ({ ...g, visibleCount: g.cols.filter((c) => columnsVisibility[c.key] && isColAllowed(c.key)).length })),
+    [columnsVisibility, mode]
   );
   const visibleCols = useMemo(
-    () => COLUMN_GROUPS.flatMap((g) => g.cols.filter((c) => columnsVisibility[c.key])),
-    [columnsVisibility]
+    () => COLUMN_GROUPS.flatMap((g) => g.cols.filter((c) => columnsVisibility[c.key] && isColAllowed(c.key))),
+    [columnsVisibility, mode]
   );
   const totalVisibleCount = visibleCols.length;
 
@@ -327,6 +383,56 @@ export default function BalanceReportPage() {
     });
   };
   const resetToFullAdmin = () => selectColumnsPreset('admin');
+
+  // KPI strip — visibility state (display-only)
+  const [kpiPreset, setKpiPreset] = useState<PresetId>('admin');
+  const [kpiVisibility, setKpiVisibility] = useState<Record<KpiKey, boolean>>(() => kpiVisibilityFromPreset('admin'));
+  const [kpiOpen, setKpiOpen] = useState(false);
+  const kpiMenuRef = useRef<HTMLDivElement>(null);
+  useClickOutside(kpiMenuRef, () => setKpiOpen(false));
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(KPI_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { preset?: PresetId; visibility?: Partial<Record<KpiKey, boolean>> };
+      if (parsed.preset && parsed.preset !== 'custom' && KPI_PRESET_VISIBLE[parsed.preset as Exclude<PresetId, 'custom'>]) {
+        setKpiPreset(parsed.preset);
+        setKpiVisibility(kpiVisibilityFromPreset(parsed.preset as Exclude<PresetId, 'custom'>));
+        return;
+      }
+      if (parsed.visibility) {
+        const merged = { ...kpiVisibilityFromPreset('admin'), ...parsed.visibility } as Record<KpiKey, boolean>;
+        setKpiVisibility(merged);
+        setKpiPreset(detectKpiPreset(merged));
+      }
+    } catch (err) {
+      console.error('Failed to load KPI preset', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(KPI_STORAGE_KEY, JSON.stringify({ preset: kpiPreset, visibility: kpiVisibility }));
+    } catch (err) {
+      console.error('Failed to persist KPI preset', err);
+    }
+  }, [kpiPreset, kpiVisibility]);
+
+  const visibleKpiCount = useMemo(() => ALL_KPI_KEYS.filter((k) => kpiVisibility[k]).length, [kpiVisibility]);
+
+  const selectKpiPreset = (id: Exclude<PresetId, 'custom'>) => {
+    setKpiPreset(id);
+    setKpiVisibility(kpiVisibilityFromPreset(id));
+  };
+  const toggleKpi = (key: KpiKey) => {
+    setKpiVisibility((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      setKpiPreset(detectKpiPreset(next));
+      return next;
+    });
+  };
+  const resetKpiToAdmin = () => selectKpiPreset('admin');
 
   useEffect(() => {
     // Restore from sessionStorage on mount
@@ -447,8 +553,8 @@ export default function BalanceReportPage() {
           acc.techPaidCash += r.techPaidCash || 0;
           acc.balance += r.balance || 0;
           acc.tipsTotal += r.tipsTotal || 0;
-          acc.techOwedToLm += r.techOwedToLm || 0;
           acc.lmOwesCompany += r.lmOwesCompany || 0;
+          acc.companyOwesLm += r.companyOwesLm || 0;
           return acc;
         },
         {
@@ -464,8 +570,8 @@ export default function BalanceReportPage() {
           techPaidCash: 0,
           balance: 0,
           tipsTotal: 0,
-          techOwedToLm: 0,
           lmOwesCompany: 0,
+          companyOwesLm: 0,
         }
       ),
     [closedRows]
@@ -606,20 +712,102 @@ export default function BalanceReportPage() {
         </FiltersPanel>
 
         {/* ── KPI Strip ── */}
-        <section className="bp-kpi-strip stagger">
-          <BpKpi label="Assigned Jobs" value={String(totals.assigned)} icon={<FiBriefcase size={14} />} accent="indigo" />
-          <BpKpi label="Avg Ticket" value={formatCurrency(totals.avgTicket)} icon={<FiPercent size={14} />} accent="cyan" />
-          <BpKpi label="Job Profit" value={formatCurrency(totals.profit)} icon={<FiTrendingUp size={14} />} accent="emerald" />
-          <BpKpi label="Avg Closed Job" value={formatCurrency(totals.avgClosedJob)} icon={<FiCheckCircle size={14} />} accent="violet" />
-          <BpKpi label="Tech Owes LM" value={formatCurrency(closedTotals.techOwedToLm)} icon={<FiAlertCircle size={14} />} accent="amber" />
-          <BpKpi label="LM Owes Company" value={formatCurrency(closedTotals.lmOwesCompany)} icon={<FiDollarSign size={14} />} accent="cyan" />
-          {mode === 'location' && (
-            <>
-              <BpKpi label="Profit on Tech" value={formatCurrency(locationVsTech.diff)} icon={<FiDollarSign size={14} />} accent="emerald" />
-              <BpKpi label="Loss on Tech" value="—" icon={<FiAlertCircle size={14} />} accent="red" />
-            </>
-          )}
-        </section>
+        <div className="bp-kpi-wrap">
+          <div className="bp-kpi-controls" ref={kpiMenuRef}>
+            <button
+              type="button"
+              onClick={() => setKpiOpen((o) => !o)}
+              className="bp-pill"
+              aria-haspopup="menu"
+              aria-expanded={kpiOpen}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0' }}
+            >
+              <span>Metrics: <strong>{PRESET_TAB_LABELS[kpiPreset]}</strong></span>
+              <span style={{ opacity: 0.6 }}>· {visibleKpiCount}/{ALL_KPI_KEYS.length}</span>
+              <FiChevronDown size={12} />
+            </button>
+            {kpiOpen && (
+              <div role="menu" className="bp-cv-popover">
+                {/* Tabs */}
+                <div className="bp-cv-tabs" role="tablist">
+                  {(['admin', 'tech', 'lm', 'custom'] as const).map((p) => {
+                    const active = kpiPreset === p;
+                    const isCustom = p === 'custom';
+                    const cls = ['bp-cv-tab', active ? 'bp-cv-tab--active' : '', isCustom ? 'bp-cv-tab--disabled' : ''].filter(Boolean).join(' ');
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        role="tab"
+                        aria-selected={active}
+                        disabled={isCustom}
+                        onClick={isCustom ? undefined : () => selectKpiPreset(p as Exclude<PresetId, 'custom'>)}
+                        title={isCustom ? "Auto-set when metrics don't match a preset" : undefined}
+                        className={cls}
+                      >
+                        {PRESET_TAB_LABELS[p]}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Single card listing all metrics as toggle pills */}
+                <div className="bp-cv-cards">
+                  <div className="bp-cv-card">
+                    <div className="bp-cv-card-header">
+                      <div className="bp-cv-card-title-wrap">
+                        <span className="bp-cv-card-title">Metrics</span>
+                        <span className="bp-cv-card-counter">{visibleKpiCount}/{ALL_KPI_KEYS.length}</span>
+                      </div>
+                      <button type="button" onClick={resetKpiToAdmin} className="bp-cv-show-all">
+                        Show all
+                      </button>
+                    </div>
+                    <div className="bp-cv-card-divider" />
+                    <div className="bp-cv-pills">
+                      {KPI_DEFS.map((d) => {
+                        const on = kpiVisibility[d.key];
+                        return (
+                          <button
+                            key={d.key}
+                            type="button"
+                            onClick={() => toggleKpi(d.key)}
+                            className={`bp-cv-pill ${on ? 'bp-cv-pill--on' : ''}`}
+                            aria-pressed={on}
+                          >
+                            {d.label}
+                            {on && <span aria-hidden className="bp-cv-pill-check">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bp-cv-footer">
+                  <button type="button" onClick={resetKpiToAdmin} className="bp-cv-reset">
+                    Reset to Admin View
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <section className="bp-kpi-strip stagger">
+            {kpiVisibility.assignedJobs   && <BpKpi label="Assigned Jobs"   value={String(totals.assigned)}                    icon={<FiBriefcase size={14} />}    accent="indigo" />}
+            {kpiVisibility.avgTicket      && <BpKpi label="Avg Ticket"      value={formatCurrency(totals.avgTicket)}           icon={<FiPercent size={14} />}      accent="cyan" />}
+            {kpiVisibility.jobProfit      && <BpKpi label="Job Profit"      value={formatCurrency(totals.profit)}              icon={<FiTrendingUp size={14} />}   accent="emerald" />}
+            {kpiVisibility.avgClosedJob   && <BpKpi label="Avg Closed Job"  value={formatCurrency(totals.avgClosedJob)}        icon={<FiCheckCircle size={14} />}  accent="violet" />}
+            {kpiVisibility.lmOwesCompany  && <BpKpi label="LM Owes Company" value={formatCurrency(closedTotals.lmOwesCompany)} icon={<FiDollarSign size={14} />}   accent="cyan" />}
+            {kpiVisibility.coOwesLm && mode === 'location' && <BpKpi label="Co. Owes LM" value={formatCurrency(closedTotals.companyOwesLm)} icon={<FiDollarSign size={14} />} accent="violet" />}
+            {mode === 'location' && (
+              <>
+                <BpKpi label="Profit on Tech" value={formatCurrency(locationVsTech.diff)} icon={<FiDollarSign size={14} />} accent="emerald" />
+                <BpKpi label="Loss on Tech" value="—" icon={<FiAlertCircle size={14} />} accent="red" />
+              </>
+            )}
+          </section>
+        </div>
 
         {/* ── Mid Row: Status Pie + Snapshot ── */}
         <div className="bp-mid-row">
@@ -731,17 +919,37 @@ export default function BalanceReportPage() {
                 </li>
                 <li className="bp-snap-divider" />
                 <li>
-                  <span className="bp-snap-label">Tech Owes LM</span>
-                  <span className="bp-snap-value" style={{ color: closedTotals.techOwedToLm > 0 ? '#fbbf24' : undefined }}>
-                    {formatCurrency(closedTotals.techOwedToLm)}
-                  </span>
-                </li>
-                <li>
                   <span className="bp-snap-label">LM Owes Company</span>
                   <span className="bp-snap-value" style={{ color: closedTotals.lmOwesCompany > 0 ? '#22d3ee' : undefined }}>
                     {formatCurrency(closedTotals.lmOwesCompany)}
                   </span>
                 </li>
+                {mode === 'location' && (
+                  <>
+                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
+                      <span className="bp-snap-label">↳ LM Cash</span>
+                      <span className="bp-snap-value">{formatCurrency(closedTotals.lmCash)}</span>
+                    </li>
+                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
+                      <span className="bp-snap-label">↳ LM Check</span>
+                      <span className="bp-snap-value">{formatCurrency(closedTotals.lmCheck)}</span>
+                    </li>
+                    <li>
+                      <span className="bp-snap-label">Company Owes LM</span>
+                      <span className="bp-snap-value" style={{ color: closedTotals.companyOwesLm > 0 ? '#a78bfa' : undefined }}>
+                        {formatCurrency(closedTotals.companyOwesLm)}
+                      </span>
+                    </li>
+                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
+                      <span className="bp-snap-label">↳ 40% Payout</span>
+                      <span className="bp-snap-value">{formatCurrency(closedTotals.shareAmount)}</span>
+                    </li>
+                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
+                      <span className="bp-snap-label">↳ LM Parts</span>
+                      <span className="bp-snap-value">{formatCurrency(closedTotals.lmParts)}</span>
+                    </li>
+                  </>
+                )}
               </ul>
             ) : (
               <EmptyState size="sm" title="No closed jobs" message="Apply filters or change date range." />
@@ -771,59 +979,74 @@ export default function BalanceReportPage() {
               </button>
               <span className="bp-pill">{closedRows.length} rows</span>
               {columnsOpen && (
-                <div
-                  role="menu"
-                  style={{
-                    position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 30,
-                    minWidth: 320, maxHeight: '70vh', overflowY: 'auto',
-                    background: '#0f172a', border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: 12, boxShadow: '0 12px 30px rgba(0,0,0,0.5)', padding: 12, fontSize: 13,
-                    color: '#e2e8f0',
-                  }}
-                >
-                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.6, marginBottom: 6 }}>Preset</div>
-                  {(['admin', 'tech', 'lm'] as const).map((p) => (
-                    <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', cursor: 'pointer', borderRadius: 6 }}>
-                      <input type="radio" name="bp-preset" checked={columnsPreset === p} onChange={() => selectColumnsPreset(p)} />
-                      {PRESET_LABELS[p]}
-                    </label>
-                  ))}
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px', borderRadius: 6, opacity: columnsPreset === 'custom' ? 1 : 0.5 }}>
-                    <input type="radio" name="bp-preset" checked={columnsPreset === 'custom'} readOnly disabled />
-                    {PRESET_LABELS.custom} <span style={{ fontSize: 11, color: '#94a3b8' }}>(auto when you change a checkbox)</span>
-                  </label>
-
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '10px 0' }} />
-
-                  <div style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.6, marginBottom: 6 }}>Columns</div>
-                  {COLUMN_GROUPS.map((g) => (
-                    <div key={g.id} style={{ marginBottom: 8 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <strong style={{ fontSize: 12 }}>{g.label}</strong>
-                        <button type="button" onClick={() => showAllInGroup(g.id)} style={{ fontSize: 11, color: '#94a3b8', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0 }}>
-                          Show all
+                <div role="menu" className="bp-cv-popover">
+                  {/* Tabs */}
+                  <div className="bp-cv-tabs" role="tablist">
+                    {(['admin', 'tech', 'lm', 'custom'] as const).map((p) => {
+                      const active = columnsPreset === p;
+                      const isCustom = p === 'custom';
+                      const cls = ['bp-cv-tab', active ? 'bp-cv-tab--active' : '', isCustom ? 'bp-cv-tab--disabled' : ''].filter(Boolean).join(' ');
+                      return (
+                        <button
+                          key={p}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          disabled={isCustom}
+                          onClick={isCustom ? undefined : () => selectColumnsPreset(p as Exclude<PresetId, 'custom'>)}
+                          title={isCustom ? "Auto-set when columns don't match a preset" : undefined}
+                          className={cls}
+                        >
+                          {PRESET_TAB_LABELS[p]}
                         </button>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2px 12px' }}>
-                        {g.cols.map((c) => (
-                          <label key={c.key} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 12 }}>
-                            <input type="checkbox" checked={columnsVisibility[c.key]} onChange={() => toggleColumn(c.key)} />
-                            {c.label}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    })}
+                  </div>
 
-                  <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', margin: '10px 0' }} />
+                  {/* Group cards */}
+                  <div className="bp-cv-cards">
+                    {COLUMN_GROUPS.map((g) => {
+                      const grpVisible = visibleByGroup.find((v) => v.id === g.id)?.visibleCount ?? 0;
+                      return (
+                        <div key={g.id} className="bp-cv-card">
+                          <div className="bp-cv-card-header">
+                            <div className="bp-cv-card-title-wrap">
+                              <span className="bp-cv-card-title">{g.label}</span>
+                              <span className="bp-cv-card-counter">{grpVisible}/{g.cols.length}</span>
+                            </div>
+                            <button type="button" onClick={() => showAllInGroup(g.id)} className="bp-cv-show-all">
+                              Show all
+                            </button>
+                          </div>
+                          <div className="bp-cv-card-divider" />
+                          <div className="bp-cv-pills">
+                            {g.cols.map((c) => {
+                              const on = columnsVisibility[c.key];
+                              return (
+                                <button
+                                  key={c.key}
+                                  type="button"
+                                  onClick={() => toggleColumn(c.key)}
+                                  className={`bp-cv-pill ${on ? 'bp-cv-pill--on' : ''}`}
+                                  aria-pressed={on}
+                                >
+                                  {c.label}
+                                  {on && <span aria-hidden className="bp-cv-pill-check">✓</span>}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
 
-                  <button
-                    type="button"
-                    onClick={resetToFullAdmin}
-                    style={{ width: '100%', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0', cursor: 'pointer', fontSize: 12 }}
-                  >
-                    Reset to Full Admin View
-                  </button>
+                  {/* Reset (secondary outline) */}
+                  <div className="bp-cv-footer">
+                    <button type="button" onClick={resetToFullAdmin} className="bp-cv-reset">
+                      Reset to Full Admin View
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

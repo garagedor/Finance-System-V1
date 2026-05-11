@@ -545,3 +545,317 @@
   .balance-page .bp-title { font-size: 22px; }
   .balance-page .bp-rows-badge { padding: 6px 12px; }
 }
+
+/* ─── KPI strip wrapper (anchors the visibility trigger above the cards) ── */
+.bp-kpi-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.bp-kpi-controls {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ─── Column Visibility Popover ─────────────────────────────────────────── */
+.bp-cv-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  min-width: 420px;
+  max-width: 460px;
+  max-height: 78vh;
+  overflow-y: auto;
+  background: #0b1220;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+  padding: 16px;
+  color: #e2e8f0;
+}
+
+.bp-cv-tabs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  margin-bottom: 16px;
+}
+.bp-cv-tab {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  background: transparent;
+  color: #cbd5e1;
+  border: none;
+  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.bp-cv-tab:not(.bp-cv-tab--active):not(.bp-cv-tab--disabled):hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
+}
+.bp-cv-tab--active {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.95), rgba(79, 70, 229, 0.95));
+  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(165, 180, 252, 0.4), 0 6px 18px rgba(99, 102, 241, 0.3);
+}
+.bp-cv-tab--disabled {
+  color: #475569;
+  cursor: default;
+}
+.bp-cv-tab--disabled.bp-cv-tab--active {
+  color: #ffffff;
+}
+
+.bp-cv-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.bp-cv-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 14px;
+}
+.bp-cv-card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.bp-cv-card-title-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.bp-cv-card-title {
+  font-size: 13px;
+  color: #f1f5f9;
+  font-weight: 600;
+}
+.bp-cv-card-counter {
+  font-size: 11px;
+  color: #64748b;
+}
+.bp-cv-show-all {
+  font-size: 11px;
+  font-weight: 500;
+  color: #a5b4fc;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s ease;
+}
+.bp-cv-show-all:hover {
+  color: #e0e7ff;
+}
+.bp-cv-card-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.06);
+  margin-bottom: 10px;
+}
+
+.bp-cv-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bp-cv-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: #94a3b8;
+  transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+}
+.bp-cv-pill:hover {
+  transform: scale(1.02);
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #cbd5e1;
+}
+.bp-cv-pill--on {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.45);
+  color: #c7d2fe;
+}
+.bp-cv-pill--on:hover {
+  border-color: rgba(165, 180, 252, 0.6);
+  color: #e0e7ff;
+}
+.bp-cv-pill-check {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.bp-cv-footer {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+.bp-cv-reset {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.bp-cv-reset:hover {
+  border-color: rgba(165, 180, 252, 0.5);
+  color: #e2e8f0;
+}
+
+/* ─── Payment Method Report — drill-down + accordions ───────────────────── */
+.pmr-tech-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.pmr-tech-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.pmr-tech-row--selected {
+  background: rgba(99, 102, 241, 0.10);
+  box-shadow: inset 3px 0 0 #6366f1;
+}
+.pmr-tech-row--selected:hover {
+  background: rgba(99, 102, 241, 0.14);
+}
+.pmr-row-arrow {
+  display: inline-block;
+  margin-right: 6px;
+  color: #a5b4fc;
+  font-size: 10px;
+}
+.pmr-row-action {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: right;
+}
+.pmr-tech-row--selected .pmr-row-action {
+  color: #c7d2fe;
+}
+
+.pmr-clear-btn {
+  font-size: 12px;
+  color: #94a3b8;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.pmr-clear-btn:hover {
+  border-color: rgba(165, 180, 252, 0.5);
+  color: #e2e8f0;
+}
+
+.pmr-details-summary {
+  font-size: 13px;
+  color: #94a3b8;
+  margin-bottom: 14px;
+}
+.pmr-subhead {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: #94a3b8;
+  margin: 16px 0 8px;
+}
+
+.pmr-mini-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.pmr-mini-table th,
+.pmr-mini-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.pmr-mini-table th {
+  color: #94a3b8;
+  font-weight: 500;
+  text-align: left;
+}
+
+/* Accordion shared (used for tech-jobs accordion + standalone jobs accordion) */
+.pmr-accordion-wrap {
+  margin-top: 12px;
+}
+.pmr-accordion {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+}
+.pmr-accordion-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: #f1f5f9;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+.pmr-accordion-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+.pmr-accordion-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.pmr-chevron {
+  display: inline-block;
+  color: #94a3b8;
+  font-size: 11px;
+  width: 10px;
+}
+.pmr-accordion-body {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Panel-as-accordion (By Location / By Provider): the existing panel-header
+   becomes a clickable button. Reset the button-default styling. */
+.balance-page .panel-header.pmr-panel-toggle {
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+.balance-page .panel-header.pmr-panel-toggle:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+.pmr-chevron-lg {
+  display: inline-block;
+  color: #94a3b8;
+  font-size: 14px;
+  transition: transform 0.2s ease;
+}

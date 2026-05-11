@@ -10,8 +10,6 @@ import {
   calcTipsTotal,
   calcFinalBalance,
   calcStandardShare,
-  calcTechOwedToLm,
-  calcLmOwedFromTech,
   calcLmOwesCompany,
   toNumber,
 } from '../utils/calculations';
@@ -123,9 +121,10 @@ export async function GET(req: NextRequest) {
       const shareAmount = calcStandardShare(totalProfit, sharePct);
       const tips = calcTipsTotal(job, { includeCheck: true, includeCompanyCashBonus: true });
       const balance = calcFinalBalance(shareAmount, job.techParts, job.techPaidCash);
-      const techOwedToLm = calcTechOwedToLm(job);
-      const lmOwedFromTech = calcLmOwedFromTech(job);
       const lmOwesCompany = calcLmOwesCompany(job);
+      // Location-mode only: what the company owes the LM = their 40% payout
+      // (locationPct share of profit) plus parts the LM fronted on the job.
+      const companyOwesLm = mode === 'location' ? shareAmount + toNumber(job.lmParts) : 0;
 
       const approvalsRaw = Array.isArray(job.approvals) ? job.approvals : (typeof job.approvals === 'string' ? job.approvals.split(',') : []);
       const approvals = [...new Set(approvalsRaw.map((a: any) => String(a).trim()).filter(Boolean))].map((name: any) => ({
@@ -177,9 +176,8 @@ export async function GET(req: NextRequest) {
         approvals,
         paymentMethod,
         balance: toNumber(balance),
-        techOwedToLm: toNumber(techOwedToLm),
-        lmOwedFromTech: toNumber(lmOwedFromTech),
         lmOwesCompany: toNumber(lmOwesCompany),
+        companyOwesLm: toNumber(companyOwesLm),
       };
     });
 

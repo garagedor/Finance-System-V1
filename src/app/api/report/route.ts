@@ -12,7 +12,6 @@ import {
   calcTipsTotal,
   calcTechShare,
   calcProviderShare,
-  calcTechOwedToLm,
   calcLmOwesCompany,
   toNumber,
 } from '../utils/calculations';
@@ -136,11 +135,11 @@ const buildDateRangeFilter = (dateField: string, startDate: Date | null, endDate
   };
 };
 
-const filterJobByParams = (job: JobRow | undefined, techs: string[], location: string, provider: string) => {
+const filterJobByParams = (job: JobRow | undefined, techs: string[], locations: string[], providers: string[]) => {
   if (!job) return false;
   if (techs.length > 0 && !techs.includes(job.tech || '')) return false;
-  if (location && job.location !== location) return false;
-  if (provider && job.provider !== provider) return false;
+  if (locations.length > 0 && !locations.includes(job.location || '')) return false;
+  if (providers.length > 0 && !providers.includes(job.provider || '')) return false;
   return true;
 };
 
@@ -192,8 +191,8 @@ export async function GET(req: NextRequest) {
     const startDate = toDate(searchParams.get('startDate'));
     const endDate = inclusiveEnd(searchParams.get('endDate'));
     const techs = searchParams.getAll('tech').map(t => t.trim()).filter(Boolean);
-    const location = searchParams.get('location')?.trim() || '';
-    const provider = searchParams.get('provider')?.trim() || '';
+    const locations = searchParams.getAll('location').map((l) => l.trim()).filter(Boolean);
+    const providers = searchParams.getAll('provider').map((p) => p.trim()).filter(Boolean);
     const page = Math.max(1, Number(searchParams.get('page') || '1'));
     const pageSize = Math.max(1, Math.min(200, Number(searchParams.get('pageSize') || '50')));
 
@@ -224,8 +223,8 @@ export async function GET(req: NextRequest) {
     if (type === 'penalty') {
       const match: Record<string, any> = {};
       if (techs.length > 0) match.tech = { $in: techs };
-      if (location) match.location = location;
-      if (provider) match.provider = provider;
+      if (locations.length) match.location = { $in: locations };
+      if (providers.length) match.provider = { $in: providers };
       match.status = 'X close';
 
       const { dataPipeline, countPipeline } = buildJobPipeline(match, startDate, endDate, page, pageSize);
@@ -257,7 +256,6 @@ export async function GET(req: NextRequest) {
           lmParts: toNumber(job.lmParts || 0),
           lmCash: toNumber(job.lmCash || 0),
           lmCheck: toNumber(job.lmCheck || 0),
-          techOwedToLm: calcTechOwedToLm(job),
           lmOwesCompany: calcLmOwesCompany(job),
         };
       };
@@ -280,8 +278,8 @@ export async function GET(req: NextRequest) {
     if (type === 'provider') {
       const match: Record<string, any> = {};
       if (techs.length > 0) match.tech = { $in: techs };
-      if (location) match.location = location;
-      if (provider) match.provider = provider;
+      if (locations.length) match.location = { $in: locations };
+      if (providers.length) match.provider = { $in: providers };
       match.status = { $in: ['Closed', 'X close'] };
 
       const { dataPipeline, countPipeline } = buildJobPipeline(match, startDate, endDate, page, pageSize);
@@ -311,7 +309,6 @@ export async function GET(req: NextRequest) {
           lmParts: toNumber(job.lmParts || 0),
           lmCash: toNumber(job.lmCash || 0),
           lmCheck: toNumber(job.lmCheck || 0),
-          techOwedToLm: calcTechOwedToLm(job),
           lmOwesCompany: calcLmOwesCompany(job),
         };
       };
@@ -345,7 +342,7 @@ export async function GET(req: NextRequest) {
         const jobId = (dispute.jobId || '').toString();
         const job = jobMap.get(jobId) || jobMap.get(jobId.trim()) || jobMap.get(parseObjectId(jobId)?.toString() || '');
 
-        if (!filterJobByParams(job, techs, location, provider)) return [];
+        if (!filterJobByParams(job, techs, locations, providers)) return [];
 
         const {
           totalPaid,
@@ -393,7 +390,6 @@ export async function GET(req: NextRequest) {
             lmParts: toNumber(job?.lmParts || 0),
             lmCash: toNumber(job?.lmCash || 0),
             lmCheck: toNumber(job?.lmCheck || 0),
-            techOwedToLm: calcTechOwedToLm(job!),
             lmOwesCompany: calcLmOwesCompany(job!),
           },
         ];
@@ -440,7 +436,7 @@ export async function GET(req: NextRequest) {
       const jobId = (refund.jobId || '').toString();
       const job = refundJobMap.get(jobId) || refundJobMap.get(jobId.trim()) || refundJobMap.get(parseObjectId(jobId)?.toString() || '');
 
-      if (!filterJobByParams(job, techs, location, provider)) return [];
+      if (!filterJobByParams(job, techs, locations, providers)) return [];
 
       const {
         totalPaid,
@@ -488,7 +484,6 @@ export async function GET(req: NextRequest) {
           lmParts: toNumber(job?.lmParts || 0),
           lmCash: toNumber(job?.lmCash || 0),
           lmCheck: toNumber(job?.lmCheck || 0),
-          techOwedToLm: calcTechOwedToLm(job!),
           lmOwesCompany: calcLmOwesCompany(job!),
         },
       ];

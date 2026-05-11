@@ -106,14 +106,14 @@ export default function ReportPage() {
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
   const [techs, setTechs] = useState<string[]>([]);
-  const [location, setLocation] = useState('');
-  const [provider, setProvider] = useState('');
+  const [locations, setLocations] = useState<string[]>([]);
+  const [providers, setProviders] = useState<string[]>([]);
   // Tracks the filter values currently used for fetching data
   const [activeFilters, setActiveFilters] = useState({
     type: 'penalty' as ReportType,
     techs: [] as string[],
-    location: '',
-    provider: '',
+    locations: [] as string[],
+    providers: [] as string[],
     startDate: defaultStart,
     endDate: defaultEnd,
     page: 1
@@ -148,8 +148,8 @@ export default function ReportPage() {
         const active = {
           type: (savedType as ReportType) || 'penalty',
           techs: [] as string[],
-          location: '',
-          provider: '',
+          locations: [] as string[],
+          providers: [] as string[],
           startDate: defaultStart,
           endDate: defaultEnd,
           page: 1
@@ -168,13 +168,16 @@ export default function ReportPage() {
           setTechs(savedTechs);
           active.techs = savedTechs;
         }
+        // Backward-compat: legacy storage saved single string; new shape is array.
         if (savedLocation) {
-          setLocation(savedLocation);
-          active.location = savedLocation;
+          const arr = Array.isArray(savedLocation) ? savedLocation : [savedLocation];
+          setLocations(arr);
+          active.locations = arr;
         }
         if (savedProvider) {
-          setProvider(savedProvider);
-          active.provider = savedProvider;
+          const arr = Array.isArray(savedProvider) ? savedProvider : [savedProvider];
+          setProviders(arr);
+          active.providers = arr;
         }
 
 
@@ -239,8 +242,8 @@ export default function ReportPage() {
     if (activeFilters.startDate) params.set('startDate', activeFilters.startDate);
     if (activeFilters.endDate) params.set('endDate', activeFilters.endDate);
     activeFilters.techs.forEach(t => params.append('tech', t));
-    if (activeFilters.location) params.set('location', activeFilters.location);
-    if (activeFilters.provider) params.set('provider', activeFilters.provider);
+    activeFilters.locations.forEach((l) => params.append('location', l));
+    activeFilters.providers.forEach((p) => params.append('provider', p));
     params.set('page', String(activeFilters.page));
     params.set('pageSize', String(pageSize));
     const fetchKey = params.toString();
@@ -287,8 +290,8 @@ export default function ReportPage() {
     if (activeFilters.startDate) params.set('startDate', activeFilters.startDate);
     if (activeFilters.endDate) params.set('endDate', activeFilters.endDate);
     activeFilters.techs.forEach(t => params.append('tech', t));
-    if (activeFilters.location) params.set('location', activeFilters.location);
-    if (activeFilters.provider) params.set('provider', activeFilters.provider);
+    activeFilters.locations.forEach((l) => params.append('location', l));
+    activeFilters.providers.forEach((p) => params.append('provider', p));
     params.set('page', '1');
     params.set('pageSize', '1');
     params.set('calculateTotals', 'true');
@@ -400,8 +403,8 @@ export default function ReportPage() {
     const nextActive = {
       type: reportType,
       techs,
-      location,
-      provider,
+      locations,
+      providers,
       startDate,
       endDate,
       page: 1
@@ -413,14 +416,15 @@ export default function ReportPage() {
     setTotalsCalculated(false);
     setTotals(null);
 
-    // Persist to sessionStorage
+    // Persist to sessionStorage. Storage key names stay 'location'/'provider'
+    // for backward-compat with the load logic; the values are now arrays.
     sessionStorage.setItem('report-filters', JSON.stringify({
       type: reportType,
       start: startDate,
       end: endDate,
       techs,
-      location,
-      provider
+      location: locations,
+      provider: providers,
     }));
   };
 
@@ -449,8 +453,8 @@ export default function ReportPage() {
       start: startDate,
       end: endDate,
       techs,
-      location,
-      provider,
+      location: locations,
+      provider: providers,
     }));
   };
 
@@ -513,34 +517,29 @@ export default function ReportPage() {
             />
           </FilterField>
           <FilterField label="Location">
-            <select
-              value={location}
-              onChange={(e) => {
-                setLocation(e.target.value);
-                setFiltersDirty(true);
-              }}
-            >
-              <option value="">All</option>
-              {lookups.locations.map((l) => (
-                <option key={l._id} value={l._id}>{l._id}</option>
-              ))}
-            </select>
+            <MultiSelect
+              options={lookups.locations.map((l) => l._id)}
+              selected={locations}
+              onChange={(v) => { setLocations(v); setFiltersDirty(true); }}
+              placeholder="All"
+              allLabel="All"
+            />
           </FilterField>
           <FilterField label="Provider">
-            <select
-              value={provider}
-              onChange={(e) => {
-                setProvider(e.target.value);
+            <MultiSelect
+              options={lookups.providers.map((p) => (p as any).name || p._id)}
+              selected={providers.map((id) => providerLabel.get(id) || id)}
+              onChange={(labels) => {
+                const ids = labels.map((l) => {
+                  const found = lookups.providers.find((p) => ((p as any).name || p._id) === l);
+                  return found ? found._id : l;
+                });
+                setProviders(ids);
                 setFiltersDirty(true);
               }}
-            >
-              <option value="">All</option>
-              {lookups.providers.map((p) => (
-                <option key={p._id} value={p._id}>
-                  {(p as any).name || p._id}
-                </option>
-              ))}
-            </select>
+              placeholder="All"
+              allLabel="All"
+            />
           </FilterField>
         </FiltersPanel>
 

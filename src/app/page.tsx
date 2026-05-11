@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { FiBriefcase, FiTrendingUp, FiAlertTriangle, FiPackage, FiAward } from 'react-icons/fi';
+import { FiBriefcase, FiTrendingUp, FiAlertTriangle, FiPackage, FiAward, FiCreditCard } from 'react-icons/fi';
 import DateRangePicker from '@/components/DateRangePicker';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
 import EmptyState from '@/components/EmptyState';
@@ -15,9 +15,10 @@ type DashboardData = {
   jobsByLocation: Array<{ _id: string; count: number }>;
   techStats: Array<{ tech: string; avgTicket: number; closedPct: number; count: number }>;
   locationStats: Array<{ location: string; avgTicket: number; closedPct: number; count: number }>;
-  companyPenaltyLoss: Array<{ _id: string; totalPenaltyLoss: number }>;
-  companyNetProfit: Array<{ _id: string; totalNetProfit: number }>;
-  totalCompanyParts: Array<{ _id: string; totalParts: number }>;
+  companyPenaltyLoss: Array<{ _id: string; totalPenaltyLoss: number; count?: number }>;
+  companyNetProfit: Array<{ _id: string; totalNetProfit: number; count?: number }>;
+  totalCompanyParts: Array<{ _id: string; totalParts: number; count?: number }>;
+  cardFeeProfit?: Array<{ _id: any; totalCardFeeProfit: number; count?: number }>;
 };
 
 export default function HomePage() {
@@ -108,19 +109,7 @@ export default function HomePage() {
     if (isInitialized) fetchData();
   }, [appliedStart, appliedEnd, isInitialized]);
 
-  const validateRange = (start: string, end: string) => {
-    const s = new Date(start);
-    const e = new Date(end);
-    const diffTime = Math.abs(e.getTime() - s.getTime());
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays <= 7;
-  };
-
   const handleApply = () => {
-    if (!validateRange(startDate, endDate)) {
-      setError('Date range cannot exceed 7 days.');
-      return;
-    }
     setError(null);
     setAppliedStart(startDate);
     setAppliedEnd(endDate);
@@ -138,8 +127,7 @@ export default function HomePage() {
     setStartDate(start);
     setEndDate(end);
     setFiltersDirty(true);
-    if (!validateRange(start, end)) setError('Date range cannot exceed 7 days.');
-    else setError(null);
+    setError(null);
   };
 
   // Display-only date formatter
@@ -153,7 +141,13 @@ export default function HomePage() {
     const totalProfit  = data.companyNetProfit.reduce((s, l) => s + (l.totalNetProfit || 0), 0);
     const totalPenalty = data.companyPenaltyLoss.reduce((s, l) => s + (l.totalPenaltyLoss || 0), 0);
     const totalParts   = data.totalCompanyParts.reduce((s, l) => s + (l.totalParts || 0), 0);
-    return { totalJobs, totalProfit, totalPenalty, totalParts };
+    const cardFeeProfit = (data.cardFeeProfit || []).reduce((s, r) => s + (r.totalCardFeeProfit || 0), 0);
+    // Per-KPI underlying job counts (basis-of-calculation).
+    const profitJobs   = data.companyNetProfit.reduce((s, l) => s + (l.count || 0), 0);
+    const penaltyJobs  = data.companyPenaltyLoss.reduce((s, l) => s + (l.count || 0), 0);
+    const partsJobs    = data.totalCompanyParts.reduce((s, l) => s + (l.count || 0), 0);
+    const cardFeeJobs  = (data.cardFeeProfit || []).reduce((s, r) => s + (r.count || 0), 0);
+    return { totalJobs, totalProfit, totalPenalty, totalParts, cardFeeProfit, profitJobs, penaltyJobs, partsJobs, cardFeeJobs };
   }, [data]);
 
   // ── Initial skeleton ──
@@ -192,6 +186,13 @@ export default function HomePage() {
   const locAvgTicketCtx   = [...(data.locationStats || [])].sort((a, b) => b.avgTicket - a.avgTicket);
   const techClosedPctCtx  = [...(data.techStats || [])].sort((a, b) => b.closedPct - a.closedPct);
   const locClosedPctCtx   = [...(data.locationStats || [])].sort((a, b) => b.closedPct - a.closedPct);
+
+  // Per-location assigned-job counts, used by Company Financial cards to show
+  // "$X · N jobs" next to each location row.
+  const jobsByLocation: Record<string, number> = (data.jobsByLocation || []).reduce(
+    (acc, l) => ({ ...acc, [l._id]: l.count || 0 }),
+    {} as Record<string, number>
+  );
 
   return (
     <main className="relative min-h-screen pb-16">
@@ -243,7 +244,7 @@ export default function HomePage() {
 
         {/* ── HERO KPI STRIP ── */}
         {kpis && (
-          <section className="grid grid-cols-2 gap-4 lg:grid-cols-4 stagger">
+          <section className="grid grid-cols-2 gap-4 lg:grid-cols-5 stagger">
             <KpiCard
               label="Total Jobs"
               value={String(kpis.totalJobs)}
@@ -255,18 +256,28 @@ export default function HomePage() {
               value={formatCurrency(kpis.totalProfit)}
               icon={<FiTrendingUp size={16} />}
               accent={kpis.totalProfit >= 0 ? 'emerald' : 'red'}
+              jobCount={kpis.profitJobs}
             />
             <KpiCard
               label="Penalty Loss"
               value={formatCurrency(kpis.totalPenalty)}
               icon={<FiAlertTriangle size={16} />}
               accent="amber"
+              jobCount={kpis.penaltyJobs}
             />
             <KpiCard
               label="Parts Total"
               value={formatCurrency(kpis.totalParts)}
               icon={<FiPackage size={16} />}
               accent="cyan"
+              jobCount={kpis.partsJobs}
+            />
+            <KpiCard
+              label="Card Fee Profit"
+              value={formatCurrency(kpis.cardFeeProfit)}
+              icon={<FiCreditCard size={16} />}
+              accent="violet"
+              jobCount={kpis.cardFeeJobs}
             />
           </section>
         )}
@@ -363,6 +374,7 @@ export default function HomePage() {
               items={data.companyPenaltyLoss || []}
               valueProp="totalPenaltyLoss"
               tone="red"
+              jobsByKey={jobsByLocation}
             />
             <FinancialCard
               title="Net Profit"
@@ -370,6 +382,7 @@ export default function HomePage() {
               items={data.companyNetProfit || []}
               valueProp="totalNetProfit"
               tone="emerald"
+              jobsByKey={jobsByLocation}
             />
             <FinancialCard
               title="Parts Total"
@@ -377,6 +390,7 @@ export default function HomePage() {
               items={data.totalCompanyParts || []}
               valueProp="totalParts"
               tone="cyan"
+              jobsByKey={jobsByLocation}
             />
           </div>
         </section>
@@ -388,7 +402,7 @@ export default function HomePage() {
 
 /* ────────────── KPI CARD ────────────── */
 
-type Accent = 'indigo' | 'emerald' | 'red' | 'amber' | 'cyan';
+type Accent = 'indigo' | 'emerald' | 'red' | 'amber' | 'cyan' | 'violet';
 
 const accentMap: Record<Accent, { ring: string; glow: string; icon: string; bg: string }> = {
   indigo:  { ring: 'rgba(99,102,241,0.25)',  glow: 'rgba(99,102,241,0.12)',  icon: '#a5b4fc', bg: 'rgba(99,102,241,0.08)' },
@@ -396,11 +410,12 @@ const accentMap: Record<Accent, { ring: string; glow: string; icon: string; bg: 
   red:     { ring: 'rgba(239,68,68,0.25)',   glow: 'rgba(239,68,68,0.10)',   icon: '#f87171', bg: 'rgba(239,68,68,0.08)'  },
   amber:   { ring: 'rgba(245,158,11,0.25)',  glow: 'rgba(245,158,11,0.10)',  icon: '#fbbf24', bg: 'rgba(245,158,11,0.08)' },
   cyan:    { ring: 'rgba(6,182,212,0.25)',   glow: 'rgba(6,182,212,0.10)',   icon: '#22d3ee', bg: 'rgba(6,182,212,0.08)'  },
+  violet:  { ring: 'rgba(139,92,246,0.25)',  glow: 'rgba(139,92,246,0.12)',  icon: '#c4b5fd', bg: 'rgba(139,92,246,0.08)' },
 };
 
 function KpiCard({
-  label, value, icon, accent,
-}: { label: string; value: string; icon: React.ReactNode; accent: Accent }) {
+  label, value, icon, accent, jobCount,
+}: { label: string; value: string; icon: React.ReactNode; accent: Accent; jobCount?: number }) {
   const a = accentMap[accent];
   return (
     <div
@@ -415,6 +430,11 @@ function KpiCard({
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
           <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-white truncate">{value}</p>
+          {typeof jobCount === 'number' && (
+            <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
+              {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
+            </p>
+          )}
         </div>
         <div
           className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl"
@@ -508,6 +528,11 @@ function LeaderboardCard({
                     <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-200">
                       {item[keyProp]}
                     </span>
+                    {typeof item.count === 'number' && (
+                      <span className="flex-shrink-0 text-[11px] font-medium tabular-nums text-slate-500">
+                        {item.count} {item.count === 1 ? 'job' : 'jobs'}
+                      </span>
+                    )}
                     <span className={`flex-shrink-0 text-[13px] font-bold tabular-nums ${valueColor}`}>
                       {formatValue(val)}
                     </span>
@@ -525,15 +550,18 @@ function LeaderboardCard({
 /* ────────────── FINANCIAL CARD ────────────── */
 
 function FinancialCard({
-  title, subtitle, items, valueProp, tone,
+  title, subtitle, items, valueProp, tone, jobsByKey,
 }: {
   title: string;
   subtitle: string;
   items: any[];
   valueProp: string;
   tone: 'emerald' | 'red' | 'cyan';
+  jobsByKey?: Record<string, number>;
 }) {
   const total = items.reduce((s, item) => s + (item[valueProp] || 0), 0);
+  // Sort the per-location breakdown highest → lowest by the displayed value.
+  const sortedItems = [...items].sort((a, b) => (b[valueProp] || 0) - (a[valueProp] || 0));
   const a = accentMap[tone];
 
   return (
@@ -568,17 +596,27 @@ function FinancialCard({
           </div>
         ) : (
           <ul className="overflow-y-auto" style={{ maxHeight: 200 }}>
-            {items.map((item, idx) => (
-              <li
-                key={idx}
-                className="flex items-center justify-between border-b border-white/5 px-5 py-2.5 last:border-0 transition-colors hover:bg-indigo-500/5"
-              >
-                <span className="text-[13px] font-medium text-slate-300">{item._id}</span>
-                <span className="text-[13px] font-semibold tabular-nums text-slate-100">
-                  {formatCurrency(item[valueProp])}
-                </span>
-              </li>
-            ))}
+            {sortedItems.map((item, idx) => {
+              const jobCount = jobsByKey?.[item._id];
+              return (
+                <li
+                  key={idx}
+                  className="flex items-center justify-between gap-3 border-b border-white/5 px-5 py-2.5 last:border-0 transition-colors hover:bg-indigo-500/5"
+                >
+                  <span className="text-[13px] font-medium text-slate-300">{item._id}</span>
+                  <div className="flex items-center gap-3">
+                    {typeof jobCount === 'number' && (
+                      <span className="text-[11px] font-medium tabular-nums text-slate-500">
+                        {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
+                      </span>
+                    )}
+                    <span className="text-[13px] font-semibold tabular-nums text-slate-100">
+                      {formatCurrency(item[valueProp])}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>
