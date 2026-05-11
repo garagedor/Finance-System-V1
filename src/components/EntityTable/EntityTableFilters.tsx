@@ -61,9 +61,14 @@ export function EntityTableFilters<T>({
     useEffect(() => {
         if (!filtersOpen) return;
         const handler = (event: MouseEvent | TouchEvent) => {
-            const target = event.target as Node;
+            const target = event.target as HTMLElement;
             if (filtersRef.current?.contains(target)) return;
             if (popupRef.current?.contains(target)) return;
+            // The DateRangePicker renders its calendar through react-datepicker's
+            // portal, so a click on a date is technically outside `popupRef`.
+            // Treat those clicks as inside the filter popup so picking a date
+            // doesn't dismiss the whole filter panel.
+            if (target.closest?.('.react-datepicker')) return;
             setFiltersOpen(false);
         };
         document.addEventListener('mousedown', handler);
