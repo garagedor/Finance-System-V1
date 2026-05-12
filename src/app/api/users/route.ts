@@ -20,7 +20,7 @@ const handlers = createCrudHandlers<User>({
   normalizeRow: normalizeUser,
 });
 
-const { GET, PUT, DELETE } = handlers;
+const { GET, DELETE } = handlers;
 
 // Custom POST handler to hash the password before saving
 export const POST = async (request: NextRequest) => {
@@ -47,4 +47,28 @@ export const POST = async (request: NextRequest) => {
   }
 };
 
-export { GET, PUT, DELETE };
+// Custom PUT handler: hash a new password if one is supplied, otherwise drop
+// the field so the existing hash isn't overwritten with an empty value.
+export const PUT = async (request: NextRequest) => {
+  try {
+    const body = await request.clone().json();
+
+    if (body.password) {
+      body.password = await bcrypt.hash(body.password, 10);
+    } else {
+      delete body.password;
+    }
+
+    const modifiedRequest = new NextRequest(request.url, {
+      method: 'PUT',
+      headers: request.headers,
+      body: JSON.stringify(body),
+    });
+
+    return handlers.PUT(modifiedRequest);
+  } catch (e) {
+    return handlers.PUT(request);
+  }
+};
+
+export { GET, DELETE };

@@ -21,6 +21,10 @@ export default function TablesPage() {
       if (user?.type !== 'admin' && user?.type !== 'location-manager' && entityParam !== 'job') {
         return 'job';
       }
+      // Users entity is admin-only.
+      if (entityParam === 'user' && user?.type !== 'admin') {
+        return 'job';
+      }
       return entityParam;
     }
 
@@ -30,6 +34,9 @@ export default function TablesPage() {
       const cached = sessionStorage.getItem('tables-selected-entity');
       if (isEntityKey(cached)) {
         if (user.type !== 'admin' && user.type !== 'location-manager' && cached !== 'job') {
+          return 'job';
+        }
+        if (cached === 'user' && user.type !== 'admin') {
           return 'job';
         }
         return cached;
@@ -57,7 +64,10 @@ export default function TablesPage() {
 
   const filteredOptions = useMemo(() => {
     const isViewer = user?.type === 'admin' || user?.type === 'location-manager';
-    return isViewer ? entityOptions : entityOptions.filter((opt) => opt.key === 'job');
+    if (!isViewer) return entityOptions.filter((opt) => opt.key === 'job');
+    // Only admins manage users.
+    if (user?.type !== 'admin') return entityOptions.filter((opt) => opt.key !== 'user');
+    return entityOptions;
   }, [user]);
 
   const selector = (
