@@ -288,6 +288,16 @@ export async function GET(req: NextRequest) {
                                 }
                             }
                         }
+                    ],
+                    totalSales: [
+                        { $match: { status: 'Closed' } },
+                        {
+                            $group: {
+                                _id: null,
+                                totalSales: { $sum: '$valTotalAmount' },
+                                count: { $sum: 1 }
+                            }
+                        }
                     ]
                 },
             },

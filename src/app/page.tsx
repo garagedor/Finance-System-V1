@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { FiBriefcase, FiTrendingUp, FiAlertTriangle, FiPackage, FiAward, FiCreditCard } from 'react-icons/fi';
+import { FiBriefcase, FiTrendingUp, FiAlertTriangle, FiPackage, FiAward, FiCreditCard, FiDollarSign } from 'react-icons/fi';
 import DateRangePicker from '@/components/DateRangePicker';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
 import EmptyState from '@/components/EmptyState';
@@ -19,6 +19,7 @@ type DashboardData = {
   companyNetProfit: Array<{ _id: string; totalNetProfit: number; count?: number }>;
   totalCompanyParts: Array<{ _id: string; totalParts: number; count?: number }>;
   cardFeeProfit?: Array<{ _id: any; totalCardFeeProfit: number; count?: number }>;
+  totalSales?: Array<{ _id: any; totalSales: number; count?: number }>;
 };
 
 export default function HomePage() {
@@ -142,12 +143,14 @@ export default function HomePage() {
     const totalPenalty = data.companyPenaltyLoss.reduce((s, l) => s + (l.totalPenaltyLoss || 0), 0);
     const totalParts   = data.totalCompanyParts.reduce((s, l) => s + (l.totalParts || 0), 0);
     const cardFeeProfit = (data.cardFeeProfit || []).reduce((s, r) => s + (r.totalCardFeeProfit || 0), 0);
+    const totalSales   = (data.totalSales || []).reduce((s, r) => s + (r.totalSales || 0), 0);
     // Per-KPI underlying job counts (basis-of-calculation).
     const profitJobs   = data.companyNetProfit.reduce((s, l) => s + (l.count || 0), 0);
     const penaltyJobs  = data.companyPenaltyLoss.reduce((s, l) => s + (l.count || 0), 0);
     const partsJobs    = data.totalCompanyParts.reduce((s, l) => s + (l.count || 0), 0);
     const cardFeeJobs  = (data.cardFeeProfit || []).reduce((s, r) => s + (r.count || 0), 0);
-    return { totalJobs, totalProfit, totalPenalty, totalParts, cardFeeProfit, profitJobs, penaltyJobs, partsJobs, cardFeeJobs };
+    const salesJobs    = (data.totalSales || []).reduce((s, r) => s + (r.count || 0), 0);
+    return { totalJobs, totalSales, totalProfit, totalPenalty, totalParts, cardFeeProfit, salesJobs, profitJobs, penaltyJobs, partsJobs, cardFeeJobs };
   }, [data]);
 
   // ── Initial skeleton ──
@@ -244,12 +247,19 @@ export default function HomePage() {
 
         {/* ── HERO KPI STRIP ── */}
         {kpis && (
-          <section className="grid grid-cols-2 gap-4 lg:grid-cols-5 stagger">
+          <section className="grid grid-cols-2 gap-4 lg:grid-cols-6 stagger">
             <KpiCard
               label="Total Jobs"
               value={String(kpis.totalJobs)}
               icon={<FiBriefcase size={16} />}
               accent="indigo"
+            />
+            <KpiCard
+              label="Total Sales"
+              value={formatCurrency(kpis.totalSales)}
+              icon={<FiDollarSign size={16} />}
+              accent="emerald"
+              jobCount={kpis.salesJobs}
             />
             <KpiCard
               label="Net Profit"
