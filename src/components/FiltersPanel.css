@@ -64,13 +64,13 @@
 .filter-field {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    min-width: 160px;
+    gap: 8px;
+    min-width: 180px;
 }
 
 .filter-field label {
     font-weight: 600;
-    font-size: 11px;
+    font-size: 12px;
     color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 0.06em;
@@ -85,11 +85,11 @@
     background-color: #1a2236;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 10px;
-    padding: 9px 14px;
-    font-size: 13px;
+    padding: 11px 16px;
+    font-size: 14px;
     font-weight: 500;
     color: #f1f5f9;
-    height: 40px;
+    height: 46px;
     transition: all 0.2s ease;
     width: 100%;
     box-sizing: border-box;

@@ -5,6 +5,7 @@ import { formatCurrency, formatDisplayDate } from '../utils/jobUtils';
 import { Technician, Location } from '@/types/job';
 import './styles.css';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
+import MultiSelect from '@/components/MultiSelect';
 import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
@@ -693,21 +694,17 @@ export default function BalanceReportPage() {
             />
           </FilterField>
           <FilterField label="Tech">
-            <select
-              value={techFilter}
-              onChange={(e) => {
-                setTechFilter(e.target.value);
+            <MultiSelect
+              single
+              options={lookups.techs
+                .filter((t) => activeTechs.includes(t._id))
+                .map((t) => t._id)}
+              selected={techFilter ? [techFilter] : []}
+              onChange={(vals) => {
+                setTechFilter(vals[0] ?? '');
                 setFiltersDirty(true);
               }}
-            >
-              {lookups.techs
-                .filter((t) => activeTechs.includes(t._id))
-                .map((t) => (
-                  <option key={t._id} value={t._id}>
-                    {t._id}
-                  </option>
-                ))}
-            </select>
+            />
           </FilterField>
         </FiltersPanel>
 
