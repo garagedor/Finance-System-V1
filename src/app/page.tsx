@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useState, useRef } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
-import { FiBriefcase, FiTrendingUp, FiAlertTriangle, FiPackage, FiAward, FiCreditCard, FiDollarSign } from 'react-icons/fi';
+import { FiBriefcase, FiTrendingUp, FiAlertTriangle, FiPackage, FiAward, FiCreditCard, FiDollarSign, FiRefreshCw } from 'react-icons/fi';
 import DateRangePicker from '@/components/DateRangePicker';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
 import EmptyState from '@/components/EmptyState';
@@ -220,6 +220,15 @@ export default function HomePage() {
                 Updating
               </div>
             )}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              title="Hard refresh — reload the page from the server, bypassing the browser cache"
+              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+            >
+              <FiRefreshCw size={12} />
+              Hard Refresh
+            </button>
           </div>
         </div>
 
