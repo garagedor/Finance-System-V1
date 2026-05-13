@@ -256,49 +256,56 @@ export default function HomePage() {
 
         {/* ── HERO KPI STRIP ── */}
         {kpis && (
-          <section className="grid grid-cols-2 gap-4 lg:grid-cols-6 stagger">
-            <KpiCard
-              label="Total Jobs"
-              value={String(kpis.totalJobs)}
-              icon={<FiBriefcase size={16} />}
-              accent="indigo"
-            />
-            <KpiCard
-              label="Total Sales"
-              value={formatCurrency(kpis.totalSales)}
-              icon={<FiDollarSign size={16} />}
-              accent="emerald"
-              jobCount={kpis.salesJobs}
-            />
-            <KpiCard
-              label="Net Profit"
-              value={formatCurrency(kpis.totalProfit)}
-              icon={<FiTrendingUp size={16} />}
-              accent={kpis.totalProfit >= 0 ? 'emerald' : 'red'}
-              jobCount={kpis.profitJobs}
-            />
-            <KpiCard
-              label="Penalty Loss"
-              value={formatCurrency(kpis.totalPenalty)}
-              icon={<FiAlertTriangle size={16} />}
-              accent="amber"
-              jobCount={kpis.penaltyJobs}
-            />
-            <KpiCard
-              label="Parts Total"
-              value={formatCurrency(kpis.totalParts)}
-              icon={<FiPackage size={16} />}
-              accent="cyan"
-              jobCount={kpis.partsJobs}
-            />
-            <KpiCard
-              label="Card Fee Profit"
-              value={formatCurrency(kpis.cardFeeProfit)}
-              icon={<FiCreditCard size={16} />}
-              accent="violet"
-              jobCount={kpis.cardFeeJobs}
-            />
-          </section>
+          <>
+            {/* Headline metrics — large, side-by-side. */}
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 stagger">
+              <FeatureKpiCard
+                label="Total Sales"
+                value={formatCurrency(kpis.totalSales)}
+                icon={<FiDollarSign size={22} />}
+                accent="emerald"
+                jobCount={kpis.salesJobs}
+              />
+              <FeatureKpiCard
+                label="Net Profit"
+                value={formatCurrency(kpis.totalProfit)}
+                icon={<FiTrendingUp size={22} />}
+                accent={kpis.totalProfit >= 0 ? 'emerald' : 'red'}
+                jobCount={kpis.profitJobs}
+              />
+            </section>
+
+            {/* Secondary KPI strip. */}
+            <section className="grid grid-cols-2 gap-4 lg:grid-cols-4 stagger">
+              <KpiCard
+                label="Total Jobs"
+                value={String(kpis.totalJobs)}
+                icon={<FiBriefcase size={16} />}
+                accent="indigo"
+              />
+              <KpiCard
+                label="Penalty Loss"
+                value={formatCurrency(kpis.totalPenalty)}
+                icon={<FiAlertTriangle size={16} />}
+                accent="amber"
+                jobCount={kpis.penaltyJobs}
+              />
+              <KpiCard
+                label="Parts Total"
+                value={formatCurrency(kpis.totalParts)}
+                icon={<FiPackage size={16} />}
+                accent="cyan"
+                jobCount={kpis.partsJobs}
+              />
+              <KpiCard
+                label="Card Fee Profit"
+                value={formatCurrency(kpis.cardFeeProfit)}
+                icon={<FiCreditCard size={16} />}
+                accent="violet"
+                jobCount={kpis.cardFeeJobs}
+              />
+            </section>
+          </>
         )}
 
         {/* ── CHART ── */}
@@ -431,6 +438,40 @@ const accentMap: Record<Accent, { ring: string; glow: string; icon: string; bg: 
   cyan:    { ring: 'rgba(6,182,212,0.25)',   glow: 'rgba(6,182,212,0.10)',   icon: '#22d3ee', bg: 'rgba(6,182,212,0.08)'  },
   violet:  { ring: 'rgba(139,92,246,0.25)',  glow: 'rgba(139,92,246,0.12)',  icon: '#c4b5fd', bg: 'rgba(139,92,246,0.08)' },
 };
+
+function FeatureKpiCard({
+  label, value, icon, accent, jobCount,
+}: { label: string; value: string; icon: React.ReactNode; accent: Accent; jobCount?: number }) {
+  const a = accentMap[accent];
+  return (
+    <div
+      className="hover-lift group relative overflow-hidden rounded-3xl border bg-[#111827] p-7 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
+      style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+    >
+      <div
+        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full opacity-70 transition-opacity group-hover:opacity-100"
+        style={{ background: `radial-gradient(circle, ${a.glow} 0%, transparent 70%)` }}
+      />
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">{label}</p>
+          <p className="mt-3 text-4xl sm:text-5xl font-bold tabular-nums tracking-tight text-white">{value}</p>
+          {typeof jobCount === 'number' && (
+            <p className="mt-2 text-xs tabular-nums text-slate-500">
+              {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
+            </p>
+          )}
+        </div>
+        <div
+          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl"
+          style={{ background: a.bg, color: a.icon, border: `1px solid ${a.ring}` }}
+        >
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function KpiCard({
   label, value, icon, accent, jobCount,
