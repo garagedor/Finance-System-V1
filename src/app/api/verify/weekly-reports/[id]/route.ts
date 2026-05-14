@@ -4,7 +4,7 @@ import type { JobRow } from '../../../../../types/job';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../../lib/supabase-server';
 import { matchTechWithMapping, matchAreaWithMapping } from '../../../../../lib/verify/mapping';
 import { getTechMappingByUserId, getAreaMappingByAreaId } from '../../../../../lib/verify/mapping-store';
-import { getNote, getJobNotesForReport } from '../../../../../lib/verify/notes-store';
+import { getNote, getJobNotesForReport, upsertNote } from '../../../../../lib/verify/notes-store';
 import { getLinksForReport } from '../../../../../lib/verify/links-store';
 import { compare, deriveCrmMethod, type SupabaseReportJob, type CrmJob } from '../../../../../lib/verify/compare';
 
@@ -248,5 +248,56 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   } catch (err: any) {
     console.error('GET /api/verify/weekly-reports/[id] error', err);
     return NextResponse.json({ error: 'Failed to load report', detail: err?.message || String(err) }, { status: 500 });
+  }
+}
+
+// Update the status of a weekly report. Allowed transitions are validated
+// only at the value level — the UI decides which buttons to show. Optional
+// `note` is appended to the admin-side report note (kept in Mongo) so the
+// reason for a Return/Under-Review is preserved without round-tripping it to
+// Lovable's schema, which doesn't have a column for it.
+const ALLOWED_STATUSES = new Set(['Submitted', 'Under Review', 'Returned', 'Approved']);
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  if (!isSupabaseConfigured()) {
+    return NextResponse.json(
+      { error: 'Supabase not configured', detail: 'Set SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_ADMIN_EMAIL, and SUPABASE_ADMIN_PASSWORD in .env.local' },
+      { status: 503 }
+    );
+  }
+
+  try {
+    const { id } = await params;
+    if (!id) return NextResponse.json({ error: 'Missing report id' }, { status: 400 });
+
+    const body = await req.json().catch(() => ({}));
+    const { status, note, updatedBy } = body as { status?: string; note?: string; updatedBy?: string };
+
+    if (!status || !ALLOWED_STATUSES.has(status)) {
+      return NextResponse.json(
+        { error: 'Invalid status', detail: `status must be one of: ${Array.from(ALLOWED_STATUSES).join(', ')}` },
+        { status: 400 }
+      );
+    }
+
+    const supa = await getSupabaseServerClient();
+    const { data: updated, error: updateErr } = await supa
+      .from('weekly_reports')
+      .update({ status })
+      .eq('id', id)
+      .select('id, status')
+      .maybeSingle();
+    if (updateErr) throw updateErr;
+    if (!updated) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+
+    // Optional admin note (kept in our Mongo, not pushed to Lovable).
+    if (typeof note === 'string' && note.trim().length > 0) {
+      await upsertNote(id, note.trim(), updatedBy ?? null);
+    }
+
+    return NextResponse.json({ id: updated.id, status: updated.status });
+  } catch (err: any) {
+    console.error('PATCH /api/verify/weekly-reports/[id] error', err);
+    return NextResponse.json({ error: 'Failed to update report', detail: err?.message || String(err) }, { status: 500 });
   }
 }

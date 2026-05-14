@@ -542,7 +542,11 @@ function DetailView({
             <ReportNoteCard report={data.report} />
             <SummaryCard summary={data.summary} totals={data.totals} />
             <PairsTable pairs={data.pairs} reportId={data.report.id} onRefresh={onRefresh} />
-            <ActionsCard />
+            <ActionsCard
+              reportId={data.report.id}
+              currentStatus={data.report.status}
+              onRefresh={onRefresh}
+            />
           </>
         )}
       </div>
@@ -1190,19 +1194,77 @@ const modalCloseStyle: React.CSSProperties = {
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
 };
 
-function ActionsCard() {
+function ActionsCard({
+  reportId, currentStatus, onRefresh,
+}: { reportId: string; currentStatus: string; onRefresh: () => void }) {
+  const [busy, setBusy] = useState<null | 'Approved' | 'Under Review' | 'Returned'>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const patchStatus = async (status: 'Approved' | 'Under Review' | 'Returned', note?: string) => {
+    setBusy(status);
+    setError(null);
+    try {
+      const res = await fetch(`/api/verify/weekly-reports/${reportId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status, note }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.detail || j.error || `HTTP ${res.status}`);
+      onRefresh();
+    } catch (e: any) {
+      setError(e?.message || 'Failed to update status');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleReturn = () => {
+    const reason = typeof window !== 'undefined'
+      ? window.prompt('Reason for returning this report? (optional — added to the admin note)')
+      : null;
+    // window.prompt returns null on cancel; treat as "abort".
+    if (reason === null) return;
+    void patchStatus('Returned', reason || undefined);
+  };
+
+  const isCurrent = (s: string) => currentStatus === s;
+
   return (
-    <div className="panel" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+    <div className="panel" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <FiHelpCircle color="#94a3b8" />
         <span style={{ fontSize: 12, color: '#94a3b8' }}>
-          Status changes (Approve / Under Review / Return) ship in v2. Read-only verification for now.
+          {error
+            ? <span style={{ color: '#f87171' }}>{error}</span>
+            : <>Current status: <strong style={{ color: '#e2e8f0' }}>{currentStatus}</strong></>}
         </span>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        <button disabled className="bp-cv-reset" title="Coming in v2">✓ Approve</button>
-        <button disabled className="bp-cv-reset" title="Coming in v2">↻ Under Review</button>
-        <button disabled className="bp-cv-reset" title="Coming in v2">↩ Return…</button>
+        <button
+          className="bp-cv-reset"
+          disabled={busy !== null || isCurrent('Approved')}
+          onClick={() => void patchStatus('Approved')}
+          title={isCurrent('Approved') ? 'Already approved' : 'Mark this report as Approved'}
+        >
+          {busy === 'Approved' ? '…' : '✓'} Approve
+        </button>
+        <button
+          className="bp-cv-reset"
+          disabled={busy !== null || isCurrent('Under Review')}
+          onClick={() => void patchStatus('Under Review')}
+          title={isCurrent('Under Review') ? 'Already under review' : 'Move this report back to Under Review'}
+        >
+          {busy === 'Under Review' ? '…' : '↻'} Under Review
+        </button>
+        <button
+          className="bp-cv-reset"
+          disabled={busy !== null || isCurrent('Returned')}
+          onClick={handleReturn}
+          title={isCurrent('Returned') ? 'Already returned' : 'Return this report to the technician with an optional reason'}
+        >
+          {busy === 'Returned' ? '…' : '↩'} Return…
+        </button>
       </div>
     </div>
   );
