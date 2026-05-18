@@ -154,11 +154,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       return partial;
     });
 
-    // 5) Identity check for the response banner
-    const allCrmTechs = await jobCol.distinct('tech');
-    const allCrmLocations = await jobCol.distinct('location');
-    const techMatched = (allCrmTechs as any[]).some((t) => typeof t === 'string' && matchTechWithMapping(t, techName, techMap?.crmTechNames));
-    const areaMatched = (allCrmLocations as any[]).some((l) => typeof l === 'string' && matchAreaWithMapping(l, areaName, areaMap?.crmLocationNames));
+    // 5) Identity check for the response banner. An explicit mapping is itself
+    //    proof of integration — short-circuit so the badge respects the admin's
+    //    curation even when the mapped tech/location has no Jobs yet.
+    const mappedTechNames = techMap?.crmTechNames;
+    const mappedAreaNames = areaMap?.crmLocationNames;
+    let techMatched: boolean;
+    let areaMatched: boolean;
+    if (mappedTechNames && mappedTechNames.length > 0) {
+      techMatched = true;
+    } else {
+      const allCrmTechs = await jobCol.distinct('tech');
+      techMatched = (allCrmTechs as any[]).some((t) => typeof t === 'string' && matchTechWithMapping(t, techName, mappedTechNames));
+    }
+    if (mappedAreaNames && mappedAreaNames.length > 0) {
+      areaMatched = true;
+    } else {
+      const allCrmLocations = await jobCol.distinct('location');
+      areaMatched = (allCrmLocations as any[]).some((l) => typeof l === 'string' && matchAreaWithMapping(l, areaName, mappedAreaNames));
+    }
 
     // 6) Compare — manual link overrides win over auto-matching.
     const manualLinks = await getLinksForReport(report.id);

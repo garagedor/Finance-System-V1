@@ -8,6 +8,8 @@ import { listTechMappings, listAreaMappings } from '../../../../lib/verify/mappi
 const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
+const TECHNICIAN_COLLECTION = 'Technician';
+const LOCATION_COLLECTION = 'Location';
 
 let cachedMongo: MongoClient | null = null;
 async function getMongoClient(): Promise<MongoClient> {
@@ -71,11 +73,28 @@ export async function GET(req: NextRequest) {
     const latestEnd = reports.reduce((acc: string, r: any) => (!acc || r.week_end > acc ? r.week_end : acc), '');
 
     const mongo = await getMongoClient();
-    const jobCol = mongo.db(DB_NAME).collection<JobRow>(JOB_COLLECTION);
-    const [crmTechs, crmLocations] = await Promise.all([
+    const db = mongo.db(DB_NAME);
+    const jobCol = db.collection<JobRow>(JOB_COLLECTION);
+    const techCol = db.collection<{ _id: any }>(TECHNICIAN_COLLECTION);
+    const locCol = db.collection<{ _id: any }>(LOCATION_COLLECTION);
+    // Pool of CRM tech / location names used for the "integrated" badges when
+    // a report's tech/area has no mapping. Union the lookup tables with the
+    // distinct values that appear on Jobs in the visible window so freshly
+    // created entities and historical job-only names both count.
+    const [crmJobTechs, crmJobLocations, techRows, locRows] = await Promise.all([
       jobCol.distinct('tech', earliestStart && latestEnd ? { date: { $gte: earliestStart, $lte: latestEnd } } : {}),
       jobCol.distinct('location', earliestStart && latestEnd ? { date: { $gte: earliestStart, $lte: latestEnd } } : {}),
+      techCol.find({}, { projection: { _id: 1 } }).toArray(),
+      locCol.find({}, { projection: { _id: 1 } }).toArray(),
     ]);
+    const crmTechs = [
+      ...(crmJobTechs as any[]),
+      ...techRows.map((t) => t._id),
+    ];
+    const crmLocations = [
+      ...(crmJobLocations as any[]),
+      ...locRows.map((l) => l._id),
+    ];
 
     // 4) Job counts + financial roll-ups per report (one query). We pull the
     //    DB-computed mirrors (tech_30, balance, total_job) plus the per-job tip
@@ -112,8 +131,15 @@ export async function GET(req: NextRequest) {
       const areaName = areaNameById.get(r.area_id) || '';
       const mappedTechNames = techMapByUserId.get(r.technician_id) || null;
       const mappedAreaNames = areaMapByAreaId.get(r.area_id) || null;
-      const techMatched = (crmTechs as any[]).some((t) => typeof t === 'string' && matchTechWithMapping(t, techName, mappedTechNames));
-      const areaMatched = (crmLocations as any[]).some((l) => typeof l === 'string' && matchAreaWithMapping(l, areaName, mappedAreaNames));
+      // An explicit mapping is itself proof of integration — no need to also
+      // find the mapped name in the CRM data pool. Without a mapping, fall
+      // back to the name-equality check against the unioned CRM pool.
+      const techMatched = (mappedTechNames && mappedTechNames.length > 0)
+        ? true
+        : (crmTechs as any[]).some((t) => typeof t === 'string' && matchTechWithMapping(t, techName, mappedTechNames));
+      const areaMatched = (mappedAreaNames && mappedAreaNames.length > 0)
+        ? true
+        : (crmLocations as any[]).some((l) => typeof l === 'string' && matchAreaWithMapping(l, areaName, mappedAreaNames));
       const roll = rollByReport.get(r.id);
       return {
         id: r.id,
