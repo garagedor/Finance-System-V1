@@ -12,6 +12,8 @@ import {
 const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
+const TECHNICIAN_COLLECTION = 'Technician';
+const LOCATION_COLLECTION = 'Location';
 
 let cachedMongo: MongoClient | null = null;
 async function getMongoClient(): Promise<MongoClient> {
@@ -42,15 +44,40 @@ export async function GET(_req: NextRequest) {
     if (usersErr) throw usersErr;
     if (areasErr) throw areasErr;
 
-    // Distinct CRM tech names + location names.
+    // CRM tech / location options for the mapping picker.
+    //
+    // We need TWO sources:
+    //   - Technician / Location lookup tables: surface entities the admin just
+    //     created in Tables that haven't been used on a Job yet.
+    //   - Distinct values from existing Jobs: keep historical names that exist
+    //     on jobs even if the corresponding lookup row was renamed/removed.
+    // Union them so neither case drops options.
     const mongo = await getMongoClient();
-    const jobCol = mongo.db(DB_NAME).collection<JobRow>(JOB_COLLECTION);
-    const [crmTechs, crmLocations] = await Promise.all([
+    const db = mongo.db(DB_NAME);
+    const jobCol = db.collection<JobRow>(JOB_COLLECTION);
+    const techCol = db.collection<{ _id: any }>(TECHNICIAN_COLLECTION);
+    const locCol = db.collection<{ _id: any }>(LOCATION_COLLECTION);
+    const [crmJobTechs, crmJobLocations, techRows, locRows] = await Promise.all([
       jobCol.distinct('tech', {}),
       jobCol.distinct('location', {}),
+      techCol.find({}, { projection: { _id: 1 } }).toArray(),
+      locCol.find({}, { projection: { _id: 1 } }).toArray(),
     ]);
-    const crmTechList = (crmTechs as any[]).filter((t) => typeof t === 'string' && t.trim()).sort((a, b) => a.localeCompare(b));
-    const crmLocationList = (crmLocations as any[]).filter((l) => typeof l === 'string' && l.trim()).sort((a, b) => a.localeCompare(b));
+    const dedupe = (vals: unknown[]): string[] => {
+      const set = new Set<string>();
+      for (const v of vals) {
+        if (typeof v === 'string' && v.trim()) set.add(v);
+      }
+      return Array.from(set).sort((a, b) => a.localeCompare(b));
+    };
+    const crmTechList = dedupe([
+      ...(crmJobTechs as any[]),
+      ...techRows.map((t) => t._id),
+    ]);
+    const crmLocationList = dedupe([
+      ...(crmJobLocations as any[]),
+      ...locRows.map((l) => l._id),
+    ]);
 
     const [techMappings, areaMappings] = await Promise.all([
       listTechMappings(),
