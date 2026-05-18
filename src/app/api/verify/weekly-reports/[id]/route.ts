@@ -87,6 +87,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       tips_company_cash: Number(r.tips_company_cash || 0),
       tips_check: Number(r.tips_check || 0),
       commission_rate: Number(r.commission_rate || 0),
+      lm_cash: Number(r.lm_cash || 0),
+      lm_check: Number(r.lm_check || 0),
+      lm_parts: Number(r.lm_parts || 0),
     }));
 
     // 4) Matching CRM jobs: tech name(s) from mapping (or fallback to Supabase

@@ -588,14 +588,14 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
     { label: 'Tips',       sup: totals.supabase.tips,        crm: totals.crm.tipsTotal,           diff: totals.diffs.tips },
     { label: 'My Parts',   sup: totals.supabase.myParts,     crm: totals.crm.techParts,           diff: totals.diffs.myParts },
     { label: 'Co. Parts',  sup: totals.supabase.companyParts,crm: totals.crm.companyParts,        diff: totals.diffs.companyParts },
+    { label: 'LM Cash',    sup: totals.supabase.lmCash,      crm: totals.crm.lmCash,              diff: totals.diffs.lmCash },
+    { label: 'LM Check',   sup: totals.supabase.lmCheck,     crm: totals.crm.lmCheck,             diff: totals.diffs.lmCheck },
+    { label: 'LM Parts',   sup: totals.supabase.lmParts,     crm: totals.crm.lmParts,             diff: totals.diffs.lmParts },
   ];
 
   const crmExtras = [
     { label: 'Co. Check (CRM-only)', value: totals.crm.totalPaidCompanyCheck },
     { label: 'Finance (CRM-only)',   value: totals.crm.totalPaidFinance },
-    { label: 'LM Cash (CRM-only)',   value: totals.crm.lmCash },
-    { label: 'LM Check (CRM-only)',  value: totals.crm.lmCheck },
-    { label: 'LM Parts (CRM-only)',  value: totals.crm.lmParts },
   ].filter((e) => e.value > 0);
 
   const colorForDiff = (d: number) => Math.abs(d) > 1 ? '#fbbf24' : '#34d399';

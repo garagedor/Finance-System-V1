@@ -39,6 +39,11 @@ export type SupabaseReportJob = {
   tips_company_cash?: number;
   tips_check?: number;
   commission_rate?: number;
+  // LM extension — mirror of the CRM's lmCash/lmCheck/lmParts (added on the
+  // Lovable side 2026-05-18). Null on legacy rows; the API coerces to 0.
+  lm_cash?: number;
+  lm_check?: number;
+  lm_parts?: number;
 };
 
 export type CrmJob = {
@@ -98,6 +103,9 @@ export type ComparisonTotals = {
     tips: number;
     myParts: number;
     companyParts: number;
+    lmCash: number;
+    lmCheck: number;
+    lmParts: number;
   };
   crm: {
     totalAmount: number;
@@ -107,12 +115,12 @@ export type ComparisonTotals = {
     tipsTotal: number;
     techParts: number;
     companyParts: number;
-    // CRM-only extras
-    totalPaidCompanyCheck: number;
-    totalPaidFinance: number;
     lmCash: number;
     lmCheck: number;
     lmParts: number;
+    // CRM-only extras — no Supabase column to diff against.
+    totalPaidCompanyCheck: number;
+    totalPaidFinance: number;
   };
   diffs: {
     totalJob: number;
@@ -122,6 +130,9 @@ export type ComparisonTotals = {
     tips: number;
     myParts: number;
     companyParts: number;
+    lmCash: number;
+    lmCheck: number;
+    lmParts: number;
   };
 };
 
@@ -234,6 +245,9 @@ function buildPairDiffs(s: SupabaseReportJob, c: CrmJob): FieldDiff[] {
     diffOne('Tips', 'tips', tipsTotalLovable(s), tipsTotalCrm(c)),
     diffOne('My Parts', 'myParts', toNum(s.my_parts), toNum(c.techParts)),
     diffOne('Co. Parts', 'companyParts', toNum(s.company_parts), toNum(c.companyParts)),
+    diffOne('LM Cash', 'lmCash', toNum(s.lm_cash), toNum(c.lmCash)),
+    diffOne('LM Check', 'lmCheck', toNum(s.lm_check), toNum(c.lmCheck)),
+    diffOne('LM Parts', 'lmParts', toNum(s.lm_parts), toNum(c.lmParts)),
   ];
 }
 
@@ -336,8 +350,14 @@ export function compare(
       tips: acc.tips + tipsTotalLovable(s),
       myParts: acc.myParts + toNum(s.my_parts),
       companyParts: acc.companyParts + toNum(s.company_parts),
+      lmCash: acc.lmCash + toNum(s.lm_cash),
+      lmCheck: acc.lmCheck + toNum(s.lm_check),
+      lmParts: acc.lmParts + toNum(s.lm_parts),
     }),
-    { totalJob: 0, cardAmount: 0, techCash: 0, companyCash: 0, tips: 0, myParts: 0, companyParts: 0 }
+    {
+      totalJob: 0, cardAmount: 0, techCash: 0, companyCash: 0, tips: 0,
+      myParts: 0, companyParts: 0, lmCash: 0, lmCheck: 0, lmParts: 0,
+    }
   );
 
   const crm = crmJobs.reduce(
@@ -349,16 +369,17 @@ export function compare(
       tipsTotal: acc.tipsTotal + tipsTotalCrm(c),
       techParts: acc.techParts + toNum(c.techParts),
       companyParts: acc.companyParts + toNum(c.companyParts),
-      totalPaidCompanyCheck: acc.totalPaidCompanyCheck + toNum(c.totalPaidCompanyCheck),
-      totalPaidFinance: acc.totalPaidFinance + toNum(c.totalPaidFinance),
       lmCash: acc.lmCash + toNum(c.lmCash),
       lmCheck: acc.lmCheck + toNum(c.lmCheck),
       lmParts: acc.lmParts + toNum(c.lmParts),
+      totalPaidCompanyCheck: acc.totalPaidCompanyCheck + toNum(c.totalPaidCompanyCheck),
+      totalPaidFinance: acc.totalPaidFinance + toNum(c.totalPaidFinance),
     }),
     {
       totalAmount: 0, totalPaidCard: 0, techPaidCash: 0, totalPaidCompanyCash: 0,
       tipsTotal: 0, techParts: 0, companyParts: 0,
-      totalPaidCompanyCheck: 0, totalPaidFinance: 0, lmCash: 0, lmCheck: 0, lmParts: 0,
+      lmCash: 0, lmCheck: 0, lmParts: 0,
+      totalPaidCompanyCheck: 0, totalPaidFinance: 0,
     }
   );
 
@@ -374,6 +395,9 @@ export function compare(
     tips: round2(crm.tipsTotal - sup.tips),
     myParts: round2(crm.techParts - sup.myParts),
     companyParts: round2(crm.companyParts - sup.companyParts),
+    lmCash: round2(crm.lmCash - sup.lmCash),
+    lmCheck: round2(crm.lmCheck - sup.lmCheck),
+    lmParts: round2(crm.lmParts - sup.lmParts),
   };
 
   let matched = 0, mismatched = 0, missingInCrm = 0, missingInReport = 0;
