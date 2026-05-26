@@ -921,7 +921,7 @@
     inset: 0 !important;
     width: 100% !important;
     padding: 0 !important;
-    font-size: 10pt !important;
+    font-size: 8.5pt !important;
   }
   .balance-page .content {
     padding: 0 !important;
@@ -939,7 +939,6 @@
   .balance-page .filters-panel,
   .balance-page .bp-kpi-controls,
   .balance-page .bp-cv-popover,
-  .balance-page .chart-card,
   .balance-page .pmr-panel-toggle .pmr-chevron-lg,
   .balance-page .top-progress,
   .balance-page .loading-overlay,
@@ -954,36 +953,52 @@
     transform: none !important;
   }
 
-  /* ── Reflow the responsive grids for portrait paper ── */
+  /* ── Page 1: header + KPI strip + chart/snapshot row ──
+     Keep all three sections together on the first page and prevent any
+     of them from splitting mid-section. */
   .balance-page .bp-header {
-    margin-bottom: 6mm !important;
+    margin-bottom: 4mm !important;
+    page-break-inside: avoid !important;
   }
   .balance-page .bp-kpi-strip {
     display: grid !important;
     grid-template-columns: repeat(6, 1fr) !important;
     gap: 6px !important;
-    margin-bottom: 6mm !important;
+    margin-bottom: 4mm !important;
+    page-break-inside: avoid !important;
   }
   .balance-page .bp-kpi-card {
-    padding: 8px 10px !important;
+    padding: 6px 8px !important;
   }
   .balance-page .bp-mid-row {
-    display: block !important;
-    margin-bottom: 6mm !important;
+    display: grid !important;
+    grid-template-columns: 1.4fr 1fr !important;
+    gap: 8px !important;
+    align-items: stretch !important;
+    margin-bottom: 0 !important;
+    page-break-inside: avoid !important;
+  }
+  .balance-page .chart-card {
+    padding: 8px !important;
+  }
+  .balance-page .chart-card .chart-body {
+    max-height: 70mm !important;
   }
   .balance-page .bp-snapshot {
-    padding: 10px 12px !important;
+    padding: 8px 10px !important;
   }
   .balance-page .bp-snapshot-list {
     display: grid !important;
     grid-template-columns: repeat(2, 1fr) !important;
-    gap: 4px 16px !important;
+    gap: 3px 14px !important;
   }
 
-  /* ── Per-job table: full width, compact ── */
+  /* ── Page 2+: per-job table on its own page(s) ── */
   .balance-page .bp-table-panel {
     padding: 0 !important;
     overflow: visible !important;
+    page-break-before: always !important;
+    margin-top: 0 !important;
   }
   .balance-page table {
     width: 100% !important;
