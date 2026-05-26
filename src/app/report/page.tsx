@@ -510,7 +510,7 @@ export default function ReportPage() {
           </FilterField>
           <FilterField label="Tech">
             <MultiSelect
-              options={narrowTechs(lookups.techs.map(t => t._id), locations)}
+              options={narrowTechs(lookups.techs.map(t => t._id), locations, providers)}
               selected={techs}
               onChange={(vals) => {
                 setTechs(vals);
@@ -529,7 +529,7 @@ export default function ReportPage() {
           </FilterField>
           <FilterField label="Provider">
             <MultiSelect
-              options={narrowProviders(lookups.providers.map((p) => p._id), locations)
+              options={narrowProviders(lookups.providers.map((p) => p._id), locations, techs)
                 .map((id) => providerLabel.get(id) || id)}
               selected={providers.map((id) => providerLabel.get(id) || id)}
               onChange={(labels) => {

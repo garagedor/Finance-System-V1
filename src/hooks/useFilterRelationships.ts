@@ -5,6 +5,8 @@ export type FilterRelationships = {
   locationToTechs: Record<string, string[]>;
   providerToLocations: Record<string, string[]>;
   locationToProviders: Record<string, string[]>;
+  techToProviders: Record<string, string[]>;
+  providerToTechs: Record<string, string[]>;
 };
 
 const EMPTY: FilterRelationships = {
@@ -12,6 +14,8 @@ const EMPTY: FilterRelationships = {
   locationToTechs: {},
   providerToLocations: {},
   locationToProviders: {},
+  techToProviders: {},
+  providerToTechs: {},
 };
 
 /**
@@ -61,6 +65,8 @@ export function useFilterRelationships() {
     const locationToTechsN = normalizeMap(data.locationToTechs);
     const providerToLocationsN = normalizeMap(data.providerToLocations);
     const locationToProvidersN = normalizeMap(data.locationToProviders);
+    const techToProvidersN = normalizeMap(data.techToProviders);
+    const providerToTechsN = normalizeMap(data.providerToTechs);
 
     const collectUnion = (
       keys: string[],
@@ -108,24 +114,51 @@ export function useFilterRelationships() {
       return allLocations.filter((l) => allowsOption(l, allowed));
     };
 
+    /**
+     * Filter `allTechs` down to those that have jobs in any selected
+     * location OR with any selected provider. Empty selections in both
+     * dimensions = no narrowing.
+     */
     const narrowTechs = (
       allTechs: string[],
       selectedLocations: string[],
+      selectedProviders: string[] = [],
     ): string[] => {
       if (!loaded) return allTechs;
-      if (!selectedLocations || selectedLocations.length === 0) return allTechs;
-      const allowed = collectUnion(selectedLocations, locationToTechsN);
+      const noLocs = !selectedLocations || selectedLocations.length === 0;
+      const noProvs = !selectedProviders || selectedProviders.length === 0;
+      if (noLocs && noProvs) return allTechs;
+      const allowed = new Set<string>();
+      if (!noLocs) {
+        for (const v of collectUnion(selectedLocations, locationToTechsN)) allowed.add(v);
+      }
+      if (!noProvs) {
+        for (const v of collectUnion(selectedProviders, providerToTechsN)) allowed.add(v);
+      }
       if (allowed.size === 0) return allTechs;
       return allTechs.filter((t) => allowsOption(t, allowed));
     };
 
+    /**
+     * Filter `allProviders` down to those with jobs in any selected location
+     * OR with any selected tech.
+     */
     const narrowProviders = (
       allProviders: string[],
       selectedLocations: string[],
+      selectedTechs: string[] = [],
     ): string[] => {
       if (!loaded) return allProviders;
-      if (!selectedLocations || selectedLocations.length === 0) return allProviders;
-      const allowed = collectUnion(selectedLocations, locationToProvidersN);
+      const noLocs = !selectedLocations || selectedLocations.length === 0;
+      const noTechs = !selectedTechs || selectedTechs.length === 0;
+      if (noLocs && noTechs) return allProviders;
+      const allowed = new Set<string>();
+      if (!noLocs) {
+        for (const v of collectUnion(selectedLocations, locationToProvidersN)) allowed.add(v);
+      }
+      if (!noTechs) {
+        for (const v of collectUnion(selectedTechs, techToProvidersN)) allowed.add(v);
+      }
       if (allowed.size === 0) return allProviders;
       return allProviders.filter((p) => allowsOption(p, allowed));
     };

@@ -277,7 +277,7 @@ export default function PaymentMethodReportPage() {
           </FilterField>
           <FilterField label="Tech">
             <MultiSelect
-              options={narrowTechs(techOptions, locations)}
+              options={narrowTechs(techOptions, locations, providers)}
               selected={techs}
               onChange={(v) => { setTechs(v); setFiltersDirty(true); }}
               placeholder="All techs"
@@ -295,7 +295,7 @@ export default function PaymentMethodReportPage() {
           </FilterField>
           <FilterField label="Provider">
             <MultiSelect
-              options={narrowProviders(providerOptions, locations)}
+              options={narrowProviders(providerOptions, locations, techs)}
               selected={providers}
               onChange={(v) => { setProviders(v); setFiltersDirty(true); }}
               placeholder="All providers"

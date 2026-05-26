@@ -25,6 +25,8 @@ export type FilterRelationships = {
   locationToTechs: Record<string, string[]>;
   providerToLocations: Record<string, string[]>;
   locationToProviders: Record<string, string[]>;
+  techToProviders: Record<string, string[]>;
+  providerToTechs: Record<string, string[]>;
 };
 
 const norm = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -47,6 +49,8 @@ export async function GET(_req: NextRequest) {
     const locationToTechs = new Map<string, Set<string>>();
     const providerToLocations = new Map<string, Set<string>>();
     const locationToProviders = new Map<string, Set<string>>();
+    const techToProviders = new Map<string, Set<string>>();
+    const providerToTechs = new Map<string, Set<string>>();
 
     const addPair = (
       a: string,
@@ -69,6 +73,7 @@ export async function GET(_req: NextRequest) {
       const p = norm((j as any).provider);
       if (t && l) addPair(t, l, techToLocations, locationToTechs);
       if (p && l) addPair(p, l, providerToLocations, locationToProviders);
+      if (t && p) addPair(t, p, techToProviders, providerToTechs);
     }
 
     const toRecord = (m: Map<string, Set<string>>): Record<string, string[]> => {
@@ -84,6 +89,8 @@ export async function GET(_req: NextRequest) {
       locationToTechs: toRecord(locationToTechs),
       providerToLocations: toRecord(providerToLocations),
       locationToProviders: toRecord(locationToProviders),
+      techToProviders: toRecord(techToProviders),
+      providerToTechs: toRecord(providerToTechs),
     };
 
     return NextResponse.json(body);

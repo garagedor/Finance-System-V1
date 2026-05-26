@@ -383,7 +383,7 @@ export default function StatsPage() {
           </FilterField>
           <FilterField label="Tech">
             <MultiSelect
-              options={narrowTechs(lookups.techs.map((t) => t._id), locationFilter)}
+              options={narrowTechs(lookups.techs.map((t) => t._id), locationFilter, providerFilter)}
               selected={techs}
               onChange={(vals) => {
                 setTechs(vals);
@@ -405,7 +405,7 @@ export default function StatsPage() {
           </FilterField>
           <FilterField label="Provider">
             <MultiSelect
-              options={narrowProviders(lookups.providers.map((p) => p._id), locationFilter)}
+              options={narrowProviders(lookups.providers.map((p) => p._id), locationFilter, techs)}
               selected={providerFilter}
               onChange={(v) => {
                 setProviderFilter(v);
