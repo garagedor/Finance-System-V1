@@ -110,7 +110,6 @@ export function useFilterRelationships() {
       if (!noProvs) {
         for (const v of collectUnion(selectedProviders, providerToLocationsN)) allowed.add(v);
       }
-      if (allowed.size === 0) return allLocations; // no data on chosen entities → don't narrow to empty
       return allLocations.filter((l) => allowsOption(l, allowed));
     };
 
@@ -135,7 +134,6 @@ export function useFilterRelationships() {
       if (!noProvs) {
         for (const v of collectUnion(selectedProviders, providerToTechsN)) allowed.add(v);
       }
-      if (allowed.size === 0) return allTechs;
       return allTechs.filter((t) => allowsOption(t, allowed));
     };
 
@@ -159,7 +157,6 @@ export function useFilterRelationships() {
       if (!noTechs) {
         for (const v of collectUnion(selectedTechs, techToProvidersN)) allowed.add(v);
       }
-      if (allowed.size === 0) return allProviders;
       return allProviders.filter((p) => allowsOption(p, allowed));
     };
 
