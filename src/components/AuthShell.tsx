@@ -9,12 +9,6 @@ import {
 } from 'react-icons/fi';
 import LoginPage from './LoginPage';
 import type { AuthUser } from '@/types/user';
-import {
-  FINANCE_NAV,
-  FINANCE_GROUPS,
-  isPortalPath,
-  findActiveModule,
-} from '@/app/portal/nav';
 
 type NavLink = { href: string; label: string };
 
@@ -41,7 +35,6 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number; className?:
   '/finance': FiPieChart,
   '/payment-method-report': FiCreditCard,
   '/verify-reports': FiCheckSquare,
-  '/portal/dashboard': FiPieChart,
 };
 
 const PAGE_TITLES: Record<string, { title: string; section: string }> = {
@@ -50,7 +43,7 @@ const PAGE_TITLES: Record<string, { title: string; section: string }> = {
   '/stats':                  { title: 'Statistics',            section: 'Analytics' },
   '/balance-report':         { title: 'Balance Report',        section: 'Reports' },
   '/report':                 { title: 'Reports',               section: 'Reports' },
-  '/finance':                { title: 'Finance (legacy)',      section: 'Reports' },
+  '/finance':                { title: 'Finance',               section: 'Reports' },
   '/payment-method-report':  { title: 'Payment Method Report', section: 'Reports' },
   '/verify-reports':         { title: 'Verify Reports',        section: 'Verification' },
   '/verify-reports/mappings':{ title: 'Identity Mappings',     section: 'Verification' },
@@ -122,11 +115,7 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
     user.type === 'admin' ? 'Admin' :
     user.type === 'office' ? 'Office' :
     user.type === 'location-manager' ? 'Location Mgr' :
-    user.type === 'bookkeeper' ? 'Bookkeeper' :
     user.type ?? '';
-
-  const inPortal = isPortalPath(pathname);
-  const activeModule = inPortal ? findActiveModule(pathname) : null;
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>
@@ -174,89 +163,33 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
             )}
           </div>
 
-          {/* Nav — swaps to Finance modules when inside /portal/* */}
+          {/* Nav */}
           <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-0.5">
-            {inPortal ? (
-              <>
-                {FINANCE_GROUPS.map((g) => {
-                  const items = FINANCE_NAV.filter((m) => m.group === g.key);
-                  if (items.length === 0) return null;
-                  return (
-                    <div key={g.key} className="mb-2">
-                      {!collapsed && (
-                        <div
-                          className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em]"
-                          style={{ color: '#475569' }}
-                        >
-                          {g.label}
-                        </div>
-                      )}
-                      {items.map((m) => {
-                        const isActive = activeModule?.href === m.href;
-                        const Icon = m.icon;
-                        return (
-                          <Link
-                            key={m.href}
-                            href={m.href}
-                            onClick={() => setMobileOpen(false)}
-                            title={collapsed ? m.label : undefined}
-                            className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150 ${
-                              isActive ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                            style={
-                              isActive
-                                ? {
-                                    background: 'rgba(99,102,241,0.12)',
-                                    border: '1px solid rgba(99,102,241,0.25)',
-                                  }
-                                : { border: '1px solid transparent' }
-                            }
-                          >
-                            <Icon size={16} className="flex-shrink-0" />
-                            {!collapsed && <span className="truncate">{m.label}</span>}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-                {!collapsed && (
-                  <div className="px-3 pt-4 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-                    <Link
-                      href="/"
-                      className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                    >
-                      <FiChevronLeft size={12} />
-                      Back to CRM
-                    </Link>
-                  </div>
-                )}
-              </>
-            ) : (
-              navLinks.map((link) => {
-                const Icon = NAV_ICONS[link.href] || FiGrid;
-                const isActive = pathname === link.href;
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => setMobileOpen(false)}
-                    title={collapsed ? link.label : undefined}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-                      isActive ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                    style={
-                      isActive
-                        ? { background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }
-                        : { border: '1px solid transparent' }
-                    }
-                  >
-                    <Icon size={17} className="flex-shrink-0" />
-                    {!collapsed && <span className="truncate">{link.label}</span>}
-                  </Link>
-                );
-              })
-            )}
+            {navLinks.map((link) => {
+              const Icon = NAV_ICONS[link.href] || FiGrid;
+              const isActive = pathname === link.href;
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileOpen(false)}
+                  title={collapsed ? link.label : undefined}
+                  className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
+                    isActive
+                      ? 'text-indigo-400'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                  style={
+                    isActive
+                      ? { background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }
+                      : { border: '1px solid transparent' }
+                  }
+                >
+                  <Icon size={17} className="flex-shrink-0" />
+                  {!collapsed && <span className="truncate">{link.label}</span>}
+                </Link>
+              );
+            })}
           </nav>
 
           {/* Collapse toggle — desktop only */}
@@ -297,26 +230,15 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
 
             {/* Desktop: page breadcrumb */}
             <div className="hidden lg:flex flex-col leading-tight min-w-0">
-              {activeModule ? (
+              {PAGE_TITLES[pathname] && (
                 <>
                   <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                    Finance Portal · {activeModule.section}
+                    {PAGE_TITLES[pathname].section}
                   </span>
                   <span className="text-sm font-bold text-slate-200 truncate">
-                    {activeModule.title}
+                    {PAGE_TITLES[pathname].title}
                   </span>
                 </>
-              ) : (
-                PAGE_TITLES[pathname] && (
-                  <>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                      {PAGE_TITLES[pathname].section}
-                    </span>
-                    <span className="text-sm font-bold text-slate-200 truncate">
-                      {PAGE_TITLES[pathname].title}
-                    </span>
-                  </>
-                )
               )}
             </div>
 
