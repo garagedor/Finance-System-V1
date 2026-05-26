@@ -942,6 +942,17 @@
     padding: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+    /* CRITICAL: page-break-* is ignored on flex children. The on-screen
+       .content is display:flex, so .bp-table-panel never gets its own
+       page. Switch to block so the table-panel break works. */
+    display: block !important;
+    gap: 0 !important;
+  }
+  .balance-page .content > * {
+    margin-bottom: 5mm !important;
+  }
+  .balance-page .content > .bp-table-panel {
+    margin-bottom: 0 !important;
   }
 
   /* ── Hide chrome and decorative content ──
