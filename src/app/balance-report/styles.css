@@ -893,23 +893,43 @@
 }
 
 @media print {
-  /* Isolate the balance-report content: hide everything else, then unhide
-     the report container and lift it to fill the page. */
+  /* ── Isolate the balance-report container ──
+     The on-screen layout assumes a wide viewport (KPI strip is 6-up,
+     mid-row is chart + snapshot side-by-side, etc.). For print we lift the
+     report out of AuthShell, switch everything to a light theme, then
+     reflow into a portrait-friendly layout. */
+
+  @page { size: A4 portrait; margin: 10mm; }
+
+  html, body {
+    background: white !important;
+    color: black !important;
+  }
   body * { visibility: hidden !important; }
   .balance-page, .balance-page * { visibility: visible !important; }
   .balance-page {
     position: absolute !important;
     inset: 0 !important;
+    width: 100% !important;
     background: white !important;
     color: black !important;
-    padding: 16px !important;
+    padding: 0 !important;
+    font-size: 10pt !important;
   }
-  /* Force a light theme for the printed copy — the on-screen dark surfaces
-     waste ink and render poorly. */
+  .balance-page .content {
+    padding: 0 !important;
+    max-width: 100% !important;
+  }
+
+  /* ── Light theme overrides for every dark surface ── */
   .balance-page,
   .balance-page .panel,
   .balance-page .bp-table-panel,
   .balance-page .bp-pill,
+  .balance-page .bp-meta-chip,
+  .balance-page .bp-kpi-card,
+  .balance-page .bp-rows-badge,
+  .balance-page .bp-snapshot,
   .balance-page table,
   .balance-page th,
   .balance-page td {
@@ -919,26 +939,99 @@
     box-shadow: none !important;
   }
   .balance-page .bp-kicker,
+  .balance-page .bp-section-kicker,
   .balance-page .bp-meta-chip-label,
+  .balance-page .bp-rows-label,
   .balance-page .muted,
   .balance-page .small {
     color: #6b7280 !important;
   }
-  .balance-page .bp-pill {
-    border: 1px solid #d1d5db !important;
+  .balance-page .bp-title,
+  .balance-page h1, .balance-page h2, .balance-page h3 {
+    color: black !important;
   }
-  /* Hide print-action buttons + the filter bar inside the report. */
+
+  /* ── Hide chrome and decorative content ──
+     - .no-print: the Download PDF button etc.
+     - .filters-panel: filter bar
+     - .bp-kpi-controls: "Metrics: Custom 5/6" dropdown trigger + popover
+     - chart-card: the donut chart (decorative; the snapshot list has the numbers)
+     - top-progress / loading-overlay: loading indicators
+     - animations: avoid mid-print fade weirdness */
   .no-print,
   .balance-page .filters-panel,
+  .balance-page .bp-kpi-controls,
+  .balance-page .bp-cv-popover,
+  .balance-page .chart-card,
+  .balance-page .pmr-panel-toggle .pmr-chevron-lg,
   .balance-page .top-progress,
-  .balance-page .loading-overlay {
+  .balance-page .loading-overlay,
+  .balance-page .top-progress-bar {
     display: none !important;
   }
-  /* Keep table rows intact across page breaks. */
+  .balance-page .animate-fade-up,
+  .balance-page .stagger,
+  .balance-page .stagger > * {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* ── Reflow the responsive grids for portrait paper ── */
+  .balance-page .bp-header {
+    margin-bottom: 6mm !important;
+  }
+  .balance-page .bp-kpi-strip {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 6px !important;
+    margin-bottom: 6mm !important;
+  }
+  .balance-page .bp-kpi-card {
+    padding: 8px 10px !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+  }
+  .balance-page .bp-mid-row {
+    display: block !important;
+    margin-bottom: 6mm !important;
+  }
+  .balance-page .bp-snapshot {
+    padding: 10px 12px !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+  }
+  .balance-page .bp-snapshot-list {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 4px 16px !important;
+  }
+
+  /* ── Per-job table: full width, compact ── */
+  .balance-page .bp-table-panel {
+    padding: 0 !important;
+    border: 1px solid #d1d5db !important;
+    border-radius: 8px !important;
+    overflow: visible !important;
+  }
+  .balance-page table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 8pt !important;
+    table-layout: auto !important;
+  }
+  .balance-page th, .balance-page td {
+    padding: 4px 6px !important;
+    border: 1px solid #e5e7eb !important;
+    white-space: nowrap !important;
+  }
+  .balance-page td.truncate {
+    white-space: normal !important;
+    word-break: break-word !important;
+    max-width: 28mm !important;
+  }
   .balance-page table { page-break-inside: auto; }
-  .balance-page tr { page-break-inside: avoid; page-break-after: auto; }
+  .balance-page tr   { page-break-inside: avoid; page-break-after: auto; }
   .balance-page thead { display: table-header-group; }
   .balance-page tfoot { display: table-footer-group; }
-  /* Use landscape since the per-job table is wide. */
-  @page { size: landscape; margin: 12mm; }
 }
