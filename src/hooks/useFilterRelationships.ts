@@ -40,17 +40,48 @@ export function useFilterRelationships() {
   }, []);
 
   return useMemo(() => {
+    // Normalize for tolerant lookup: lowercase + collapse internal whitespace.
+    // The lookup _id used in dropdowns (e.g. Provider._id, Technician._id)
+    // can differ from the raw Job.tech / Job.provider string by case or
+    // trailing whitespace, which would silently break exact-match lookups.
+    const norm = (s: string) => (s || '').toLowerCase().trim().replace(/\s+/g, ' ');
+
+    // Pre-build normalized-key variants of each map so lookups are O(1).
+    const normalizeMap = (m: Record<string, string[]>): Record<string, Set<string>> => {
+      const out: Record<string, Set<string>> = {};
+      for (const [k, vals] of Object.entries(m)) {
+        const nk = norm(k);
+        const set = out[nk] || new Set<string>();
+        for (const v of vals) set.add(v);
+        out[nk] = set;
+      }
+      return out;
+    };
+    const techToLocationsN = normalizeMap(data.techToLocations);
+    const locationToTechsN = normalizeMap(data.locationToTechs);
+    const providerToLocationsN = normalizeMap(data.providerToLocations);
+    const locationToProvidersN = normalizeMap(data.locationToProviders);
+
     const collectUnion = (
       keys: string[],
-      map: Record<string, string[]>,
+      map: Record<string, Set<string>>,
     ): Set<string> => {
       const out = new Set<string>();
       for (const k of keys) {
-        const arr = map[k];
+        const arr = map[norm(k)];
         if (!arr) continue;
         for (const v of arr) out.add(v);
       }
       return out;
+    };
+
+    // Match an option against a set of allowed values using normalized
+    // comparison so case/whitespace mismatches don't drop valid options.
+    const allowsOption = (opt: string, allowed: Set<string>): boolean => {
+      if (allowed.has(opt)) return true;
+      const n = norm(opt);
+      for (const v of allowed) if (norm(v) === n) return true;
+      return false;
     };
 
     /**
@@ -68,40 +99,35 @@ export function useFilterRelationships() {
       if (noTechs && noProvs) return allLocations;
       const allowed = new Set<string>();
       if (!noTechs) {
-        for (const v of collectUnion(selectedTechs, data.techToLocations)) allowed.add(v);
+        for (const v of collectUnion(selectedTechs, techToLocationsN)) allowed.add(v);
       }
       if (!noProvs) {
-        for (const v of collectUnion(selectedProviders, data.providerToLocations)) allowed.add(v);
+        for (const v of collectUnion(selectedProviders, providerToLocationsN)) allowed.add(v);
       }
-      return allLocations.filter((l) => allowed.has(l));
+      if (allowed.size === 0) return allLocations; // no data on chosen entities → don't narrow to empty
+      return allLocations.filter((l) => allowsOption(l, allowed));
     };
 
-    /**
-     * Filter `allTechs` down to those that have jobs in any of the selected
-     * locations.
-     */
     const narrowTechs = (
       allTechs: string[],
       selectedLocations: string[],
     ): string[] => {
       if (!loaded) return allTechs;
       if (!selectedLocations || selectedLocations.length === 0) return allTechs;
-      const allowed = collectUnion(selectedLocations, data.locationToTechs);
-      return allTechs.filter((t) => allowed.has(t));
+      const allowed = collectUnion(selectedLocations, locationToTechsN);
+      if (allowed.size === 0) return allTechs;
+      return allTechs.filter((t) => allowsOption(t, allowed));
     };
 
-    /**
-     * Filter `allProviders` down to those that have jobs in any of the
-     * selected locations.
-     */
     const narrowProviders = (
       allProviders: string[],
       selectedLocations: string[],
     ): string[] => {
       if (!loaded) return allProviders;
       if (!selectedLocations || selectedLocations.length === 0) return allProviders;
-      const allowed = collectUnion(selectedLocations, data.locationToProviders);
-      return allProviders.filter((p) => allowed.has(p));
+      const allowed = collectUnion(selectedLocations, locationToProvidersN);
+      if (allowed.size === 0) return allProviders;
+      return allProviders.filter((p) => allowsOption(p, allowed));
     };
 
     return { data, loaded, narrowLocations, narrowTechs, narrowProviders };
