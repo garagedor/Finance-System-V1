@@ -916,16 +916,26 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
+  /* CRITICAL — force a wide layout in print.
+     Browsers render the print preview at an emulated portrait viewport
+     (~816px), which trips on-screen responsive rules that collapse the KPI
+     strip to 1 column and shrink the mid-row. Lock the container to A4
+     landscape's printable width (297mm − 2×10mm margins ≈ 277mm) so every
+     downstream grid lays out as it would on a wide screen. */
+  html, body { width: 277mm !important; }
   .balance-page {
     position: absolute !important;
-    inset: 0 !important;
-    width: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 277mm !important;
+    max-width: 277mm !important;
     padding: 0 !important;
-    font-size: 8.5pt !important;
+    font-size: 7.5pt !important;
   }
   .balance-page .content {
     padding: 0 !important;
-    max-width: 100% !important;
+    width: 277mm !important;
+    max-width: 277mm !important;
   }
 
   /* ── Hide chrome and decorative content ──
@@ -981,8 +991,21 @@
   .balance-page .chart-card {
     padding: 8px !important;
   }
-  .balance-page .chart-card .chart-body {
-    max-height: 70mm !important;
+  /* Recharts' ResponsiveContainer reads the parent's clientHeight in pixels
+     at render time. Without an explicit pixel height the donut renders to 0
+     and looks "missing" in print. Force a concrete size and disable the
+     wrapper's 100% animation. */
+  .balance-page .chart-card .chart-body,
+  .balance-page .chart-card .recharts-responsive-container,
+  .balance-page .chart-card .recharts-wrapper {
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
+    width: 100% !important;
+  }
+  .balance-page .chart-card .recharts-surface {
+    width: 100% !important;
+    height: 220px !important;
   }
   .balance-page .bp-snapshot {
     padding: 8px 10px !important;
