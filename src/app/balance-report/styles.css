@@ -859,3 +859,86 @@
   font-size: 14px;
   transition: transform 0.2s ease;
 }
+
+/* ─────────────────────────── PDF / PRINT ───────────────────────────────── */
+
+.bp-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.bp-pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.10);
+  color: #c7d2fe;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.bp-pdf-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.55);
+  color: #e0e7ff;
+}
+.bp-pdf-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@media print {
+  /* Isolate the balance-report content: hide everything else, then unhide
+     the report container and lift it to fill the page. */
+  body * { visibility: hidden !important; }
+  .balance-page, .balance-page * { visibility: visible !important; }
+  .balance-page {
+    position: absolute !important;
+    inset: 0 !important;
+    background: white !important;
+    color: black !important;
+    padding: 16px !important;
+  }
+  /* Force a light theme for the printed copy — the on-screen dark surfaces
+     waste ink and render poorly. */
+  .balance-page,
+  .balance-page .panel,
+  .balance-page .bp-table-panel,
+  .balance-page .bp-pill,
+  .balance-page table,
+  .balance-page th,
+  .balance-page td {
+    background: white !important;
+    color: black !important;
+    border-color: #d1d5db !important;
+    box-shadow: none !important;
+  }
+  .balance-page .bp-kicker,
+  .balance-page .bp-meta-chip-label,
+  .balance-page .muted,
+  .balance-page .small {
+    color: #6b7280 !important;
+  }
+  .balance-page .bp-pill {
+    border: 1px solid #d1d5db !important;
+  }
+  /* Hide print-action buttons + the filter bar inside the report. */
+  .no-print,
+  .balance-page .filters-panel,
+  .balance-page .top-progress,
+  .balance-page .loading-overlay {
+    display: none !important;
+  }
+  /* Keep table rows intact across page breaks. */
+  .balance-page table { page-break-inside: auto; }
+  .balance-page tr { page-break-inside: avoid; page-break-after: auto; }
+  .balance-page thead { display: table-header-group; }
+  .balance-page tfoot { display: table-footer-group; }
+  /* Use landscape since the per-job table is wide. */
+  @page { size: landscape; margin: 12mm; }
+}

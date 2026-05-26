@@ -10,7 +10,7 @@ import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
 import { useClickOutside } from '@/hooks/useClickOutside';
-import { FiBriefcase, FiTrendingUp, FiDollarSign, FiCheckCircle, FiPercent, FiAlertCircle, FiChevronDown } from 'react-icons/fi';
+import { FiBriefcase, FiTrendingUp, FiDollarSign, FiCheckCircle, FiPercent, FiAlertCircle, FiChevronDown, FiDownload } from 'react-icons/fi';
 import {
   PieChart,
   Pie,
@@ -629,6 +629,20 @@ export default function BalanceReportPage() {
 
   const titleSubject = mode === 'tech' ? appliedTech : lookups.locations.find((l) => l._id === (lookups.techs.find((t) => t._id === appliedTech)?.location || ''))?._id || '';
 
+  // Trigger the browser's native Print → Save as PDF flow. Document.title sets
+  // the default PDF filename, so swap it for the duration of the print and
+  // restore afterwards.
+  const handleDownloadPdf = () => {
+    if (typeof window === 'undefined') return;
+    const safeSubject = (titleSubject || 'Report').replace(/[^A-Za-z0-9_\- ]/g, '').trim() || 'Report';
+    const filename = `${mode === 'tech' ? 'Tech' : 'Location'} Report — ${safeSubject} — ${appliedStart} to ${appliedEnd}`;
+    const prevTitle = document.title;
+    document.title = filename;
+    const restore = () => { document.title = prevTitle; window.removeEventListener('afterprint', restore); };
+    window.addEventListener('afterprint', restore);
+    window.print();
+  };
+
   // Display-only date formatter
   const fmtDateChip = (s: string) =>
     s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—';
@@ -655,10 +669,22 @@ export default function BalanceReportPage() {
               </span>
             </div>
           </div>
-          <div className="bp-rows-badge">
-            <span className="bp-rows-dot" />
-            <strong className="bp-rows-num">{closedRows.length}</strong>
-            <span className="bp-rows-label">Closed Jobs</span>
+          <div className="bp-header-right no-print">
+            <button
+              type="button"
+              className="bp-pdf-btn"
+              onClick={handleDownloadPdf}
+              disabled={loading || closedRows.length === 0}
+              title="Save this report as a PDF (opens your browser's print → Save as PDF dialog)"
+            >
+              <FiDownload size={14} />
+              Download PDF
+            </button>
+            <div className="bp-rows-badge">
+              <span className="bp-rows-dot" />
+              <strong className="bp-rows-num">{closedRows.length}</strong>
+              <span className="bp-rows-label">Closed Jobs</span>
+            </div>
           </div>
         </header>
 
