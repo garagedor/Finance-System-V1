@@ -33,6 +33,8 @@ export default function MultiSelect({
   const [searchTerm, setSearchTerm] = useState('');
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const optionsListRef = useRef<HTMLDivElement>(null);
+  const selectedOptionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -44,13 +46,25 @@ export default function MultiSelect({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Reset search and focus the input when the dropdown opens.
+  // Reset search, focus the input, and scroll the first selected option
+  // into view when the dropdown opens — so reopening a filter that's
+  // already narrowed (e.g. "Yanai") lands on that row instead of the top
+  // of a long list.
   useEffect(() => {
-    if (isOpen) {
-      setSearchTerm('');
-      // Defer until the dropdown is in the DOM.
-      setTimeout(() => searchInputRef.current?.focus(), 0);
-    }
+    if (!isOpen) return;
+    setSearchTerm('');
+    // Defer to next frame so the dropdown is in the DOM.
+    const id = window.requestAnimationFrame(() => {
+      searchInputRef.current?.focus();
+      const target = selectedOptionRef.current;
+      const list = optionsListRef.current;
+      if (target && list) {
+        // Scroll the row into the middle of the visible area.
+        const offset = target.offsetTop - (list.clientHeight / 2) + (target.clientHeight / 2);
+        list.scrollTop = Math.max(0, offset);
+      }
+    });
+    return () => window.cancelAnimationFrame(id);
   }, [isOpen]);
 
   const toggleOption = (option: string) => {
@@ -110,9 +124,10 @@ export default function MultiSelect({
               />
             </div>
           )}
-          <div className="multiselect-options-list">
+          <div className="multiselect-options-list" ref={optionsListRef}>
             {!searchTerm && (
               <div
+                ref={isAllSelected ? selectedOptionRef : undefined}
                 className={`multiselect-option ${isAllSelected ? 'selected' : ''}`}
                 onClick={handleAllClick}
               >
@@ -122,18 +137,26 @@ export default function MultiSelect({
             )}
             {filteredOptions.length === 0 ? (
               <div className="multiselect-empty">No matches</div>
-            ) : (
-              filteredOptions.map((option) => (
-                <div
-                  key={option}
-                  className={`multiselect-option ${selected.includes(option) ? 'selected' : ''}`}
-                  onClick={() => toggleOption(option)}
-                >
-                  <div className={`custom-checkbox ${selected.includes(option) ? 'checked' : ''}`}></div>
-                  <span>{option}</span>
-                </div>
-              ))
-            )}
+            ) : (() => {
+              // Pin selectedOptionRef to the FIRST selected option so the
+              // scroll-into-view effect lands on it.
+              const firstSelected = filteredOptions.find((o) => selected.includes(o));
+              return filteredOptions.map((option) => {
+                const isSel = selected.includes(option);
+                const isFirstSelected = !isAllSelected && option === firstSelected;
+                return (
+                  <div
+                    key={option}
+                    ref={isFirstSelected ? selectedOptionRef : undefined}
+                    className={`multiselect-option ${isSel ? 'selected' : ''}`}
+                    onClick={() => toggleOption(option)}
+                  >
+                    <div className={`custom-checkbox ${isSel ? 'checked' : ''}`}></div>
+                    <span>{option}</span>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       )}
