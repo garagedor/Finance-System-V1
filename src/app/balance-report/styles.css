@@ -347,13 +347,10 @@
 }
 
 .balance-page .legend {
-  /* Auto-fit grid: as many ~160px columns as fit, no scroll. With many
-     statuses the legend wraps into 2+ columns instead of clipping. */
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 4px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding-right: 4px;
-  align-content: start;
 }
 
 .balance-page .legend-row {
