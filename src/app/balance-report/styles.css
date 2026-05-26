@@ -1031,7 +1031,7 @@
      The on-screen table has 17+ columns (Job Info + Costs & Profit + LM +
      Tech Payout + Settlements) and on screen it scrolls horizontally. In
      print the rightmost columns (the Settlements group) get clipped, so
-     scale the whole table panel down to fit 277 mm. */
+     shrink everything down. */
   .balance-page .bp-table-panel {
     page-break-before: always !important;
     overflow: visible !important;
@@ -1062,9 +1062,28 @@
   }
   .balance-page .bp-table-panel .balance-table {
     overflow: visible !important;
+    position: static !important;
+  }
+
+  /* ── KILL STICKY POSITIONING IN PRINT ──
+     The on-screen thead/tfoot use position:sticky so they pin to the
+     top/bottom while scrolling. In print the browser tries to honor
+     sticky and produces overlapping header + totals rows mid-page.
+     Reset to static so table-header-group / table-footer-group can
+     repeat normally at the start/end of each page. */
+  .balance-page .balance-table th,
+  .balance-page .balance-table .bp-group-row th,
+  .balance-page .balance-table thead tr:nth-child(2) th,
+  .balance-page .balance-table tfoot tr {
+    position: static !important;
+    top: auto !important;
+    bottom: auto !important;
+    box-shadow: none !important;
   }
   .balance-page table { page-break-inside: auto; }
   .balance-page tr   { page-break-inside: avoid; page-break-after: auto; }
+  .balance-page thead { display: table-header-group !important; }
+  .balance-page tfoot { display: table-footer-group !important; }
   .balance-page thead { display: table-header-group; }
   .balance-page tfoot { display: table-footer-group; }
 }
