@@ -1,0 +1,418 @@
+// Domain types for the Finance Portal.
+//
+// All records use string ids (prefix-based, see newId in finance-db).
+// Money is stored as a number (USD). Dates are stored as Date in Mongo,
+// serialized as ISO strings over the wire.
+
+export type FinanceStatus = "paid" | "unpaid";
+export type DisputeStatus = "open" | "won" | "lost" | "partial";
+export type DebtStatus = "open" | "settled" | "deducted";
+
+/** Where an income amount came from. */
+export type IncomeSource =
+  | "crm_jobs"
+  | "installations"
+  | "parts_sales"
+  | "card_fee_margin"
+  | "finance_fee_margin"
+  | "company_parts_margin"
+  | "manual"
+  | "inventory"
+  | "other";
+
+/** Categories the user listed in the spec. */
+export type ExpenseCategory =
+  | "office"
+  | "payroll"
+  | "office_staff"
+  | "manager_salary"
+  | "installer_payment"
+  | "equipment_purchase"
+  | "parts_purchase"
+  | "door_purchase"
+  | "marketing"
+  | "software"
+  | "insurance"
+  | "fuel"
+  | "rent"
+  | "subscription"
+  | "refund"
+  | "dispute"
+  | "chargeback"
+  | "misc";
+
+export type PaymentMethod =
+  | "cash"
+  | "card"
+  | "check"
+  | "ach"
+  | "wire"
+  | "zelle"
+  | "venmo"
+  | "other";
+
+// ─── Income ────────────────────────────────────────────────────────────────
+
+export interface ManualIncomeRecord {
+  _id: string;
+  source: IncomeSource;
+  amount: number;
+  date: string;           // YYYY-MM-DD
+  description: string;
+  category?: string;
+  payment_method?: PaymentMethod;
+  related_area?: string;
+  related_person_id?: string;
+  notes?: string;
+  attachment_url?: string;
+  created_at: string;
+  created_by?: string;    // user id/name
+}
+
+// ─── Expense ───────────────────────────────────────────────────────────────
+
+export interface ExpenseRecord {
+  _id: string;
+  category: ExpenseCategory;
+  amount: number;
+  date: string;
+  vendor_name?: string;
+  vendor_id?: string;
+  related_person_id?: string;
+  related_area?: string;
+  payment_method?: PaymentMethod;
+  receipt_url?: string;
+  notes?: string;
+  status: FinanceStatus;
+  paid_at?: string;
+  paid_by?: string;
+  description?: string;
+  /** If this expense was created by a recurring template, link back to it. */
+  recurring_id?: string;
+  created_at: string;
+  created_by?: string;
+}
+
+// ─── Position profile + Payout ─────────────────────────────────────────────
+
+export type PayoutComponentKind =
+  | "base_salary"
+  | "fixed_bonus"
+  | "commission_pct"            // a percent of some base
+  | "follow_up_commission"
+  | "parts_margin_commission"
+  | "area_manager_payout"
+  | "provider_payout"
+  | "deduction"
+  | "reimbursement"
+  | "advance"
+  | "manual_adjustment"
+  | "penalty"
+  | "expense_deduction";
+
+export interface PayoutComponentTemplate {
+  id: string;                     // local within the profile
+  kind: PayoutComponentKind;
+  label: string;
+  default_amount?: number;        // for fixed amounts
+  default_rate?: number;          // for percent-of-base components
+  notes?: string;
+}
+
+export interface PayoutProfile {
+  _id: string;
+  name: string;                   // "Office Manager", "Area Manager 40%", "Installer Custom A"
+  description?: string;
+  applies_to_role?: string;       // e.g. "office_manager", "area_manager" — informational
+  components: PayoutComponentTemplate[];
+  active: boolean;
+  created_at: string;
+}
+
+export interface PayoutLineItem {
+  id: string;
+  kind: PayoutComponentKind;
+  label: string;
+  amount: number;                 // signed: deductions/penalties are negative
+  source_ref?: string;            // e.g. "FollowUp:abc123" or "Expense:xyz"
+  notes?: string;
+}
+
+export interface PayoutRecord {
+  _id: string;
+  recipient_id: string;           // person id (CRM tech _id, manual, etc.)
+  recipient_name: string;
+  recipient_role?: string;
+  profile_id?: string;            // optional reference to the profile used
+  period_start: string;           // YYYY-MM-DD
+  period_end: string;
+  line_items: PayoutLineItem[];
+  gross: number;
+  deductions: number;
+  net: number;
+  status: FinanceStatus;
+  payment_method?: PaymentMethod;
+  paid_at?: string;
+  paid_by?: string;
+  notes?: string;
+  created_at: string;
+  created_by?: string;
+}
+
+// ─── Follow-up commission (manual layer on top of a CRM job) ──────────────
+
+export interface FollowUpCommission {
+  _id: string;
+  job_id: string;                 // CRM job _id
+  job_snapshot: {                 // frozen at creation so it stays in payout view
+    customer?: string;
+    address?: string;
+    tech?: string;
+    area?: string;
+    provider?: string;
+    total?: number;
+    profit?: number;
+    payment_method?: string;
+    parts?: number;
+    date?: string;
+  };
+  recipient_id: string;           // person id (any role)
+  recipient_name: string;
+  recipient_role?: string;
+  kind: "fixed" | "percent" | "manual";
+  amount?: number;                // fixed kind
+  rate?: number;                  // percent kind (e.g. 0.05)
+  computed_amount: number;        // final $ on the payout
+  paid_via_payout_id?: string;    // set once attached to a payout
+  notes?: string;
+  created_at: string;
+  created_by?: string;
+}
+
+// ─── Debt / running balance ────────────────────────────────────────────────
+
+export interface DebtRecord {
+  _id: string;
+  from_party_id: string;          // who owes
+  from_party_name: string;
+  from_party_role?: string;
+  to_party_id: string;            // who is owed
+  to_party_name: string;
+  to_party_role?: string;
+  amount: number;
+  reason?: string;
+  related_job_id?: string;
+  related_report_id?: string;
+  related_expense_id?: string;
+  due_date?: string;
+  deduct_from_payout?: boolean;
+  attachment_url?: string;
+  notes?: string;
+  status: DebtStatus;
+  settled_at?: string;
+  created_at: string;
+  created_by?: string;
+}
+
+// ─── Dispute / refund (manual, decoupled from CRM dispute collection) ──────
+
+export interface DisputeRecord {
+  _id: string;
+  customer_name?: string;
+  address?: string;
+  job_id?: string;
+  tech_id?: string;
+  tech_name?: string;
+  area?: string;
+  provider_id?: string;
+  provider_name?: string;
+  date: string;                   // when raised
+  amount_disputed: number;
+  amount_recovered?: number;
+  amount_open?: number;
+  status: DisputeStatus;
+  attachments?: string[];
+  notes?: string;
+  paid_unpaid_impact?: FinanceStatus;
+  created_at: string;
+  created_by?: string;
+}
+
+export interface RefundRecord {
+  _id: string;
+  customer_name?: string;
+  address?: string;
+  job_id?: string;
+  tech_id?: string;
+  tech_name?: string;
+  area?: string;
+  provider_id?: string;
+  provider_name?: string;
+  date: string;
+  amount: number;
+  reason?: string;
+  attachments?: string[];
+  notes?: string;
+  status: FinanceStatus;          // paid = we sent the money, unpaid = pending
+  created_at: string;
+  created_by?: string;
+}
+
+// ─── Equipment finance ─────────────────────────────────────────────────────
+
+export type EquipmentTxnType = "purchase" | "sale_to_am" | "internal_use" | "scrap";
+
+export interface EquipmentRecord {
+  _id: string;
+  date: string;
+  type: EquipmentTxnType;
+  description: string;
+  sku?: string;
+  qty?: number;
+  unit_cost?: number;
+  unit_price?: number;
+  amount: number;                 // net financial effect (positive = revenue, negative = cost)
+  profit?: number;                // if known
+  counterparty_id?: string;       // area manager / vendor
+  counterparty_name?: string;
+  related_area?: string;
+  paid_amount?: number;
+  open_amount?: number;
+  status: FinanceStatus;
+  notes?: string;
+  created_at: string;
+  created_by?: string;
+}
+
+// ─── Banking ───────────────────────────────────────────────────────────────
+
+export interface BankAccountRecord {
+  _id: string;
+  label: string;
+  bank_name?: string;
+  account_type?: "checking" | "savings" | "credit_card" | "merchant" | "other";
+  last4?: string;
+  starting_balance?: number;
+  currency?: string;
+  active: boolean;
+  notes?: string;
+  created_at: string;
+}
+
+export interface BankTxnRecord {
+  _id: string;
+  account_id: string;
+  posted_date: string;
+  amount: number;                 // signed: + deposit, - withdrawal
+  description: string;
+  type?: "deposit" | "withdrawal" | "fee" | "transfer" | "interest" | "other";
+  payment_method?: PaymentMethod;
+  matched_to?: string;            // free-form pointer for now (expense id, payout id, etc.)
+  notes?: string;
+  source: "manual" | "import";
+  created_at: string;
+  created_by?: string;
+}
+
+export interface SettlementRecord {
+  _id: string;
+  date: string;
+  from_party_id: string;
+  from_party_name: string;
+  to_party_id: string;
+  to_party_name: string;
+  amount: number;
+  payment_method?: PaymentMethod;
+  reference?: string;
+  related_debt_ids?: string[];
+  related_payout_id?: string;
+  notes?: string;
+  created_at: string;
+  created_by?: string;
+}
+
+// ─── Saved report ──────────────────────────────────────────────────────────
+
+export type ReportType =
+  | "tech_report"
+  | "area_manager_report"
+  | "provider_report"
+  | "employee_payout_report"
+  | "debt_statement"
+  | "settlement_statement"
+  | "expense_report";
+
+export interface SavedReportRecord {
+  _id: string;
+  type: ReportType;
+  title: string;
+  subject_id?: string;            // e.g. tech _id
+  subject_name?: string;
+  period_start: string;
+  period_end: string;
+  generated_at: string;
+  generated_by?: string;
+  snapshot: unknown;              // frozen JSON payload (the computed report)
+  status: FinanceStatus;
+  notes?: string;
+}
+
+// ─── Recurring expense template ────────────────────────────────────────────
+
+export type RecurringFrequency =
+  | "daily"
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "quarterly"
+  | "annual"
+  | "custom";
+
+export interface RecurringExpenseRecord {
+  _id: string;
+  name: string;                  // e.g. "Monthly office rent", "Salary — Yonatan"
+  category: ExpenseCategory;
+  amount: number;
+  vendor_name?: string;
+  vendor_id?: string;
+  payment_method?: PaymentMethod;
+  related_area?: string;
+  related_person_id?: string;
+  notes?: string;
+
+  // Schedule
+  frequency: RecurringFrequency;
+  custom_interval_days?: number; // for "custom"
+  day_of_month?: number;         // 1-31 for monthly/quarterly/annual; -1 = last day
+  day_of_week?: number;          // 0=Sun .. 6=Sat for weekly/biweekly
+  start_date: string;            // YYYY-MM-DD
+  end_date?: string;             // optional cutoff (inclusive)
+
+  // State (managed by the generator)
+  next_due_date: string;         // YYYY-MM-DD
+  last_generated_at?: string;    // ISO timestamp
+  last_generated_for?: string;   // YYYY-MM-DD of the most recently generated period
+  total_generated: number;
+
+  // Behavior
+  default_status: FinanceStatus; // status applied to newly generated expense entries
+  active: boolean;               // paused if false — no generation while paused
+
+  created_at: string;
+  created_by?: string;
+}
+
+// ─── Position (HR-light: who works in what role) ──────────────────────────
+
+export interface PositionRecord {
+  _id: string;
+  name: string;                   // person display name
+  role: string;                   // free-form role label or matches a profile name
+  profile_id?: string;            // optional default payout profile
+  area?: string;
+  email?: string;
+  phone?: string;
+  active: boolean;
+  notes?: string;
+  created_at: string;
+}

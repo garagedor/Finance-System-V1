@@ -22,6 +22,9 @@ const INPUT_FIELDS = [
   'tips_company_cash',
   'tips_check',
   'commission_rate',
+  'lm_cash',
+  'lm_check',
+  'lm_parts',
 ] as const;
 
 const NUMERIC_FIELDS = new Set([
@@ -29,6 +32,7 @@ const NUMERIC_FIELDS = new Set([
   'paid_finance', 'tech_parts', 'company_parts',
   'tips_card', 'tips_finance', 'tips_company_cash', 'tips_check',
   'commission_rate',
+  'lm_cash', 'lm_check', 'lm_parts',
 ]);
 
 const NULLABLE_TEXT_FIELDS = new Set(['customer_name', 'address', 'notes']);

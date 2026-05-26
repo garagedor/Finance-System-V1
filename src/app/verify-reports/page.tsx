@@ -962,6 +962,9 @@ type EditableJob = {
   tips_company_cash?: number;
   tips_check?: number;
   commission_rate?: number;
+  lm_cash?: number;
+  lm_check?: number;
+  lm_parts?: number;
 };
 
 function EditJobModal({
@@ -976,13 +979,22 @@ function EditJobModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Live total preview — sum of all payment fields
+  // Live total preview — sum of all payment fields (matches the CRM's
+  // calcPaidSum: includes lm_cash + lm_check).
   const total = useMemo(() => (
     (Number(form.tech_paid_cash) || 0) +
     (Number(form.paid_card) || 0) +
     (Number(form.paid_company_cash) || 0) +
     (Number(form.paid_company_check) || 0) +
-    (Number(form.paid_finance) || 0)
+    (Number(form.paid_finance) || 0) +
+    (Number(form.lm_cash) || 0) +
+    (Number(form.lm_check) || 0)
+  ), [form]);
+
+  const partsTotal = useMemo(() => (
+    (Number(form.tech_parts) || 0) +
+    (Number(form.company_parts) || 0) +
+    (Number(form.lm_parts) || 0)
   ), [form]);
 
   const tipsTotal = useMemo(() => (
@@ -1026,6 +1038,9 @@ function EditJobModal({
         tips_company_cash: Number(form.tips_company_cash) || 0,
         tips_check: Number(form.tips_check) || 0,
         commission_rate: Number(form.commission_rate) || 0,
+        lm_cash: Number(form.lm_cash) || 0,
+        lm_check: Number(form.lm_check) || 0,
+        lm_parts: Number(form.lm_parts) || 0,
       };
       const res = await fetch(`/api/verify/weekly-reports/${reportId}/jobs/${job.id}`, {
         method: 'PATCH',
@@ -1095,11 +1110,15 @@ function EditJobModal({
           <NumField label="Company cash" v={form.paid_company_cash} onChange={setNum('paid_company_cash')} />
           <NumField label="Company check" v={form.paid_company_check} onChange={setNum('paid_company_check')} />
           <NumField label="Finance" v={form.paid_finance} onChange={setNum('paid_finance')} />
+          <NumField label="LM cash" v={form.lm_cash} onChange={setNum('lm_cash')} />
+          <NumField label="LM check" v={form.lm_check} onChange={setNum('lm_check')} />
           <Field label="Total (computed)"><div style={readonlyStyle}>${total.toFixed(2)}</div></Field>
 
           <SectionLabel>Parts</SectionLabel>
           <NumField label="Tech parts (My Parts)" v={form.tech_parts} onChange={setNum('tech_parts')} />
           <NumField label="Company parts" v={form.company_parts} onChange={setNum('company_parts')} />
+          <NumField label="LM parts" v={form.lm_parts} onChange={setNum('lm_parts')} />
+          <Field label="Parts total (computed)"><div style={readonlyStyle}>${partsTotal.toFixed(2)}</div></Field>
 
           <SectionLabel>Tips</SectionLabel>
           <NumField label="Tips on card" v={form.tips_card} onChange={setNum('tips_card')} />

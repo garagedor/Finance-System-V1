@@ -24,9 +24,10 @@ export default function RootLayout({
     { href: "/stats", label: "Stats" },
     { href: "/balance-report", label: "Balance Report" },
     { href: "/report", label: "Report" },
-    { href: "/finance", label: "Finance" },
+    { href: "/finance", label: "Finance (legacy)" },
     { href: "/payment-method-report", label: "Payment Methods" },
     { href: "/verify-reports", label: "Verify Reports" },
+    { href: "/portal/dashboard", label: "Finance Portal" },
   ];
 
   return (
