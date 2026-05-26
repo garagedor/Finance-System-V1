@@ -914,26 +914,23 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  /* SHRINK-TO-FIT — render the page at the same width the on-screen design
-     was built for (1500 px), then scale it down to fit A4 landscape's
-     printable width (~1046 px at 96 dpi). This way every fixed-px font
-     size, padding, and card width keeps its visual proportions instead of
-     overflowing or collapsing into a mobile layout. */
+  /* True print-native layout — explicit mm/pt sizes that fit A4 landscape
+     (277 mm × 190 mm content area). Don't scale; just shrink every dimension
+     so the overview actually fits on page 1 without splitting. */
   html, body { margin: 0 !important; padding: 0 !important; }
   .balance-page {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
-    width: 1500px !important;
-    max-width: 1500px !important;
+    width: 277mm !important;
+    max-width: 277mm !important;
     padding: 0 !important;
-    transform: scale(0.697) !important;
-    transform-origin: top left !important;
+    font-size: 9pt !important;
   }
   .balance-page .content {
     padding: 0 !important;
-    width: 1500px !important;
-    max-width: 1500px !important;
+    width: 277mm !important;
+    max-width: 277mm !important;
   }
 
   /* ── Hide chrome and decorative content ──
@@ -961,24 +958,76 @@
     transform: none !important;
   }
 
-  /* Recharts' ResponsiveContainer reads the parent's clientHeight in pixels
-     at render time. Inside @media print the parent often resolves to 0
-     so we pin a concrete size. */
-  .balance-page .chart-card .chart-body,
-  .balance-page .chart-card .recharts-responsive-container,
-  .balance-page .chart-card .recharts-wrapper {
-    height: 280px !important;
-    min-height: 280px !important;
-    width: 100% !important;
+  /* ── Header: compact horizontal strip ── */
+  .balance-page .bp-header {
+    margin-bottom: 3mm !important;
+    page-break-inside: avoid !important;
   }
-  .balance-page .chart-card .recharts-surface {
-    width: 100% !important;
-    height: 280px !important;
-  }
+  .balance-page .bp-title { font-size: 16pt !important; line-height: 1.1 !important; margin: 1mm 0 !important; }
+  .balance-page .bp-kicker { font-size: 7pt !important; }
+  .balance-page .bp-meta-chip { padding: 2px 6px !important; font-size: 7pt !important; }
+  .balance-page .bp-rows-badge { padding: 3px 8px !important; }
 
-  /* ── Page 2+: per-job table on its own page ──
-     Reset the transform so the table prints at native size on its own
-     page(s), and force a break before it so page 1 holds the overview. */
+  /* ── KPI strip: single row, compact cards ── */
+  .balance-page .bp-kpi-strip {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(38mm, 1fr)) !important;
+    gap: 4px !important;
+    margin-bottom: 3mm !important;
+    page-break-inside: avoid !important;
+  }
+  .balance-page .bp-kpi {
+    padding: 6px 8px !important;
+    border-radius: 6px !important;
+  }
+  .balance-page .bp-kpi-label { font-size: 7pt !important; }
+  .balance-page .bp-kpi-value { font-size: 13pt !important; line-height: 1.1 !important; margin-top: 2px !important; }
+
+  /* ── Mid row: chart + snapshot side-by-side, ~90mm tall ── */
+  .balance-page .bp-mid-row {
+    display: grid !important;
+    grid-template-columns: 1.4fr 1fr !important;
+    gap: 6px !important;
+    margin-bottom: 0 !important;
+    page-break-inside: avoid !important;
+  }
+  .balance-page .chart-card,
+  .balance-page .bp-snapshot {
+    padding: 6px 8px !important;
+    border-radius: 6px !important;
+  }
+  .balance-page .bp-section-kicker { font-size: 7pt !important; }
+  .balance-page .chart-card h3,
+  .balance-page .bp-snapshot h3 { font-size: 10pt !important; margin: 1mm 0 !important; }
+
+  /* Recharts: pin a concrete pixel size or the donut renders to 0×0 */
+  .balance-page .chart-card .chart-body {
+    display: grid !important;
+    grid-template-columns: 50mm 1fr !important;
+    gap: 4mm !important;
+    margin-top: 2mm !important;
+  }
+  .balance-page .chart-card .pie-shell {
+    width: 50mm !important;
+    height: 50mm !important;
+  }
+  .balance-page .chart-card .recharts-responsive-container,
+  .balance-page .chart-card .recharts-wrapper,
+  .balance-page .chart-card .recharts-surface {
+    width: 50mm !important;
+    height: 50mm !important;
+  }
+  .balance-page .legend { gap: 2px !important; padding: 0 !important; }
+  .balance-page .legend-row { padding: 1px 2px !important; }
+  .balance-page .legend-row .label,
+  .balance-page .legend-row .muted.small { font-size: 7.5pt !important; }
+
+  /* Snapshot list */
+  .balance-page .bp-snapshot-list { gap: 2px !important; padding: 0 !important; }
+  .balance-page .bp-snap-label,
+  .balance-page .bp-snap-value { font-size: 8pt !important; }
+
+  /* ── Page 2+: per-job table at full native size ── */
   .balance-page .bp-table-panel {
     page-break-before: always !important;
     overflow: visible !important;
