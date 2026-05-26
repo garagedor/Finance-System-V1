@@ -901,18 +901,29 @@
 
   /* Print the app's dark theme as-is. Chrome/Firefox drop background
      colors/images in print by default — `print-color-adjust: exact` opts
-     back in. Keep the AuthShell visibility-hidden trick so the printed
-     output is just the balance-page content. */
-  html, body {
+     back in. */
+  html, body, .balance-page, .balance-page * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  body * { visibility: hidden !important; }
-  .balance-page, .balance-page * { visibility: visible !important; }
-  .balance-page,
-  .balance-page * {
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
+
+  /* Hide AuthShell chrome via display:none (not visibility:hidden) so it
+     doesn't occupy vertical space and push the report off the page. */
+  aside,
+  header:not(.bp-header),
+  nav,
+  .no-print {
+    display: none !important;
+  }
+  /* Collapse the flex/overflow wrappers AuthShell sets up so the report
+     can flow naturally across multiple pages. */
+  body, body > div, body > div > div, main {
+    display: block !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: transparent !important;
   }
   /* Print-native layout. Let the page fill 100 % of whatever the browser
      reports as the printable width (works for A4 landscape, Letter
