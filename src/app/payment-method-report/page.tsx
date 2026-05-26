@@ -12,6 +12,7 @@ import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
 import EmptyState from '@/components/EmptyState';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import MultiSelect from '@/components/MultiSelect';
+import { useFilterRelationships } from '@/hooks/useFilterRelationships';
 import { formatCurrency, formatDisplayDate } from '../utils/jobUtils';
 import '../balance-report/styles.css';
 
@@ -60,6 +61,7 @@ const defaultEnd = fmtDate(new Date());
 const defaultStart = fmtDate(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000));
 
 export default function PaymentMethodReportPage() {
+  const { narrowTechs, narrowLocations, narrowProviders } = useFilterRelationships();
   const { user } = useAuth();
 
   // Filter state
@@ -275,7 +277,7 @@ export default function PaymentMethodReportPage() {
           </FilterField>
           <FilterField label="Tech">
             <MultiSelect
-              options={techOptions}
+              options={narrowTechs(techOptions, locations)}
               selected={techs}
               onChange={(v) => { setTechs(v); setFiltersDirty(true); }}
               placeholder="All techs"
@@ -284,7 +286,7 @@ export default function PaymentMethodReportPage() {
           </FilterField>
           <FilterField label="Location">
             <MultiSelect
-              options={locationOptions}
+              options={narrowLocations(locationOptions, techs, providers)}
               selected={locations}
               onChange={(v) => { setLocations(v); setFiltersDirty(true); }}
               placeholder="All locations"
@@ -293,7 +295,7 @@ export default function PaymentMethodReportPage() {
           </FilterField>
           <FilterField label="Provider">
             <MultiSelect
-              options={providerOptions}
+              options={narrowProviders(providerOptions, locations)}
               selected={providers}
               onChange={(v) => { setProviders(v); setFiltersDirty(true); }}
               placeholder="All providers"

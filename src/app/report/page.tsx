@@ -5,6 +5,7 @@ import { formatCurrency, formatDisplayDate } from '../utils/jobUtils';
 import type { Provider, Technician } from '@/types/job';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
 import MultiSelect from '@/components/MultiSelect';
+import { useFilterRelationships } from '@/hooks/useFilterRelationships';
 import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
@@ -102,6 +103,7 @@ const defaultEnd = formatDateInput(today);
 const defaultStart = formatDateInput(new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000));
 
 export default function ReportPage() {
+  const { narrowTechs, narrowLocations, narrowProviders } = useFilterRelationships();
   const [reportType, setReportType] = useState<ReportType>('penalty');
   const [startDate, setStartDate] = useState(defaultStart);
   const [endDate, setEndDate] = useState(defaultEnd);
@@ -508,7 +510,7 @@ export default function ReportPage() {
           </FilterField>
           <FilterField label="Tech">
             <MultiSelect
-              options={lookups.techs.map(t => t._id)}
+              options={narrowTechs(lookups.techs.map(t => t._id), locations)}
               selected={techs}
               onChange={(vals) => {
                 setTechs(vals);
@@ -518,7 +520,7 @@ export default function ReportPage() {
           </FilterField>
           <FilterField label="Location">
             <MultiSelect
-              options={lookups.locations.map((l) => l._id)}
+              options={narrowLocations(lookups.locations.map((l) => l._id), techs, providers)}
               selected={locations}
               onChange={(v) => { setLocations(v); setFiltersDirty(true); }}
               placeholder="All"
@@ -527,7 +529,8 @@ export default function ReportPage() {
           </FilterField>
           <FilterField label="Provider">
             <MultiSelect
-              options={lookups.providers.map((p) => (p as any).name || p._id)}
+              options={narrowProviders(lookups.providers.map((p) => p._id), locations)
+                .map((id) => providerLabel.get(id) || id)}
               selected={providers.map((id) => providerLabel.get(id) || id)}
               onChange={(labels) => {
                 const ids = labels.map((l) => {

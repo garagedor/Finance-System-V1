@@ -6,6 +6,7 @@ import './styles.css';
 import { Technician, Location, Provider } from '@/types/job';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
 import MultiSelect from '@/components/MultiSelect';
+import { useFilterRelationships } from '@/hooks/useFilterRelationships';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useAuth } from '@/components/AuthShell';
 import DateRangePicker from '@/components/DateRangePicker';
@@ -76,6 +77,7 @@ type PieDatum = { name: string; value: number; percent: number; color: string };
 
 export default function StatsPage() {
   const { user } = useAuth();
+  const { narrowTechs, narrowLocations, narrowProviders } = useFilterRelationships();
   const [stats, setStats] = useState<StatsResponse>(emptyStats);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -381,7 +383,7 @@ export default function StatsPage() {
           </FilterField>
           <FilterField label="Tech">
             <MultiSelect
-              options={lookups.techs.map((t) => t._id)}
+              options={narrowTechs(lookups.techs.map((t) => t._id), locationFilter)}
               selected={techs}
               onChange={(vals) => {
                 setTechs(vals);
@@ -391,7 +393,7 @@ export default function StatsPage() {
           </FilterField>
           <FilterField label="Location">
             <MultiSelect
-              options={lookups.locations.map((l) => l._id)}
+              options={narrowLocations(lookups.locations.map((l) => l._id), techs, providerFilter)}
               selected={locationFilter}
               onChange={(v) => {
                 setLocationFilter(v);
@@ -403,7 +405,7 @@ export default function StatsPage() {
           </FilterField>
           <FilterField label="Provider">
             <MultiSelect
-              options={lookups.providers.map((p) => p._id)}
+              options={narrowProviders(lookups.providers.map((p) => p._id), locationFilter)}
               selected={providerFilter}
               onChange={(v) => {
                 setProviderFilter(v);

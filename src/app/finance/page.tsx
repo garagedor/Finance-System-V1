@@ -6,6 +6,7 @@ import { useAuth } from '@/components/AuthShell';
 import DateRangePicker from '@/components/DateRangePicker';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
 import MultiSelect from '@/components/MultiSelect';
+import { useFilterRelationships } from '@/hooks/useFilterRelationships';
 import EmptyState from '@/components/EmptyState';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { formatCurrency } from '../utils/jobUtils';
@@ -44,6 +45,7 @@ const defaultEnd = fmtDate(new Date());
 const defaultStart = fmtDate(new Date(Date.now() - 29 * 24 * 60 * 60 * 1000));
 
 export default function FinancePage() {
+  const { narrowTechs, narrowLocations } = useFilterRelationships();
   const { user } = useAuth();
 
   const [startDate, setStartDate] = useState(defaultStart);
@@ -200,7 +202,7 @@ export default function FinancePage() {
           </FilterField>
           <FilterField label="Tech">
             <MultiSelect
-              options={lookups.techs.map((t) => t._id)}
+              options={narrowTechs(lookups.techs.map((t) => t._id), locations)}
               selected={techs}
               onChange={(v) => { setTechs(v); setFiltersDirty(true); }}
               placeholder="All techs"
@@ -209,7 +211,7 @@ export default function FinancePage() {
           </FilterField>
           <FilterField label="Location">
             <MultiSelect
-              options={lookups.locations.map((l) => l._id)}
+              options={narrowLocations(lookups.locations.map((l) => l._id), techs, [])}
               selected={locations}
               onChange={(v) => { setLocations(v); setFiltersDirty(true); }}
               placeholder="All locations"
