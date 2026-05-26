@@ -1027,9 +1027,40 @@
   .balance-page .bp-snap-label,
   .balance-page .bp-snap-value { font-size: 8pt !important; }
 
-  /* ── Page 2+: per-job table at full native size ── */
+  /* ── Page 2+: per-job table — shrink to fit landscape A4 width ──
+     The on-screen table has 17+ columns (Job Info + Costs & Profit + LM +
+     Tech Payout + Settlements) and on screen it scrolls horizontally. In
+     print the rightmost columns (the Settlements group) get clipped, so
+     scale the whole table panel down to fit 277 mm. */
   .balance-page .bp-table-panel {
     page-break-before: always !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  .balance-page .bp-table-panel table {
+    font-size: 6.5pt !important;
+    width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+  }
+  .balance-page .bp-table-panel th,
+  .balance-page .bp-table-panel td {
+    padding: 3px 4px !important;
+    white-space: nowrap !important;
+    font-size: 6.5pt !important;
+  }
+  .balance-page .bp-table-panel td.truncate {
+    white-space: normal !important;
+    word-break: break-word !important;
+    max-width: 28mm !important;
+  }
+  /* Hide the on-screen "View: Full Admin View 18/19" / "16 rows" chrome
+     and the panel padding wrapper that adds horizontal scroll. */
+  .balance-page .bp-table-panel .pmr-panel-toggle,
+  .balance-page .bp-table-panel .panel-header > div:last-child {
+    display: none !important;
+  }
+  .balance-page .bp-table-panel .balance-table {
     overflow: visible !important;
   }
   .balance-page table { page-break-inside: auto; }
