@@ -916,26 +916,26 @@
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  /* CRITICAL — force a wide layout in print.
-     Browsers render the print preview at an emulated portrait viewport
-     (~816px), which trips on-screen responsive rules that collapse the KPI
-     strip to 1 column and shrink the mid-row. Lock the container to A4
-     landscape's printable width (297mm − 2×10mm margins ≈ 277mm) so every
-     downstream grid lays out as it would on a wide screen. */
-  html, body { width: 277mm !important; }
+  /* SHRINK-TO-FIT — render the page at the same width the on-screen design
+     was built for (1500 px), then scale it down to fit A4 landscape's
+     printable width (~1046 px at 96 dpi). This way every fixed-px font
+     size, padding, and card width keeps its visual proportions instead of
+     overflowing or collapsing into a mobile layout. */
+  html, body { margin: 0 !important; padding: 0 !important; }
   .balance-page {
     position: absolute !important;
     top: 0 !important;
     left: 0 !important;
-    width: 277mm !important;
-    max-width: 277mm !important;
+    width: 1500px !important;
+    max-width: 1500px !important;
     padding: 0 !important;
-    font-size: 7.5pt !important;
+    transform: scale(0.697) !important;
+    transform-origin: top left !important;
   }
   .balance-page .content {
     padding: 0 !important;
-    width: 277mm !important;
-    max-width: 277mm !important;
+    width: 1500px !important;
+    max-width: 1500px !important;
   }
 
   /* ── Hide chrome and decorative content ──
@@ -963,80 +963,27 @@
     transform: none !important;
   }
 
-  /* ── Page 1: header + KPI strip + chart/snapshot row ──
-     Keep all three sections together on the first page and prevent any
-     of them from splitting mid-section. */
-  .balance-page .bp-header {
-    margin-bottom: 4mm !important;
-    page-break-inside: avoid !important;
-  }
-  .balance-page .bp-kpi-strip {
-    display: grid !important;
-    grid-template-columns: repeat(6, 1fr) !important;
-    gap: 6px !important;
-    margin-bottom: 4mm !important;
-    page-break-inside: avoid !important;
-  }
-  .balance-page .bp-kpi-card {
-    padding: 6px 8px !important;
-  }
-  .balance-page .bp-mid-row {
-    display: grid !important;
-    grid-template-columns: 1.4fr 1fr !important;
-    gap: 8px !important;
-    align-items: stretch !important;
-    margin-bottom: 0 !important;
-    page-break-inside: avoid !important;
-  }
-  .balance-page .chart-card {
-    padding: 8px !important;
-  }
   /* Recharts' ResponsiveContainer reads the parent's clientHeight in pixels
-     at render time. Without an explicit pixel height the donut renders to 0
-     and looks "missing" in print. Force a concrete size and disable the
-     wrapper's 100% animation. */
+     at render time. Inside @media print the parent often resolves to 0
+     so we pin a concrete size. */
   .balance-page .chart-card .chart-body,
   .balance-page .chart-card .recharts-responsive-container,
   .balance-page .chart-card .recharts-wrapper {
-    height: 220px !important;
-    min-height: 220px !important;
-    max-height: 220px !important;
+    height: 280px !important;
+    min-height: 280px !important;
     width: 100% !important;
   }
   .balance-page .chart-card .recharts-surface {
     width: 100% !important;
-    height: 220px !important;
-  }
-  .balance-page .bp-snapshot {
-    padding: 8px 10px !important;
-  }
-  .balance-page .bp-snapshot-list {
-    display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 3px 14px !important;
+    height: 280px !important;
   }
 
-  /* ── Page 2+: per-job table on its own page(s) ── */
+  /* ── Page 2+: per-job table on its own page ──
+     Reset the transform so the table prints at native size on its own
+     page(s), and force a break before it so page 1 holds the overview. */
   .balance-page .bp-table-panel {
-    padding: 0 !important;
-    overflow: visible !important;
     page-break-before: always !important;
-    margin-top: 0 !important;
-  }
-  .balance-page table {
-    width: 100% !important;
-    border-collapse: collapse !important;
-    font-size: 9pt !important;
-    table-layout: auto !important;
-  }
-  .balance-page th, .balance-page td {
-    padding: 5px 7px !important;
-    white-space: nowrap !important;
-  }
-  .balance-page td.truncate {
-    white-space: normal !important;
-    word-break: break-word !important;
-    max-width: 45mm !important;
+    overflow: visible !important;
   }
   .balance-page table { page-break-inside: auto; }
   .balance-page tr   { page-break-inside: avoid; page-break-after: auto; }
