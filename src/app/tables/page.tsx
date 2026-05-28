@@ -21,9 +21,9 @@ export default function TablesPage() {
       if (user?.type !== 'admin' && user?.type !== 'location-manager' && entityParam !== 'job') {
         return 'job';
       }
-      // Users entity is admin-only.
-      if (entityParam === 'user' && user?.type !== 'admin') {
-        return 'job';
+      // Users moved to /admin/users — never resolve to the Tables Users entity.
+      if (entityParam === 'user') {
+        return user?.type === 'admin' ? null : 'job';
       }
       return entityParam;
     }
@@ -53,6 +53,14 @@ export default function TablesPage() {
     }
   }, [selectedEntity]);
 
+  // Auto-redirect admins hitting the legacy /tables?entity=user URL to the
+  // new dedicated admin page.
+  useEffect(() => {
+    if (entityParam === 'user' && user?.type === 'admin') {
+      router.replace('/admin/users');
+    }
+  }, [entityParam, user, router]);
+
   const activeConfig = useMemo(() => {
     if (!selectedEntity) return null;
     return entityConfigs[selectedEntity] ?? entityConfigs.job;
@@ -65,9 +73,9 @@ export default function TablesPage() {
   const filteredOptions = useMemo(() => {
     const isViewer = user?.type === 'admin' || user?.type === 'location-manager';
     if (!isViewer) return entityOptions.filter((opt) => opt.key === 'job');
-    // Only admins manage users.
-    if (user?.type !== 'admin') return entityOptions.filter((opt) => opt.key !== 'user');
-    return entityOptions;
+    // Users now live on the dedicated /admin/users page (with permission
+    // management + password reset). Drop the legacy Tables entry for them.
+    return entityOptions.filter((opt) => opt.key !== 'user');
   }, [user]);
 
   const selector = (
