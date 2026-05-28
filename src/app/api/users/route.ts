@@ -2,24 +2,14 @@ import type { User } from '../../../types/user';
 import { createCrudHandlers } from '../utils/crudHandlers';
 import bcrypt from 'bcryptjs';
 import { NextRequest, NextResponse } from 'next/server';
-import { jwtVerify } from 'jose';
+import { requirePermission } from '@/lib/rbac';
+import type { Permission } from '@/types/rbac';
 
-const JWT_SECRET = new TextEncoder().encode('super-secret-key-for-development');
-
-const requireAdmin = async (request: NextRequest): Promise<NextResponse | null> => {
-  const session = request.cookies.get('session')?.value;
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-  try {
-    const { payload } = await jwtVerify(session, JWT_SECRET);
-    if ((payload as { type?: string }).type !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    return null;
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+/** Returns null if the session holds the given permission, else a 401/403. */
+const gate = async (perm: Permission): Promise<NextResponse | null> => {
+  const s = await requirePermission(perm);
+  if (s instanceof NextResponse) return s;
+  return null;
 };
 
 const normalizeUser = (row: any): User => {
@@ -40,13 +30,13 @@ const handlers = createCrudHandlers<User>({
 });
 
 export const GET = async (request: NextRequest) => {
-  const denied = await requireAdmin(request);
+  const denied = await gate('system:users:view');
   if (denied) return denied;
   return handlers.GET(request);
 };
 
 export const POST = async (request: NextRequest) => {
-  const denied = await requireAdmin(request);
+  const denied = await gate('system:users:create');
   if (denied) return denied;
   try {
     const body = await request.clone().json();
@@ -59,7 +49,7 @@ export const POST = async (request: NextRequest) => {
       body: JSON.stringify(body),
     });
     return handlers.POST(modifiedRequest);
-  } catch (e) {
+  } catch {
     return handlers.POST(request);
   }
 };
@@ -67,7 +57,7 @@ export const POST = async (request: NextRequest) => {
 // Hash a new password when supplied; drop the field when blank so editing
 // other fields doesn't wipe the existing hash.
 export const PUT = async (request: NextRequest) => {
-  const denied = await requireAdmin(request);
+  const denied = await gate('system:users:edit');
   if (denied) return denied;
   try {
     const body = await request.clone().json();
@@ -82,13 +72,13 @@ export const PUT = async (request: NextRequest) => {
       body: JSON.stringify(body),
     });
     return handlers.PUT(modifiedRequest);
-  } catch (e) {
+  } catch {
     return handlers.PUT(request);
   }
 };
 
 export const DELETE = async (request: NextRequest) => {
-  const denied = await requireAdmin(request);
+  const denied = await gate('system:users:delete');
   if (denied) return denied;
   return handlers.DELETE(request);
 };
