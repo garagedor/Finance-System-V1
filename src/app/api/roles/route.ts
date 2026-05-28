@@ -17,6 +17,7 @@ export async function GET() {
         label: (r as any).label || r.key,
         description: (r as any).description || '',
         is_system: !!(r as any).is_system,
+        permissions: Array.isArray(r.permissions) ? r.permissions : [],
         permissionCount: Array.isArray(r.permissions) ? r.permissions.length : 0,
       })),
     });
