@@ -168,8 +168,10 @@ const COLUMN_GROUPS: ColGroup[] = [
     cols: [
       {
         key: 'co-tech', label: 'Co.↔Tech',
-        renderBody: (j) => <td key="co-tech" style={{ color: j.balance * -1 < 0 ? '#f87171' : j.balance * -1 > 0 ? '#34d399' : undefined, fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance * -1)}</td>,
-        renderTotal: (t) => <td key="co-tech" style={{ color: t.balance * -1 < 0 ? '#f87171' : t.balance * -1 > 0 ? '#34d399' : undefined }}>{formatCurrency(t.balance * -1)}</td>,
+        // Sign convention (rev 2): the raw balance IS the display value.
+        // positive (green) → company owes subject; negative (red) → subject owes company.
+        renderBody: (j) => <td key="co-tech" style={{ color: j.balance > 0 ? '#34d399' : j.balance < 0 ? '#f87171' : undefined, fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance)}</td>,
+        renderTotal: (t) => <td key="co-tech" style={{ color: t.balance > 0 ? '#34d399' : t.balance < 0 ? '#f87171' : undefined }}>{formatCurrency(t.balance)}</td>,
       },
       {
         key: 'lm-co', label: 'LM→Co.',
@@ -922,11 +924,11 @@ export default function BalanceReportPage() {
                     className="bp-snap-value bp-snap-strong"
                     style={{
                       color:
-                        closedTotals.balance * -1 < 0 ? '#f87171' :
-                        closedTotals.balance * -1 > 0 ? '#34d399' : undefined,
+                        closedTotals.balance > 0 ? '#34d399' :
+                        closedTotals.balance < 0 ? '#f87171' : undefined,
                     }}
                   >
-                    {formatCurrency(closedTotals.balance * -1)}
+                    {formatCurrency(closedTotals.balance)}
                   </span>
                 </li>
                 {/* Tips are baked into the Tech Report balance now — show them

@@ -309,32 +309,40 @@ export const calcFinalBalance = (shareAmount: number, techParts: number, techPai
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Balance-report unified helper (locked 2026-06-03 — final spec).
+// Balance-report unified helper (locked 2026-06-03 — final spec, rev 2).
 //
 // Single source of truth for every number the balance-report consumes per
 // job. Both Tech Report and Location Report MUST go through this helper so
 // the two views cannot drift.
 //
 // Pipeline:
-//   1. payment_fee — card/finance/companyCheck/lmCheck processor cuts
+//   1. payment_fee = 5%×card + 10%×finance + 10%×companyCheck + 10%×lmCheck
 //      (0 for pure cash jobs)
 //   2. total_profit = job_total − payment_fee − (tech_parts + company_parts + lm_parts)
 //   3. tech_share     = total_profit × tech_percentage
 //   4. location_share = total_profit × location_percentage
-//   5. tech_balance     = tech_share + tech_parts + tips − tech_cash − lm_parts
+//   5. tech_balance     = tech_share + tech_parts + tips − tech_cash
 //   6. location_balance = location_share + lm_parts − lm_cash − lm_check − tech_cash
 //
-// Rules baked in (do not violate these by hand):
-//   - Card / finance / company-check / lm-check payments deduct payment_fee
-//     from total_profit BEFORE any share is computed. Pure cash jobs have a
-//     zero payment_fee.
+// CRITICAL: total_profit ALREADY deducts all three parts buckets (tech,
+// company, lm) before the share is taken. The balance formulas therefore add
+// back ONLY the parts the *subject of the report* personally fronted as a
+// reimbursement claim — tech_parts in tech mode, lm_parts in location mode.
+// Subtracting lm_parts a second time from tech_balance (the previous bug)
+// double-counts the LM-parts cost.
+//
+// Sign convention (the value this helper returns matches the on-screen
+// display 1:1 — DO NOT multiply by −1 in the UI):
+//   positive  →  company owes the subject (tech / LM is in the black)
+//   negative  →  subject owes the company (cash collected exceeds earnings)
+//
+// Other invariants:
 //   - tips flow only to the technician (tech_balance), never to the location.
-//   - lm_parts is **negative** for tech_balance (LM absorbed the cost — tech
-//     gets no reimbursement) but **positive** for location_balance (LM
-//     fronted parts → company owes LM that reimbursement).
-//   - tech_cash reduces BOTH balances. The tech sits inside the location
+//   - tech_cash reduces both balances. The tech sits inside the location
 //     structure for cash-collection accounting; cash the tech kept "stays"
 //     on the LM side and reduces what the company still owes the LM.
+//   - lm_parts is positive for location_balance — LM fronted those parts, so
+//     the company owes that amount back to the LM on top of the profit share.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type JobBalanceComputation = {
@@ -382,15 +390,19 @@ export const calcJobBalances = (
   const lmCash = toNumber(job.lmCash);
   const lmCheck = toNumber(job.lmCheck);
 
-  // Step 5
+  // Step 5 — tech_balance
+  //   tech_share already reflects the lm_parts deduction (it was removed from
+  //   total_profit upstream), so we DO NOT subtract lm_parts again here.
   const techBalance =
     techShare +
-    techParts +
+    techParts +     // tech-fronted parts → company reimburses the tech
     tipsTotal -
-    techCash -
-    lmParts;
+    techCash;       // cash the tech kept → reduces what company still owes
 
-  // Step 6
+  // Step 6 — location_balance
+  //   lm_parts is added because the LM personally fronted those parts and
+  //   they get reimbursed on top of their profit share. tech_cash deducts
+  //   because the tech sits inside the location structure for cash holding.
   const locationBalance =
     locationShare +
     lmParts -
