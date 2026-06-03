@@ -8,7 +8,8 @@ import {
   calcJobProfit,
   calcPaymentFee,
   calcTipsTotal,
-  calcFinalBalance,
+  calcTechBalance,
+  calcLocationBalance,
   calcStandardShare,
   calcLmOwesCompany,
   toNumber,
@@ -120,7 +121,13 @@ export async function GET(req: NextRequest) {
       const totalProfit = calcJobProfit(toNumber(paidSum) - toNumber(fee), parts);
       const shareAmount = calcStandardShare(totalProfit, sharePct);
       const tips = calcTipsTotal(job, { includeCheck: true, includeCompanyCashBonus: true });
-      const balance = calcFinalBalance(shareAmount, job.techParts, job.techPaidCash);
+      // Balance is mode-aware (locked 2026-06-03):
+      //   tech mode     → shareAmount + techParts − techPaidCash − lmParts
+      //   location mode → shareAmount + lmParts − lmCash − lmCheck
+      // See calculations.ts for the rationale.
+      const balance = mode === 'location'
+        ? calcLocationBalance(shareAmount, job.lmParts, job.lmCash, job.lmCheck)
+        : calcTechBalance(shareAmount, job.techParts, job.techPaidCash, job.lmParts);
       const lmOwesCompany = calcLmOwesCompany(job);
       // Location-mode only: what the company owes the LM = their 40% payout
       // (locationPct share of profit) plus parts the LM fronted on the job.

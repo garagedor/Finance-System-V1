@@ -915,7 +915,9 @@ export default function BalanceReportPage() {
                 </li>
                 <li className="bp-snap-divider" />
                 <li>
-                  <span className="bp-snap-label">Balance</span>
+                  <span className="bp-snap-label">
+                    {mode === 'location' ? 'LM Balance' : 'Tech Balance'}
+                  </span>
                   <span
                     className="bp-snap-value"
                     style={{
@@ -927,19 +929,23 @@ export default function BalanceReportPage() {
                     {formatCurrency(closedTotals.balance * -1)}
                   </span>
                 </li>
-                <li>
-                  <span className="bp-snap-label">Balance + Tips</span>
-                  <span
-                    className="bp-snap-value bp-snap-strong"
-                    style={{
-                      color:
-                        (closedTotals.balance + closedTotals.tipsTotal) * -1 < 0 ? '#f87171' :
-                        (closedTotals.balance + closedTotals.tipsTotal) * -1 > 0 ? '#34d399' : undefined,
-                    }}
-                  >
-                    {formatCurrency((closedTotals.balance + closedTotals.tipsTotal) * -1)}
-                  </span>
-                </li>
+                {/* Tips only flow to the technician — hide the "+ Tips" line
+                    in location mode where the LM doesn't receive them. */}
+                {mode !== 'location' && (
+                  <li>
+                    <span className="bp-snap-label">Balance + Tips</span>
+                    <span
+                      className="bp-snap-value bp-snap-strong"
+                      style={{
+                        color:
+                          (closedTotals.balance + closedTotals.tipsTotal) * -1 < 0 ? '#f87171' :
+                          (closedTotals.balance + closedTotals.tipsTotal) * -1 > 0 ? '#34d399' : undefined,
+                      }}
+                    >
+                      {formatCurrency((closedTotals.balance + closedTotals.tipsTotal) * -1)}
+                    </span>
+                  </li>
+                )}
                 <li className="bp-snap-divider" />
                 <li>
                   <span className="bp-snap-label">LM Owes Company</span>
@@ -1085,7 +1091,13 @@ export default function BalanceReportPage() {
                 </tr>
                 <tr>
                   {visibleCols.map((c) => (
-                    <th key={c.key}>{c.label}</th>
+                    <th key={c.key}>
+                      {/* Co.↔Tech column doubles as the LM net balance column
+                          in location mode (the `balance` field is now
+                          mode-aware on the server). Relabel so the header
+                          matches what's actually being displayed. */}
+                      {c.key === 'co-tech' && mode === 'location' ? 'Co.↔LM' : c.label}
+                    </th>
                   ))}
                 </tr>
               </thead>
