@@ -329,21 +329,27 @@ export const calcTechBalance = (
 
 /**
  * Location-side balance ("what the company owes the Area / Location Manager
- * on this job"), locked 2026-06-03. LM-fronted parts add to it; cash and
- * check the LM collected for the company subtract from it.
+ * on this job"), locked 2026-06-03.
  *
- *   location_share + lm_parts − lm_cash − lm_check
+ *   location_share + lm_parts − lm_cash − lm_check − tech_cash
+ *
+ * tech_cash is included because the technician is part of the location
+ * structure for cash-collection accounting: any cash the tech collected sits
+ * in the location-side bucket and reduces what the company still owes the
+ * LM (equivalently: the LM-side already "has" that money via their tech).
  */
 export const calcLocationBalance = (
   shareAmount: number,
   lmParts: number,
   lmCash: number,
   lmCheck: number,
+  techPaidCash: number,
 ) =>
   toNumber(shareAmount) +
   toNumber(lmParts) -
   toNumber(lmCash) -
-  toNumber(lmCheck);
+  toNumber(lmCheck) -
+  toNumber(techPaidCash);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LM (Location Manager) extension — accounting model (locked 2026-05-07).

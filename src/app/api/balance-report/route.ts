@@ -123,10 +123,13 @@ export async function GET(req: NextRequest) {
       const tips = calcTipsTotal(job, { includeCheck: true, includeCompanyCashBonus: true });
       // Balance is mode-aware (locked 2026-06-03):
       //   tech mode     → shareAmount + techParts − techPaidCash − lmParts
-      //   location mode → shareAmount + lmParts − lmCash − lmCheck
-      // See calculations.ts for the rationale.
+      //   location mode → shareAmount + lmParts − lmCash − lmCheck − techPaidCash
+      // The location mode deducts techPaidCash because the technician is part
+      // of the location structure for cash-collection accounting; cash the
+      // tech collected sits in the location-side bucket. See
+      // calculations.ts for the rationale.
       const balance = mode === 'location'
-        ? calcLocationBalance(shareAmount, job.lmParts, job.lmCash, job.lmCheck)
+        ? calcLocationBalance(shareAmount, job.lmParts, job.lmCash, job.lmCheck, job.techPaidCash)
         : calcTechBalance(shareAmount, job.techParts, job.techPaidCash, job.lmParts);
       const lmOwesCompany = calcLmOwesCompany(job);
       // Location-mode only: what the company owes the LM = their 40% payout
