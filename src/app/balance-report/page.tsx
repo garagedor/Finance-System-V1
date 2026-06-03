@@ -915,11 +915,11 @@ export default function BalanceReportPage() {
                 </li>
                 <li className="bp-snap-divider" />
                 <li>
-                  <span className="bp-snap-label">
+                  <span className="bp-snap-label bp-snap-strong">
                     {mode === 'location' ? 'LM Balance' : 'Tech Balance'}
                   </span>
                   <span
-                    className="bp-snap-value"
+                    className="bp-snap-value bp-snap-strong"
                     style={{
                       color:
                         closedTotals.balance * -1 < 0 ? '#f87171' :
@@ -929,21 +929,14 @@ export default function BalanceReportPage() {
                     {formatCurrency(closedTotals.balance * -1)}
                   </span>
                 </li>
-                {/* Tips only flow to the technician — hide the "+ Tips" line
-                    in location mode where the LM doesn't receive them. */}
+                {/* Tips are baked into the Tech Report balance now — show them
+                    as an informational sub-line so the user can still see the
+                    figure that contributed. Tips don't flow to LM, so suppress
+                    the line in location mode. */}
                 {mode !== 'location' && (
-                  <li>
-                    <span className="bp-snap-label">Balance + Tips</span>
-                    <span
-                      className="bp-snap-value bp-snap-strong"
-                      style={{
-                        color:
-                          (closedTotals.balance + closedTotals.tipsTotal) * -1 < 0 ? '#f87171' :
-                          (closedTotals.balance + closedTotals.tipsTotal) * -1 > 0 ? '#34d399' : undefined,
-                      }}
-                    >
-                      {formatCurrency((closedTotals.balance + closedTotals.tipsTotal) * -1)}
-                    </span>
+                  <li style={{ paddingLeft: 16, opacity: 0.75 }}>
+                    <span className="bp-snap-label">↳ Tips (already in balance)</span>
+                    <span className="bp-snap-value">{formatCurrency(closedTotals.tipsTotal)}</span>
                   </li>
                 )}
                 <li className="bp-snap-divider" />

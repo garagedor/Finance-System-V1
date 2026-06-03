@@ -308,48 +308,108 @@ export const calcFinalBalance = (shareAmount: number, techParts: number, techPai
   return toNumber(shareAmount) + toNumber(techParts) - toNumber(techPaidCash);
 };
 
-/**
- * Tech-side balance ("what company owes the technician on this job"), locked
- * 2026-06-03. Same as the legacy `calcFinalBalance` plus a deduction for
- * lmParts — LM-fronted parts are tech-equivalent costs the LM absorbed, so
- * they reduce what the company still owes the tech.
- *
- *   tech_share + tech_parts − tech_cash_collected − lm_parts
- */
-export const calcTechBalance = (
-  shareAmount: number,
-  techParts: number,
-  techPaidCash: number,
-  lmParts: number,
-) =>
-  toNumber(shareAmount) +
-  toNumber(techParts) -
-  toNumber(techPaidCash) -
-  toNumber(lmParts);
+// ─────────────────────────────────────────────────────────────────────────────
+// Balance-report unified helper (locked 2026-06-03 — final spec).
+//
+// Single source of truth for every number the balance-report consumes per
+// job. Both Tech Report and Location Report MUST go through this helper so
+// the two views cannot drift.
+//
+// Pipeline:
+//   1. payment_fee — card/finance/companyCheck/lmCheck processor cuts
+//      (0 for pure cash jobs)
+//   2. total_profit = job_total − payment_fee − (tech_parts + company_parts + lm_parts)
+//   3. tech_share     = total_profit × tech_percentage
+//   4. location_share = total_profit × location_percentage
+//   5. tech_balance     = tech_share + tech_parts + tips − tech_cash − lm_parts
+//   6. location_balance = location_share + lm_parts − lm_cash − lm_check − tech_cash
+//
+// Rules baked in (do not violate these by hand):
+//   - Card / finance / company-check / lm-check payments deduct payment_fee
+//     from total_profit BEFORE any share is computed. Pure cash jobs have a
+//     zero payment_fee.
+//   - tips flow only to the technician (tech_balance), never to the location.
+//   - lm_parts is **negative** for tech_balance (LM absorbed the cost — tech
+//     gets no reimbursement) but **positive** for location_balance (LM
+//     fronted parts → company owes LM that reimbursement).
+//   - tech_cash reduces BOTH balances. The tech sits inside the location
+//     structure for cash-collection accounting; cash the tech kept "stays"
+//     on the LM side and reduces what the company still owes the LM.
+// ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Location-side balance ("what the company owes the Area / Location Manager
- * on this job"), locked 2026-06-03.
- *
- *   location_share + lm_parts − lm_cash − lm_check − tech_cash
- *
- * tech_cash is included because the technician is part of the location
- * structure for cash-collection accounting: any cash the tech collected sits
- * in the location-side bucket and reduces what the company still owes the
- * LM (equivalently: the LM-side already "has" that money via their tech).
- */
-export const calcLocationBalance = (
-  shareAmount: number,
-  lmParts: number,
-  lmCash: number,
-  lmCheck: number,
-  techPaidCash: number,
-) =>
-  toNumber(shareAmount) +
-  toNumber(lmParts) -
-  toNumber(lmCash) -
-  toNumber(lmCheck) -
-  toNumber(techPaidCash);
+export type JobBalanceComputation = {
+  /** Sum of processor / handling fees on all paid-via-rail methods. */
+  paymentFee: number;
+  /** tech_parts + company_parts + lm_parts. */
+  parts: number;
+  /** Gross job total (sum of every payment method received from the customer). */
+  jobTotal: number;
+  /** job_total − payment_fee − parts. The share-eligible amount. */
+  totalProfit: number;
+  /** Net-of-processor-fee tip total (already discounted for card / finance / check tips). */
+  tipsTotal: number;
+  /** total_profit × tech_percentage / 100. */
+  techShare: number;
+  /** total_profit × location_percentage / 100. */
+  locationShare: number;
+  /** Tech-perspective balance — see formula above. */
+  techBalance: number;
+  /** Location-perspective balance — see formula above. */
+  locationBalance: number;
+};
+
+export const calcJobBalances = (
+  job: Partial<JobRow>,
+  techPercentage: number,
+  locationPercentage: number,
+): JobBalanceComputation => {
+  // Step 1
+  const paymentFee = calcPaymentFee(job);
+  // Step 2
+  const jobTotal = calcPaidSum(job);
+  const parts = calcParts(job);
+  const totalProfit = toNumber(jobTotal) - toNumber(paymentFee) - toNumber(parts);
+  // Steps 3 & 4
+  const techShare = calcStandardShare(totalProfit, techPercentage);
+  const locationShare = calcStandardShare(totalProfit, locationPercentage);
+  // Tips are net of processor fees (tipsCard × 0.95 etc.) — they apply only
+  // to the technician balance.
+  const tipsTotal = calcTipsTotal(job, { includeCheck: true, includeCompanyCashBonus: true });
+
+  const techCash = toNumber(job.techPaidCash);
+  const techParts = toNumber(job.techParts);
+  const lmParts = toNumber(job.lmParts);
+  const lmCash = toNumber(job.lmCash);
+  const lmCheck = toNumber(job.lmCheck);
+
+  // Step 5
+  const techBalance =
+    techShare +
+    techParts +
+    tipsTotal -
+    techCash -
+    lmParts;
+
+  // Step 6
+  const locationBalance =
+    locationShare +
+    lmParts -
+    lmCash -
+    lmCheck -
+    techCash;
+
+  return {
+    paymentFee,
+    parts,
+    jobTotal,
+    totalProfit,
+    tipsTotal,
+    techShare,
+    locationShare,
+    techBalance,
+    locationBalance,
+  };
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LM (Location Manager) extension — accounting model (locked 2026-05-07).

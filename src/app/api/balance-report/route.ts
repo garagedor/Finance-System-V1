@@ -3,14 +3,7 @@ import { MongoClient } from 'mongodb';
 import type { JobRow, Location, Technician } from '../../../types/job';
 import type { User } from '../../../types/user';
 import {
-  calcPaidSum,
-  calcParts,
-  calcJobProfit,
-  calcPaymentFee,
-  calcTipsTotal,
-  calcTechBalance,
-  calcLocationBalance,
-  calcStandardShare,
+  calcJobBalances,
   calcLmOwesCompany,
   toNumber,
 } from '../utils/calculations';
@@ -113,28 +106,24 @@ export async function GET(req: NextRequest) {
       const techId = job.tech || '';
       const techDoc = techId ? techMap.get(techId) : undefined;
       const techPct = techDoc?.profitPercent ?? 0;
-      const sharePct = mode === 'location' ? locationPct : techPct;
 
-      const paidSum = calcPaidSum(job);
-      const parts = calcParts(job);
-      const fee = calcPaymentFee(job);
-      const totalProfit = calcJobProfit(toNumber(paidSum) - toNumber(fee), parts);
-      const shareAmount = calcStandardShare(totalProfit, sharePct);
-      const tips = calcTipsTotal(job, { includeCheck: true, includeCompanyCashBonus: true });
-      // Balance is mode-aware (locked 2026-06-03):
-      //   tech mode     → shareAmount + techParts − techPaidCash − lmParts
-      //   location mode → shareAmount + lmParts − lmCash − lmCheck − techPaidCash
-      // The location mode deducts techPaidCash because the technician is part
-      // of the location structure for cash-collection accounting; cash the
-      // tech collected sits in the location-side bucket. See
-      // calculations.ts for the rationale.
-      const balance = mode === 'location'
-        ? calcLocationBalance(shareAmount, job.lmParts, job.lmCash, job.lmCheck, job.techPaidCash)
-        : calcTechBalance(shareAmount, job.techParts, job.techPaidCash, job.lmParts);
+      // Single source of truth: every per-job number goes through
+      // calcJobBalances so Tech Report and Location Report can't drift.
+      // The mode picks which of techShare / locationShare and techBalance /
+      // locationBalance gets surfaced — both are computed unconditionally.
+      const calc = calcJobBalances(job, techPct, locationPct);
+      const paidSum = calc.jobTotal;
+      const parts = calc.parts;
+      const fee = calc.paymentFee;
+      const totalProfit = calc.totalProfit;
+      const tips = calc.tipsTotal;
+      const shareAmount = mode === 'location' ? calc.locationShare : calc.techShare;
+      const balance = mode === 'location' ? calc.locationBalance : calc.techBalance;
+
       const lmOwesCompany = calcLmOwesCompany(job);
-      // Location-mode only: what the company owes the LM = their 40% payout
-      // (locationPct share of profit) plus parts the LM fronted on the job.
-      const companyOwesLm = mode === 'location' ? shareAmount + toNumber(job.lmParts) : 0;
+      // Location-mode only: what the company owes the LM = their location-%
+      // payout plus parts the LM fronted on the job.
+      const companyOwesLm = mode === 'location' ? calc.locationShare + toNumber(job.lmParts) : 0;
 
       const approvalsRaw = Array.isArray(job.approvals) ? job.approvals : (typeof job.approvals === 'string' ? job.approvals.split(',') : []);
       const approvals = [...new Set(approvalsRaw.map((a: any) => String(a).trim()).filter(Boolean))].map((name: any) => ({
