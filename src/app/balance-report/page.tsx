@@ -202,8 +202,12 @@ const COLUMN_GROUPS: ColGroup[] = [
       },
       {
         key: 'net-tips', label: 'Net + Tips',
-        renderBody: (j) => <td key="net-tips" style={{ color: (j.balance + j.tipsTotal) * -1 < 0 ? '#f87171' : (j.balance + j.tipsTotal) * -1 > 0 ? '#34d399' : undefined, fontWeight: (j.balance + j.tipsTotal) !== 0 ? 600 : undefined }}>{formatCurrency((j.balance + j.tipsTotal) * -1)}</td>,
-        renderTotal: (t) => <td key="net-tips" style={{ color: (t.balance + t.tipsTotal) * -1 < 0 ? '#f87171' : (t.balance + t.tipsTotal) * -1 > 0 ? '#34d399' : undefined }}>{formatCurrency((t.balance + t.tipsTotal) * -1)}</td>,
+        // Tips are now baked into `balance` upstream (calcJobBalances step 5),
+        // so Net + Tips reads straight off `balance` — same value as the
+        // Co.↔Tech column. Same sign convention: positive (green) = company
+        // owes subject, negative (red) = subject owes company.
+        renderBody: (j) => <td key="net-tips" style={{ color: j.balance > 0 ? '#34d399' : j.balance < 0 ? '#f87171' : undefined, fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance)}</td>,
+        renderTotal: (t) => <td key="net-tips" style={{ color: t.balance > 0 ? '#34d399' : t.balance < 0 ? '#f87171' : undefined }}>{formatCurrency(t.balance)}</td>,
       },
     ],
   },
