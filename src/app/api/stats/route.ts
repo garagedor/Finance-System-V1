@@ -121,6 +121,16 @@ export async function GET(req: NextRequest) {
             { $multiply: [toNumberAgg('$lmCheck'), 0.1] },
           ],
         },
+        // All-kinds fee burden — card 5% + finance 10% + company check 10%
+        // + LM check 10%. Used for the "Jobs Profit" KPI (locked 2026-06-01).
+        valFeeAllKinds: {
+          $add: [
+            { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
+            { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
+            { $multiply: [toNumberAgg('$totalPaidCompanyCheck'), 0.1] },
+            { $multiply: [toNumberAgg('$lmCheck'), 0.1] },
+          ],
+        },
         valParts: {
           $add: [
             toNumberAgg('$techParts'),
@@ -159,6 +169,16 @@ export async function GET(req: NextRequest) {
                   $cond: [
                     { $eq: ['$status', 'Closed'] },
                     { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
+                    0,
+                  ],
+                },
+              },
+              // Jobs Profit = totalSales − all payment fees − all parts (Closed only).
+              jobsProfit: {
+                $sum: {
+                  $cond: [
+                    { $eq: ['$status', 'Closed'] },
+                    { $subtract: [{ $subtract: ['$valTotalAmount', '$valFeeAllKinds'] }, '$valParts'] },
                     0,
                   ],
                 },
@@ -241,6 +261,7 @@ export async function GET(req: NextRequest) {
     const closedCount = summaryDoc.closedCount || 0;
     const profitClosedOrXClose = summaryDoc.profitClosedOrXClose || 0;
     const profitClosedOnly = summaryDoc.profitClosedOnly || 0;
+    const jobsProfit = summaryDoc.jobsProfit || 0;
 
     return NextResponse.json({
       summary: {
@@ -251,12 +272,21 @@ export async function GET(req: NextRequest) {
         // Closed + X close jobs. Same scope and definition as the avg ticket
         // numerator, just not divided.
         totalProfit: profitClosedOrXClose,
+        // Jobs Profit (Closed only) = totalSales − all payment fees − all parts.
+        // Fees include card 5% + finance 10% + companyCheck 10% + lmCheck 10%.
+        jobsProfit,
         // Avg ticket = (Total Payment − Total Fees − Total Parts) / jobs
         // sourced from the same payment/fees/parts breakdown shown on the
         // report page provider tab.
         avgTicket: count ? profitClosedOrXClose / count : 0,
         avgTicketWithoutPenalty: count ? profitClosedOnly / count : 0,
-        avgClosedTicket: closedCount ? totalAmount / closedCount : 0,
+        // Avg Closed Ticket = total profit on Closed jobs / count of Closed
+        // jobs. Uses `jobsProfit` which is the closed-only profit pool
+        // already aggregated above (valTotalAmount − all fees − all parts,
+        // summed across status = 'Closed'). The previous formula divided
+        // valTotalAmount across *every* job by the closed count, producing
+        // a misleadingly inflated number.
+        avgClosedTicket: closedCount ? jobsProfit / closedCount : 0,
         closedRatio: count ? closedCount / count : 0,
       },
       byTech: (result?.byTech || []).map((r: any) => ({
