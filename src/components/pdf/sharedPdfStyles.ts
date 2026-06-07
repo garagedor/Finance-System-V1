@@ -65,7 +65,11 @@ export const sharedPdfStyles = StyleSheet.create({
     },
     body: {
         paddingTop: 14,
-        paddingHorizontal: 24,
+        paddingHorizontal: 28,
+    },
+    bodyTight: {
+        paddingTop: 12,
+        paddingHorizontal: 28,
     },
 
     // ── Brand header band (navy) ───────────────────────────────────────────
@@ -146,7 +150,89 @@ export const sharedPdfStyles = StyleSheet.create({
     },
     sectionTextBlock: { flexDirection: 'column' },
 
-    // ── KPI grid ───────────────────────────────────────────────────────────
+    // ── Hero balance section ───────────────────────────────────────────────
+    // Two oversized cards on page 1 for Balance + Balance + Tips. Wide
+    // left-edge accent strip, generous padding, headline-size number.
+    // The point is that a glance at page 1 immediately answers "what's
+    // the bottom line?" — same role as a CFO email subject line.
+    heroRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    heroCard: {
+        flex: 1,
+        backgroundColor: palette.surface,
+        borderWidth: 0.5,
+        borderColor: palette.slate200,
+        borderLeftWidth: 5,
+        borderRadius: 4,
+        paddingVertical: 16,
+        paddingHorizontal: 18,
+        minHeight: 92,
+    },
+    heroLabel: {
+        fontSize: 8.5,
+        color: palette.slate500,
+        textTransform: 'uppercase',
+        letterSpacing: 1,
+        fontFamily: 'Helvetica-Bold',
+    },
+    heroValue: {
+        fontSize: 24,
+        fontFamily: 'Helvetica-Bold',
+        color: palette.ink900,
+        marginTop: 8,
+        lineHeight: 1.1,
+    },
+    heroValuePos: { color: palette.emerald600 },
+    heroValueNeg: { color: palette.red600 },
+    heroCaption: {
+        fontSize: 8.5,
+        color: palette.slate500,
+        marginTop: 6,
+    },
+    heroBadge: {
+        backgroundColor: palette.slate100,
+        color: palette.slate500,
+        fontSize: 7,
+        fontFamily: 'Helvetica-Bold',
+        textTransform: 'uppercase',
+        letterSpacing: 0.8,
+        paddingVertical: 2,
+        paddingHorizontal: 5,
+        borderRadius: 2,
+        marginLeft: 6,
+    },
+
+    // ── Key-figure cards (medium, between hero and KPI grid) ──────────────
+    keyRow: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    keyCard: {
+        flex: 1,
+        backgroundColor: palette.surface,
+        borderWidth: 0.5,
+        borderColor: palette.slate200,
+        borderTopWidth: 2,
+        borderRadius: 3,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+    },
+    keyLabel: {
+        fontSize: 7.5,
+        color: palette.slate500,
+        textTransform: 'uppercase',
+        letterSpacing: 0.7,
+    },
+    keyValue: {
+        fontSize: 15,
+        fontFamily: 'Helvetica-Bold',
+        color: palette.ink900,
+        marginTop: 4,
+    },
+
+    // ── KPI grid (small cards) ─────────────────────────────────────────────
     kpiGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
@@ -182,12 +268,17 @@ export const sharedPdfStyles = StyleSheet.create({
     // ── Two-column row: pie + legend ───────────────────────────────────────
     twoColRow: {
         flexDirection: 'row',
-        gap: 16,
+        gap: 18,
         marginBottom: 4,
+        backgroundColor: palette.surface,
+        borderWidth: 0.5,
+        borderColor: palette.slate200,
+        borderRadius: 4,
+        padding: 14,
     },
     pieBox: {
-        width: 130,
-        height: 130,
+        width: 170,
+        height: 170,
         alignItems: 'center',
         justifyContent: 'center',
     },

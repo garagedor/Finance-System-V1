@@ -4,13 +4,15 @@ import {
     fmtCurrency,
     fmtDate,
     fmtInt,
-    palette,
 } from './sharedPdfStyles';
 import {
     BrandHeader,
     SectionHeader,
     KpiCard,
     KpiGrid,
+    KeyFigureCard,
+    KeyFigureRow,
+    HeroBalanceRow,
     PieChart,
     PieLegend,
     ReportFooter,
@@ -111,6 +113,7 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
 
 export function TechReportPdf({ data }: { data: PdfReportData }) {
     const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt } = data;
+    const totalParts = totals.techParts + totals.companyParts + totals.lmParts;
 
     return (
         <Document
@@ -118,8 +121,14 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
             subject="LBS Garage Door — Tech Balance Report"
             author="LBS Garage Door"
         >
+            {/* ════════════════════════════════════════════════════════════
+                PAGE 1 — EXECUTIVE SUMMARY
+                Headline balance numbers first (the "answer"), then key
+                figures (Total Profit, Total Paid, Payout), then range KPIs
+                and status distribution. The detail table lives on page 2
+                so the exec view is never crowded by raw rows.
+                ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
-                {/* Brand band + meta strip — repeats on every page */}
                 <BrandHeader
                     reportTitle="Tech Balance Report"
                     subject={subject}
@@ -130,46 +139,43 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
                 />
 
                 <View style={s.body}>
-                    {/* ── Range-wide KPI grid ────────────────────────────── */}
+                    {/* HERO — the headline bottom-line numbers */}
+                    <SectionHeader kicker="Executive Summary" title="Bottom Line" />
+                    <HeroBalanceRow
+                        balance={totals.balance}
+                        balanceWithTips={totals.balanceWithTips}
+                        mode="tech"
+                    />
+
+                    {/* KEY FIGURES — the three numbers a manager scans next */}
+                    <SectionHeader kicker="Key Figures" title="Period Financials" />
+                    <KeyFigureRow>
+                        <KeyFigureCard label="Total Paid"   value={fmtCurrency(totals.paidSum)}     accent="indigo" />
+                        <KeyFigureCard label="Total Profit" value={fmtCurrency(totals.totalProfit)} accent="emerald" />
+                        <KeyFigureCard label="Tech Payout"  value={fmtCurrency(totals.shareAmount)} accent="cyan" />
+                    </KeyFigureRow>
+
+                    {/* RANGE KPIs — overall performance signal */}
                     <SectionHeader kicker="Performance" title="Range Overview" />
                     <KpiGrid>
-                        <KpiCard label="Assigned Jobs"  value={fmtInt(stats.assignedJobs)}     accent="indigo" />
-                        <KpiCard label="Avg Ticket"     value={fmtCurrency(stats.avgTicket)}   accent="cyan" />
-                        <KpiCard label="Job Profit"     value={fmtCurrency(stats.jobProfit)}   accent="emerald" />
-                        <KpiCard label="Avg Closed Job" value={fmtCurrency(stats.avgClosedJob)} accent="violet" />
+                        <KpiCard label="Assigned Jobs"   value={fmtInt(stats.assignedJobs)}       accent="indigo" />
+                        <KpiCard label="Avg Ticket"      value={fmtCurrency(stats.avgTicket)}     accent="cyan" />
+                        <KpiCard label="Job Profit"      value={fmtCurrency(stats.jobProfit)}     accent="emerald" />
+                        <KpiCard label="Avg Closed Job"  value={fmtCurrency(stats.avgClosedJob)}  accent="violet" />
+                        <KpiCard label="Payment Fees"    value={fmtCurrency(totals.paymentFee)}   accent="amber" />
+                        <KpiCard label="Total Parts"     value={fmtCurrency(totalParts)}          accent="amber" />
+                        <KpiCard label="Cash Collected"  value={fmtCurrency(totals.techPaidCash)} accent="violet" />
+                        <KpiCard label="Tips"            value={fmtCurrency(totals.tipsTotal)}    accent="violet" />
                     </KpiGrid>
 
-                    {/* ── Closed-jobs summary cards ──────────────────────── */}
-                    <SectionHeader kicker="Closed Jobs" title="Financial Summary" />
-                    <KpiGrid>
-                        <KpiCard label="Total Paid"     value={fmtCurrency(totals.paidSum)}     accent="indigo" />
-                        <KpiCard label="Payment Fees"  value={fmtCurrency(totals.paymentFee)}  accent="amber" />
-                        <KpiCard label="Total Parts"   value={fmtCurrency(totals.techParts + totals.companyParts + totals.lmParts)} accent="amber" />
-                        <KpiCard label="Total Profit"  value={fmtCurrency(totals.totalProfit)} accent="emerald" />
-                        <KpiCard label="Tech Payout"   value={fmtCurrency(totals.shareAmount)} accent="cyan" />
-                        <KpiCard label="Cash Collected" value={fmtCurrency(totals.techPaidCash)} accent="violet" />
-                        <KpiCard label="Tips"          value={fmtCurrency(totals.tipsTotal)}   accent="violet" />
-                        <KpiCard
-                            label="Balance"
-                            value={fmtCurrency(totals.balance)}
-                            tone={balanceTone(totals.balance)}
-                            accent={totals.balance > 0 ? 'emerald' : totals.balance < 0 ? 'red' : 'indigo'}
-                        />
-                        <KpiCard
-                            label="Balance + Tips"
-                            value={fmtCurrency(totals.balanceWithTips)}
-                            tone={balanceTone(totals.balanceWithTips)}
-                            accent={totals.balanceWithTips > 0 ? 'emerald' : totals.balanceWithTips < 0 ? 'red' : 'indigo'}
-                        />
-                    </KpiGrid>
-
-                    {/* ── Status pie + legend ────────────────────────────── */}
+                    {/* STATUS PIE — visual breakdown */}
                     {stats.statusStats.length > 0 && (
                         <>
                             <SectionHeader kicker="Distribution" title="Jobs by Status" />
                             <View style={s.twoColRow} wrap={false}>
                                 <PieChart
                                     slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
+                                    size={170}
                                 />
                                 <PieLegend
                                     slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
@@ -177,8 +183,28 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
                             </View>
                         </>
                     )}
+                </View>
 
-                    {/* ── Detail table ───────────────────────────────────── */}
+                <ReportFooter generatedAt={generatedAt} />
+            </Page>
+
+            {/* ════════════════════════════════════════════════════════════
+                PAGE 2+ — DETAIL TABLE
+                Same brand header so it reads as one document. The fixed
+                table header above each row block means continuation pages
+                always carry their column labels.
+                ════════════════════════════════════════════════════════════ */}
+            <Page size="A4" orientation="landscape" style={s.page}>
+                <BrandHeader
+                    reportTitle="Tech Balance Report"
+                    subject={subject}
+                    startDate={startDate}
+                    endDate={endDate}
+                    appliedPct={appliedPct}
+                    rowCount={totals.rowCount}
+                />
+
+                <View style={s.bodyTight}>
                     <SectionHeader kicker="Detail" title="Closed Jobs Breakdown" />
                     <View style={s.tableContainer}>
                         <View style={s.table}>
@@ -195,7 +221,6 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
                     </View>
                 </View>
 
-                {/* Footer with brand stamp + page count — repeats every page */}
                 <ReportFooter generatedAt={generatedAt} />
             </Page>
         </Document>

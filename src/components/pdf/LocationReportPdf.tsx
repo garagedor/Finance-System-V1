@@ -10,6 +10,9 @@ import {
     SectionHeader,
     KpiCard,
     KpiGrid,
+    KeyFigureCard,
+    KeyFigureRow,
+    HeroBalanceRow,
     PieChart,
     PieLegend,
     ReportFooter,
@@ -112,6 +115,7 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
 
 export function LocationReportPdf({ data }: { data: PdfReportData }) {
     const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt } = data;
+    const totalParts = totals.techParts + totals.companyParts + totals.lmParts;
 
     return (
         <Document
@@ -119,6 +123,9 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
             subject="LBS Garage Door — Location Balance Report"
             author="LBS Garage Door"
         >
+            {/* ════════════════════════════════════════════════════════════
+                PAGE 1 — EXECUTIVE SUMMARY
+                ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
                 <BrandHeader
                     reportTitle="Location Balance Report"
@@ -130,56 +137,45 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
                 />
 
                 <View style={s.body}>
-                    {/* ── Range-wide KPI grid ────────────────────────────── */}
+                    {/* HERO — bottom-line numbers (Balance + Tips is info-only) */}
+                    <SectionHeader kicker="Executive Summary" title="Bottom Line" />
+                    <HeroBalanceRow
+                        balance={totals.balance}
+                        balanceWithTips={totals.balanceWithTips}
+                        mode="location"
+                    />
+
+                    {/* KEY FIGURES — three numbers a manager scans next */}
+                    <SectionHeader kicker="Key Figures" title="Period Financials" />
+                    <KeyFigureRow>
+                        <KeyFigureCard label="Total Paid"   value={fmtCurrency(totals.paidSum)}     accent="indigo" />
+                        <KeyFigureCard label="Total Profit" value={fmtCurrency(totals.totalProfit)} accent="emerald" />
+                        <KeyFigureCard label="LM Payout"    value={fmtCurrency(totals.shareAmount)} accent="cyan" />
+                    </KeyFigureRow>
+
+                    {/* RANGE KPIs — performance + LM-side cash/check signals */}
                     <SectionHeader kicker="Performance" title="Range Overview" />
                     <KpiGrid>
-                        <KpiCard label="Assigned Jobs"  value={fmtInt(stats.assignedJobs)}     accent="indigo" />
-                        <KpiCard label="Avg Ticket"     value={fmtCurrency(stats.avgTicket)}   accent="cyan" />
-                        <KpiCard label="Job Profit"     value={fmtCurrency(stats.jobProfit)}   accent="emerald" />
-                        <KpiCard label="Avg Closed Job" value={fmtCurrency(stats.avgClosedJob)} accent="violet" />
+                        <KpiCard label="Assigned Jobs"   value={fmtInt(stats.assignedJobs)}       accent="indigo" />
+                        <KpiCard label="Avg Ticket"      value={fmtCurrency(stats.avgTicket)}     accent="cyan" />
+                        <KpiCard label="Job Profit"      value={fmtCurrency(stats.jobProfit)}     accent="emerald" />
+                        <KpiCard label="Avg Closed Job"  value={fmtCurrency(stats.avgClosedJob)}  accent="violet" />
+                        <KpiCard label="Payment Fees"    value={fmtCurrency(totals.paymentFee)}   accent="amber" />
+                        <KpiCard label="Total Parts"     value={fmtCurrency(totalParts)}          accent="amber" />
+                        <KpiCard label="LM Cash"         value={fmtCurrency(totals.lmCash)}       accent="cyan" />
+                        <KpiCard label="LM Check"        value={fmtCurrency(totals.lmCheck)}      accent="cyan" />
+                        <KpiCard label="Tech Cash"       value={fmtCurrency(totals.techPaidCash)} accent="violet" />
+                        <KpiCard label="Tips (info)"     value={fmtCurrency(totals.tipsTotal)}    accent="violet" />
                     </KpiGrid>
 
-                    {/* ── Closed-job summary (LM settlement) ─────────────── */}
-                    <SectionHeader kicker="Closed Jobs" title="Location Settlement" />
-                    <KpiGrid>
-                        <KpiCard label="Total Paid"     value={fmtCurrency(totals.paidSum)}      accent="indigo" />
-                        <KpiCard label="Payment Fees"   value={fmtCurrency(totals.paymentFee)}   accent="amber" />
-                        <KpiCard label="Total Parts"    value={fmtCurrency(totals.techParts + totals.companyParts + totals.lmParts)} accent="amber" />
-                        <KpiCard label="Total Profit"   value={fmtCurrency(totals.totalProfit)}  accent="emerald" />
-                        <KpiCard label="LM Payout"      value={fmtCurrency(totals.shareAmount)}  accent="cyan" />
-                        <KpiCard label="LM Cash"        value={fmtCurrency(totals.lmCash)}       accent="cyan" />
-                        <KpiCard label="LM Check"       value={fmtCurrency(totals.lmCheck)}      accent="cyan" />
-                        <KpiCard label="Tech Cash"      value={fmtCurrency(totals.techPaidCash)} accent="violet" />
-                        <KpiCard
-                            label="Balance"
-                            value={fmtCurrency(totals.balance)}
-                            tone={balanceTone(totals.balance)}
-                            accent={totals.balance > 0 ? 'emerald' : totals.balance < 0 ? 'red' : 'indigo'}
-                        />
-                    </KpiGrid>
-
-                    {/* ── Informational: tip activity in the period ─────────
-                          Tips do NOT affect LM settlement / payout / company
-                          liability. Shown so the AM can see total tech
-                          earnings + total job economics for the period. */}
-                    <SectionHeader kicker="Informational" title="Technician Tip Activity (excluded from settlement)" />
-                    <KpiGrid>
-                        <KpiCard label="Total Tips"      value={fmtCurrency(totals.tipsTotal)}    accent="violet" />
-                        <KpiCard
-                            label="Balance + Tips"
-                            value={fmtCurrency(totals.balanceWithTips)}
-                            tone={balanceTone(totals.balanceWithTips)}
-                            accent={totals.balanceWithTips > 0 ? 'emerald' : totals.balanceWithTips < 0 ? 'red' : 'indigo'}
-                        />
-                    </KpiGrid>
-
-                    {/* ── Status pie + legend ────────────────────────────── */}
+                    {/* STATUS PIE */}
                     {stats.statusStats.length > 0 && (
                         <>
                             <SectionHeader kicker="Distribution" title="Jobs by Status" />
                             <View style={s.twoColRow} wrap={false}>
                                 <PieChart
                                     slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
+                                    size={170}
                                 />
                                 <PieLegend
                                     slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
@@ -187,8 +183,25 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
                             </View>
                         </>
                     )}
+                </View>
 
-                    {/* ── Detail table ───────────────────────────────────── */}
+                <ReportFooter generatedAt={generatedAt} />
+            </Page>
+
+            {/* ════════════════════════════════════════════════════════════
+                PAGE 2+ — DETAIL TABLE
+                ════════════════════════════════════════════════════════════ */}
+            <Page size="A4" orientation="landscape" style={s.page}>
+                <BrandHeader
+                    reportTitle="Location Balance Report"
+                    subject={subject}
+                    startDate={startDate}
+                    endDate={endDate}
+                    appliedPct={appliedPct}
+                    rowCount={totals.rowCount}
+                />
+
+                <View style={s.bodyTight}>
                     <SectionHeader kicker="Detail" title="Closed Jobs Breakdown" />
                     <View style={s.tableContainer}>
                         <View style={s.table}>

@@ -4,6 +4,7 @@ import {
     palette,
     kpiAccents,
     statusColor,
+    fmtCurrency,
     fmtTimestamp,
     type KpiAccent,
 } from './sharedPdfStyles';
@@ -62,6 +63,90 @@ export const SectionHeader = ({ kicker, title }: { kicker: string; title: string
             <Text style={s.sectionTitle}>{title}</Text>
         </View>
     </View>
+);
+
+// ─── Hero balance card (page-1 headline numbers) ───────────────────────────
+// One card per metric (Balance / Balance + Tips). Headline-size value
+// (24pt) so the bottom line answers itself at first glance.
+// Sign convention (locked 2026-06-08):
+//   positive (green) → subject owes the COMPANY
+//   negative (red)   → COMPANY owes the subject
+const directionCaption = (mode: 'tech' | 'location', value: number, info: boolean): string => {
+    const subject = mode === 'tech' ? 'Tech' : 'Location';
+    if (info) return `Informational only · excluded from settlement`;
+    if (value > 0) return `${subject} owes the company`;
+    if (value < 0) return `Company owes the ${subject.toLowerCase()}`;
+    return 'No outstanding settlement';
+};
+
+export const HeroBalanceCard = ({
+    label,
+    value,
+    mode,
+    info = false,
+}: {
+    label: string;
+    value: number;
+    mode: 'tech' | 'location';
+    info?: boolean;
+}) => {
+    const tone = value > 0 ? 'pos' : value < 0 ? 'neg' : undefined;
+    const accentColor = tone === 'pos' ? palette.emerald600 : tone === 'neg' ? palette.red600 : palette.indigo500;
+    return (
+        <View style={[s.heroCard, { borderLeftColor: accentColor }] as any}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={s.heroLabel}>{label}</Text>
+                {info && <Text style={s.heroBadge}>Info</Text>}
+            </View>
+            <Text
+                style={[
+                    s.heroValue,
+                    tone === 'pos' ? s.heroValuePos : tone === 'neg' ? s.heroValueNeg : null,
+                ].filter(Boolean) as any}
+            >
+                {fmtCurrency(value)}
+            </Text>
+            <Text style={s.heroCaption}>{directionCaption(mode, value, info)}</Text>
+        </View>
+    );
+};
+
+export const HeroBalanceRow = ({
+    balance,
+    balanceWithTips,
+    mode,
+}: {
+    balance: number;
+    balanceWithTips: number;
+    mode: 'tech' | 'location';
+}) => (
+    // `wrap={false}` keeps the two hero cards on the same page — they
+    // belong together visually and we always have room for them on
+    // landscape page 1.
+    <View style={s.heroRow} wrap={false}>
+        <HeroBalanceCard label="Balance"        value={balance}         mode={mode} />
+        <HeroBalanceCard label="Balance + Tips" value={balanceWithTips} mode={mode} info={mode === 'location'} />
+    </View>
+);
+
+// ─── Key-figure cards (mid-tier emphasis between hero + KPI strip) ─────────
+export const KeyFigureCard = ({
+    label,
+    value,
+    accent = 'indigo',
+}: {
+    label: string;
+    value: string;
+    accent?: KpiAccent;
+}) => (
+    <View style={[s.keyCard, { borderTopColor: kpiAccents[accent] }] as any}>
+        <Text style={s.keyLabel}>{label}</Text>
+        <Text style={s.keyValue}>{value}</Text>
+    </View>
+);
+
+export const KeyFigureRow = ({ children }: { children: React.ReactNode }) => (
+    <View style={s.keyRow} wrap={false}>{children}</View>
 );
 
 // ─── KPI card ────────────────────────────────────────────────────────────────
