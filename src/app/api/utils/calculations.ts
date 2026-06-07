@@ -360,10 +360,15 @@ export const calcFinalBalance = (shareAmount: number, techParts: number, techPai
 // Subtracting lm_parts a second time from tech_balance (the previous bug)
 // double-counts the LM-parts cost.
 //
-// Sign convention (the value this helper returns matches the on-screen
-// display 1:1 — DO NOT multiply by −1 in the UI):
-//   positive  →  company owes the subject (tech / LM is in the black)
-//   negative  →  subject owes the company (cash collected exceeds earnings)
+// Sign convention (locked 2026-06-08 — company-first business meaning).
+// The returned value matches the on-screen display 1:1; DO NOT × −1 in UI:
+//   positive (green) → subject owes the COMPANY (company is owed money)
+//   negative (red)   → COMPANY owes the subject (company needs to pay out)
+//
+// Same rule for Tech Report and Location Report — no per-mode flipping.
+// Internally we still compute "settlement claim from the subject's
+// perspective" (positive = good for subject) and then negate at return,
+// so step-5/step-6 arithmetic above reads the natural way.
 //
 // Other invariants:
 //   - tips flow only to the technician (tech_balance), never to the location.
@@ -389,13 +394,15 @@ export type JobBalanceComputation = {
   techShare: number;
   /** total_profit × location_percentage / 100. */
   locationShare: number;
-  /** Tech-perspective balance, EXCLUDING tips. */
+  /** Tech balance, EXCLUDING tips. Sign convention: positive = tech owes
+   *  the company (green); negative = company owes the tech (red). */
   techBalance: number;
-  /** Tech-perspective balance WITH tips folded in. */
+  /** Tech balance WITH tips folded in. Same sign convention as techBalance. */
   techBalanceWithTips: number;
-  /** Location-perspective balance. Tips don't flow to LM, so no separate withTips field is needed. */
+  /** Location balance. Sign convention: positive = LM owes the company
+   *  (green); negative = company owes the LM (red). */
   locationBalance: number;
-  /** Location-perspective balance with tips — equals locationBalance (tips never flow to LM). */
+  /** Location balance with tips — equals locationBalance (tips don't flow to LM). */
   locationBalanceWithTips: number;
 };
 
@@ -453,6 +460,15 @@ export const calcJobBalances = (
   //   "balance" and "balanceWithTips" uniformly across modes.
   const locationBalanceWithTips = locationBalance;
 
+  // ── Final display-sign flip (locked 2026-06-08) ─────────────────────
+  // Business meaning: positive = subject OWES company, negative = company
+  // OWES subject. The internal arithmetic above is the "subject's claim"
+  // perspective (positive = company owes them); flip at the boundary so
+  // every downstream consumer (API rows, totals, summary cards, PDFs)
+  // automatically follows the new convention without per-call work.
+  // Only balance/-with-tips fields are flipped — intermediates like
+  // tech_share / location_share / total_profit stay raw because they're
+  // amounts (always non-negative in the natural reading), not net debts.
   return {
     paymentFee,
     parts,
@@ -461,10 +477,10 @@ export const calcJobBalances = (
     tipsTotal,
     techShare,
     locationShare,
-    techBalance,
-    techBalanceWithTips,
-    locationBalance,
-    locationBalanceWithTips,
+    techBalance:              -techBalance,
+    techBalanceWithTips:      -techBalanceWithTips,
+    locationBalance:          -locationBalance,
+    locationBalanceWithTips:  -locationBalanceWithTips,
   };
 };
 
