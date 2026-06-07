@@ -1,119 +1,310 @@
 import { StyleSheet } from '@react-pdf/renderer';
 
-// Shared style sheet for the Balance Report PDFs (Tech + Location).
-// Built for landscape A4 — the column count is wide enough that portrait
-// would force every cell to wrap. Font sizes target legibility when the page
-// is printed at 100% or viewed on a phone PDF reader.
+// LBS Garage Door brand palette — mirrors the dashboard
+// (src/app/balance-report/styles.css) so the PDF feels like an official
+// document exported from the system, not a generic white report.
+//   navy900 — dashboard `--bg`                                   (#0a0f1c)
+//   navy800 — chip / muted card background                      (#111827)
+//   ink900 — primary text on light surfaces                     (#0f172a)
+//   slate500 — muted body text                                  (#64748b)
+//   slate400 — even more muted (labels)                         (#94a3b8)
+//   slate300 — divider lines                                    (#cbd5e1)
+//   slate100 — alt-row background                               (#f1f5f9)
+//   slate50 — page background                                   (#fafbfd)
+//   indigo400 — primary accent (matches dashboard kicker)       (#818cf8)
+//   emerald400 — positive money / "company owed money"          (#34d399)
+//   red400 — negative money / "company owes"                    (#f87171)
+//   cyan400 — secondary accent                                  (#22d3ee)
+//   violet400 — tertiary accent                                 (#a78bfa)
+//   amber400 — warning accent                                   (#fbbf24)
+export const palette = {
+    navy900:    '#0a0f1c',
+    navy800:    '#111827',
+    ink900:     '#0f172a',
+    slate700:   '#334155',
+    slate500:   '#64748b',
+    slate400:   '#94a3b8',
+    slate300:   '#cbd5e1',
+    slate200:   '#e2e8f0',
+    slate100:   '#f1f5f9',
+    slate50:    '#f8fafc',
+    surface:    '#ffffff',
+    indigo400:  '#818cf8',
+    indigo500:  '#6366f1',
+    emerald400: '#34d399',
+    emerald600: '#059669',
+    red400:     '#f87171',
+    red600:     '#dc2626',
+    cyan400:    '#22d3ee',
+    violet400:  '#a78bfa',
+    amber400:   '#fbbf24',
+} as const;
+
+// Accent strip color per KPI — keeps the same hues as the dashboard's
+// `BpKpi` accent prop so a tech / LM viewing the PDF sees familiar coding.
+export const kpiAccents = {
+    indigo:  palette.indigo400,
+    cyan:    palette.cyan400,
+    emerald: palette.emerald400,
+    violet:  palette.violet400,
+    amber:   palette.amber400,
+    red:     palette.red400,
+} as const;
+export type KpiAccent = keyof typeof kpiAccents;
+
 export const sharedPdfStyles = StyleSheet.create({
+    // ── Page ───────────────────────────────────────────────────────────────
     page: {
-        paddingTop: 36,
+        paddingTop: 0,
         paddingBottom: 50,
-        paddingHorizontal: 28,
+        paddingHorizontal: 0,
         fontSize: 8.5,
         fontFamily: 'Helvetica',
-        color: '#0f172a',
+        color: palette.ink900,
+        backgroundColor: palette.slate50,
     },
-    // ── Header ─────────────────────────────────────────────────────────────
-    headerRow: {
+    body: {
+        paddingTop: 14,
+        paddingHorizontal: 24,
+    },
+
+    // ── Brand header band (navy) ───────────────────────────────────────────
+    brandBand: {
+        backgroundColor: palette.navy900,
+        paddingVertical: 14,
+        paddingHorizontal: 24,
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        borderBottomWidth: 1.5,
-        borderBottomColor: '#0f172a',
-        paddingBottom: 10,
-        marginBottom: 14,
+        alignItems: 'center',
+        borderBottomWidth: 3,
+        borderBottomColor: palette.indigo400,
     },
-    brandBlock: { flexDirection: 'column' },
-    brandName: { fontSize: 16, fontFamily: 'Helvetica-Bold', color: '#0f172a' },
-    brandSub:  { fontSize: 9, color: '#475569', marginTop: 2 },
-    metaBlock: { flexDirection: 'column', alignItems: 'flex-end' },
-    reportTitle: { fontSize: 13, fontFamily: 'Helvetica-Bold', color: '#0f172a' },
-    metaLine:    { fontSize: 9, color: '#334155', marginTop: 3 },
-    metaLabel:   { color: '#64748b' },
+    brandLeft: { flexDirection: 'column' },
+    brandLogo: {
+        fontSize: 16,
+        fontFamily: 'Helvetica-Bold',
+        color: palette.surface,
+        letterSpacing: 1,
+    },
+    brandKicker: {
+        fontSize: 8,
+        color: palette.indigo400,
+        textTransform: 'uppercase',
+        letterSpacing: 1.2,
+        marginTop: 2,
+    },
+    brandRight: { flexDirection: 'column', alignItems: 'flex-end' },
+    reportTitle: {
+        fontSize: 14,
+        fontFamily: 'Helvetica-Bold',
+        color: palette.surface,
+    },
+    reportSubtitle: {
+        fontSize: 9,
+        color: palette.slate300,
+        marginTop: 3,
+    },
 
-    // ── Summary card ───────────────────────────────────────────────────────
-    summarySection: {
+    // ── Meta strip (under header band) ─────────────────────────────────────
+    metaStrip: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 24,
+        paddingVertical: 8,
+        backgroundColor: palette.navy800,
+        color: palette.slate300,
+    },
+    metaPair:  { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    metaLabel: { color: palette.slate400, fontSize: 8, textTransform: 'uppercase', letterSpacing: 0.6 },
+    metaValue: { color: palette.surface, fontSize: 9.5, fontFamily: 'Helvetica-Bold', marginLeft: 4 },
+
+    // ── Section header ─────────────────────────────────────────────────────
+    sectionHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginTop: 18,
+        marginBottom: 8,
+    },
+    sectionAccent: {
+        width: 3,
+        height: 14,
+        backgroundColor: palette.indigo500,
+        marginRight: 8,
+    },
+    sectionKicker: {
+        fontSize: 7.5,
+        color: palette.slate500,
+        textTransform: 'uppercase',
+        letterSpacing: 1.4,
+    },
+    sectionTitle: {
+        fontSize: 11.5,
+        fontFamily: 'Helvetica-Bold',
+        color: palette.ink900,
+        marginTop: 1,
+    },
+    sectionTextBlock: { flexDirection: 'column' },
+
+    // ── KPI grid ───────────────────────────────────────────────────────────
+    kpiGrid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 8,
-        marginBottom: 14,
+        gap: 6,
     },
-    summaryCard: {
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-        borderRadius: 4,
-        padding: 8,
-        minWidth: 110,
+    kpiCard: {
+        backgroundColor: palette.surface,
+        borderWidth: 0.5,
+        borderColor: palette.slate200,
+        borderLeftWidth: 3,
+        borderRadius: 3,
+        paddingVertical: 7,
+        paddingHorizontal: 9,
+        minWidth: 100,
         flexGrow: 1,
-        flexBasis: '15%',
+        flexBasis: '17%',
     },
-    summaryLabel: { fontSize: 7.5, color: '#64748b', textTransform: 'uppercase', letterSpacing: 0.4 },
-    summaryValue: { fontSize: 11, fontFamily: 'Helvetica-Bold', color: '#0f172a', marginTop: 3 },
-    summaryValuePos: { color: '#047857' },
-    summaryValueNeg: { color: '#b91c1c' },
+    kpiLabel: {
+        fontSize: 7,
+        color: palette.slate500,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+    },
+    kpiValue: {
+        fontSize: 11.5,
+        fontFamily: 'Helvetica-Bold',
+        color: palette.ink900,
+        marginTop: 3,
+    },
+    kpiValuePos: { color: palette.emerald600 },
+    kpiValueNeg: { color: palette.red600 },
+
+    // ── Two-column row: pie + legend ───────────────────────────────────────
+    twoColRow: {
+        flexDirection: 'row',
+        gap: 16,
+        marginBottom: 4,
+    },
+    pieBox: {
+        width: 130,
+        height: 130,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    legendBox: {
+        flex: 1,
+        flexDirection: 'column',
+        gap: 4,
+        paddingVertical: 6,
+    },
+    legendRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: 2,
+        borderBottomWidth: 0.25,
+        borderBottomColor: palette.slate200,
+    },
+    legendDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 6,
+    },
+    legendLabel: {
+        fontSize: 8.5,
+        color: palette.ink900,
+        flex: 1,
+    },
+    legendCount: {
+        fontSize: 8.5,
+        color: palette.slate500,
+        fontFamily: 'Helvetica-Bold',
+        marginLeft: 4,
+    },
+    legendPct: {
+        fontSize: 8,
+        color: palette.slate400,
+        marginLeft: 6,
+        width: 36,
+        textAlign: 'right',
+    },
 
     // ── Table ──────────────────────────────────────────────────────────────
+    tableContainer: {
+        borderWidth: 0.5,
+        borderColor: palette.slate200,
+        borderRadius: 3,
+        overflow: 'hidden',
+    },
     table: { width: '100%' },
     tableHeader: {
         flexDirection: 'row',
-        backgroundColor: '#0f172a',
-        color: '#f8fafc',
-        paddingVertical: 5,
+        backgroundColor: palette.navy900,
+        paddingVertical: 6,
         paddingHorizontal: 3,
     },
     tableHeaderCell: {
         fontFamily: 'Helvetica-Bold',
         fontSize: 7.5,
-        color: '#f8fafc',
+        color: palette.surface,
         paddingHorizontal: 3,
         textTransform: 'uppercase',
+        letterSpacing: 0.4,
     },
     tableRow: {
         flexDirection: 'row',
         borderBottomWidth: 0.5,
-        borderBottomColor: '#e2e8f0',
+        borderBottomColor: palette.slate200,
         paddingVertical: 3,
         paddingHorizontal: 3,
+        backgroundColor: palette.surface,
     },
-    tableRowAlt: { backgroundColor: '#f8fafc' },
-    tableCell: { fontSize: 8, paddingHorizontal: 3, color: '#0f172a' },
-    cellMuted: { color: '#94a3b8' },
-    cellPos: { color: '#047857', fontFamily: 'Helvetica-Bold' },
-    cellNeg: { color: '#b91c1c', fontFamily: 'Helvetica-Bold' },
-    cellRight: { textAlign: 'right' },
+    tableRowAlt: { backgroundColor: palette.slate50 },
+    tableCell: { fontSize: 8, paddingHorizontal: 3, color: palette.ink900 },
+    cellMuted: { color: palette.slate400 },
+    cellPos:   { color: palette.emerald600, fontFamily: 'Helvetica-Bold' },
+    cellNeg:   { color: palette.red600, fontFamily: 'Helvetica-Bold' },
 
     // ── Totals row ─────────────────────────────────────────────────────────
     tableTotals: {
         flexDirection: 'row',
         borderTopWidth: 1.5,
-        borderTopColor: '#0f172a',
-        backgroundColor: '#f1f5f9',
+        borderTopColor: palette.navy900,
+        backgroundColor: palette.slate100,
         paddingVertical: 5,
         paddingHorizontal: 3,
-        marginTop: 4,
     },
     totalsCell: {
         fontFamily: 'Helvetica-Bold',
         fontSize: 8.5,
         paddingHorizontal: 3,
-        color: '#0f172a',
+        color: palette.ink900,
     },
-    totalsLabel: { fontFamily: 'Helvetica-Bold', fontSize: 8.5 },
 
-    // ── Footer (page number + generated stamp) ─────────────────────────────
+    // ── Footer ─────────────────────────────────────────────────────────────
     footer: {
         position: 'absolute',
-        left: 28,
-        right: 28,
-        bottom: 20,
+        left: 24,
+        right: 24,
+        bottom: 18,
         flexDirection: 'row',
         justifyContent: 'space-between',
         fontSize: 7.5,
-        color: '#94a3b8',
+        color: palette.slate400,
         borderTopWidth: 0.5,
-        borderTopColor: '#e2e8f0',
+        borderTopColor: palette.slate200,
         paddingTop: 6,
     },
+    footerBrand: { color: palette.slate500, fontFamily: 'Helvetica-Bold' },
+
+    // ── Empty state ────────────────────────────────────────────────────────
+    emptyState: {
+        paddingVertical: 24,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: palette.surface,
+    },
+    emptyText: { fontSize: 9, color: palette.slate400, fontStyle: 'italic' },
 });
 
 export const fmtCurrency = (n: number | undefined | null): string => {
@@ -124,6 +315,11 @@ export const fmtCurrency = (n: number | undefined | null): string => {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
+};
+
+export const fmtInt = (n: number | undefined | null): string => {
+    const v = Number(n ?? 0);
+    return Math.round(v).toLocaleString('en-US');
 };
 
 export const fmtDate = (iso: string | undefined | null): string => {
@@ -143,4 +339,20 @@ export const fmtTimestamp = (d: Date = new Date()): string => {
     const hh = String(d.getHours()).padStart(2, '0');
     const mi = String(d.getMinutes()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd} ${hh}:${mi}`;
+};
+
+// Deterministic accent assignment for arbitrary status keys (so the same
+// status always gets the same color across renders). Cycles through the
+// palette hues — matches the dashboard's `colorForIndex(idx)` pattern.
+export const statusColor = (idx: number): string => {
+    const wheel = [
+        palette.emerald400,
+        palette.indigo400,
+        palette.cyan400,
+        palette.violet400,
+        palette.amber400,
+        palette.red400,
+        '#10b981', '#f472b6', '#fb923c', '#60a5fa',
+    ];
+    return wheel[idx % wheel.length];
 };

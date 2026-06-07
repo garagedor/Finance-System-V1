@@ -1,10 +1,26 @@
 import { Document, Page, Text, View } from '@react-pdf/renderer';
-import { sharedPdfStyles as s, fmtCurrency, fmtDate, fmtTimestamp } from './sharedPdfStyles';
+import {
+    sharedPdfStyles as s,
+    fmtCurrency,
+    fmtDate,
+    fmtInt,
+    palette,
+} from './sharedPdfStyles';
+import {
+    BrandHeader,
+    SectionHeader,
+    KpiCard,
+    KpiGrid,
+    PieChart,
+    PieLegend,
+    ReportFooter,
+    balanceTone,
+} from './ReportShared';
 import type { PdfReportData, PdfRow, PdfTotals } from './types';
 
-// Column layout for Tech Report — widths are flex fractions that sum to 100.
-// Includes Balance + Balance + Tips so the tech sees both at-a-glance net
-// settlement and "with my tips" version.
+// Column layout for Tech Report — flex weights sum to ~100 so the row fits
+// landscape A4 without horizontal scroll. Sign convention (2026-06-08):
+// positive = subject owes the company (green), negative = company owes (red).
 const COLS = [
     { key: 'date',         label: 'Date',        flex: 5, align: 'left'  as const, kind: 'date'     as const },
     { key: 'address',      label: 'Address',     flex: 14, align: 'left' as const, kind: 'text'     as const },
@@ -22,26 +38,23 @@ const COLS = [
     { key: 'balanceWithTips', label: 'Bal. + Tips',     flex: 8, align: 'right' as const, kind: 'balance' as const },
 ];
 
-const formatCell = (row: PdfRow, col: typeof COLS[number]): { text: string; tone?: 'pos' | 'neg' } => {
+const formatCell = (row: PdfRow, col: typeof COLS[number]) => {
     const raw = (row as any)[col.key];
     if (col.kind === 'date') return { text: fmtDate(raw) };
     if (col.kind === 'currency') return { text: fmtCurrency(raw) };
     if (col.kind === 'balance') {
         const n = Number(raw ?? 0);
-        return { text: fmtCurrency(n), tone: n > 0 ? 'pos' : n < 0 ? 'neg' : undefined };
+        return { text: fmtCurrency(n), tone: balanceTone(n) };
     }
     return { text: raw == null || raw === '' ? '—' : String(raw) };
 };
 
 const TableHeader = () => (
-    // `fixed` makes react-pdf re-render this view at the top of every page,
-    // giving us repeating column headers without any custom paging math.
+    // `fixed` makes react-pdf re-render this header at the top of every page
+    // — no custom paging logic needed for repeating headers.
     <View style={s.tableHeader} fixed>
         {COLS.map((c) => (
-            <Text
-                key={c.key}
-                style={[s.tableHeaderCell, { flex: c.flex, textAlign: c.align }]}
-            >
+            <Text key={c.key} style={[s.tableHeaderCell, { flex: c.flex, textAlign: c.align }]}>
                 {c.label}
             </Text>
         ))}
@@ -49,8 +62,7 @@ const TableHeader = () => (
 );
 
 const TableRow = ({ row, alt }: { row: PdfRow; alt: boolean }) => (
-    // `wrap={false}` keeps an individual row intact across page breaks — a
-    // row never gets cut in half. react-pdf decides where to break.
+    // `wrap={false}` keeps a single row intact across page breaks — never split.
     <View style={[s.tableRow, alt ? s.tableRowAlt : null].filter(Boolean) as any} wrap={false}>
         {COLS.map((c) => {
             const cell = formatCell(row, c);
@@ -97,24 +109,8 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
     </View>
 );
 
-const SummaryCard = ({ label, value, tone }: { label: string; value: string; tone?: 'pos' | 'neg' }) => (
-    <View style={s.summaryCard}>
-        <Text style={s.summaryLabel}>{label}</Text>
-        <Text
-            style={[
-                s.summaryValue,
-                tone === 'pos' ? s.summaryValuePos : tone === 'neg' ? s.summaryValueNeg : null,
-            ].filter(Boolean) as any}
-        >
-            {value}
-        </Text>
-    </View>
-);
-
 export function TechReportPdf({ data }: { data: PdfReportData }) {
-    const { subject, startDate, endDate, appliedPct, rows, totals, generatedAt } = data;
-    const balanceTone = totals.balance > 0 ? 'pos' : totals.balance < 0 ? 'neg' : undefined;
-    const balanceWithTipsTone = totals.balanceWithTips > 0 ? 'pos' : totals.balanceWithTips < 0 ? 'neg' : undefined;
+    const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt } = data;
 
     return (
         <Document
@@ -123,65 +119,84 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
             author="LBS Garage Door"
         >
             <Page size="A4" orientation="landscape" style={s.page}>
-                {/* ── Header ───────────────────────────────────────────── */}
-                <View style={s.headerRow} fixed>
-                    <View style={s.brandBlock}>
-                        <Text style={s.brandName}>LBS Garage Door</Text>
-                        <Text style={s.brandSub}>Official Balance Report</Text>
-                    </View>
-                    <View style={s.metaBlock}>
-                        <Text style={s.reportTitle}>Tech Report — {subject || '—'}</Text>
-                        <Text style={s.metaLine}>
-                            <Text style={s.metaLabel}>Range: </Text>
-                            {fmtDate(startDate)} → {fmtDate(endDate)}
-                        </Text>
-                        <Text style={s.metaLine}>
-                            <Text style={s.metaLabel}>Applied %: </Text>
-                            {appliedPct}%
-                            {'   '}
-                            <Text style={s.metaLabel}>Closed Jobs: </Text>
-                            {totals.rowCount}
-                        </Text>
-                    </View>
-                </View>
+                {/* Brand band + meta strip — repeats on every page */}
+                <BrandHeader
+                    reportTitle="Tech Balance Report"
+                    subject={subject}
+                    startDate={startDate}
+                    endDate={endDate}
+                    appliedPct={appliedPct}
+                    rowCount={totals.rowCount}
+                />
 
-                {/* ── Summary ──────────────────────────────────────────── */}
-                <View style={s.summarySection}>
-                    <SummaryCard label="Total Paid"    value={fmtCurrency(totals.paidSum)} />
-                    <SummaryCard label="Payment Fees"  value={fmtCurrency(totals.paymentFee)} />
-                    <SummaryCard label="Parts"         value={fmtCurrency(totals.techParts + totals.companyParts + totals.lmParts)} />
-                    <SummaryCard label="Total Profit"  value={fmtCurrency(totals.totalProfit)} />
-                    <SummaryCard label="Tech Payout"   value={fmtCurrency(totals.shareAmount)} />
-                    <SummaryCard label="Cash Collected" value={fmtCurrency(totals.techPaidCash)} />
-                    <SummaryCard label="Tips"          value={fmtCurrency(totals.tipsTotal)} />
-                    <SummaryCard label="Balance"       value={fmtCurrency(totals.balance)} tone={balanceTone} />
-                    <SummaryCard label="Balance + Tips" value={fmtCurrency(totals.balanceWithTips)} tone={balanceWithTipsTone} />
-                </View>
+                <View style={s.body}>
+                    {/* ── Range-wide KPI grid ────────────────────────────── */}
+                    <SectionHeader kicker="Performance" title="Range Overview" />
+                    <KpiGrid>
+                        <KpiCard label="Assigned Jobs"  value={fmtInt(stats.assignedJobs)}     accent="indigo" />
+                        <KpiCard label="Avg Ticket"     value={fmtCurrency(stats.avgTicket)}   accent="cyan" />
+                        <KpiCard label="Job Profit"     value={fmtCurrency(stats.jobProfit)}   accent="emerald" />
+                        <KpiCard label="Avg Closed Job" value={fmtCurrency(stats.avgClosedJob)} accent="violet" />
+                    </KpiGrid>
 
-                {/* ── Table ────────────────────────────────────────────── */}
-                <View style={s.table}>
-                    <TableHeader />
-                    {rows.length === 0 ? (
-                        <View style={s.tableRow}>
-                            <Text style={[s.tableCell, s.cellMuted, { flex: 1, textAlign: 'center' }]}>
-                                No closed jobs in this range.
-                            </Text>
-                        </View>
-                    ) : (
-                        rows.map((row, i) => <TableRow key={row.id} row={row} alt={i % 2 === 1} />)
+                    {/* ── Closed-jobs summary cards ──────────────────────── */}
+                    <SectionHeader kicker="Closed Jobs" title="Financial Summary" />
+                    <KpiGrid>
+                        <KpiCard label="Total Paid"     value={fmtCurrency(totals.paidSum)}     accent="indigo" />
+                        <KpiCard label="Payment Fees"  value={fmtCurrency(totals.paymentFee)}  accent="amber" />
+                        <KpiCard label="Total Parts"   value={fmtCurrency(totals.techParts + totals.companyParts + totals.lmParts)} accent="amber" />
+                        <KpiCard label="Total Profit"  value={fmtCurrency(totals.totalProfit)} accent="emerald" />
+                        <KpiCard label="Tech Payout"   value={fmtCurrency(totals.shareAmount)} accent="cyan" />
+                        <KpiCard label="Cash Collected" value={fmtCurrency(totals.techPaidCash)} accent="violet" />
+                        <KpiCard label="Tips"          value={fmtCurrency(totals.tipsTotal)}   accent="violet" />
+                        <KpiCard
+                            label="Balance"
+                            value={fmtCurrency(totals.balance)}
+                            tone={balanceTone(totals.balance)}
+                            accent={totals.balance > 0 ? 'emerald' : totals.balance < 0 ? 'red' : 'indigo'}
+                        />
+                        <KpiCard
+                            label="Balance + Tips"
+                            value={fmtCurrency(totals.balanceWithTips)}
+                            tone={balanceTone(totals.balanceWithTips)}
+                            accent={totals.balanceWithTips > 0 ? 'emerald' : totals.balanceWithTips < 0 ? 'red' : 'indigo'}
+                        />
+                    </KpiGrid>
+
+                    {/* ── Status pie + legend ────────────────────────────── */}
+                    {stats.statusStats.length > 0 && (
+                        <>
+                            <SectionHeader kicker="Distribution" title="Jobs by Status" />
+                            <View style={s.twoColRow} wrap={false}>
+                                <PieChart
+                                    slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
+                                />
+                                <PieLegend
+                                    slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
+                                />
+                            </View>
+                        </>
                     )}
-                    {rows.length > 0 && <TotalsRow totals={totals} />}
+
+                    {/* ── Detail table ───────────────────────────────────── */}
+                    <SectionHeader kicker="Detail" title="Closed Jobs Breakdown" />
+                    <View style={s.tableContainer}>
+                        <View style={s.table}>
+                            <TableHeader />
+                            {rows.length === 0 ? (
+                                <View style={s.emptyState}>
+                                    <Text style={s.emptyText}>No closed jobs in this range.</Text>
+                                </View>
+                            ) : (
+                                rows.map((row, i) => <TableRow key={row.id} row={row} alt={i % 2 === 1} />)
+                            )}
+                            {rows.length > 0 && <TotalsRow totals={totals} />}
+                        </View>
+                    </View>
                 </View>
 
-                {/* ── Footer ───────────────────────────────────────────── */}
-                <View style={s.footer} fixed>
-                    <Text>Generated {fmtTimestamp(new Date(generatedAt))}</Text>
-                    <Text
-                        render={({ pageNumber, totalPages }) =>
-                            `Page ${pageNumber} of ${totalPages}`
-                        }
-                    />
-                </View>
+                {/* Footer with brand stamp + page count — repeats every page */}
+                <ReportFooter generatedAt={generatedAt} />
             </Page>
         </Document>
     );

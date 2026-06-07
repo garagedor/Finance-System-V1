@@ -21,7 +21,7 @@ import {
 } from '../../utils/calculations';
 import { TechReportPdf } from '../../../../components/pdf/TechReportPdf';
 import { LocationReportPdf } from '../../../../components/pdf/LocationReportPdf';
-import type { PdfReportData, PdfRow, PdfTotals } from '../../../../components/pdf/types';
+import type { PdfReportData, PdfReportStats, PdfRow, PdfTotals } from '../../../../components/pdf/types';
 
 // Force Node runtime — @react-pdf/renderer requires Node APIs that aren't
 // available in Edge. PDFs aren't latency-sensitive enough to justify Edge.
@@ -200,11 +200,49 @@ export async function GET(req: NextRequest) {
             .aggregate([{ $match: match }, { $sort: { date: -1, _id: -1 } }])
             .toArray();
 
-        // ── PDF body ───────────────────────────────────────────────────
-        // The PDF surfaces closed jobs only — matches the on-screen
-        // "Closed Jobs Breakdown" table the user prints from.
+        // ── Closed-job table data (powers the detail table + totals) ──
         const closedJobs = allJobs.filter((j: any) => (j.status || '') === 'Closed');
         const { rows, totals } = buildRowsAndTotals(closedJobs, techMap, locationPct, mode, userRoleMap);
+
+        // ── Range-wide stats (matches the dashboard's `totals` block) ──
+        // Computed across EVERY job in range (not just Closed) so the KPI
+        // strip shows Assigned, Avg Ticket, Job Profit, Avg Closed Job in
+        // the same numbers the user sees on screen. Per-job calc reuses
+        // calcJobBalances so the math can't drift between views.
+        let assignedJobs = 0;
+        let jobProfitSum = 0;       // Σ totalProfit across non-X-close jobs
+        let closedCount = 0;
+        let closedProfitSum = 0;
+        const statusMap = new Map<string, number>();
+
+        allJobs.forEach((job: any) => {
+            assignedJobs += 1;
+            const status = String(job.status || '').trim();
+            if (status) statusMap.set(status, (statusMap.get(status) || 0) + 1);
+
+            const techDoc = job.tech ? techMap.get(job.tech) : undefined;
+            const techPct = techDoc?.profitPercent ?? 0;
+            const calc = calcJobBalances(job, techPct, locationPct);
+            const profit = toNumber(calc.totalProfit);
+
+            if (status !== 'X close') jobProfitSum += profit;
+            if (status === 'Closed') {
+                closedCount += 1;
+                closedProfitSum += profit;
+            }
+        });
+
+        const stats: PdfReportStats = {
+            assignedJobs,
+            jobProfit: jobProfitSum,
+            avgTicket: assignedJobs > 0 ? jobProfitSum / assignedJobs : 0,
+            avgClosedJob: closedCount > 0 ? closedProfitSum / closedCount : 0,
+            // Sort statuses by count desc so the legend reads like the
+            // dashboard's pie tooltip — biggest slice first.
+            statusStats: Array.from(statusMap.entries())
+                .map(([key, count]) => ({ key, count }))
+                .sort((a, b) => b.count - a.count),
+        };
 
         const subject = mode === 'tech'
             ? techFilter
@@ -218,6 +256,7 @@ export async function GET(req: NextRequest) {
             appliedPct: toNumber(appliedPct),
             rows,
             totals,
+            stats,
             generatedAt: new Date().toISOString(),
         };
 
