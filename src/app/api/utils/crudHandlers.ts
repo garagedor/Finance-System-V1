@@ -194,6 +194,23 @@ export function createCrudHandlers<T extends Document>(options: CrudOptions<T>) 
         const operator = rule.operator ?? 'contains';
         let condition: any = null;
 
+        // Numeric fields: same coercion the stats / home-stats aggregations
+        // use. Legacy data is mixed-type — some currency rows are stored as
+        // Number, others as String — and Mongo's $gt/$lt won't cross-coerce.
+        // Without this, "lmParts > 0" silently misses string-typed rows.
+        if (numberFields.includes(field as keyof T)) {
+          const mongoOp = ['gt', 'lt', 'gte', 'lte'].includes(operator) ? `$${operator}` : '$eq';
+          filterConditions.push({
+            $expr: {
+              [mongoOp]: [
+                { $convert: { input: `$${field}`, to: 'double', onError: 0, onNull: 0 } },
+                converted,
+              ],
+            },
+          });
+          return;
+        }
+
         if (['contains', 'startsWith', 'endsWith'].includes(operator)) {
           if (numberFields.includes(field as keyof T) || booleanFields.includes(field as keyof T)) {
             condition = { $eq: converted };

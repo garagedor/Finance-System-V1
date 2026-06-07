@@ -224,6 +224,26 @@ export async function GET(req: NextRequest) {
             let condition: any = null;
             const operator = (rule as any).operator ?? 'contains';
 
+            // Numeric fields: legacy Mongo data is mixed-type — some rows
+            // store currency as Number, others as String ("5"). Plain
+            // {field: {$gt: 0}} silently skips string rows because Mongo
+            // doesn't cross-coerce in comparison ops. Wrap in $expr +
+            // $convert to match the same pattern used by stats / home-stats
+            // aggregations. This is why the user saw 0 results for the
+            // perfectly valid "Paid Company Check > 0 AND LM Parts > 0".
+            if (numberFields.has(field as keyof JobRow)) {
+                const mongoOp = ['gt', 'lt', 'gte', 'lte'].includes(operator) ? `$${operator}` : '$eq';
+                filterConditions.push({
+                    $expr: {
+                        [mongoOp]: [
+                            { $convert: { input: `$${field}`, to: 'double', onError: 0, onNull: 0 } },
+                            converted,
+                        ],
+                    },
+                });
+                return;
+            }
+
             if (dateFields.has(field as keyof JobRow)) {
                 // Check if value is a date range (JSON string with start/end)
                 let dateRangeObj: any = null;
