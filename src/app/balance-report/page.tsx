@@ -346,9 +346,12 @@ export default function BalanceReportPage() {
     }
   }, [columnsPreset, columnsVisibility]);
 
-  // `balance-with-tips` is informational only in location mode (tips never
-  // flow to LM, so it equals `balance`); hide it there to reduce noise.
-  const isColAllowed = (key: ColKey) => key !== 'balance-with-tips' || mode === 'tech';
+  // Both Balance and Balance + Tips columns are shown in every mode.
+  // In Location mode, Balance + Tips is INFORMATIONAL ONLY — it does not
+  // affect any LM settlement, payout, or company-liability calculation
+  // (clarified 2026-06-08). It's surfaced so the AM can see the full
+  // picture of total tech earnings + job economics for the period.
+  const isColAllowed = (_key: ColKey) => true;
   const visibleByGroup = useMemo(
     () => COLUMN_GROUPS.map((g) => ({ ...g, visibleCount: g.cols.filter((c) => columnsVisibility[c.key] && isColAllowed(c.key)).length })),
     [columnsVisibility, mode]
@@ -945,22 +948,31 @@ export default function BalanceReportPage() {
                     {formatCurrency(closedTotals.balance)}
                   </span>
                 </li>
-                {mode === 'tech' && (
-                  <li>
-                    <span className="bp-snap-label bp-snap-strong">Balance + Tips</span>
-                    <span
-                      className="bp-snap-value bp-snap-strong"
-                      style={{
-                        color:
-                          closedTotals.balanceWithTips > 0 ? '#34d399' :
-                          closedTotals.balanceWithTips < 0 ? '#f87171' : undefined,
-                      }}
-                      title={`Balance ${formatCurrency(closedTotals.balance)} + Tips ${formatCurrency(closedTotals.tipsTotal)}`}
-                    >
-                      {formatCurrency(closedTotals.balanceWithTips)}
-                    </span>
-                  </li>
-                )}
+                {/* Tips line — informational. In Location mode, tips do not
+                    affect the settlement balance; surfaced so the AM can see
+                    total tech-tip activity for the period. */}
+                <li style={{ paddingLeft: 16, opacity: 0.75 }}>
+                  <span className="bp-snap-label">
+                    ↳ Tips {mode === 'location' ? '(info only)' : ''}
+                  </span>
+                  <span className="bp-snap-value">{formatCurrency(closedTotals.tipsTotal)}</span>
+                </li>
+                <li>
+                  <span className="bp-snap-label bp-snap-strong">
+                    Balance + Tips {mode === 'location' ? <span style={{ fontWeight: 400, opacity: 0.6 }}>(info)</span> : null}
+                  </span>
+                  <span
+                    className="bp-snap-value bp-snap-strong"
+                    style={{
+                      color:
+                        closedTotals.balanceWithTips > 0 ? '#34d399' :
+                        closedTotals.balanceWithTips < 0 ? '#f87171' : undefined,
+                    }}
+                    title={`Balance ${formatCurrency(closedTotals.balance)} + Tips ${formatCurrency(closedTotals.tipsTotal)}`}
+                  >
+                    {formatCurrency(closedTotals.balanceWithTips)}
+                  </span>
+                </li>
               </ul>
             ) : (
               <EmptyState size="sm" title="No closed jobs" message="Apply filters or change date range." />

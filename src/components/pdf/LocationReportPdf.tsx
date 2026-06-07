@@ -17,26 +17,29 @@ import {
 } from './ReportShared';
 import type { PdfReportData, PdfRow, PdfTotals } from './types';
 
-// Location Report column layout — drops Tips (tips never flow to LM) and
-// surfaces LM Cash / LM Check / Tech Cash instead. Tech Parts is kept
-// because the AM pays the technician (parts reimbursement included) and
-// the company settles with the AM. Sign convention (locked 2026-06-08):
+// Location Report column layout. Tips and Balance + Tips are INFORMATIONAL
+// ONLY — they don't affect any LM settlement / payout / company-liability
+// calculation. The AM still doesn't receive tips, but the figures are
+// surfaced so the AM can see total tech earnings + total job economics
+// for the period. Sign convention (locked 2026-06-08):
 // positive (green) = LM owes company; negative (red) = company owes LM.
 const COLS = [
-    { key: 'date',         label: 'Date',        flex: 5,  align: 'left'  as const, kind: 'date'     as const },
-    { key: 'address',      label: 'Address',     flex: 16, align: 'left'  as const, kind: 'text'     as const },
-    { key: 'paymentMethod',label: 'Pay Method',  flex: 7,  align: 'left'  as const, kind: 'text'     as const },
-    { key: 'paidSum',      label: 'Job Total',   flex: 6,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'techParts',    label: 'Tech Parts',  flex: 6,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'companyParts', label: 'Co. Parts',   flex: 6,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'lmParts',      label: 'LM Parts',    flex: 5,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'paymentFee',   label: 'Pay Fee',     flex: 5,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'totalProfit',  label: 'Profit',      flex: 6,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'shareAmount',  label: 'LM Payout',   flex: 7,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'lmCash',       label: 'LM Cash',     flex: 6,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'lmCheck',      label: 'LM Check',    flex: 6,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'techPaidCash', label: 'Tech Cash',   flex: 6,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'balance',      label: 'Balance',     flex: 7,  align: 'right' as const, kind: 'balance' as const },
+    { key: 'date',            label: 'Date',         flex: 5,  align: 'left'  as const, kind: 'date'     as const },
+    { key: 'address',         label: 'Address',      flex: 14, align: 'left'  as const, kind: 'text'     as const },
+    { key: 'paymentMethod',   label: 'Pay Method',   flex: 6,  align: 'left'  as const, kind: 'text'     as const },
+    { key: 'paidSum',         label: 'Job Total',    flex: 6,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'techParts',       label: 'Tech Parts',   flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'companyParts',    label: 'Co. Parts',    flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'lmParts',         label: 'LM Parts',     flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'paymentFee',      label: 'Pay Fee',      flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'totalProfit',     label: 'Profit',       flex: 6,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'shareAmount',     label: 'LM Payout',    flex: 6,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'lmCash',          label: 'LM Cash',      flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'lmCheck',         label: 'LM Check',     flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'techPaidCash',    label: 'Tech Cash',    flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'tipsTotal',       label: 'Tips (info)',  flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'balance',         label: 'Balance',      flex: 6,  align: 'right' as const, kind: 'balance' as const },
+    { key: 'balanceWithTips', label: 'Bal. + Tips',  flex: 7,  align: 'right' as const, kind: 'balance' as const },
 ];
 
 const formatCell = (row: PdfRow, col: typeof COLS[number]) => {
@@ -136,7 +139,7 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
                         <KpiCard label="Avg Closed Job" value={fmtCurrency(stats.avgClosedJob)} accent="violet" />
                     </KpiGrid>
 
-                    {/* ── Closed-job summary (LM-flavored) ───────────────── */}
+                    {/* ── Closed-job summary (LM settlement) ─────────────── */}
                     <SectionHeader kicker="Closed Jobs" title="Location Settlement" />
                     <KpiGrid>
                         <KpiCard label="Total Paid"     value={fmtCurrency(totals.paidSum)}      accent="indigo" />
@@ -152,6 +155,21 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
                             value={fmtCurrency(totals.balance)}
                             tone={balanceTone(totals.balance)}
                             accent={totals.balance > 0 ? 'emerald' : totals.balance < 0 ? 'red' : 'indigo'}
+                        />
+                    </KpiGrid>
+
+                    {/* ── Informational: tip activity in the period ─────────
+                          Tips do NOT affect LM settlement / payout / company
+                          liability. Shown so the AM can see total tech
+                          earnings + total job economics for the period. */}
+                    <SectionHeader kicker="Informational" title="Technician Tip Activity (excluded from settlement)" />
+                    <KpiGrid>
+                        <KpiCard label="Total Tips"      value={fmtCurrency(totals.tipsTotal)}    accent="violet" />
+                        <KpiCard
+                            label="Balance + Tips"
+                            value={fmtCurrency(totals.balanceWithTips)}
+                            tone={balanceTone(totals.balanceWithTips)}
+                            accent={totals.balanceWithTips > 0 ? 'emerald' : totals.balanceWithTips < 0 ? 'red' : 'indigo'}
                         />
                     </KpiGrid>
 
