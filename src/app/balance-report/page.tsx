@@ -627,18 +627,43 @@ export default function BalanceReportPage() {
 
   const titleSubject = mode === 'tech' ? appliedTech : lookups.locations.find((l) => l._id === (lookups.techs.find((t) => t._id === appliedTech)?.location || ''))?._id || '';
 
-  // Trigger the browser's native Print → Save as PDF flow. Document.title sets
-  // the default PDF filename, so swap it for the duration of the print and
-  // restore afterwards.
-  const handleDownloadPdf = () => {
-    if (typeof window === 'undefined') return;
-    const safeSubject = (titleSubject || 'Report').replace(/[^A-Za-z0-9_\- ]/g, '').trim() || 'Report';
-    const filename = `${mode === 'tech' ? 'Tech' : 'Location'} Report — ${safeSubject} — ${appliedStart} to ${appliedEnd}`;
-    const prevTitle = document.title;
-    document.title = filename;
-    const restore = () => { document.title = prevTitle; window.removeEventListener('afterprint', restore); };
-    window.addEventListener('afterprint', restore);
-    window.print();
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  // Server-side PDF download — hits /api/balance-report/pdf which renders
+  // a dedicated landscape A4 template (react-pdf) from the same data the
+  // dashboard uses. The previous window.print() flow rendered the visible
+  // dashboard, which dropped off-screen columns on mobile and cropped wide
+  // tables on desktop. The new flow is layout-independent and always
+  // includes every row + every column.
+  const handleDownloadPdf = async () => {
+    if (typeof window === 'undefined' || !appliedTech) return;
+    try {
+      setPdfLoading(true);
+      const params = new URLSearchParams({
+        startDate: appliedStart,
+        endDate: appliedEnd,
+        tech: appliedTech,
+        mode,
+      });
+      const res = await fetch(`/api/balance-report/pdf?${params.toString()}`);
+      if (!res.ok) throw new Error(`PDF request failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const safeSubject = (titleSubject || 'Report').replace(/[^A-Za-z0-9_\- ]/g, '').trim() || 'Report';
+      const filename = `${mode === 'tech' ? 'Tech' : 'Location'}_Report_${safeSubject}_${appliedStart}_to_${appliedEnd}.pdf`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      // Free the blob after the browser starts downloading.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error('Failed to download PDF', err);
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   // Display-only date formatter
@@ -672,11 +697,11 @@ export default function BalanceReportPage() {
               type="button"
               className="bp-pdf-btn"
               onClick={handleDownloadPdf}
-              disabled={loading || closedRows.length === 0}
-              title="Save this report as a PDF (opens your browser's print → Save as PDF dialog)"
+              disabled={loading || pdfLoading || closedRows.length === 0 || !appliedTech}
+              title="Download the official PDF report (rendered server-side; includes every row and column)"
             >
               <FiDownload size={14} />
-              Download PDF
+              {pdfLoading ? 'Generating…' : 'Download PDF'}
             </button>
             <div className="bp-rows-badge">
               <span className="bp-rows-dot" />
