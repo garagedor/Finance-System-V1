@@ -13,11 +13,13 @@ import {
     KeyFigureCard,
     KeyFigureRow,
     HeroBalanceRow,
-    PieChart,
-    PieLegend,
+    DistributionPanel,
+    HorizontalBars,
+    ConversionStats,
     ReportFooter,
     balanceTone,
 } from './ReportShared';
+import { statusColor } from './sharedPdfStyles';
 import type { PdfReportData, PdfRow, PdfTotals } from './types';
 
 // Location Report column layout. Tips and Balance + Tips are INFORMATIONAL
@@ -114,30 +116,41 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
 );
 
 export function LocationReportPdf({ data }: { data: PdfReportData }) {
-    const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt } = data;
+    const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
     const totalParts = totals.techParts + totals.companyParts + totals.lmParts;
+    const statusSlices = stats.statusStats.map((st, i) => ({
+        label: st.key,
+        value: st.count,
+        color: statusColor(i),
+    }));
+    const closedCount = stats.statusStats.find((s) => s.key === 'Closed')?.count ?? 0;
+    const lostCount   = stats.statusStats.find((s) => s.key.toLowerCase().includes('lost'))?.count ?? 0;
+    const xCloseCount = stats.statusStats.find((s) => s.key === 'X close')?.count ?? 0;
+    const openCount   = Math.max(0, stats.assignedJobs - closedCount - lostCount - xCloseCount);
+
+    const headerProps = {
+        reportTitle: 'Location Balance Report',
+        subject,
+        startDate,
+        endDate,
+        appliedPct,
+        rowCount: totals.rowCount,
+        logoSrc,
+    } as const;
 
     return (
         <Document
             title={`Location Report — ${subject}`}
-            subject="LBS Garage Door — Location Balance Report"
-            author="LBS Garage Door"
+            subject="317 Garage Door — Location Balance Report"
+            author="317 Garage Door"
         >
             {/* ════════════════════════════════════════════════════════════
                 PAGE 1 — EXECUTIVE SUMMARY
                 ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
-                <BrandHeader
-                    reportTitle="Location Balance Report"
-                    subject={subject}
-                    startDate={startDate}
-                    endDate={endDate}
-                    appliedPct={appliedPct}
-                    rowCount={totals.rowCount}
-                />
+                <BrandHeader {...headerProps} />
 
                 <View style={s.body}>
-                    {/* HERO — bottom-line numbers (Balance + Tips is info-only) */}
                     <SectionHeader kicker="Executive Summary" title="Bottom Line" />
                     <HeroBalanceRow
                         balance={totals.balance}
@@ -145,7 +158,6 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
                         mode="location"
                     />
 
-                    {/* KEY FIGURES — three numbers a manager scans next */}
                     <SectionHeader kicker="Key Figures" title="Period Financials" />
                     <KeyFigureRow>
                         <KeyFigureCard label="Total Paid"   value={fmtCurrency(totals.paidSum)}     accent="indigo" />
@@ -153,7 +165,6 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
                         <KeyFigureCard label="LM Payout"    value={fmtCurrency(totals.shareAmount)} accent="cyan" />
                     </KeyFigureRow>
 
-                    {/* RANGE KPIs — performance + LM-side cash/check signals */}
                     <SectionHeader kicker="Performance" title="Range Overview" />
                     <KpiGrid>
                         <KpiCard label="Assigned Jobs"   value={fmtInt(stats.assignedJobs)}       accent="indigo" />
@@ -167,39 +178,53 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
                         <KpiCard label="Tech Cash"       value={fmtCurrency(totals.techPaidCash)} accent="violet" />
                         <KpiCard label="Tips (info)"     value={fmtCurrency(totals.tipsTotal)}    accent="violet" />
                     </KpiGrid>
-
-                    {/* STATUS PIE */}
-                    {stats.statusStats.length > 0 && (
-                        <>
-                            <SectionHeader kicker="Distribution" title="Jobs by Status" />
-                            <View style={s.twoColRow} wrap={false}>
-                                <PieChart
-                                    slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
-                                    size={170}
-                                />
-                                <PieLegend
-                                    slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
-                                />
-                            </View>
-                        </>
-                    )}
                 </View>
 
                 <ReportFooter generatedAt={generatedAt} />
             </Page>
 
             {/* ════════════════════════════════════════════════════════════
-                PAGE 2+ — DETAIL TABLE
+                PAGE 2 — DISTRIBUTION ANALYTICS
+                ════════════════════════════════════════════════════════════ */}
+            {stats.statusStats.length > 0 && (
+                <Page size="A4" orientation="landscape" style={s.page}>
+                    <BrandHeader {...headerProps} />
+
+                    <View style={s.body}>
+                        <SectionHeader kicker="Analytics" title="Job Status Distribution" />
+                        <DistributionPanel
+                            slices={statusSlices}
+                            centerValue={fmtInt(stats.assignedJobs)}
+                            centerCaption="Total Jobs"
+                        />
+
+                        <SectionHeader kicker="Volume" title="Jobs per Status" />
+                        <View style={s.distPanel} wrap={false}>
+                            <HorizontalBars
+                                rows={statusSlices.map((sl) => ({
+                                    label: sl.label,
+                                    value: sl.value,
+                                    color: sl.color,
+                                }))}
+                            />
+                            <ConversionStats
+                                closedCount={closedCount}
+                                openCount={openCount}
+                                lostCount={lostCount}
+                                totalCount={stats.assignedJobs}
+                            />
+                        </View>
+                    </View>
+
+                    <ReportFooter generatedAt={generatedAt} />
+                </Page>
+            )}
+
+            {/* ════════════════════════════════════════════════════════════
+                PAGE 3+ — DETAIL TABLE
                 ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
-                <BrandHeader
-                    reportTitle="Location Balance Report"
-                    subject={subject}
-                    startDate={startDate}
-                    endDate={endDate}
-                    appliedPct={appliedPct}
-                    rowCount={totals.rowCount}
-                />
+                <BrandHeader {...headerProps} />
 
                 <View style={s.bodyTight}>
                     <SectionHeader kicker="Detail" title="Closed Jobs Breakdown" />

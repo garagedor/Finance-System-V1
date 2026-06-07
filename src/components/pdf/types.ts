@@ -65,4 +65,6 @@ export type PdfReportData = {
     totals: PdfTotals;          // Closed-job aggregates
     stats: PdfReportStats;      // Range-wide stats
     generatedAt: string;
+    /** Data-URL of the company logo (public/lbs-logo.png) if present. */
+    logoSrc?: string | null;
 };

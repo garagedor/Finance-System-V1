@@ -13,6 +13,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient } from 'mongodb';
 import { renderToBuffer } from '@react-pdf/renderer';
 import { createElement } from 'react';
+import { readFile } from 'fs/promises';
+import path from 'path';
 import type { JobRow, Location, Technician } from '../../../../types/job';
 import type { User } from '../../../../types/user';
 import {
@@ -22,6 +24,33 @@ import {
 import { TechReportPdf } from '../../../../components/pdf/TechReportPdf';
 import { LocationReportPdf } from '../../../../components/pdf/LocationReportPdf';
 import type { PdfReportData, PdfReportStats, PdfRow, PdfTotals } from '../../../../components/pdf/types';
+
+// ── Logo loader (cached after first read) ─────────────────────────────────
+// We read public/lbs-logo.png at request time, base64-encode it, and pass
+// as a data URL into the PDF. react-pdf's <Image> needs the bytes either
+// as a URL or a Buffer; inlining as a data URL is the safest path under
+// Vercel serverless (no separate HTTP fetch from inside the render).
+// Caching means we only hit the disk once per warm instance.
+let cachedLogoDataUrl: string | null | undefined = undefined;
+async function loadLogoDataUrl(): Promise<string | null> {
+    if (cachedLogoDataUrl !== undefined) return cachedLogoDataUrl;
+    const candidates = [
+        path.join(process.cwd(), 'public', 'lbs-logo.png'),
+        path.join(process.cwd(), 'public', 'lbs-logo.jpg'),
+    ];
+    for (const file of candidates) {
+        try {
+            const buf = await readFile(file);
+            const ext = file.endsWith('.jpg') ? 'jpeg' : 'png';
+            cachedLogoDataUrl = `data:image/${ext};base64,${buf.toString('base64')}`;
+            return cachedLogoDataUrl;
+        } catch {
+            /* file missing — try next */
+        }
+    }
+    cachedLogoDataUrl = null;
+    return cachedLogoDataUrl;
+}
 
 // Force Node runtime — @react-pdf/renderer requires Node APIs that aren't
 // available in Edge. PDFs aren't latency-sensitive enough to justify Edge.
@@ -248,6 +277,8 @@ export async function GET(req: NextRequest) {
             ? techFilter
             : (locationId || '—');
 
+        const logoSrc = await loadLogoDataUrl();
+
         const reportData: PdfReportData = {
             mode,
             subject,
@@ -258,6 +289,7 @@ export async function GET(req: NextRequest) {
             totals,
             stats,
             generatedAt: new Date().toISOString(),
+            logoSrc,
         };
 
         const element = mode === 'location'

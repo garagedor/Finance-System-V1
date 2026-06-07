@@ -1,16 +1,21 @@
-import { Text, View, Svg, Path, G } from '@react-pdf/renderer';
+import { Text, View, Svg, Path, G, Image } from '@react-pdf/renderer';
 import {
     sharedPdfStyles as s,
     palette,
     kpiAccents,
     statusColor,
     fmtCurrency,
+    fmtInt,
+    fmtPct,
     fmtTimestamp,
     type KpiAccent,
 } from './sharedPdfStyles';
 import { fmtDate } from './sharedPdfStyles';
 
 // ─── Brand header + meta strip ───────────────────────────────────────────────
+// `logoSrc`: optional data-URL or file path for the company badge. The route
+// reads `public/lbs-logo.png` at request time and passes it through; if the
+// file isn't there we fall back to the text wordmark alone.
 export const BrandHeader = ({
     reportTitle,
     subject,
@@ -18,6 +23,7 @@ export const BrandHeader = ({
     endDate,
     appliedPct,
     rowCount,
+    logoSrc,
 }: {
     reportTitle: string;
     subject: string;
@@ -25,14 +31,18 @@ export const BrandHeader = ({
     endDate: string;
     appliedPct: number;
     rowCount: number;
+    logoSrc?: string | null;
 }) => (
     // `fixed` repeats the navy band + meta strip on every page so the doc
     // always reads as the same official report regardless of where it broke.
     <View fixed>
         <View style={s.brandBand}>
             <View style={s.brandLeft}>
-                <Text style={s.brandLogo}>LBS GARAGE DOOR</Text>
-                <Text style={s.brandKicker}>Official Balance Report</Text>
+                {logoSrc && <Image src={logoSrc} style={s.brandLogoImg} />}
+                <View style={s.brandLogoTextBlock}>
+                    <Text style={s.brandLogo}>317 GARAGE DOOR</Text>
+                    <Text style={s.brandKicker}>Official Balance Report</Text>
+                </View>
             </View>
             <View style={s.brandRight}>
                 <Text style={s.reportTitle}>{reportTitle}</Text>
@@ -268,6 +278,158 @@ export const PieLegend = ({ slices }: { slices: Slice[] }) => {
                     </View>
                 );
             })}
+        </View>
+    );
+};
+
+// ─── Distribution panel (large donut + colored legend) ─────────────────────
+// Centerpiece of Page 2. The donut has a labeled center showing total
+// jobs; the legend uses larger type than the page-1 compact pie so it
+// can be read at arm's length when printed.
+export const DistributionPanel = ({
+    slices,
+    centerValue,
+    centerCaption,
+}: {
+    slices: { label: string; value: number; color?: string }[];
+    centerValue: string;
+    centerCaption: string;
+}) => {
+    const total = slices.reduce((sum, s) => sum + Math.max(0, s.value), 0);
+    return (
+        <View style={s.distPanel} wrap={false}>
+            <View style={s.distTopRow}>
+                <View style={s.distPieBox}>
+                    <BigDonut slices={slices} size={260} />
+                    <View style={[s.distCenterLabel, { width: 260, height: 260 }]}>
+                        <Text style={s.distCenterValue}>{centerValue}</Text>
+                        <Text style={s.distCenterCaption}>{centerCaption}</Text>
+                    </View>
+                </View>
+                <View style={s.distLegendBox}>
+                    <Text style={s.distSectionTitle}>Status Breakdown</Text>
+                    {slices.map((slice, idx) => {
+                        const pct = total > 0 ? (slice.value / total) * 100 : 0;
+                        const color = slice.color || statusColor(idx);
+                        return (
+                            <View key={`${slice.label}-${idx}`} style={s.distLegendRow}>
+                                <View style={[s.distLegendDot, { backgroundColor: color }] as any} />
+                                <Text style={s.distLegendLabel}>{slice.label || 'Unknown'}</Text>
+                                <Text style={s.distLegendCount}>{fmtInt(slice.value)}</Text>
+                                <Text style={s.distLegendPct}>{fmtPct(pct)}</Text>
+                            </View>
+                        );
+                    })}
+                </View>
+            </View>
+        </View>
+    );
+};
+
+// Bigger version of PieChart, used by DistributionPanel. Same SVG math.
+const BigDonut = ({ slices, size }: { slices: { label: string; value: number; color?: string }[]; size: number }) => {
+    const total = slices.reduce((sum, s) => sum + Math.max(0, s.value), 0);
+    if (total <= 0) {
+        return (
+            <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+                <Path
+                    d={`M ${size / 2 - size / 2 + 4} ${size / 2} a ${size / 2 - 4} ${size / 2 - 4} 0 1 0 ${(size / 2 - 4) * 2} 0 a ${size / 2 - 4} ${size / 2 - 4} 0 1 0 -${(size / 2 - 4) * 2} 0 Z`}
+                    fill={palette.slate100}
+                />
+            </Svg>
+        );
+    }
+    const cx = size / 2;
+    const cy = size / 2;
+    const r = size / 2 - 6;
+    const innerR = r * 0.62;
+    let cursor = 0;
+    const segs: { d: string; color: string }[] = [];
+    slices.forEach((slice, idx) => {
+        if (slice.value <= 0) return;
+        const sweep = (slice.value / total) * Math.PI * 2;
+        const a = cursor;
+        const b = cursor + sweep;
+        cursor = b;
+        const p1 = polar(cx, cy, r, a);
+        const p2 = polar(cx, cy, r, b);
+        const largeArc = b - a > Math.PI ? 1 : 0;
+        const d = `M ${cx} ${cy} L ${p1.x} ${p1.y} A ${r} ${r} 0 ${largeArc} 1 ${p2.x} ${p2.y} Z`;
+        segs.push({ d, color: slice.color || statusColor(idx) });
+    });
+    return (
+        <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <G>
+                {segs.map((p, i) => (
+                    <Path key={i} d={p.d} fill={p.color} stroke={palette.surface} strokeWidth={1.5} />
+                ))}
+                <Path
+                    d={`M ${cx - innerR} ${cy} a ${innerR} ${innerR} 0 1 0 ${innerR * 2} 0 a ${innerR} ${innerR} 0 1 0 -${innerR * 2} 0 Z`}
+                    fill={palette.surface}
+                />
+            </G>
+        </Svg>
+    );
+};
+
+// ─── Horizontal bar chart row ─────────────────────────────────────────────
+// Used on the Distribution page to give a second visual on top of the
+// donut. Bar fills proportional to `value / max`, so the longest bar
+// always reaches full width and the relative ranking is unambiguous.
+export const HorizontalBars = ({
+    rows,
+    max,
+}: {
+    rows: { label: string; value: number; color?: string; valueLabel?: string }[];
+    max?: number;
+}) => {
+    const ceiling = max ?? Math.max(1, ...rows.map((r) => r.value));
+    return (
+        <View style={s.barChartGroup}>
+            {rows.map((r, idx) => {
+                const pct = ceiling > 0 ? Math.min(100, (r.value / ceiling) * 100) : 0;
+                const color = r.color || statusColor(idx);
+                return (
+                    <View key={`${r.label}-${idx}`} style={s.barRow}>
+                        <Text style={s.barLabel}>{r.label}</Text>
+                        <View style={s.barTrack}>
+                            <View style={[s.barFill, { width: `${pct}%`, backgroundColor: color }] as any} />
+                        </View>
+                        <Text style={s.barValue}>{r.valueLabel ?? fmtInt(r.value)}</Text>
+                    </View>
+                );
+            })}
+        </View>
+    );
+};
+
+// Closed-rate KPI strip — three large stat cards under the bar chart.
+export const ConversionStats = ({
+    closedCount,
+    openCount,
+    lostCount,
+    totalCount,
+}: {
+    closedCount: number;
+    openCount: number;
+    lostCount: number;
+    totalCount: number;
+}) => {
+    const rate = totalCount > 0 ? (closedCount / totalCount) * 100 : 0;
+    return (
+        <View style={s.closedRateRow}>
+            <View style={s.closedRateCard}>
+                <Text style={s.closedRateLabel}>Closed Rate</Text>
+                <Text style={[s.closedRateValue, { color: palette.emerald600 }]}>{fmtPct(rate)}</Text>
+            </View>
+            <View style={s.closedRateCard}>
+                <Text style={s.closedRateLabel}>Open Jobs</Text>
+                <Text style={s.closedRateValue}>{fmtInt(openCount)}</Text>
+            </View>
+            <View style={s.closedRateCard}>
+                <Text style={s.closedRateLabel}>Lost Jobs</Text>
+                <Text style={[s.closedRateValue, { color: palette.red600 }]}>{fmtInt(lostCount)}</Text>
+            </View>
         </View>
     );
 };

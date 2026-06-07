@@ -13,11 +13,13 @@ import {
     KeyFigureCard,
     KeyFigureRow,
     HeroBalanceRow,
-    PieChart,
-    PieLegend,
+    DistributionPanel,
+    HorizontalBars,
+    ConversionStats,
     ReportFooter,
     balanceTone,
 } from './ReportShared';
+import { statusColor } from './sharedPdfStyles';
 import type { PdfReportData, PdfRow, PdfTotals } from './types';
 
 // Column layout for Tech Report — flex weights sum to ~100 so the row fits
@@ -112,34 +114,42 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
 );
 
 export function TechReportPdf({ data }: { data: PdfReportData }) {
-    const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt } = data;
+    const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
     const totalParts = totals.techParts + totals.companyParts + totals.lmParts;
+    const statusSlices = stats.statusStats.map((st, i) => ({
+        label: st.key,
+        value: st.count,
+        color: statusColor(i),
+    }));
+    const closedCount = stats.statusStats.find((s) => s.key === 'Closed')?.count ?? 0;
+    const lostCount   = stats.statusStats.find((s) => s.key.toLowerCase().includes('lost'))?.count ?? 0;
+    const xCloseCount = stats.statusStats.find((s) => s.key === 'X close')?.count ?? 0;
+    const openCount   = Math.max(0, stats.assignedJobs - closedCount - lostCount - xCloseCount);
+
+    const headerProps = {
+        reportTitle: 'Tech Balance Report',
+        subject,
+        startDate,
+        endDate,
+        appliedPct,
+        rowCount: totals.rowCount,
+        logoSrc,
+    } as const;
 
     return (
         <Document
             title={`Tech Report — ${subject}`}
-            subject="LBS Garage Door — Tech Balance Report"
-            author="LBS Garage Door"
+            subject="317 Garage Door — Tech Balance Report"
+            author="317 Garage Door"
         >
             {/* ════════════════════════════════════════════════════════════
                 PAGE 1 — EXECUTIVE SUMMARY
-                Headline balance numbers first (the "answer"), then key
-                figures (Total Profit, Total Paid, Payout), then range KPIs
-                and status distribution. The detail table lives on page 2
-                so the exec view is never crowded by raw rows.
+                Headline balance numbers first, key figures, range KPIs.
                 ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
-                <BrandHeader
-                    reportTitle="Tech Balance Report"
-                    subject={subject}
-                    startDate={startDate}
-                    endDate={endDate}
-                    appliedPct={appliedPct}
-                    rowCount={totals.rowCount}
-                />
+                <BrandHeader {...headerProps} />
 
                 <View style={s.body}>
-                    {/* HERO — the headline bottom-line numbers */}
                     <SectionHeader kicker="Executive Summary" title="Bottom Line" />
                     <HeroBalanceRow
                         balance={totals.balance}
@@ -147,7 +157,6 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
                         mode="tech"
                     />
 
-                    {/* KEY FIGURES — the three numbers a manager scans next */}
                     <SectionHeader kicker="Key Figures" title="Period Financials" />
                     <KeyFigureRow>
                         <KeyFigureCard label="Total Paid"   value={fmtCurrency(totals.paidSum)}     accent="indigo" />
@@ -155,7 +164,6 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
                         <KeyFigureCard label="Tech Payout"  value={fmtCurrency(totals.shareAmount)} accent="cyan" />
                     </KeyFigureRow>
 
-                    {/* RANGE KPIs — overall performance signal */}
                     <SectionHeader kicker="Performance" title="Range Overview" />
                     <KpiGrid>
                         <KpiCard label="Assigned Jobs"   value={fmtInt(stats.assignedJobs)}       accent="indigo" />
@@ -167,42 +175,58 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
                         <KpiCard label="Cash Collected"  value={fmtCurrency(totals.techPaidCash)} accent="violet" />
                         <KpiCard label="Tips"            value={fmtCurrency(totals.tipsTotal)}    accent="violet" />
                     </KpiGrid>
-
-                    {/* STATUS PIE — visual breakdown */}
-                    {stats.statusStats.length > 0 && (
-                        <>
-                            <SectionHeader kicker="Distribution" title="Jobs by Status" />
-                            <View style={s.twoColRow} wrap={false}>
-                                <PieChart
-                                    slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
-                                    size={170}
-                                />
-                                <PieLegend
-                                    slices={stats.statusStats.map((st) => ({ label: st.key, value: st.count }))}
-                                />
-                            </View>
-                        </>
-                    )}
                 </View>
 
                 <ReportFooter generatedAt={generatedAt} />
             </Page>
 
             {/* ════════════════════════════════════════════════════════════
-                PAGE 2+ — DETAIL TABLE
-                Same brand header so it reads as one document. The fixed
-                table header above each row block means continuation pages
-                always carry their column labels.
+                PAGE 2 — DISTRIBUTION ANALYTICS
+                Full-page status visualization. Big donut + status legend,
+                then horizontal bars per status, then conversion KPIs.
+                Skipped entirely when there's no status data to show.
+                ════════════════════════════════════════════════════════════ */}
+            {stats.statusStats.length > 0 && (
+                <Page size="A4" orientation="landscape" style={s.page}>
+                    <BrandHeader {...headerProps} />
+
+                    <View style={s.body}>
+                        <SectionHeader kicker="Analytics" title="Job Status Distribution" />
+                        <DistributionPanel
+                            slices={statusSlices}
+                            centerValue={fmtInt(stats.assignedJobs)}
+                            centerCaption="Total Jobs"
+                        />
+
+                        <SectionHeader kicker="Volume" title="Jobs per Status" />
+                        <View style={s.distPanel} wrap={false}>
+                            <HorizontalBars
+                                rows={statusSlices.map((sl) => ({
+                                    label: sl.label,
+                                    value: sl.value,
+                                    color: sl.color,
+                                }))}
+                            />
+                            <ConversionStats
+                                closedCount={closedCount}
+                                openCount={openCount}
+                                lostCount={lostCount}
+                                totalCount={stats.assignedJobs}
+                            />
+                        </View>
+                    </View>
+
+                    <ReportFooter generatedAt={generatedAt} />
+                </Page>
+            )}
+
+            {/* ════════════════════════════════════════════════════════════
+                PAGE 3+ — DETAIL TABLE
+                Same brand band so the doc reads as one piece. The fixed
+                table header repeats on overflow pages.
                 ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
-                <BrandHeader
-                    reportTitle="Tech Balance Report"
-                    subject={subject}
-                    startDate={startDate}
-                    endDate={endDate}
-                    appliedPct={appliedPct}
-                    rowCount={totals.rowCount}
-                />
+                <BrandHeader {...headerProps} />
 
                 <View style={s.bodyTight}>
                     <SectionHeader kicker="Detail" title="Closed Jobs Breakdown" />
