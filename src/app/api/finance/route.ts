@@ -30,16 +30,20 @@ async function getClient(): Promise<MongoClient> {
 type TechBalanceRow = { tech: string; jobs: number; balance: number };
 
 // View 2: LM ↔ Company — net settlement.
-// LM owes company: cash + check the LM physically collected on company's behalf.
-// Company owes LM:  the LM's 40% (locationPct) profit share on closed jobs +
-//                   lmParts (parts the LM fronted on any job).
+// LM owes company: cash + check the LM physically collected on company's behalf
+//                  + cash the technician collected (the tech sits inside the
+//                  location structure for cash-collection accounting; cash the
+//                  tech kept is held under the LM and owed back to the company).
+// Company owes LM: the LM's 40% (locationPct) profit share on closed jobs +
+//                  lmParts (parts the LM fronted on any job).
 type LmCompanyRow = {
   location: string;
   jobsTouched: number;       // distinct jobs that contributed to either side
   // LM → Company side
   lmCashTotal: number;
   lmCheckTotal: number;
-  lmOwesCompany: number;     // = lmCashTotal + lmCheckTotal
+  techPaidCashTotal: number; // cash the tech kept, held under the LM structure
+  lmOwesCompany: number;     // = lmCashTotal + lmCheckTotal + techPaidCashTotal
   // Company → LM side
   fortyPctPayout: number;    // Σ closed-job totalProfit × locationPct/100
   lmPartsTotal: number;
@@ -101,6 +105,7 @@ export async function GET(req: NextRequest) {
       jobsTouched: 0,
       lmCashTotal: 0,
       lmCheckTotal: 0,
+      techPaidCashTotal: 0,
       lmOwesCompany: 0,
       fortyPctPayout: 0,
       lmPartsTotal: 0,
@@ -115,6 +120,7 @@ export async function GET(req: NextRequest) {
       const lmCash = toNumber(job.lmCash);
       const lmCheck = toNumber(job.lmCheck);
       const lmParts = toNumber(job.lmParts);
+      const techPaidCash = toNumber(job.techPaidCash);
       const locationPct = locationPctMap.get(location) ?? 0;
 
       // Per-job profit (used by both the Co↔Tech and Co→LM sides)
@@ -141,18 +147,22 @@ export async function GET(req: NextRequest) {
       }
 
       // View 2 — LM ↔ Company net settlement.
-      //   LM → Company side: lmCash + lmCheck on any job.
+      //   LM → Company side: lmCash + lmCheck + techPaidCash on any job. The
+      //                      tech sits inside the location structure for
+      //                      cash-collection accounting, so cash the tech kept
+      //                      is held under the LM and owed back to the company.
       //   Company → LM side: 40% (locationPct) of totalProfit on CLOSED jobs
       //                      (matches Balance Report's location mode), plus
       //                      lmParts on any job.
       const fortyPct = status === 'closed' ? calcStandardShare(totalProfit, locationPct) : 0;
-      const touchesLm = lmCash > 0 || lmCheck > 0 || lmParts > 0 || fortyPct !== 0;
+      const touchesLm = lmCash > 0 || lmCheck > 0 || techPaidCash > 0 || lmParts > 0 || fortyPct !== 0;
       if (touchesLm) {
         const l = lmCompanyAgg.get(location) || blankLmRow(location);
         l.jobsTouched += 1;
         l.lmCashTotal += lmCash;
         l.lmCheckTotal += lmCheck;
-        l.lmOwesCompany += lmCash + lmCheck;
+        l.techPaidCashTotal += techPaidCash;
+        l.lmOwesCompany += lmCash + lmCheck + techPaidCash;
         l.fortyPctPayout += fortyPct;
         l.lmPartsTotal += lmParts;
         l.companyOwesLm = l.fortyPctPayout + l.lmPartsTotal;

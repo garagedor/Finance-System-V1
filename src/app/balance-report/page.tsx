@@ -10,7 +10,7 @@ import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
 import { useClickOutside } from '@/hooks/useClickOutside';
-import { FiBriefcase, FiTrendingUp, FiDollarSign, FiCheckCircle, FiPercent, FiAlertCircle, FiChevronDown, FiDownload } from 'react-icons/fi';
+import { FiBriefcase, FiTrendingUp, FiCheckCircle, FiPercent, FiChevronDown, FiDownload } from 'react-icons/fi';
 import {
   PieChart,
   Pie,
@@ -42,7 +42,10 @@ type BalanceRow = {
   totalPaidFinance: number;
   totalPaidCompanyCash: number;
   tipsTotal: number;
+  /** Net settlement (excludes tips). Positive = company owes the subject. */
   balance: number;
+  /** Net settlement with tips folded in. Same as `balance` in location mode. */
+  balanceWithTips: number;
   lmOwesCompany: number;
   companyOwesLm: number;
   approvals: Array<{ name: string; role: string }>;
@@ -80,7 +83,7 @@ type ColKey =
   | 'job-total' | 'tech-parts' | 'company-parts' | 'payment-fee' | 'total-profit'
   | 'lm-parts' | 'lm-cash' | 'lm-check'
   | 'tech-payout' | 'cash'
-  | 'co-tech' | 'lm-co' | 'co-lm' | 'tips' | 'net-tips';
+  | 'balance' | 'balance-with-tips';
 
 type PresetId = 'admin' | 'tech' | 'lm' | 'custom';
 
@@ -96,6 +99,7 @@ type ClosedTotalsShape = {
   shareAmount: number;
   techPaidCash: number;
   balance: number;
+  balanceWithTips: number;
   tipsTotal: number;
   lmOwesCompany: number;
   companyOwesLm: number;
@@ -164,50 +168,37 @@ const COLUMN_GROUPS: ColGroup[] = [
     ],
   },
   {
-    id: 'settle', label: 'Settlements', cssClass: 'bp-group-balance',
+    // Simplified Settlements (locked 2026-06-07): only Balance and Balance +
+    // Tips. The directional Co.↔Tech / LM→Co. / Co.→LM / Tips columns were
+    // removed — they made the report harder to read. Underlying calculations
+    // still run in the API; just not surfaced as separate table columns.
+    //
+    // Sign convention (matches the API):
+    //   positive (green) → company owes the subject (tech / LM)
+    //   negative (red)   → subject owes the company
+    id: 'settle', label: 'Balance', cssClass: 'bp-group-balance',
     cols: [
       {
-        key: 'co-tech', label: 'Co.↔Tech',
-        // Sign convention (rev 2): the raw balance IS the display value.
-        // positive (green) → company owes subject; negative (red) → subject owes company.
-        renderBody: (j) => <td key="co-tech" style={{ color: j.balance > 0 ? '#34d399' : j.balance < 0 ? '#f87171' : undefined, fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance)}</td>,
-        renderTotal: (t) => <td key="co-tech" style={{ color: t.balance > 0 ? '#34d399' : t.balance < 0 ? '#f87171' : undefined }}>{formatCurrency(t.balance)}</td>,
+        key: 'balance', label: 'Balance',
+        renderBody: (j) => <td key="balance" style={{ color: j.balance > 0 ? '#34d399' : j.balance < 0 ? '#f87171' : undefined, fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance)}</td>,
+        renderTotal: (t) => <td key="balance" style={{ color: t.balance > 0 ? '#34d399' : t.balance < 0 ? '#f87171' : undefined }}>{formatCurrency(t.balance)}</td>,
       },
       {
-        key: 'lm-co', label: 'LM→Co.',
-        renderBody: (j) => <td key="lm-co" style={{ color: j.lmOwesCompany > 0 ? '#22d3ee' : undefined, fontWeight: j.lmOwesCompany > 0 ? 600 : undefined }}>{formatCurrency(j.lmOwesCompany)}</td>,
-        renderTotal: (t) => <td key="lm-co" style={{ color: t.lmOwesCompany > 0 ? '#22d3ee' : undefined }}>{formatCurrency(t.lmOwesCompany)}</td>,
-      },
-      {
-        key: 'co-lm', label: 'Co.→LM',
+        key: 'balance-with-tips', label: 'Balance + Tips',
         renderBody: (j) => (
-          <td key="co-lm"
-              title={`40% payout: ${formatCurrency(j.shareAmount)} · LM parts: ${formatCurrency(j.lmParts)}`}
-              style={{ color: j.companyOwesLm > 0 ? '#a78bfa' : undefined, fontWeight: j.companyOwesLm > 0 ? 600 : undefined }}>
-            {formatCurrency(j.companyOwesLm)}
+          <td key="balance-with-tips"
+              title={`Balance ${formatCurrency(j.balance)} + Tips ${formatCurrency(j.tipsTotal)}`}
+              style={{ color: j.balanceWithTips > 0 ? '#34d399' : j.balanceWithTips < 0 ? '#f87171' : undefined, fontWeight: j.balanceWithTips !== 0 ? 600 : undefined }}>
+            {formatCurrency(j.balanceWithTips)}
           </td>
         ),
         renderTotal: (t) => (
-          <td key="co-lm"
-              title={`40% payout: ${formatCurrency(t.shareAmount)} · LM parts: ${formatCurrency(t.lmParts)}`}
-              style={{ color: t.companyOwesLm > 0 ? '#a78bfa' : undefined }}>
-            {formatCurrency(t.companyOwesLm)}
+          <td key="balance-with-tips"
+              title={`Balance ${formatCurrency(t.balance)} + Tips ${formatCurrency(t.tipsTotal)}`}
+              style={{ color: t.balanceWithTips > 0 ? '#34d399' : t.balanceWithTips < 0 ? '#f87171' : undefined }}>
+            {formatCurrency(t.balanceWithTips)}
           </td>
         ),
-      },
-      {
-        key: 'tips', label: 'Tips',
-        renderBody: (j) => <td key="tips">{formatCurrency(j.tipsTotal)}</td>,
-        renderTotal: (t) => <td key="tips">{formatCurrency(t.tipsTotal)}</td>,
-      },
-      {
-        key: 'net-tips', label: 'Net + Tips',
-        // Tips are now baked into `balance` upstream (calcJobBalances step 5),
-        // so Net + Tips reads straight off `balance` — same value as the
-        // Co.↔Tech column. Same sign convention: positive (green) = company
-        // owes subject, negative (red) = subject owes company.
-        renderBody: (j) => <td key="net-tips" style={{ color: j.balance > 0 ? '#34d399' : j.balance < 0 ? '#f87171' : undefined, fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance)}</td>,
-        renderTotal: (t) => <td key="net-tips" style={{ color: t.balance > 0 ? '#34d399' : t.balance < 0 ? '#f87171' : undefined }}>{formatCurrency(t.balance)}</td>,
       },
     ],
   },
@@ -217,8 +208,8 @@ const ALL_COL_KEYS: ColKey[] = COLUMN_GROUPS.flatMap((g) => g.cols.map((c) => c.
 
 const PRESET_VISIBLE: Record<Exclude<PresetId, 'custom'>, ColKey[]> = {
   admin: ALL_COL_KEYS,
-  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'tech-payout', 'cash', 'co-tech', 'tips', 'net-tips'],
-  lm:    ['date', 'address', 'job-total', 'lm-parts', 'lm-cash', 'lm-check', 'lm-co', 'co-lm'],
+  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'tech-payout', 'cash', 'balance', 'balance-with-tips'],
+  lm:    ['date', 'address', 'job-total', 'lm-parts', 'lm-cash', 'lm-check', 'balance'],
 };
 
 const PRESET_LABELS: Record<PresetId, string> = {
@@ -235,7 +226,7 @@ const PRESET_TAB_LABELS: Record<PresetId, string> = {
   custom: 'Custom',
 };
 
-const COLUMNS_STORAGE_KEY = 'balance-report-column-preset-v1';
+const COLUMNS_STORAGE_KEY = 'balance-report-column-preset-v2';
 
 const visibilityFromPreset = (id: Exclude<PresetId, 'custom'>): Record<ColKey, boolean> => {
   const visibleSet = new Set(PRESET_VISIBLE[id]);
@@ -254,25 +245,23 @@ const detectPreset = (vis: Record<ColKey, boolean>): PresetId => {
 // ─── KPI strip — visibility (display-only) ──────────────────────────────────
 // Reuses PresetId + tab styles from the column-visibility system.
 // Independent state, independent localStorage key. Calculations untouched.
-type KpiKey = 'assignedJobs' | 'avgTicket' | 'jobProfit' | 'avgClosedJob' | 'lmOwesCompany' | 'coOwesLm';
+type KpiKey = 'assignedJobs' | 'avgTicket' | 'jobProfit' | 'avgClosedJob';
 
 const KPI_DEFS: { key: KpiKey; label: string }[] = [
   { key: 'assignedJobs',  label: 'Assigned Jobs' },
   { key: 'avgTicket',     label: 'Avg Ticket' },
   { key: 'jobProfit',     label: 'Job Profit' },
   { key: 'avgClosedJob',  label: 'Avg Closed Job' },
-  { key: 'lmOwesCompany', label: 'LM Owes Company' },
-  { key: 'coOwesLm',      label: 'Co. Owes LM' },
 ];
 const ALL_KPI_KEYS: KpiKey[] = KPI_DEFS.map((d) => d.key);
 
 const KPI_PRESET_VISIBLE: Record<Exclude<PresetId, 'custom'>, KpiKey[]> = {
   admin: ALL_KPI_KEYS,
   tech:  ['assignedJobs', 'avgTicket', 'avgClosedJob'],
-  lm:    ['assignedJobs', 'avgClosedJob', 'lmOwesCompany', 'coOwesLm'],
+  lm:    ['assignedJobs', 'avgClosedJob'],
 };
 
-const KPI_STORAGE_KEY = 'balance-report-kpi-preset-v1';
+const KPI_STORAGE_KEY = 'balance-report-kpi-preset-v2';
 
 const kpiVisibilityFromPreset = (id: Exclude<PresetId, 'custom'>): Record<KpiKey, boolean> => {
   const visibleSet = new Set(KPI_PRESET_VISIBLE[id]);
@@ -357,8 +346,9 @@ export default function BalanceReportPage() {
     }
   }, [columnsPreset, columnsVisibility]);
 
-  // `co-lm` is location-mode only; hide it elsewhere regardless of preset state.
-  const isColAllowed = (key: ColKey) => key !== 'co-lm' || mode === 'location';
+  // `balance-with-tips` is informational only in location mode (tips never
+  // flow to LM, so it equals `balance`); hide it there to reduce noise.
+  const isColAllowed = (key: ColKey) => key !== 'balance-with-tips' || mode === 'tech';
   const visibleByGroup = useMemo(
     () => COLUMN_GROUPS.map((g) => ({ ...g, visibleCount: g.cols.filter((c) => columnsVisibility[c.key] && isColAllowed(c.key)).length })),
     [columnsVisibility, mode]
@@ -559,6 +549,7 @@ export default function BalanceReportPage() {
           acc.shareAmount += r.shareAmount || 0;
           acc.techPaidCash += r.techPaidCash || 0;
           acc.balance += r.balance || 0;
+          acc.balanceWithTips += r.balanceWithTips || 0;
           acc.tipsTotal += r.tipsTotal || 0;
           acc.lmOwesCompany += r.lmOwesCompany || 0;
           acc.companyOwesLm += r.companyOwesLm || 0;
@@ -576,6 +567,7 @@ export default function BalanceReportPage() {
           shareAmount: 0,
           techPaidCash: 0,
           balance: 0,
+          balanceWithTips: 0,
           tipsTotal: 0,
           lmOwesCompany: 0,
           companyOwesLm: 0,
@@ -823,18 +815,10 @@ export default function BalanceReportPage() {
           </div>
 
           <section className="bp-kpi-strip stagger">
-            {kpiVisibility.assignedJobs   && <BpKpi label="Assigned Jobs"   value={String(totals.assigned)}                    icon={<FiBriefcase size={14} />}    accent="indigo" />}
-            {kpiVisibility.avgTicket      && <BpKpi label="Avg Ticket"      value={formatCurrency(totals.avgTicket)}           icon={<FiPercent size={14} />}      accent="cyan" />}
-            {kpiVisibility.jobProfit      && <BpKpi label="Job Profit"      value={formatCurrency(totals.profit)}              icon={<FiTrendingUp size={14} />}   accent="emerald" />}
-            {kpiVisibility.avgClosedJob   && <BpKpi label="Avg Closed Job"  value={formatCurrency(totals.avgClosedJob)}        icon={<FiCheckCircle size={14} />}  accent="violet" />}
-            {kpiVisibility.lmOwesCompany  && <BpKpi label="LM Owes Company" value={formatCurrency(closedTotals.lmOwesCompany)} icon={<FiDollarSign size={14} />}   accent="cyan" />}
-            {kpiVisibility.coOwesLm && mode === 'location' && <BpKpi label="Co. Owes LM" value={formatCurrency(closedTotals.companyOwesLm)} icon={<FiDollarSign size={14} />} accent="violet" />}
-            {mode === 'location' && (
-              <>
-                <BpKpi label="Profit on Tech" value={formatCurrency(locationVsTech.diff)} icon={<FiDollarSign size={14} />} accent="emerald" />
-                <BpKpi label="Loss on Tech" value="—" icon={<FiAlertCircle size={14} />} accent="red" />
-              </>
-            )}
+            {kpiVisibility.assignedJobs && <BpKpi label="Assigned Jobs"  value={String(totals.assigned)}             icon={<FiBriefcase size={14} />}   accent="indigo" />}
+            {kpiVisibility.avgTicket    && <BpKpi label="Avg Ticket"     value={formatCurrency(totals.avgTicket)}    icon={<FiPercent size={14} />}     accent="cyan" />}
+            {kpiVisibility.jobProfit    && <BpKpi label="Job Profit"     value={formatCurrency(totals.profit)}       icon={<FiTrendingUp size={14} />}  accent="emerald" />}
+            {kpiVisibility.avgClosedJob && <BpKpi label="Avg Closed Job" value={formatCurrency(totals.avgClosedJob)} icon={<FiCheckCircle size={14} />} accent="violet" />}
           </section>
         </div>
 
@@ -912,7 +896,7 @@ export default function BalanceReportPage() {
                   <span className="bp-snap-value">{formatCurrency(closedTotals.totalProfit)}</span>
                 </li>
                 <li>
-                  <span className="bp-snap-label">Tech Payout</span>
+                  <span className="bp-snap-label">{mode === 'location' ? '40% Payout' : 'Tech Payout'}</span>
                   <span className="bp-snap-value">{formatCurrency(closedTotals.shareAmount)}</span>
                 </li>
                 <li>
@@ -920,10 +904,11 @@ export default function BalanceReportPage() {
                   <span className="bp-snap-value">{formatCurrency(closedTotals.techPaidCash)}</span>
                 </li>
                 <li className="bp-snap-divider" />
+                {/* Simplified settlement (locked 2026-06-07): just Balance
+                    and Balance + Tips. Directional rows (LM Owes / Co. Owes)
+                    were dropped to make the report easier to read. */}
                 <li>
-                  <span className="bp-snap-label bp-snap-strong">
-                    {mode === 'location' ? 'LM Balance' : 'Tech Balance'}
-                  </span>
+                  <span className="bp-snap-label bp-snap-strong">Balance</span>
                   <span
                     className="bp-snap-value bp-snap-strong"
                     style={{
@@ -935,56 +920,21 @@ export default function BalanceReportPage() {
                     {formatCurrency(closedTotals.balance)}
                   </span>
                 </li>
-                {/* Tips are baked into the Tech Report balance now — show them
-                    as an informational sub-line so the user can still see the
-                    figure that contributed. Tips don't flow to LM, so suppress
-                    the line in location mode. */}
-                {mode !== 'location' && (
-                  <li style={{ paddingLeft: 16, opacity: 0.75 }}>
-                    <span className="bp-snap-label">↳ Tips (already in balance)</span>
-                    <span className="bp-snap-value">{formatCurrency(closedTotals.tipsTotal)}</span>
+                {mode === 'tech' && (
+                  <li>
+                    <span className="bp-snap-label bp-snap-strong">Balance + Tips</span>
+                    <span
+                      className="bp-snap-value bp-snap-strong"
+                      style={{
+                        color:
+                          closedTotals.balanceWithTips > 0 ? '#34d399' :
+                          closedTotals.balanceWithTips < 0 ? '#f87171' : undefined,
+                      }}
+                      title={`Balance ${formatCurrency(closedTotals.balance)} + Tips ${formatCurrency(closedTotals.tipsTotal)}`}
+                    >
+                      {formatCurrency(closedTotals.balanceWithTips)}
+                    </span>
                   </li>
-                )}
-                <li className="bp-snap-divider" />
-                <li>
-                  <span className="bp-snap-label">LM Owes Company</span>
-                  <span className="bp-snap-value" style={{ color: closedTotals.lmOwesCompany > 0 ? '#22d3ee' : undefined }}>
-                    {formatCurrency(closedTotals.lmOwesCompany)}
-                  </span>
-                </li>
-                {mode === 'location' && (
-                  <>
-                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
-                      <span className="bp-snap-label">↳ LM Cash</span>
-                      <span className="bp-snap-value">{formatCurrency(closedTotals.lmCash)}</span>
-                    </li>
-                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
-                      <span className="bp-snap-label">↳ LM Check</span>
-                      <span className="bp-snap-value">{formatCurrency(closedTotals.lmCheck)}</span>
-                    </li>
-                    {/* Tech under the location is part of the location structure
-                        for cash holding — surface it alongside lm_cash/lm_check
-                        so the breakdown reconciles with the LM Owes Company
-                        total. */}
-                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
-                      <span className="bp-snap-label">↳ Tech Cash</span>
-                      <span className="bp-snap-value">{formatCurrency(closedTotals.techPaidCash)}</span>
-                    </li>
-                    <li>
-                      <span className="bp-snap-label">Company Owes LM</span>
-                      <span className="bp-snap-value" style={{ color: closedTotals.companyOwesLm > 0 ? '#a78bfa' : undefined }}>
-                        {formatCurrency(closedTotals.companyOwesLm)}
-                      </span>
-                    </li>
-                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
-                      <span className="bp-snap-label">↳ 40% Payout</span>
-                      <span className="bp-snap-value">{formatCurrency(closedTotals.shareAmount)}</span>
-                    </li>
-                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
-                      <span className="bp-snap-label">↳ LM Parts</span>
-                      <span className="bp-snap-value">{formatCurrency(closedTotals.lmParts)}</span>
-                    </li>
-                  </>
                 )}
               </ul>
             ) : (
@@ -1098,20 +1048,7 @@ export default function BalanceReportPage() {
                 </tr>
                 <tr>
                   {visibleCols.map((c) => (
-                    <th key={c.key}>
-                      {/* Co.↔Tech column doubles as the LM net balance column
-                          in location mode (the `balance` field is now
-                          mode-aware on the server). Relabel so the header
-                          matches what's actually being displayed. */}
-                      {c.key === 'co-tech' && mode === 'location'
-                        ? 'Co.↔LM'
-                        : c.key === 'lm-co' && mode === 'location'
-                          // In location mode this field is lm_cash + lm_check
-                          // + tech_cash — i.e. everything the LM-side (LM +
-                          // their tech) is holding for the company.
-                          ? 'Loc→Co.'
-                          : c.label}
-                    </th>
+                    <th key={c.key}>{c.label}</th>
                   ))}
                 </tr>
               </thead>

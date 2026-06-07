@@ -119,7 +119,11 @@ export async function GET(req: NextRequest) {
       const totalProfit = calc.totalProfit;
       const tips = calc.tipsTotal;
       const shareAmount = mode === 'location' ? calc.locationShare : calc.techShare;
+      // Mode-aware base balance — net settlement, excluding tips.
       const balance = mode === 'location' ? calc.locationBalance : calc.techBalance;
+      // Balance with tips folded in — meaningful in tech mode only; equals
+      // `balance` for location mode (tips never flow to LM).
+      const balanceWithTips = mode === 'location' ? calc.locationBalanceWithTips : calc.techBalanceWithTips;
 
       // What the LM-side owes the company. In location mode we include
       // tech_cash too: the technician sits inside the location structure for
@@ -154,6 +158,34 @@ export async function GET(req: NextRequest) {
       if (usedPayments.length > 1) paymentMethod = 'Split Payment';
       else if (usedPayments.length === 1) paymentMethod = usedPayments[0].label;
 
+      // Row-level calculation breakdown — every input and intermediate value
+      // used by calcJobBalances, surfaced so the formula can be verified per
+      // job. The displayed `balance` / `shareAmount` are derived directly from
+      // this `breakdown` object (mode-aware).
+      const breakdown = {
+        // Inputs (raw)
+        techPercentage: toNumber(techPct),
+        locationPercentage: toNumber(locationPct),
+        techPaidCash: toNumber(job.techPaidCash || 0),
+        techParts: toNumber(job.techParts || 0),
+        companyParts: toNumber(job.companyParts || 0),
+        lmParts: toNumber(job.lmParts || 0),
+        lmCash: toNumber(job.lmCash || 0),
+        lmCheck: toNumber(job.lmCheck || 0),
+        // Pipeline outputs
+        jobTotal: toNumber(calc.jobTotal),
+        paymentFee: toNumber(calc.paymentFee),
+        parts: toNumber(calc.parts),
+        totalProfit: toNumber(calc.totalProfit),
+        tipsTotal: toNumber(calc.tipsTotal),
+        techShare: toNumber(calc.techShare),
+        locationShare: toNumber(calc.locationShare),
+        techBalance: toNumber(calc.techBalance),
+        techBalanceWithTips: toNumber(calc.techBalanceWithTips),
+        locationBalance: toNumber(calc.locationBalance),
+        locationBalanceWithTips: toNumber(calc.locationBalanceWithTips),
+      };
+
       return {
         id: jobId,
         date: job.date || '',
@@ -184,8 +216,10 @@ export async function GET(req: NextRequest) {
         approvals,
         paymentMethod,
         balance: toNumber(balance),
+        balanceWithTips: toNumber(balanceWithTips),
         lmOwesCompany: toNumber(lmOwesCompany),
         companyOwesLm: toNumber(companyOwesLm),
+        breakdown,
       };
     });
 

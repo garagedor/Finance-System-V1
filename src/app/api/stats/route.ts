@@ -112,23 +112,22 @@ export async function GET(req: NextRequest) {
         },
         // Used by avg-ticket calculation below — mirrors the report page's
         // provider-tab columns: Total Payment − Total Fees − Total Parts.
-        // calcPaymentFeeNoCheck (excludes companyCheck fee but charges
-        // lmCheck fee per business rule). calcParts includes lmParts.
+        // Excludes companyCheck fee (legacy provider-tab convention).
+        // lmCheck has 0% fee per rule locked 2026-06-04. calcParts includes lmParts.
         valFeeNoCheck: {
           $add: [
             { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
             { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
-            { $multiply: [toNumberAgg('$lmCheck'), 0.1] },
           ],
         },
-        // All-kinds fee burden — card 5% + finance 10% + company check 10%
-        // + LM check 10%. Used for the "Jobs Profit" KPI (locked 2026-06-01).
+        // All-kinds fee burden — card 5% + finance 10% + company check 10%.
+        // lmCheck has 0% fee (the LM holds the paper check, no processor).
+        // Used for the "Jobs Profit" KPI.
         valFeeAllKinds: {
           $add: [
             { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
             { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
             { $multiply: [toNumberAgg('$totalPaidCompanyCheck'), 0.1] },
-            { $multiply: [toNumberAgg('$lmCheck'), 0.1] },
           ],
         },
         valParts: {
@@ -273,7 +272,7 @@ export async function GET(req: NextRequest) {
         // numerator, just not divided.
         totalProfit: profitClosedOrXClose,
         // Jobs Profit (Closed only) = totalSales − all payment fees − all parts.
-        // Fees include card 5% + finance 10% + companyCheck 10% + lmCheck 10%.
+        // Fees include card 5% + finance 10% + companyCheck 10%. lmCheck = 0%.
         jobsProfit,
         // Avg ticket = (Total Payment − Total Fees − Total Parts) / jobs
         // sourced from the same payment/fees/parts breakdown shown on the

@@ -17,20 +17,21 @@ export const calcPaidSum = (job: Partial<JobRow>) => {
     toNumber(job.lmCheck);
 };
 
+// Payment-fee rule (locked 2026-06-04): only COMPANY CHECK carries a 10%
+// check fee. lmCheck is treated as full-value: the LM physically holds the
+// paper check, the company never pays a processor to cash it, so no fee is
+// taken. (Previous code charged lmCheck 10% — that was wrong.)
 export const calcPaymentFee = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.05 +
   toNumber(job.totalPaidFinance) * 0.1 +
-  toNumber(job.totalPaidCompanyCheck) * 0.1 +
-  toNumber(job.lmCheck) * 0.1;
+  toNumber(job.totalPaidCompanyCheck) * 0.1;
 
-// lmCheck fee is included here too — per business rule (2026-05-07): lmCheck
-// must always carry the 10% check fee, even in variants that exclude
-// companyCheck fee. (companyCheck/no-check inconsistency is a pre-existing
-// bug not fixed in this scope.)
+// Same rule as calcPaymentFee but with the companyCheck fee excluded — used
+// by legacy provider-tab columns that report "fees w/o check". lmCheck is
+// likewise full-value (no fee).
 export const calcPaymentFeeNoCheck = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.05 +
-  toNumber(job.totalPaidFinance) * 0.1 +
-  toNumber(job.lmCheck) * 0.1;
+  toNumber(job.totalPaidFinance) * 0.1;
 
 export const calcTotalAfterFee = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.95 +
@@ -39,7 +40,7 @@ export const calcTotalAfterFee = (job: Partial<JobRow>) =>
   toNumber(job.techPaidCash) +
   toNumber(job.totalPaidCompanyCash) +
   toNumber(job.lmCash) +
-  toNumber(job.lmCheck) * 0.9;
+  toNumber(job.lmCheck);
 
 export const calcParts = (job: Partial<JobRow>) =>
   toNumber(job.techParts) + toNumber(job.companyParts) + toNumber(job.lmParts);
@@ -49,14 +50,26 @@ type TipsOptions = {
   includeCompanyCashBonus?: boolean;
 };
 
+// Tips total — net of processor fees, never double-counted. Tips belong
+// 100% to the technician side (folded into tech_balance only, never into
+// location_balance). Rule locked 2026-06-04 (replaces a pre-existing bug
+// where tipsCompanyCash was counted at 0.9 PLUS a "bonus" 1.0 = 1.9x).
+//
+// Per-tip-kind treatment:
+//   tipsCard         × 0.95  (5% processor fee)
+//   tipsFinance      × 0.9   (10% processor fee)
+//   tipsCheck        × 0.9   (10% processor fee — when includeCheck = true)
+//   tipsCompanyCash  × 1.0   (no processor; full face value)
+//                    × 0.9   when includeCompanyCashBonus = false (legacy
+//                           dispute-pool variant that discounts it like a
+//                           card tip).
 export const calcTipsTotal = (job: Partial<JobRow>, opts: TipsOptions = {}) => {
   const { includeCheck = true, includeCompanyCashBonus = true } = opts;
   return (
     toNumber(job.tipsCard) * 0.95 +
     toNumber(job.tipsFinance) * 0.9 +
-    toNumber(job.tipsCompanyCash) * 0.9 +
-    (includeCheck ? toNumber(job.tipsCheck) * 0.9 : 0) +
-    (includeCompanyCashBonus ? toNumber(job.tipsCompanyCash) : 0)
+    toNumber(job.tipsCompanyCash) * (includeCompanyCashBonus ? 1 : 0.9) +
+    (includeCheck ? toNumber(job.tipsCheck) * 0.9 : 0)
   );
 };
 
@@ -316,13 +329,29 @@ export const calcFinalBalance = (shareAmount: number, techParts: number, techPai
 // the two views cannot drift.
 //
 // Pipeline:
-//   1. payment_fee = 5%×card + 10%×finance + 10%×companyCheck + 10%×lmCheck
-//      (0 for pure cash jobs)
+//   1. payment_fee = 5%×card + 10%×finance + 10%×companyCheck
+//      (lmCheck has 0% fee — the LM holds the paper check, no processor
+//      involved. 0 for pure cash jobs.)
 //   2. total_profit = job_total − payment_fee − (tech_parts + company_parts + lm_parts)
 //   3. tech_share     = total_profit × tech_percentage
 //   4. location_share = total_profit × location_percentage
-//   5. tech_balance     = tech_share + tech_parts + tips − tech_cash
-//   6. location_balance = location_share + lm_parts − lm_cash − lm_check − tech_cash
+//   5a. tech_balance           = tech_share + tech_parts − tech_cash
+//   5b. tech_balance_with_tips = tech_balance + tips
+//   6a. location_balance           = location_share + tech_parts + lm_parts
+//                                    − lm_cash − lm_check − tech_cash
+//   6b. location_balance_with_tips = location_balance  (tips don't flow to LM)
+//
+// Why tech_parts appears in BOTH balances (locked 2026-06-07): the Area
+// Manager pays the technician — including tech parts reimbursement — out of
+// their own pocket, then the company settles with the AM. So tech_parts
+// raises what the company owes the AM (positive on location side), and
+// independently raises what the AM owes the tech (positive on tech side).
+// Both views are correct settlement claims sitting on different ledgers.
+//
+// The UI presents only Balance and Balance + Tips — directional Co.↔Tech /
+// LM↔Co. columns were dropped (rule locked 2026-06-07). Balance is the net
+// settlement, sign convention below; Balance + Tips includes tips where
+// relevant (tech mode only — for location mode it equals Balance).
 //
 // CRITICAL: total_profit ALREADY deducts all three parts buckets (tech,
 // company, lm) before the share is taken. The balance formulas therefore add
@@ -360,10 +389,14 @@ export type JobBalanceComputation = {
   techShare: number;
   /** total_profit × location_percentage / 100. */
   locationShare: number;
-  /** Tech-perspective balance — see formula above. */
+  /** Tech-perspective balance, EXCLUDING tips. */
   techBalance: number;
-  /** Location-perspective balance — see formula above. */
+  /** Tech-perspective balance WITH tips folded in. */
+  techBalanceWithTips: number;
+  /** Location-perspective balance. Tips don't flow to LM, so no separate withTips field is needed. */
   locationBalance: number;
+  /** Location-perspective balance with tips — equals locationBalance (tips never flow to LM). */
+  locationBalanceWithTips: number;
 };
 
 export const calcJobBalances = (
@@ -390,25 +423,35 @@ export const calcJobBalances = (
   const lmCash = toNumber(job.lmCash);
   const lmCheck = toNumber(job.lmCheck);
 
-  // Step 5 — tech_balance
-  //   tech_share already reflects the lm_parts deduction (it was removed from
-  //   total_profit upstream), so we DO NOT subtract lm_parts again here.
+  // Step 5a — tech_balance (no tips). tech_share already reflects the
+  //   lm_parts deduction (removed from total_profit upstream), so we DO NOT
+  //   subtract lm_parts again here.
   const techBalance =
     techShare +
-    techParts +     // tech-fronted parts → company reimburses the tech
-    tipsTotal -
-    techCash;       // cash the tech kept → reduces what company still owes
+    techParts -     // tech-fronted parts: company reimburses the tech (+)
+    techCash;       // cash the tech kept: reduces what company still owes (−)
 
-  // Step 6 — location_balance
-  //   lm_parts is added because the LM personally fronted those parts and
-  //   they get reimbursed on top of their profit share. tech_cash deducts
+  // Step 5b — tech_balance with tips folded in.
+  const techBalanceWithTips = techBalance + tipsTotal;
+
+  // Step 6a — location_balance. lm_parts is added because the LM personally
+  //   fronted those parts and they get reimbursed on top of their profit
+  //   share. tech_parts is added because the AM pays the technician (parts
+  //   reimbursement included) and the company settles with the AM — so
+  //   tech_parts raises what the company owes the AM. tech_cash deducts
   //   because the tech sits inside the location structure for cash holding.
   const locationBalance =
     locationShare +
+    techParts +
     lmParts -
     lmCash -
     lmCheck -
     techCash;
+
+  // Step 6b — location_balance with tips. Tips never flow to the LM, so
+  //   this is identical to locationBalance. Exposed so the UI can read both
+  //   "balance" and "balanceWithTips" uniformly across modes.
+  const locationBalanceWithTips = locationBalance;
 
   return {
     paymentFee,
@@ -419,7 +462,9 @@ export const calcJobBalances = (
     techShare,
     locationShare,
     techBalance,
+    techBalanceWithTips,
     locationBalance,
+    locationBalanceWithTips,
   };
 };
 
@@ -429,9 +474,9 @@ export const calcJobBalances = (
 // Recognition (in the original revenue/cost helpers above):
 //   - lmCash and lmCheck ARE recognized job revenue. They flow into
 //     calcPaidSum and calcTotalAfterFee like any other payment method.
-//     lmCheck always carries a 10% fee in BOTH calcPaymentFee and
-//     calcPaymentFeeNoCheck (no exceptions, even where companyCheck fee
-//     is excluded for legacy reasons).
+//     lmCheck has a 0% fee (locked 2026-06-04): only COMPANY CHECK carries
+//     the 10% check fee. lmCheck is a paper check held by the LM, the
+//     company never pays a processor to cash it.
 //   - lmParts IS a job-profit cost. calcParts includes it alongside
 //     techParts and companyParts. The parts were consumed on the job, so
 //     their cost is real to the company's profit pool regardless of who
@@ -452,8 +497,9 @@ export const calcJobBalances = (
 export const calcLmRevenue = (job: Partial<JobRow>) =>
   toNumber(job.lmCash) + toNumber(job.lmCheck);
 
-export const calcLmCheckFee = (job: Partial<JobRow>) =>
-  toNumber(job.lmCheck) * 0.1;
+// lmCheck has a 0% fee (rule locked 2026-06-04). Kept as a named helper for
+// any caller that wants to be explicit about the LM-check fee being zero.
+export const calcLmCheckFee = (_job: Partial<JobRow>) => 0;
 
 export const calcLmOwesCompany = (job: Partial<JobRow>) =>
   toNumber(job.lmCash) + toNumber(job.lmCheck);

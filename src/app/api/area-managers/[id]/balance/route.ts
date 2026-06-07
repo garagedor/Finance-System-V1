@@ -2,8 +2,12 @@
 //
 // For each location the AM owns we replay the same Company↔LM math the
 // /api/finance route uses (per-location managerProfitPercent × closed-job
-// profit + lmParts, minus lmCash + lmCheck collected by the LM). Then we
-// subtract the net of recorded payments to land at the open balance.
+// profit + lmParts, minus lmCash + lmCheck + techPaidCash collected under
+// the location structure). techPaidCash is included on the AM-owes side
+// because the technician sits inside the location structure for cash-
+// collection accounting — cash the tech kept is held under the LM and owed
+// back to the company. Then we subtract the net of recorded payments to
+// land at the open balance.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient, ObjectId } from 'mongodb';
@@ -69,9 +73,13 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         const lmCash = toNumber((j as any).lmCash);
         const lmCheck = toNumber((j as any).lmCheck);
         const lmParts = toNumber((j as any).lmParts);
+        const techPaidCash = toNumber((j as any).techPaidCash);
 
-        // AM-side: cash + check collected on behalf of company.
-        amOwesCompany += lmCash + lmCheck;
+        // AM-side: cash + check collected on behalf of company. Includes
+        // techPaidCash — the tech sits inside the location structure for
+        // cash-collection accounting (matches Balance Report location mode
+        // and /api/finance LM↔Company settlement view).
+        amOwesCompany += lmCash + lmCheck + techPaidCash;
 
         // Company-side: profit share on closed jobs + parts reimbursement on any job.
         companyOwesAm += lmParts;

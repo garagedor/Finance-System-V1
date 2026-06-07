@@ -112,12 +112,14 @@ export async function GET(req: NextRequest) {
                             toNumber('$lmCheck'),
                         ],
                     },
+                    // Payment fee — card 5% + finance 10% + companyCheck 10%.
+                    // lmCheck = 0% (rule locked 2026-06-04: only company
+                    // check carries the 10%; the LM holds the paper check).
                     valPaymentFee: {
                         $add: [
                             { $multiply: [toNumber('$totalPaidCard'), 0.05] },
                             { $multiply: [toNumber('$totalPaidFinance'), 0.1] },
-                            { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.1] },
-                            { $multiply: [toNumber('$lmCheck'), 0.1] }
+                            { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.1] }
                         ]
                     },
                     valParts: { $add: [toNumber('$techParts'), toNumber('$companyParts'), toNumber('$lmParts')] },
