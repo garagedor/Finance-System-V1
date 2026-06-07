@@ -10,12 +10,9 @@ import {
     SectionHeader,
     KpiCard,
     KpiGrid,
-    KeyFigureCard,
-    KeyFigureRow,
-    HeroBalanceRow,
-    DistributionPanel,
-    HorizontalBars,
-    ConversionStats,
+    MidRow,
+    PiePanel,
+    SnapshotCard,
     ReportFooter,
     balanceTone,
 } from './ReportShared';
@@ -117,16 +114,11 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
 
 export function LocationReportPdf({ data }: { data: PdfReportData }) {
     const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
-    const totalParts = totals.techParts + totals.companyParts + totals.lmParts;
     const statusSlices = stats.statusStats.map((st, i) => ({
         label: st.key,
         value: st.count,
         color: statusColor(i),
     }));
-    const closedCount = stats.statusStats.find((s) => s.key === 'Closed')?.count ?? 0;
-    const lostCount   = stats.statusStats.find((s) => s.key.toLowerCase().includes('lost'))?.count ?? 0;
-    const xCloseCount = stats.statusStats.find((s) => s.key === 'X close')?.count ?? 0;
-    const openCount   = Math.max(0, stats.assignedJobs - closedCount - lostCount - xCloseCount);
 
     const headerProps = {
         reportTitle: 'Location Balance Report',
@@ -145,88 +137,52 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
             author="317 Garage Door"
         >
             {/* ════════════════════════════════════════════════════════════
-                PAGE 1 — EXECUTIVE SUMMARY
+                PAGE 1 — DASHBOARD SUMMARY (mirrors CRM /balance-report)
                 ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
                 <BrandHeader {...headerProps} />
 
                 <View style={s.body}>
-                    <SectionHeader kicker="Executive Summary" title="Bottom Line" />
-                    <HeroBalanceRow
-                        balance={totals.balance}
-                        balanceWithTips={totals.balanceWithTips}
-                        mode="location"
-                    />
-
-                    <SectionHeader kicker="Key Figures" title="Period Financials" />
-                    <KeyFigureRow>
-                        <KeyFigureCard label="Total Paid"   value={fmtCurrency(totals.paidSum)}     accent="indigo" />
-                        <KeyFigureCard label="Total Profit" value={fmtCurrency(totals.totalProfit)} accent="emerald" />
-                        <KeyFigureCard label="LM Payout"    value={fmtCurrency(totals.shareAmount)} accent="cyan" />
-                    </KeyFigureRow>
-
                     <SectionHeader kicker="Performance" title="Range Overview" />
                     <KpiGrid>
-                        <KpiCard label="Assigned Jobs"   value={fmtInt(stats.assignedJobs)}       accent="indigo" />
-                        <KpiCard label="Avg Ticket"      value={fmtCurrency(stats.avgTicket)}     accent="cyan" />
-                        <KpiCard label="Job Profit"      value={fmtCurrency(stats.jobProfit)}     accent="emerald" />
-                        <KpiCard label="Avg Closed Job"  value={fmtCurrency(stats.avgClosedJob)}  accent="violet" />
-                        <KpiCard label="Payment Fees"    value={fmtCurrency(totals.paymentFee)}   accent="amber" />
-                        <KpiCard label="Total Parts"     value={fmtCurrency(totalParts)}          accent="amber" />
-                        <KpiCard label="LM Cash"         value={fmtCurrency(totals.lmCash)}       accent="cyan" />
-                        <KpiCard label="LM Check"        value={fmtCurrency(totals.lmCheck)}      accent="cyan" />
-                        <KpiCard label="Tech Cash"       value={fmtCurrency(totals.techPaidCash)} accent="violet" />
-                        <KpiCard label="Tips (info)"     value={fmtCurrency(totals.tipsTotal)}    accent="violet" />
+                        <KpiCard label="Assigned Jobs"  value={fmtInt(stats.assignedJobs)}       accent="indigo" />
+                        <KpiCard label="Avg Ticket"     value={fmtCurrency(stats.avgTicket)}     accent="cyan" />
+                        <KpiCard label="Job Profit"     value={fmtCurrency(stats.jobProfit)}     accent="emerald" />
+                        <KpiCard label="Avg Closed Job" value={fmtCurrency(stats.avgClosedJob)}  accent="violet" />
                     </KpiGrid>
+
+                    <MidRow>
+                        <PiePanel slices={statusSlices} totalLabel="Total Jobs" />
+                        <SnapshotCard
+                            kicker="Closed Jobs Snapshot"
+                            title="Quick Totals"
+                            pill={`${totals.rowCount} closed`}
+                            entries={[
+                                { label: 'Total Paid',     value: totals.paidSum },
+                                { label: 'Total Profit',   value: totals.totalProfit },
+                                { label: 'LM Payout',      value: totals.shareAmount },
+                                { label: 'LM Cash',        value: totals.lmCash,        sub: true },
+                                { label: 'LM Check',       value: totals.lmCheck,       sub: true },
+                                { label: 'Tech Cash',      value: totals.techPaidCash,  sub: true },
+                                'divider',
+                                { label: 'Balance',        value: totals.balance,         weight: 'strong', tone: 'auto' },
+                                { label: 'Tips',           value: totals.tipsTotal,       sub: true, badge: 'INFO' },
+                                { label: 'Balance + Tips', value: totals.balanceWithTips, weight: 'strong', tone: 'auto', badge: 'INFO' },
+                            ]}
+                        />
+                    </MidRow>
                 </View>
 
                 <ReportFooter generatedAt={generatedAt} />
             </Page>
 
             {/* ════════════════════════════════════════════════════════════
-                PAGE 2 — DISTRIBUTION ANALYTICS
-                ════════════════════════════════════════════════════════════ */}
-            {stats.statusStats.length > 0 && (
-                <Page size="A4" orientation="landscape" style={s.page}>
-                    <BrandHeader {...headerProps} />
-
-                    <View style={s.body}>
-                        <SectionHeader kicker="Analytics" title="Job Status Distribution" />
-                        <DistributionPanel
-                            slices={statusSlices}
-                            centerValue={fmtInt(stats.assignedJobs)}
-                            centerCaption="Total Jobs"
-                        />
-
-                        <SectionHeader kicker="Volume" title="Jobs per Status" />
-                        <View style={s.distPanel} wrap={false}>
-                            <HorizontalBars
-                                rows={statusSlices.map((sl) => ({
-                                    label: sl.label,
-                                    value: sl.value,
-                                    color: sl.color,
-                                }))}
-                            />
-                            <ConversionStats
-                                closedCount={closedCount}
-                                openCount={openCount}
-                                lostCount={lostCount}
-                                totalCount={stats.assignedJobs}
-                            />
-                        </View>
-                    </View>
-
-                    <ReportFooter generatedAt={generatedAt} />
-                </Page>
-            )}
-
-            {/* ════════════════════════════════════════════════════════════
-                PAGE 3+ — DETAIL TABLE
+                PAGE 2+ — DETAIL TABLE
                 ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
                 <BrandHeader {...headerProps} />
 
-                <View style={s.bodyTight}>
+                <View style={s.body}>
                     <SectionHeader kicker="Detail" title="Closed Jobs Breakdown" />
                     <View style={s.tableContainer}>
                         <View style={s.table}>

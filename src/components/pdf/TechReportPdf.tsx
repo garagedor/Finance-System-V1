@@ -4,22 +4,19 @@ import {
     fmtCurrency,
     fmtDate,
     fmtInt,
+    statusColor,
 } from './sharedPdfStyles';
 import {
     BrandHeader,
     SectionHeader,
     KpiCard,
     KpiGrid,
-    KeyFigureCard,
-    KeyFigureRow,
-    HeroBalanceRow,
-    DistributionPanel,
-    HorizontalBars,
-    ConversionStats,
+    MidRow,
+    PiePanel,
+    SnapshotCard,
     ReportFooter,
     balanceTone,
 } from './ReportShared';
-import { statusColor } from './sharedPdfStyles';
 import type { PdfReportData, PdfRow, PdfTotals } from './types';
 
 // Column layout for Tech Report — flex weights sum to ~100 so the row fits
@@ -115,16 +112,11 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
 
 export function TechReportPdf({ data }: { data: PdfReportData }) {
     const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
-    const totalParts = totals.techParts + totals.companyParts + totals.lmParts;
     const statusSlices = stats.statusStats.map((st, i) => ({
         label: st.key,
         value: st.count,
         color: statusColor(i),
     }));
-    const closedCount = stats.statusStats.find((s) => s.key === 'Closed')?.count ?? 0;
-    const lostCount   = stats.statusStats.find((s) => s.key.toLowerCase().includes('lost'))?.count ?? 0;
-    const xCloseCount = stats.statusStats.find((s) => s.key === 'X close')?.count ?? 0;
-    const openCount   = Math.max(0, stats.assignedJobs - closedCount - lostCount - xCloseCount);
 
     const headerProps = {
         reportTitle: 'Tech Balance Report',
@@ -143,92 +135,56 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
             author="317 Garage Door"
         >
             {/* ════════════════════════════════════════════════════════════
-                PAGE 1 — EXECUTIVE SUMMARY
-                Headline balance numbers first, key figures, range KPIs.
+                PAGE 1 — DASHBOARD SUMMARY (mirrors CRM /balance-report)
+                KPI strip across the top, then a mid-row with the status
+                pie/legend on the left and the Quick Totals snapshot card
+                on the right. Single page, no separate analytics page.
                 ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
                 <BrandHeader {...headerProps} />
 
                 <View style={s.body}>
-                    <SectionHeader kicker="Executive Summary" title="Bottom Line" />
-                    <HeroBalanceRow
-                        balance={totals.balance}
-                        balanceWithTips={totals.balanceWithTips}
-                        mode="tech"
-                    />
-
-                    <SectionHeader kicker="Key Figures" title="Period Financials" />
-                    <KeyFigureRow>
-                        <KeyFigureCard label="Total Paid"   value={fmtCurrency(totals.paidSum)}     accent="indigo" />
-                        <KeyFigureCard label="Total Profit" value={fmtCurrency(totals.totalProfit)} accent="emerald" />
-                        <KeyFigureCard label="Tech Payout"  value={fmtCurrency(totals.shareAmount)} accent="cyan" />
-                    </KeyFigureRow>
-
+                    {/* KPI strip — same 4 cards the CRM exposes by default */}
                     <SectionHeader kicker="Performance" title="Range Overview" />
                     <KpiGrid>
-                        <KpiCard label="Assigned Jobs"   value={fmtInt(stats.assignedJobs)}       accent="indigo" />
-                        <KpiCard label="Avg Ticket"      value={fmtCurrency(stats.avgTicket)}     accent="cyan" />
-                        <KpiCard label="Job Profit"      value={fmtCurrency(stats.jobProfit)}     accent="emerald" />
-                        <KpiCard label="Avg Closed Job"  value={fmtCurrency(stats.avgClosedJob)}  accent="violet" />
-                        <KpiCard label="Payment Fees"    value={fmtCurrency(totals.paymentFee)}   accent="amber" />
-                        <KpiCard label="Total Parts"     value={fmtCurrency(totalParts)}          accent="amber" />
-                        <KpiCard label="Cash Collected"  value={fmtCurrency(totals.techPaidCash)} accent="violet" />
-                        <KpiCard label="Tips"            value={fmtCurrency(totals.tipsTotal)}    accent="violet" />
+                        <KpiCard label="Assigned Jobs"  value={fmtInt(stats.assignedJobs)}       accent="indigo" />
+                        <KpiCard label="Avg Ticket"     value={fmtCurrency(stats.avgTicket)}     accent="cyan" />
+                        <KpiCard label="Job Profit"     value={fmtCurrency(stats.jobProfit)}     accent="emerald" />
+                        <KpiCard label="Avg Closed Job" value={fmtCurrency(stats.avgClosedJob)}  accent="violet" />
                     </KpiGrid>
+
+                    {/* Mid row: pie panel + snapshot. Both are dark cards
+                        matching the dashboard's panels exactly. */}
+                    <MidRow>
+                        <PiePanel slices={statusSlices} totalLabel="Total Jobs" />
+                        <SnapshotCard
+                            kicker="Closed Jobs Snapshot"
+                            title="Quick Totals"
+                            pill={`${totals.rowCount} closed`}
+                            entries={[
+                                { label: 'Total Paid',     value: totals.paidSum },
+                                { label: 'Total Profit',   value: totals.totalProfit },
+                                { label: 'Tech Payout',    value: totals.shareAmount },
+                                { label: 'Cash Collected', value: totals.techPaidCash },
+                                'divider',
+                                { label: 'Balance',        value: totals.balance,         weight: 'strong', tone: 'auto' },
+                                { label: 'Tips',           value: totals.tipsTotal,       sub: true },
+                                { label: 'Balance + Tips', value: totals.balanceWithTips, weight: 'strong', tone: 'auto' },
+                            ]}
+                        />
+                    </MidRow>
                 </View>
 
                 <ReportFooter generatedAt={generatedAt} />
             </Page>
 
             {/* ════════════════════════════════════════════════════════════
-                PAGE 2 — DISTRIBUTION ANALYTICS
-                Full-page status visualization. Big donut + status legend,
-                then horizontal bars per status, then conversion KPIs.
-                Skipped entirely when there's no status data to show.
-                ════════════════════════════════════════════════════════════ */}
-            {stats.statusStats.length > 0 && (
-                <Page size="A4" orientation="landscape" style={s.page}>
-                    <BrandHeader {...headerProps} />
-
-                    <View style={s.body}>
-                        <SectionHeader kicker="Analytics" title="Job Status Distribution" />
-                        <DistributionPanel
-                            slices={statusSlices}
-                            centerValue={fmtInt(stats.assignedJobs)}
-                            centerCaption="Total Jobs"
-                        />
-
-                        <SectionHeader kicker="Volume" title="Jobs per Status" />
-                        <View style={s.distPanel} wrap={false}>
-                            <HorizontalBars
-                                rows={statusSlices.map((sl) => ({
-                                    label: sl.label,
-                                    value: sl.value,
-                                    color: sl.color,
-                                }))}
-                            />
-                            <ConversionStats
-                                closedCount={closedCount}
-                                openCount={openCount}
-                                lostCount={lostCount}
-                                totalCount={stats.assignedJobs}
-                            />
-                        </View>
-                    </View>
-
-                    <ReportFooter generatedAt={generatedAt} />
-                </Page>
-            )}
-
-            {/* ════════════════════════════════════════════════════════════
-                PAGE 3+ — DETAIL TABLE
-                Same brand band so the doc reads as one piece. The fixed
-                table header repeats on overflow pages.
+                PAGE 2+ — DETAIL TABLE
                 ════════════════════════════════════════════════════════════ */}
             <Page size="A4" orientation="landscape" style={s.page}>
                 <BrandHeader {...headerProps} />
 
-                <View style={s.bodyTight}>
+                <View style={s.body}>
                     <SectionHeader kicker="Detail" title="Closed Jobs Breakdown" />
                     <View style={s.tableContainer}>
                         <View style={s.table}>
