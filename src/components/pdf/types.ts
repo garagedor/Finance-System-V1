@@ -58,6 +58,14 @@ export type PdfReportStats = {
 export type PdfReportData = {
     mode: 'tech' | 'location';
     subject: string;
+    /** The technician this report was generated for (always present —
+     *  both modes filter by tech under the hood). Displayed in the
+     *  brand header so the PDF stands alone without needing the CRM. */
+    techName: string;
+    /** The location the technician belongs to (always present when the
+     *  tech has a `location` pointer; '—' otherwise). Displayed in the
+     *  brand header alongside techName so the reader sees both contexts. */
+    locationName: string;
     startDate: string;
     endDate: string;
     appliedPct: number;

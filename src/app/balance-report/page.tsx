@@ -628,7 +628,16 @@ export default function BalanceReportPage() {
     }));
   };
 
-  const titleSubject = mode === 'tech' ? appliedTech : lookups.locations.find((l) => l._id === (lookups.techs.find((t) => t._id === appliedTech)?.location || ''))?._id || '';
+  // The technician this report is filtered by — same value regardless of
+  // mode (every report needs a tech to scope the data).
+  const techNameForHeader = appliedTech || '';
+  // The location the technician belongs to. Resolved through the tech's
+  // `location` pointer so both Tech and Location reports show it.
+  const locationNameForHeader =
+    lookups.techs.find((t) => t._id === appliedTech)?.location || '';
+  // Title still defers to the report mode so the report's primary subject
+  // reads first; the OTHER context is exposed as a chip below.
+  const titleSubject = mode === 'tech' ? techNameForHeader : locationNameForHeader;
 
   const [pdfLoading, setPdfLoading] = useState(false);
 
@@ -684,14 +693,26 @@ export default function BalanceReportPage() {
           <div className="bp-header-left">
             <p className="bp-kicker">{mode === 'tech' ? 'Tech Report' : 'Location Report'}</p>
             <h1 className="bp-title">{titleSubject || '—'}</h1>
+            {/* Always surface BOTH Location and Technician chips. The
+                report is filtered by a single tech, so the reader needs
+                to see whose numbers they're looking at and which
+                location the tech belongs to — same for either mode. */}
             <div className="bp-meta">
               <span className="bp-meta-chip">
-                <span className="bp-meta-chip-label">Applied</span>
-                <strong>{appliedPct}%</strong>
+                <span className="bp-meta-chip-label">Location</span>
+                <strong>{locationNameForHeader || '—'}</strong>
+              </span>
+              <span className="bp-meta-chip">
+                <span className="bp-meta-chip-label">Technician</span>
+                <strong>{techNameForHeader || '—'}</strong>
               </span>
               <span className="bp-meta-chip">
                 <span className="bp-meta-chip-label">Range</span>
                 <strong>{fmtDateChip(appliedStart)} → {fmtDateChip(appliedEnd)}</strong>
+              </span>
+              <span className="bp-meta-chip">
+                <span className="bp-meta-chip-label">Applied</span>
+                <strong>{appliedPct}%</strong>
               </span>
             </div>
           </div>

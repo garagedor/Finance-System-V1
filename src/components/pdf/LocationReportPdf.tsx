@@ -113,7 +113,7 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
 );
 
 export function LocationReportPdf({ data }: { data: PdfReportData }) {
-    const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
+    const { techName, locationName, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
     const statusSlices = stats.statusStats.map((st, i) => ({
         label: st.key,
         value: st.count,
@@ -122,7 +122,8 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
 
     const headerProps = {
         reportTitle: 'Location Balance Report',
-        subject,
+        techName,
+        locationName,
         startDate,
         endDate,
         appliedPct,
@@ -132,7 +133,7 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
 
     return (
         <Document
-            title={`Location Report — ${subject}`}
+            title={`Location Report — ${locationName} — ${techName}`}
             subject="317 Garage Door — Location Balance Report"
             author="317 Garage Door"
         >

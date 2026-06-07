@@ -111,7 +111,7 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
 );
 
 export function TechReportPdf({ data }: { data: PdfReportData }) {
-    const { subject, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
+    const { techName, locationName, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
     const statusSlices = stats.statusStats.map((st, i) => ({
         label: st.key,
         value: st.count,
@@ -120,7 +120,8 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
 
     const headerProps = {
         reportTitle: 'Tech Balance Report',
-        subject,
+        techName,
+        locationName,
         startDate,
         endDate,
         appliedPct,
@@ -130,7 +131,7 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
 
     return (
         <Document
-            title={`Tech Report — ${subject}`}
+            title={`Tech Report — ${techName}`}
             subject="317 Garage Door — Tech Balance Report"
             author="317 Garage Door"
         >

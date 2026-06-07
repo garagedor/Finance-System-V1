@@ -15,9 +15,14 @@ import {
 // ─── Brand header + meta strip ───────────────────────────────────────────────
 // `logoSrc`: data-URL or file path for the company badge. The route reads
 // public/lbs-logo.png at request time and passes it through.
+//
+// The header surfaces BOTH `locationName` and `techName` regardless of mode
+// — a Location Report is still filtered by a single tech and the reader
+// needs to see whose numbers they're looking at without re-opening the CRM.
 export const BrandHeader = ({
     reportTitle,
-    subject,
+    techName,
+    locationName,
     startDate,
     endDate,
     appliedPct,
@@ -25,7 +30,8 @@ export const BrandHeader = ({
     logoSrc,
 }: {
     reportTitle: string;
-    subject: string;
+    techName: string;
+    locationName: string;
     startDate: string;
     endDate: string;
     appliedPct: number;
@@ -45,7 +51,12 @@ export const BrandHeader = ({
             </View>
             <View style={s.brandRight}>
                 <Text style={s.reportTitle}>{reportTitle}</Text>
-                <Text style={s.reportSubtitle}>Subject: {subject || '—'}</Text>
+                <View style={s.brandSubjectRow}>
+                    <Text style={s.brandSubjectLabel}>Location: </Text>
+                    <Text style={s.brandSubjectValue}>{locationName || '—'}</Text>
+                    <Text style={[s.brandSubjectLabel, { marginLeft: 12 }]}>Technician: </Text>
+                    <Text style={s.brandSubjectValue}>{techName || '—'}</Text>
+                </View>
             </View>
         </View>
         <View style={s.metaStrip}>

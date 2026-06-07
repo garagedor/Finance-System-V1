@@ -273,15 +273,20 @@ export async function GET(req: NextRequest) {
                 .sort((a, b) => b.count - a.count),
         };
 
-        const subject = mode === 'tech'
-            ? techFilter
-            : (locationId || '—');
+        // Always surface both names so the brand header can label the
+        // report with full context ("Location: Milwaukee · Technician:
+        // Ben Zaken") regardless of which mode is active.
+        const techName = techFilter;
+        const locationName = locationId || '—';
+        const subject = mode === 'tech' ? techName : locationName;
 
         const logoSrc = await loadLogoDataUrl();
 
         const reportData: PdfReportData = {
             mode,
             subject,
+            techName,
+            locationName,
             startDate,
             endDate,
             appliedPct: toNumber(appliedPct),
@@ -299,7 +304,8 @@ export async function GET(req: NextRequest) {
         const pdfBuffer = await renderToBuffer(element as any);
 
         const modeLabel = mode === 'tech' ? 'Tech' : 'Location';
-        const filename = `${modeLabel}_Report_${safeFilename(subject)}_${startDate}_to_${endDate}.pdf`;
+        // Filename carries both contexts so a stack of PDFs is browsable.
+        const filename = `${modeLabel}_Report_${safeFilename(locationName)}_${safeFilename(techName)}_${startDate}_to_${endDate}.pdf`;
 
         return new NextResponse(new Uint8Array(pdfBuffer), {
             status: 200,

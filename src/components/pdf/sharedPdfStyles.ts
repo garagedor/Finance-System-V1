@@ -100,6 +100,22 @@ export const sharedPdfStyles = StyleSheet.create({
         color: palette.slate300,
         marginTop: 3,
     },
+    brandSubjectRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        marginTop: 4,
+    },
+    brandSubjectLabel: {
+        fontSize: 8,
+        color: palette.slate400,
+        textTransform: 'uppercase',
+        letterSpacing: 0.6,
+    },
+    brandSubjectValue: {
+        fontSize: 10,
+        color: palette.surface,
+        fontFamily: 'Helvetica-Bold',
+    },
 
     // ── Meta strip ─────────────────────────────────────────────────────────
     metaStrip: {
