@@ -43,7 +43,11 @@ async function connectToDatabase<T extends Document>(
 }
 
 function convertFilterValue<T extends Document>(field: string, value: unknown, options: CrudOptions<T>) {
-  if (value === undefined || value === null) return undefined;
+  // Skip empty values for all field types — without this guard, an empty
+  // currency input would coerce via Number('') === 0 and silently apply a
+  // `field = 0` filter; an empty boolean would fall through to `false` and
+  // hide every "Yes" row. Empty inputs mean "no filter," not "= 0 / = false".
+  if (value === undefined || value === null || value === '') return undefined;
 
   const { numberFields = [], booleanFields = [], dateFields = [] } = options;
 
@@ -62,6 +66,23 @@ function convertFilterValue<T extends Document>(field: string, value: unknown, o
 
   return value;
 }
+
+// Detect a DateRangePicker-encoded value (JSON string with start/end keys).
+// The filter UI stores date-range selections as JSON-stringified objects so
+// they survive the searchParams round-trip; both the Jobs route and the
+// generic crud handler need to parse them back into {$gte, $lte} ranges.
+const parseDateRange = (raw: unknown): { start?: string; end?: string } | null => {
+  if (typeof raw !== 'string' || !raw.includes('{')) return null;
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && typeof obj === 'object' && ('start' in obj || 'end' in obj)) {
+      return { start: obj.start || undefined, end: obj.end || undefined };
+    }
+  } catch {
+    /* not a JSON range */
+  }
+  return null;
+};
 
 const dateVariants = (raw: unknown): string[] => {
   const val = typeof raw === 'string' ? raw.trim() : '';
@@ -152,6 +173,20 @@ export function createCrudHandlers<T extends Document>(options: CrudOptions<T>) 
       parsedFilters.forEach((rule) => {
         const field = (rule.field ?? '').toString().trim();
         if (!field) return;
+
+        // Date-range filter — emitted by the UI's DateRangePicker. Handle
+        // before normal conversion since the raw value is a JSON string,
+        // not a date.
+        if (dateFields.includes(field as keyof T)) {
+          const range = parseDateRange(rule.value);
+          if (range && (range.start || range.end)) {
+            const rangeCondition: Record<string, string> = {};
+            if (range.start) rangeCondition.$gte = range.start;
+            if (range.end) rangeCondition.$lte = range.end;
+            filterConditions.push({ [field]: rangeCondition });
+            return;
+          }
+        }
 
         const converted = convertFilterValue(field, rule.value, options);
         if (converted === undefined) return;

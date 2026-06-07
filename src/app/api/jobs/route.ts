@@ -52,7 +52,13 @@ async function connectToDatabase(): Promise<{ client: MongoClient; db: Db; colle
 }
 
 function convertFilterValue(field: string, value: unknown) {
-    if (value === undefined || value === null) return undefined;
+    // Skip empty values across every type — without this guard, an empty
+    // currency input would coerce via Number('') === 0 and silently apply a
+    // `field = 0` filter; an empty boolean falls through to `false` and
+    // hides every "Yes" row. Empty = "no filter," not "= 0 / = false".
+    // Date-range JSON ('{"start":"...","end":"..."}') is intentionally NOT
+    // pre-checked here — the GET handler parses it before calling this.
+    if (value === undefined || value === null || value === '') return undefined;
 
     if (booleanFields.has(field as keyof JobRow)) {
         return value === true || value === 'true' || value === '1';

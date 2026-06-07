@@ -1,12 +1,53 @@
 'use client';
 
 import { FiChevronDown, FiPlus, FiX, FiTrash2, FiRefreshCw } from 'react-icons/fi';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import type { ColumnConfig } from '@/app/utils/jobUtils';
 import { EntityFilterRule } from './types';
 import './EntityTableFilters.css';
+
+// Which operators are meaningful per column type.
+//   • Numeric (currency/number) — text operators silently collapse to `$eq`
+//     on the backend, which is misleading ("Contains 5" looking like it
+//     would match 5/50/150 but actually matching only 5). Restrict to
+//     comparison operators so the dropdown matches what the backend does.
+//   • Boolean/select — only equality is meaningful.
+//   • Date — the operator dropdown is hidden entirely; the DateRangePicker
+//     covers single-day and range selections via JSON-encoded value.
+//   • Text/default — full string-operator set.
+const ALL_OPERATORS = [
+    { value: 'contains',   label: 'Contains' },
+    { value: 'equals',     label: 'Equals' },
+    { value: 'startsWith', label: 'Starts With' },
+    { value: 'endsWith',   label: 'Ends With' },
+    { value: 'gt',         label: 'Greater >' },
+    { value: 'lt',         label: 'Less <' },
+    { value: 'gte',        label: 'Greater >=' },
+    { value: 'lte',        label: 'Less <=' },
+] as const;
+
+type OpValue = (typeof ALL_OPERATORS)[number]['value'];
+
+const NUMERIC_OPS: OpValue[]    = ['equals', 'gt', 'lt', 'gte', 'lte'];
+const TEXT_OPS: OpValue[]       = ['contains', 'equals', 'startsWith', 'endsWith'];
+const EQUALITY_ONLY_OPS: OpValue[] = ['equals'];
+
+const operatorsForType = (type?: string): OpValue[] => {
+    switch (type) {
+        case 'currency':
+        case 'number':
+            return NUMERIC_OPS;
+        case 'boolean':
+        case 'select':
+            return EQUALITY_ONLY_OPS;
+        default:
+            return TEXT_OPS;
+    }
+};
+
+const defaultOperatorForType = (type?: string): OpValue => operatorsForType(type)[0];
 
 type EntityTableFiltersProps<T> = {
     activeFiltersCount: number;
@@ -105,6 +146,33 @@ export function EntityTableFilters<T>({
         }
         setFiltersOpen((v) => !v);
     };
+
+    // Auto-correct stale operators when the column type for a filter row
+    // changes underneath them. Example: user picks the text "Address" column
+    // with operator "Contains", then switches the field to "LM Parts"
+    // (currency). "Contains" is no longer a valid operator for a number, so
+    // we silently swap to the type's default (`equals` for numbers). Without
+    // this the backend would convert "contains" to `$eq` anyway, but the
+    // dropdown UI would still read "Contains" — a confusing mismatch.
+    const columnsByKey = useMemo(() => {
+        const map = new Map<string, ColumnConfig<T>>();
+        filterableColumns.forEach((c) => map.set(String(c.key), c));
+        return map;
+    }, [filterableColumns]);
+
+    useEffect(() => {
+        filters.forEach((filter) => {
+            if (!filter.field) return;
+            const col = columnsByKey.get(String(filter.field));
+            // Date fields don't surface the operator dropdown — backend has
+            // special-case date logic — so leave their operators alone.
+            if (!col || col.type === 'date') return;
+            const valid = operatorsForType(col.type);
+            if (!valid.includes(filter.operator as OpValue)) {
+                updateFilterOperator(filter.id, defaultOperatorForType(col.type));
+            }
+        });
+    }, [filters, columnsByKey, updateFilterOperator]);
 
     return (
         <div className="filters-inline relative" ref={filtersRef}>
@@ -222,11 +290,18 @@ export function EntityTableFilters<T>({
                                     </select>
 
                                     {(() => {
-                                        const col = filterableColumns.find(c => c.key === filter.field);
+                                        const col = columnsByKey.get(String(filter.field));
                                         const isDateField = col?.type === 'date';
 
                                         // Hide operator for date fields
                                         if (isDateField) return null;
+
+                                        // Restrict the dropdown to operators that are meaningful
+                                        // for this column type. The auto-correct effect above keeps
+                                        // `filter.operator` in sync with the type, so the rendered
+                                        // value is guaranteed to be one of the visible options.
+                                        const validOps = operatorsForType(col?.type);
+                                        const visibleOps = ALL_OPERATORS.filter((op) => validOps.includes(op.value));
 
                                         return (
                                             <select
@@ -235,14 +310,9 @@ export function EntityTableFilters<T>({
                                                 onChange={(e) => updateFilterOperator(filter.id, e.target.value)}
                                                 style={{ flex: 1 }}
                                             >
-                                                <option value="contains">Contains</option>
-                                                <option value="equals">Equals</option>
-                                                <option value="startsWith">Starts With</option>
-                                                <option value="endsWith">Ends With</option>
-                                                <option value="gt">Greater &gt;</option>
-                                                <option value="lt">Less &lt;</option>
-                                                <option value="gte">Greater &gt;=</option>
-                                                <option value="lte">Less &lt;=</option>
+                                                {visibleOps.map((op) => (
+                                                    <option key={op.value} value={op.value}>{op.label}</option>
+                                                ))}
                                             </select>
                                         );
                                     })()}
