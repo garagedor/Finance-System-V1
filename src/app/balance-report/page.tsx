@@ -10,7 +10,7 @@ import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
 import { useClickOutside } from '@/hooks/useClickOutside';
-import { FiBriefcase, FiTrendingUp, FiCheckCircle, FiPercent, FiChevronDown, FiDownload } from 'react-icons/fi';
+import { FiBriefcase, FiTrendingUp, FiCheckCircle, FiPercent, FiChevronDown, FiDownload, FiEye, FiX } from 'react-icons/fi';
 import {
   PieChart,
   Pie,
@@ -640,32 +640,46 @@ export default function BalanceReportPage() {
   const titleSubject = mode === 'tech' ? techNameForHeader : locationNameForHeader;
 
   const [pdfLoading, setPdfLoading] = useState(false);
+  // Preview-modal state. `pdfPreviewUrl` is a blob URL; while it's set
+  // the modal is open. We revoke it on close so the in-memory blob is
+  // freed (~one PDF can be several hundred KB).
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
+
+  const pdfFilename = () => {
+    const safeSubject = (titleSubject || 'Report').replace(/[^A-Za-z0-9_\- ]/g, '').trim() || 'Report';
+    return `${mode === 'tech' ? 'Tech' : 'Location'}_Report_${safeSubject}_${appliedStart}_to_${appliedEnd}.pdf`;
+  };
+
+  // Shared blob fetcher — used by both Download and Preview so the network
+  // round-trip / error handling lives in one place. Returns a Blob or null
+  // on failure (caller already showed the spinner).
+  const fetchPdfBlob = async (): Promise<Blob | null> => {
+    if (typeof window === 'undefined' || !appliedTech) return null;
+    const params = new URLSearchParams({
+      startDate: appliedStart,
+      endDate: appliedEnd,
+      tech: appliedTech,
+      mode,
+    });
+    const res = await fetch(`/api/balance-report/pdf?${params.toString()}`);
+    if (!res.ok) throw new Error(`PDF request failed: ${res.status}`);
+    return await res.blob();
+  };
 
   // Server-side PDF download — hits /api/balance-report/pdf which renders
   // a dedicated landscape A4 template (react-pdf) from the same data the
-  // dashboard uses. The previous window.print() flow rendered the visible
-  // dashboard, which dropped off-screen columns on mobile and cropped wide
-  // tables on desktop. The new flow is layout-independent and always
-  // includes every row + every column.
+  // dashboard uses. The flow is layout-independent and always includes
+  // every row + every column (the prior window.print() approach cropped
+  // off-screen columns on mobile and wide tables on desktop).
   const handleDownloadPdf = async () => {
-    if (typeof window === 'undefined' || !appliedTech) return;
     try {
       setPdfLoading(true);
-      const params = new URLSearchParams({
-        startDate: appliedStart,
-        endDate: appliedEnd,
-        tech: appliedTech,
-        mode,
-      });
-      const res = await fetch(`/api/balance-report/pdf?${params.toString()}`);
-      if (!res.ok) throw new Error(`PDF request failed: ${res.status}`);
-      const blob = await res.blob();
+      const blob = await fetchPdfBlob();
+      if (!blob) return;
       const url = URL.createObjectURL(blob);
-      const safeSubject = (titleSubject || 'Report').replace(/[^A-Za-z0-9_\- ]/g, '').trim() || 'Report';
-      const filename = `${mode === 'tech' ? 'Tech' : 'Location'}_Report_${safeSubject}_${appliedStart}_to_${appliedEnd}.pdf`;
       const a = document.createElement('a');
       a.href = url;
-      a.download = filename;
+      a.download = pdfFilename();
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -677,6 +691,53 @@ export default function BalanceReportPage() {
       setPdfLoading(false);
     }
   };
+
+  // Preview — fetch the PDF blob and open it in an in-page modal with an
+  // <iframe>. User can scroll through pages and then download from the
+  // modal's Download button (which reuses the SAME blob, no second fetch).
+  const handlePreviewPdf = async () => {
+    try {
+      setPdfLoading(true);
+      const blob = await fetchPdfBlob();
+      if (!blob) return;
+      // If a previous preview URL is still around, revoke it before
+      // replacing — otherwise we leak the underlying blob.
+      if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+      setPdfPreviewUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      console.error('Failed to preview PDF', err);
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  const closePdfPreview = () => {
+    if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl);
+    setPdfPreviewUrl(null);
+  };
+
+  // Triggered from inside the modal — re-use the already-loaded preview
+  // blob URL to download (no extra request).
+  const handleDownloadFromPreview = () => {
+    if (!pdfPreviewUrl) return;
+    const a = document.createElement('a');
+    a.href = pdfPreviewUrl;
+    a.download = pdfFilename();
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  // Esc closes the preview — matches the column / KPI popovers' UX.
+  useEffect(() => {
+    if (!pdfPreviewUrl) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closePdfPreview(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pdfPreviewUrl]);
+
+  // Free any lingering preview blob on unmount.
+  useEffect(() => () => { if (pdfPreviewUrl) URL.revokeObjectURL(pdfPreviewUrl); }, [pdfPreviewUrl]);
 
   // Display-only date formatter
   const fmtDateChip = (s: string) =>
@@ -716,7 +777,18 @@ export default function BalanceReportPage() {
               </span>
             </div>
           </div>
-          <div className="bp-header-right no-print">
+          <div className="bp-header-right no-print" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              type="button"
+              className="bp-pdf-btn"
+              onClick={handlePreviewPdf}
+              disabled={loading || pdfLoading || closedRows.length === 0 || !appliedTech}
+              title="Preview the official PDF in a modal before downloading"
+              style={{ background: 'rgba(255,255,255,0.04)', color: '#cbd5e1', borderColor: 'rgba(255,255,255,0.12)' }}
+            >
+              <FiEye size={14} />
+              {pdfLoading && !pdfPreviewUrl ? 'Loading…' : 'Preview PDF'}
+            </button>
             <button
               type="button"
               className="bp-pdf-btn"
@@ -1145,6 +1217,89 @@ export default function BalanceReportPage() {
         </div>
 
       </div>
+
+      {/* ── PDF preview modal ─────────────────────────────────────────
+          Inline modal with an iframe over the blob URL. The iframe
+          uses the browser's built-in PDF viewer so the user can scroll,
+          zoom, and download from there — or hit the Download button at
+          the top to grab it via the same blob (no second network call). */}
+      {pdfPreviewUrl && (
+        <div
+          className="no-print"
+          onClick={closePdfPreview}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(2, 6, 23, 0.78)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'stretch',
+            justifyContent: 'center',
+            padding: '4vh 4vw',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              flex: 1,
+              background: '#0a0f1c',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: 10,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              boxShadow: '0 18px 60px rgba(0,0,0,0.55)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 18px',
+                background: '#111827',
+                borderBottom: '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 11, color: '#818cf8', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700 }}>
+                  PDF Preview
+                </span>
+                <span style={{ fontSize: 14, color: '#f1f5f9', fontWeight: 600, marginTop: 2 }}>
+                  {mode === 'tech' ? 'Tech' : 'Location'} Report — {titleSubject || '—'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={handleDownloadFromPreview}
+                  className="bp-pdf-btn"
+                  title="Download this PDF"
+                >
+                  <FiDownload size={14} />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  onClick={closePdfPreview}
+                  className="bp-pdf-btn"
+                  title="Close preview (Esc)"
+                  style={{ background: 'rgba(255,255,255,0.04)', color: '#cbd5e1', borderColor: 'rgba(255,255,255,0.12)' }}
+                >
+                  <FiX size={14} />
+                  Close
+                </button>
+              </div>
+            </div>
+            <iframe
+              title="PDF preview"
+              src={pdfPreviewUrl}
+              style={{ flex: 1, width: '100%', border: 'none', background: '#0a0f1c' }}
+            />
+          </div>
+        </div>
+      )}
     </main>
   );
 }
