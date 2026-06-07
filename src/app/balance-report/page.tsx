@@ -962,6 +962,14 @@ export default function BalanceReportPage() {
                       <span className="bp-snap-label">↳ LM Check</span>
                       <span className="bp-snap-value">{formatCurrency(closedTotals.lmCheck)}</span>
                     </li>
+                    {/* Tech under the location is part of the location structure
+                        for cash holding — surface it alongside lm_cash/lm_check
+                        so the breakdown reconciles with the LM Owes Company
+                        total. */}
+                    <li style={{ paddingLeft: 16, opacity: 0.75 }}>
+                      <span className="bp-snap-label">↳ Tech Cash</span>
+                      <span className="bp-snap-value">{formatCurrency(closedTotals.techPaidCash)}</span>
+                    </li>
                     <li>
                       <span className="bp-snap-label">Company Owes LM</span>
                       <span className="bp-snap-value" style={{ color: closedTotals.companyOwesLm > 0 ? '#a78bfa' : undefined }}>
@@ -1095,7 +1103,14 @@ export default function BalanceReportPage() {
                           in location mode (the `balance` field is now
                           mode-aware on the server). Relabel so the header
                           matches what's actually being displayed. */}
-                      {c.key === 'co-tech' && mode === 'location' ? 'Co.↔LM' : c.label}
+                      {c.key === 'co-tech' && mode === 'location'
+                        ? 'Co.↔LM'
+                        : c.key === 'lm-co' && mode === 'location'
+                          // In location mode this field is lm_cash + lm_check
+                          // + tech_cash — i.e. everything the LM-side (LM +
+                          // their tech) is holding for the company.
+                          ? 'Loc→Co.'
+                          : c.label}
                     </th>
                   ))}
                 </tr>

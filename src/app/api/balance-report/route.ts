@@ -121,7 +121,15 @@ export async function GET(req: NextRequest) {
       const shareAmount = mode === 'location' ? calc.locationShare : calc.techShare;
       const balance = mode === 'location' ? calc.locationBalance : calc.techBalance;
 
-      const lmOwesCompany = calcLmOwesCompany(job);
+      // What the LM-side owes the company. In location mode we include
+      // tech_cash too: the technician sits inside the location structure for
+      // cash-collection accounting, so cash the tech kept is "held by the
+      // location side" and is owed back to the company. In tech mode we keep
+      // the literal calcLmOwesCompany (lm_cash + lm_check only) — there
+      // tech_cash sits in the tech ↔ company column instead.
+      const lmOwesCompany = mode === 'location'
+        ? calcLmOwesCompany(job) + toNumber(job.techPaidCash)
+        : calcLmOwesCompany(job);
       // Location-mode only: what the company owes the LM = their location-%
       // payout plus parts the LM fronted on the job.
       const companyOwesLm = mode === 'location' ? calc.locationShare + toNumber(job.lmParts) : 0;
