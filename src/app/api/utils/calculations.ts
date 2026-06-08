@@ -356,16 +356,18 @@ export const calcFinalBalance = (shareAmount: number, techParts: number, techPai
 //   3. tech_share     = total_profit × tech_percentage
 //   4. location_share = total_profit × location_percentage
 //   5a. tech_balance           = tech_share + tech_parts − tech_cash
-//   5b. tech_balance_with_tips (display) = display(tech_balance) + tips
+//   5b. tech_balance_with_tips (display) = display(tech_balance) − tips
 //   6a. location_balance           = location_share + tech_parts + lm_parts
 //                                    − lm_cash − lm_check − tech_cash
-//   6b. location_balance_with_tips (display) = display(location_balance) + tips
+//   6b. location_balance_with_tips (display) = display(location_balance) − tips
 //
-// Important: tips are INFORMATIONAL ONLY on the *_balance_with_tips
-// fields. Tips do NOT enter any settlement / payout / company-liability
-// calculation. Customers pay tips directly to the tech; the company
-// never holds tip money. The +Tips view simply lets the subject (tech or
-// LM) see total job economics for the period.
+// Tips logic: tips are money owed to the technician. If the company /
+// LM is holding tips (collected via card / finance / check), those add
+// to whatever's already owed to the tech. With the sign convention
+// (negative = company owes), subtracting tips from the displayed
+// balance moves it FURTHER negative — i.e. more total owed to the tech.
+// Tech Payout, Balance, and any settlement / company-liability number
+// remain untouched; +Tips is informational on top of Balance.
 //
 // Why tech_parts appears in BOTH balances (locked 2026-06-07): the Area
 // Manager pays the technician — including tech parts reimbursement — out of
@@ -471,14 +473,17 @@ export const calcJobBalances = (
     techParts -     // tech-fronted parts: company reimburses the tech (+)
     techCash;       // cash the tech kept: reduces what company still owes (−)
 
-  // Step 5b — tech_balance + tips (informational view ONLY).
-  //   Per business rule (locked 2026-06-08): tips are NOT a settlement
-  //   amount. Customer paid the tip directly to the tech; the company
-  //   never holds it. "Balance + Tips" is purely "Displayed Balance +
-  //   Total Tips" arithmetic for visibility.
-  //   To get `display = display(balance) + tips` after the boundary flip
-  //   below (negation), we subtract tips here.
-  const techBalanceWithTips = techBalance - tipsTotal;
+  // Step 5b — tech_balance + tips.
+  //   Rule (clarified 2026-06-08, revised): tips are money owed to the
+  //   technician. If the company is holding tips (collected on a card /
+  //   finance / check rail), those amounts pile on top of whatever the
+  //   company already owes the tech. So the tip is added to the
+  //   "subject's claim" side here, which after the boundary sign-flip
+  //   below produces:
+  //       displayed(balanceWithTips) = displayed(balance) − tipsTotal
+  //   i.e. when balance is negative (company owes tech), adding tips
+  //   moves it FURTHER negative — more total owed to the tech.
+  const techBalanceWithTips = techBalance + tipsTotal;
 
   // Step 6a — location_balance. lm_parts is added because the LM personally
   //   fronted those parts and they get reimbursed on top of their profit
@@ -495,13 +500,16 @@ export const calcJobBalances = (
     techCash;
 
   // Step 6b — location_balance + tips (informational view ONLY).
-  //   Rule (clarified 2026-06-08): tips do NOT affect any LM-side
-  //   settlement, payout, or company liability calculation. The AM does
-  //   not receive tips. We surface the figure so the AM can see total
-  //   job economics for the period:
-  //       Display Location Balance + Tips = Display Location Balance + Tips
-  //   Same literal-addition formula as Tech mode — no per-mode mixing.
-  const locationBalanceWithTips = locationBalance - tipsTotal;
+  //   Tips do NOT affect any LM-side settlement, payout, or company
+  //   liability. The AM does not receive tips — tips belong to the tech.
+  //   When the LM/company is holding tip money on behalf of the tech, the
+  //   total amount the company owes for the period (LM payout + tips owed
+  //   to the tech) is the sum. Same formula as tech mode — tips ADD to
+  //   the "owed by company" side here, which after the boundary flip below
+  //   produces:
+  //       displayed(balanceWithTips) = displayed(balance) − tipsTotal
+  //   i.e. negative balance gets more negative when tips are folded in.
+  const locationBalanceWithTips = locationBalance + tipsTotal;
 
   // ── Final display-sign flip (locked 2026-06-08) ─────────────────────
   // Business meaning: positive = subject OWES company, negative = company

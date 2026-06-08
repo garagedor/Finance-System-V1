@@ -207,14 +207,14 @@ const COLUMN_GROUPS: ColGroup[] = [
         key: 'balance-with-tips', label: 'Balance + Tips',
         renderBody: (j) => (
           <td key="balance-with-tips"
-              title={`Balance ${formatCurrency(j.balance)} + Tips ${formatCurrency(j.tipsTotal)}`}
+              title={`Includes Net Tip of ${formatCurrency(j.tipsTotal)} owed to the technician`}
               style={{ color: j.balanceWithTips > 0 ? '#34d399' : j.balanceWithTips < 0 ? '#f87171' : undefined, fontWeight: j.balanceWithTips !== 0 ? 600 : undefined }}>
             {formatCurrency(j.balanceWithTips)}
           </td>
         ),
         renderTotal: (t) => (
           <td key="balance-with-tips"
-              title={`Balance ${formatCurrency(t.balance)} + Tips ${formatCurrency(t.tipsTotal)}`}
+              title={`Includes Net Tips of ${formatCurrency(t.tipsTotal)} owed to the technician`}
               style={{ color: t.balanceWithTips > 0 ? '#34d399' : t.balanceWithTips < 0 ? '#f87171' : undefined }}>
             {formatCurrency(t.balanceWithTips)}
           </td>
@@ -1085,7 +1085,7 @@ export default function BalanceReportPage() {
                         closedTotals.balanceWithTips > 0 ? '#34d399' :
                         closedTotals.balanceWithTips < 0 ? '#f87171' : undefined,
                     }}
-                    title={`Balance ${formatCurrency(closedTotals.balance)} + Tips ${formatCurrency(closedTotals.tipsTotal)}`}
+                    title={`Includes Net Tips of ${formatCurrency(closedTotals.tipsTotal)} owed to the technician`}
                   >
                     {formatCurrency(closedTotals.balanceWithTips)}
                   </span>
