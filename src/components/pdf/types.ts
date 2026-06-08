@@ -20,6 +20,8 @@ export type PdfRow = {
     totalProfit: number;
     shareAmount: number;
     techPaidCash: number;
+    tipsGross: number;
+    tipsFee: number;
     tipsTotal: number;
     balance: number;
     balanceWithTips: number;
@@ -40,6 +42,8 @@ export type PdfTotals = {
     totalProfit: number;
     shareAmount: number;
     techPaidCash: number;
+    tipsGross: number;
+    tipsFee: number;
     tipsTotal: number;
     balance: number;
     balanceWithTips: number;

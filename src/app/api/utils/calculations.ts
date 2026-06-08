@@ -73,6 +73,26 @@ export const calcTipsTotal = (job: Partial<JobRow>, opts: TipsOptions = {}) => {
   );
 };
 
+// Gross tip — sum of every tip kind at face value, BEFORE any processor
+// fee. Used by the new Tips table section so the reader can see Tip → Fee
+// → Net Tip side-by-side. (calcTipsTotal returns the Net figure.)
+export const calcTipsGross = (job: Partial<JobRow>) =>
+  toNumber(job.tipsCard) +
+  toNumber(job.tipsFinance) +
+  toNumber(job.tipsCompanyCash) +
+  toNumber(job.tipsCheck);
+
+// Processor fee on tips per the payment-method-specific schedule:
+//   Card           5%   (tipsCard)
+//   Finance       10%   (tipsFinance — same fee schedule as job finance)
+//   Company Check 10%   (tipsCheck)
+//   Cash           0%   (tipsCompanyCash — paid directly, no rail)
+//   LM Check       0%   (no tipsLMCheck field exists; N/A)
+export const calcTipsFee = (job: Partial<JobRow>) =>
+  toNumber(job.tipsCard) * 0.05 +
+  toNumber(job.tipsFinance) * 0.1 +
+  toNumber(job.tipsCheck) * 0.1;
+
 export const calcJobProfit = (paidSum: number, parts: number) => toNumber(paidSum) - toNumber(parts);
 
 // Standard share calculation used in most reports: (profit * percent / 100)
@@ -394,7 +414,11 @@ export type JobBalanceComputation = {
   jobTotal: number;
   /** job_total − payment_fee − parts. The share-eligible amount. */
   totalProfit: number;
-  /** Net-of-processor-fee tip total (already discounted for card / finance / check tips). */
+  /** Gross tip — face-value sum of every tip kind, before any processor fee. */
+  tipsGross: number;
+  /** Processor-fee on tips (5% card / 10% finance / 10% companyCheck / 0% cash). */
+  tipsFee: number;
+  /** Net tip — gross minus fee. Used by Balance + Tips. */
   tipsTotal: number;
   /** total_profit × tech_percentage / 100. */
   techShare: number;
@@ -426,8 +450,11 @@ export const calcJobBalances = (
   // Steps 3 & 4
   const techShare = calcStandardShare(totalProfit, techPercentage);
   const locationShare = calcStandardShare(totalProfit, locationPercentage);
-  // Tips are net of processor fees (tipsCard × 0.95 etc.) — they apply only
-  // to the technician balance.
+  // Tips — gross, fee, and net all exposed so the table can show the
+  // breakdown side-by-side. Net is what the tech actually keeps and what
+  // Balance + Tips folds in.
+  const tipsGross = calcTipsGross(job);
+  const tipsFee   = calcTipsFee(job);
   const tipsTotal = calcTipsTotal(job, { includeCheck: true, includeCompanyCashBonus: true });
 
   const techCash = toNumber(job.techPaidCash);
@@ -490,6 +517,8 @@ export const calcJobBalances = (
     parts,
     jobTotal,
     totalProfit,
+    tipsGross,
+    tipsFee,
     tipsTotal,
     techShare,
     locationShare,

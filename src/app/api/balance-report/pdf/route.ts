@@ -86,7 +86,8 @@ const buildRowsAndTotals = (
         rowCount: 0,
         paidSum: 0, techParts: 0, companyParts: 0, lmParts: 0,
         lmCash: 0, lmCheck: 0, paymentFee: 0, totalProfit: 0,
-        shareAmount: 0, techPaidCash: 0, tipsTotal: 0,
+        shareAmount: 0, techPaidCash: 0,
+        tipsGross: 0, tipsFee: 0, tipsTotal: 0,
         balance: 0, balanceWithTips: 0,
     };
 
@@ -143,6 +144,8 @@ const buildRowsAndTotals = (
             totalProfit: toNumber(calc.totalProfit),
             shareAmount: toNumber(shareAmount),
             techPaidCash: toNumber(job.techPaidCash || 0),
+            tipsGross: toNumber(calc.tipsGross),
+            tipsFee:   toNumber(calc.tipsFee),
             tipsTotal: toNumber(calc.tipsTotal),
             balance: toNumber(balance),
             balanceWithTips: toNumber(balanceWithTips),
@@ -161,6 +164,8 @@ const buildRowsAndTotals = (
         totals.totalProfit += row.totalProfit;
         totals.shareAmount += row.shareAmount;
         totals.techPaidCash += row.techPaidCash;
+        totals.tipsGross += row.tipsGross;
+        totals.tipsFee += row.tipsFee;
         totals.tipsTotal += row.tipsTotal;
         totals.balance += row.balance;
         totals.balanceWithTips += row.balanceWithTips;

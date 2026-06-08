@@ -41,6 +41,8 @@ type BalanceRow = {
   totalPaidCompanyCheck: number;
   totalPaidFinance: number;
   totalPaidCompanyCash: number;
+  tipsGross: number;
+  tipsFee: number;
   tipsTotal: number;
   /** Net settlement (excludes tips). Positive = company owes the subject. */
   balance: number;
@@ -83,6 +85,7 @@ type ColKey =
   | 'job-total' | 'tech-parts' | 'company-parts' | 'payment-fee' | 'total-profit'
   | 'lm-parts' | 'lm-cash' | 'lm-check'
   | 'tech-payout' | 'cash'
+  | 'tip-gross' | 'tip-fee' | 'tip-net'
   | 'balance' | 'balance-with-tips';
 
 type PresetId = 'admin' | 'tech' | 'lm' | 'custom';
@@ -100,6 +103,8 @@ type ClosedTotalsShape = {
   techPaidCash: number;
   balance: number;
   balanceWithTips: number;
+  tipsGross: number;
+  tipsFee: number;
   tipsTotal: number;
   lmOwesCompany: number;
   companyOwesLm: number;
@@ -112,7 +117,7 @@ type ColDef = {
   renderTotal: ((t: ClosedTotalsShape) => ReactNode) | null;
 };
 
-type ColGroupId = 'meta' | 'cost' | 'lm' | 'payout' | 'settle';
+type ColGroupId = 'meta' | 'cost' | 'lm' | 'payout' | 'tips' | 'settle';
 type ColGroup = { id: ColGroupId; label: string; cssClass: string; cols: ColDef[] };
 
 const renderApprovalsCell = (job: BalanceRow): ReactNode => {
@@ -168,6 +173,21 @@ const COLUMN_GROUPS: ColGroup[] = [
     ],
   },
   {
+    // Tips section (added 2026-06-08).
+    //   Tip      = gross tip collected from the customer, all kinds.
+    //   Fee      = processor fee on the tip only — card 5% / finance 10% /
+    //              companyCheck 10% / cash 0% / LM check 0%.
+    //   Net Tip  = Tip − Fee. This is what Balance + Tips folds in.
+    // Tips belong 100% to the technician; they do NOT affect Tech Payout,
+    // Balance, settlement, or any company-liability number.
+    id: 'tips', label: 'Tips', cssClass: 'bp-group-meta',
+    cols: [
+      { key: 'tip-gross', label: 'Tip',     renderBody: (j) => <td key="tip-gross">{formatCurrency(j.tipsGross)}</td>, renderTotal: (t) => <td key="tip-gross">{formatCurrency(t.tipsGross)}</td> },
+      { key: 'tip-fee',   label: 'Fee',     renderBody: (j) => <td key="tip-fee">{formatCurrency(j.tipsFee)}</td>,     renderTotal: (t) => <td key="tip-fee">{formatCurrency(t.tipsFee)}</td> },
+      { key: 'tip-net',   label: 'Net Tip', renderBody: (j) => <td key="tip-net">{formatCurrency(j.tipsTotal)}</td>,   renderTotal: (t) => <td key="tip-net">{formatCurrency(t.tipsTotal)}</td> },
+    ],
+  },
+  {
     // Simplified Settlements (locked 2026-06-07): only Balance and Balance +
     // Tips. The directional Co.↔Tech / LM→Co. / Co.→LM / Tips columns were
     // removed — they made the report harder to read. Underlying calculations
@@ -208,8 +228,8 @@ const ALL_COL_KEYS: ColKey[] = COLUMN_GROUPS.flatMap((g) => g.cols.map((c) => c.
 
 const PRESET_VISIBLE: Record<Exclude<PresetId, 'custom'>, ColKey[]> = {
   admin: ALL_COL_KEYS,
-  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'tech-payout', 'cash', 'balance', 'balance-with-tips'],
-  lm:    ['date', 'address', 'job-total', 'lm-parts', 'lm-cash', 'lm-check', 'balance'],
+  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'tech-payout', 'cash', 'tip-gross', 'tip-fee', 'tip-net', 'balance', 'balance-with-tips'],
+  lm:    ['date', 'address', 'job-total', 'lm-parts', 'lm-cash', 'lm-check', 'tip-gross', 'tip-net', 'balance'],
 };
 
 const PRESET_LABELS: Record<PresetId, string> = {
@@ -553,6 +573,8 @@ export default function BalanceReportPage() {
           acc.techPaidCash += r.techPaidCash || 0;
           acc.balance += r.balance || 0;
           acc.balanceWithTips += r.balanceWithTips || 0;
+          acc.tipsGross += r.tipsGross || 0;
+          acc.tipsFee += r.tipsFee || 0;
           acc.tipsTotal += r.tipsTotal || 0;
           acc.lmOwesCompany += r.lmOwesCompany || 0;
           acc.companyOwesLm += r.companyOwesLm || 0;
@@ -571,6 +593,8 @@ export default function BalanceReportPage() {
           techPaidCash: 0,
           balance: 0,
           balanceWithTips: 0,
+          tipsGross: 0,
+          tipsFee: 0,
           tipsTotal: 0,
           lmOwesCompany: 0,
           companyOwesLm: 0,

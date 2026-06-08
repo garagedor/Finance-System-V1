@@ -33,10 +33,14 @@ const COLS = [
     { key: 'paymentFee',   label: 'Pay Fee',     flex: 5, align: 'right' as const, kind: 'currency' as const },
     { key: 'totalProfit',  label: 'Profit',      flex: 6, align: 'right' as const, kind: 'currency' as const },
     { key: 'shareAmount',  label: 'Payout',      flex: 6, align: 'right' as const, kind: 'currency' as const },
-    { key: 'techPaidCash', label: 'Cash',        flex: 6, align: 'right' as const, kind: 'currency' as const },
-    { key: 'tipsTotal',    label: 'Tips',        flex: 5, align: 'right' as const, kind: 'currency' as const },
-    { key: 'balance',         label: 'Balance',         flex: 7, align: 'right' as const, kind: 'balance' as const },
-    { key: 'balanceWithTips', label: 'Bal. + Tips',     flex: 8, align: 'right' as const, kind: 'balance' as const },
+    { key: 'techPaidCash', label: 'Cash',        flex: 5, align: 'right' as const, kind: 'currency' as const },
+    // Tips section (added 2026-06-08) — Tip | Fee | Net Tip.
+    // Net Tip is what Balance + Tips folds in; Fee = Tip − Net Tip.
+    { key: 'tipsGross',    label: 'Tip',         flex: 5, align: 'right' as const, kind: 'currency' as const },
+    { key: 'tipsFee',      label: 'Fee',         flex: 4, align: 'right' as const, kind: 'currency' as const },
+    { key: 'tipsTotal',    label: 'Net Tip',     flex: 5, align: 'right' as const, kind: 'currency' as const },
+    { key: 'balance',         label: 'Balance',         flex: 6, align: 'right' as const, kind: 'balance' as const },
+    { key: 'balanceWithTips', label: 'Bal. + Tips',     flex: 7, align: 'right' as const, kind: 'balance' as const },
 ];
 
 const formatCell = (row: PdfRow, col: typeof COLS[number]) => {

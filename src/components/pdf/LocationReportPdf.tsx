@@ -39,9 +39,13 @@ const COLS = [
     { key: 'lmCash',          label: 'LM Cash',      flex: 5,  align: 'right' as const, kind: 'currency' as const },
     { key: 'lmCheck',         label: 'LM Check',     flex: 5,  align: 'right' as const, kind: 'currency' as const },
     { key: 'techPaidCash',    label: 'Tech Cash',    flex: 5,  align: 'right' as const, kind: 'currency' as const },
-    { key: 'tipsTotal',       label: 'Tips (info)',  flex: 5,  align: 'right' as const, kind: 'currency' as const },
+    // Tips section — informational only on Location report (tips never
+    // flow to the LM); shown so the AM can see total tech tip activity.
+    { key: 'tipsGross',       label: 'Tip',          flex: 4,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'tipsFee',         label: 'Fee',          flex: 4,  align: 'right' as const, kind: 'currency' as const },
+    { key: 'tipsTotal',       label: 'Net Tip',      flex: 5,  align: 'right' as const, kind: 'currency' as const },
     { key: 'balance',         label: 'Balance',      flex: 6,  align: 'right' as const, kind: 'balance' as const },
-    { key: 'balanceWithTips', label: 'Bal. + Tips',  flex: 7,  align: 'right' as const, kind: 'balance' as const },
+    { key: 'balanceWithTips', label: 'Bal. + Tips',  flex: 6,  align: 'right' as const, kind: 'balance' as const },
 ];
 
 const formatCell = (row: PdfRow, col: typeof COLS[number]) => {
