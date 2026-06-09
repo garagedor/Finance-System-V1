@@ -4,13 +4,13 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  FiLogOut, FiUser, FiHome, FiGrid, FiBarChart2,
+  FiLogOut, FiUser, FiHome, FiGrid, FiBarChart2, FiShield,
   FiDollarSign, FiFileText, FiChevronLeft, FiChevronRight, FiMenu, FiPieChart, FiCreditCard, FiCheckSquare,
 } from 'react-icons/fi';
 import LoginPage from './LoginPage';
 import type { AuthUser } from '@/types/user';
 
-type NavLink = { href: string; label: string };
+type NavLink = { href: string; label: string; adminOnly?: boolean };
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -35,6 +35,8 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number; className?:
   '/finance': FiPieChart,
   '/payment-method-report': FiCreditCard,
   '/verify-reports': FiCheckSquare,
+  '/admin/users': FiShield,
+  '/admin/roles': FiShield,
 };
 
 const PAGE_TITLES: Record<string, { title: string; section: string }> = {
@@ -48,6 +50,8 @@ const PAGE_TITLES: Record<string, { title: string; section: string }> = {
   '/verify-reports':         { title: 'Verify Reports',        section: 'Verification' },
   '/verify-reports/mappings':{ title: 'Identity Mappings',     section: 'Verification' },
   '/verify-reports/week-control':{ title: 'Week Control',     section: 'Verification' },
+  '/admin/users':            { title: 'Users',                 section: 'Administration' },
+  '/admin/roles':            { title: 'Roles',                 section: 'Administration' },
 };
 
 export function AuthShell({ children, navLinks }: { children: React.ReactNode; navLinks: NavLink[] }) {
@@ -163,11 +167,14 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
             )}
           </div>
 
-          {/* Nav */}
+          {/* Nav — adminOnly links are filtered out for non-admins so
+              the Admin section is only visible when relevant. */}
           <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-0.5">
-            {navLinks.map((link) => {
+            {navLinks
+              .filter((link) => !link.adminOnly || user.type === 'admin')
+              .map((link) => {
               const Icon = NAV_ICONS[link.href] || FiGrid;
-              const isActive = pathname === link.href;
+              const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
               return (
                 <Link
                   key={link.href}

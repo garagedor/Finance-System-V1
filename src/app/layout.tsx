@@ -27,6 +27,7 @@ export default function RootLayout({
     { href: "/finance", label: "Finance" },
     { href: "/payment-method-report", label: "Payment Methods" },
     { href: "/verify-reports", label: "Verify Reports" },
+    { href: "/admin/users", label: "Admin", adminOnly: true },
   ];
 
   return (
