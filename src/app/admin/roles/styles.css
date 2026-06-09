@@ -1,0 +1,313 @@
+/* Roles + shared admin styling extensions. The base .adm-* classes come
+ * from /admin/users/styles.css which we extend here with the tab nav,
+ * roles-table, and the permission-matrix grid. */
+
+@import "../users/styles.css";
+
+.adm-tabs {
+    display: flex;
+    gap: 4px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 0;
+}
+
+.adm-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    border-radius: 8px 8px 0 0;
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-bottom: none;
+    transition: background 0.15s, color 0.15s;
+}
+
+.adm-tab:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #cbd5e1;
+}
+
+.adm-tab--active {
+    background: #1a2236;
+    color: #f1f5f9;
+    border-color: rgba(255, 255, 255, 0.1);
+    border-bottom-color: #1a2236;
+    margin-bottom: -1px;
+}
+
+/* ── Roles table ────────────────────────────────────────────────────── */
+
+.adm-roles-table {
+    width: 100%;
+    border-collapse: collapse;
+    color: #e2e8f0;
+}
+
+.adm-roles-table thead th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.adm-roles-table tbody td {
+    padding: 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 13px;
+    vertical-align: middle;
+}
+
+.adm-roles-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.adm-role-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.adm-role-icon {
+    color: #818cf8;
+    flex-shrink: 0;
+}
+
+.adm-role-desc {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 2px;
+}
+
+.adm-role-key {
+    background: rgba(99, 102, 241, 0.1);
+    color: #a5b4fc;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'SFMono-Regular', Monaco, 'Cascadia Code', 'Courier New', monospace;
+    font-size: 11px;
+}
+
+.adm-perm-count {
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 12px;
+}
+
+.adm-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.adm-badge--system {
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.adm-badge--custom {
+    background: rgba(99, 102, 241, 0.12);
+    color: #a5b4fc;
+    border: 1px solid rgba(99, 102, 241, 0.25);
+}
+
+.adm-btn--small {
+    padding: 6px 12px;
+    font-size: 12px;
+    text-decoration: none;
+}
+
+.adm-btn--danger {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.3);
+}
+.adm-btn--danger:hover { background: rgba(248, 113, 113, 0.08); }
+
+.adm-back {
+    color: #818cf8;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.adm-back:hover { text-decoration: underline; }
+
+.adm-flash {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    color: #6ee7b7;
+    padding: 8px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.adm-meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 2fr;
+    gap: 14px;
+}
+@media (max-width: 720px) {
+    .adm-meta-grid { grid-template-columns: 1fr; }
+}
+
+.adm-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.adm-field > span {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.adm-field input {
+    background: #0f172a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #f1f5f9;
+    font-size: 14px;
+}
+.adm-field input:focus {
+    outline: none;
+    border-color: #818cf8;
+}
+
+/* ── Permission matrix ─────────────────────────────────────────────── */
+
+.adm-perm-matrix {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.adm-perm-module {
+    background: #111827;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 16px 18px;
+}
+
+.adm-perm-module-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.adm-perm-module-head h2 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+    color: #f1f5f9;
+    flex: 1;
+}
+
+.adm-perm-section {
+    margin-bottom: 16px;
+}
+.adm-perm-section:last-child { margin-bottom: 0; }
+
+.adm-perm-section-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+.adm-perm-section-head h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    flex: 1;
+}
+
+.adm-perm-counter {
+    font-size: 11px;
+    color: #94a3b8;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-weight: 600;
+}
+.adm-perm-counter--small {
+    font-size: 10px;
+}
+
+.adm-perm-toggle {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    cursor: pointer;
+    padding: 2px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.adm-perm-toggle:hover { color: #f1f5f9; }
+.adm-perm-toggle--module { color: #818cf8; }
+
+.adm-perm-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 6px;
+}
+
+.adm-perm-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    transition: background 0.12s, border-color 0.12s;
+}
+.adm-perm-row:hover { background: rgba(255, 255, 255, 0.04); }
+.adm-perm-row--on {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.25);
+}
+
+.adm-perm-row input[type="checkbox"] {
+    accent-color: #818cf8;
+    width: 14px;
+    height: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.adm-perm-label {
+    flex: 1;
+    font-size: 12px;
+    color: #e2e8f0;
+}
+
+.adm-perm-key {
+    font-size: 10px;
+    color: #64748b;
+    font-family: 'SFMono-Regular', Monaco, 'Cascadia Code', 'Courier New', monospace;
+}
+.adm-perm-row--on .adm-perm-key { color: #94a3b8; }

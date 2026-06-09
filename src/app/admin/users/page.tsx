@@ -10,6 +10,8 @@ import EmptyState from '@/components/EmptyState';
 import type { User, UserType } from '@/types/user';
 import type { Permission } from '@/types/rbac';
 import { PERMISSION_CATALOG, MODULE_LABEL } from '@/types/rbac';
+import { AdminTabs } from '../_components/AdminTabs';
+import '../roles/styles.css';
 import './styles.css';
 
 type Role = {
@@ -130,8 +132,8 @@ export default function AdminUsersPage() {
       <div className="adm-content">
         <header className="adm-header">
           <div>
-            <p className="adm-kicker">System</p>
-            <h1 className="adm-title">Users & Permissions</h1>
+            <p className="adm-kicker">Administration</p>
+            <h1 className="adm-title">Users &amp; Roles</h1>
             <p className="adm-subtitle">Reset passwords, assign roles, enable/disable login.</p>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -149,6 +151,8 @@ export default function AdminUsersPage() {
             </button>
           </div>
         </header>
+
+        <AdminTabs />
 
         {error && (
           <div className="adm-error">
