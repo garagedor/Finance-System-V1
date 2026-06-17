@@ -18,6 +18,7 @@ type ReportSummary = {
   weekStart: string;
   weekEnd: string;
   status: string;
+  resubmitted?: boolean;
   submittedAt: string | null;
   supabaseJobCount: number;
   supabaseTotalSales: number;
@@ -443,7 +444,21 @@ function ListView({
                     </td>
                     <td>{r.areaName || '—'}</td>
                     <td>{formatDisplayDate(r.weekStart)} → {formatDisplayDate(r.weekEnd)}</td>
-                    <td>{r.status}</td>
+                    <td>
+                      {r.status}
+                      {r.resubmitted && (
+                        <span
+                          title="Returned, then edited again by the tech — treat as a re-submission"
+                          style={{
+                            marginLeft: 6, padding: '1px 6px', borderRadius: 6, fontSize: 11,
+                            fontWeight: 600, background: 'rgba(245,158,11,0.15)', color: '#fbbf24',
+                            border: '1px solid rgba(245,158,11,0.35)', whiteSpace: 'nowrap',
+                          }}
+                        >
+                          resubmitted
+                        </span>
+                      )}
+                    </td>
                     <td>{r.submittedAt ? formatDisplayDate(r.submittedAt.slice(0, 10)) : '—'}</td>
                     <td>{r.supabaseJobCount}</td>
                     <td style={{ fontWeight: 600 }}>{formatCurrency(r.supabaseTotalSales)}</td>

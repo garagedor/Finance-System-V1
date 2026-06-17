@@ -37,15 +37,28 @@ export async function GET(req: NextRequest) {
 
     const supa = await getSupabaseServerClient();
 
+    // A "resubmitted" report is one we Returned that the tech then edited again
+    // (updated_at > returned_at). The technician app currently leaves the status
+    // on 'Returned' instead of flipping it back to 'Submitted', so when the
+    // pending queue is requested we also pull Returned reports and keep only the
+    // ones edited after return — otherwise a tech's fix never comes back to us.
+    const surfaceResubmitted = statuses.includes('Submitted') && !statuses.includes('Returned');
+    const queryStatuses = surfaceResubmitted ? [...statuses, 'Returned'] : statuses;
+    const isResubmitted = (r: any): boolean =>
+      r.status === 'Returned' && !!r.returned_at && !!r.updated_at && r.updated_at > r.returned_at;
+
     // 1) Reports
-    const { data: reports, error: reportsErr } = await supa
+    const { data: reportsRaw, error: reportsErr } = await supa
       .from('weekly_reports')
-      .select('id, technician_id, area_id, week_start, week_end, status, submitted_at, total_sales')
-      .in('status', statuses)
+      .select('id, technician_id, area_id, week_start, week_end, status, submitted_at, returned_at, updated_at, total_sales')
+      .in('status', queryStatuses)
       .order('week_start', { ascending: false })
       .limit(200);
 
     if (reportsErr) throw reportsErr;
+    const reports = surfaceResubmitted
+      ? (reportsRaw || []).filter((r: any) => r.status !== 'Returned' || isResubmitted(r))
+      : (reportsRaw || []);
     if (!reports || reports.length === 0) {
       return NextResponse.json({ reports: [] });
     }
@@ -150,6 +163,7 @@ export async function GET(req: NextRequest) {
         weekStart: r.week_start,
         weekEnd: r.week_end,
         status: r.status,
+        resubmitted: isResubmitted(r),
         submittedAt: r.submitted_at,
         supabaseJobCount: roll?.count || 0,
         supabaseTotalSales: Number(r.total_sales || 0),
