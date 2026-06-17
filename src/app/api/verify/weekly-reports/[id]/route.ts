@@ -298,13 +298,42 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
 
     const supa = await getSupabaseServerClient();
-    const { data: updated, error: updateErr } = await supa
-      .from('weekly_reports')
-      .update({ status })
-      .eq('id', id)
-      .select('id, status')
-      .maybeSingle();
-    if (updateErr) throw updateErr;
+
+    // The Lovable DB enforces a status state-machine and rejects some DIRECT
+    // transitions — notably "Returned -> Approved" (a Returned report can only
+    // be re-Submitted, and the tech app doesn't always do that, so reports get
+    // stuck). Try the direct change first; if the DB rejects it, walk an
+    // allowed path (e.g. Returned -> Submitted -> Approved) server-side so a
+    // single "Approve" click works regardless of where the report is stuck.
+    const setStatus = (s: string) =>
+      supa.from('weekly_reports').update({ status: s }).eq('id', id).select('id, status').maybeSingle();
+
+    const { data: current } = await supa
+      .from('weekly_reports').select('id, status').eq('id', id).maybeSingle();
+    if (!current) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
+
+    let { data: updated, error: updateErr } = await setStatus(status);
+
+    if (updateErr && current.status !== status) {
+      // Candidate intermediate paths that END at the requested status.
+      const paths: string[][] = status === 'Approved'
+        ? [['Submitted', 'Approved'], ['Submitted', 'Under Review', 'Approved']]
+        : [['Submitted', status]];
+      let lastErr: unknown = updateErr;
+      let done = false;
+      for (const path of paths) {
+        let ok = true;
+        for (const step of path) {
+          const r = await setStatus(step);
+          if (r.error) { lastErr = r.error; ok = false; break; }
+          updated = r.data;
+        }
+        if (ok) { done = true; break; }
+      }
+      if (!done) throw lastErr;
+    } else if (updateErr) {
+      throw updateErr;
+    }
     if (!updated) return NextResponse.json({ error: 'Report not found' }, { status: 404 });
 
     // Optional admin note (kept in our Mongo, not pushed to Lovable).
