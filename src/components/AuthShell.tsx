@@ -8,6 +8,7 @@ import {
   FiDollarSign, FiFileText, FiChevronLeft, FiChevronRight, FiMenu, FiPieChart, FiCreditCard, FiCheckSquare,
 } from 'react-icons/fi';
 import LoginPage from './LoginPage';
+import SidebarClocks from './SidebarClocks';
 import type { AuthUser } from '@/types/user';
 
 type NavLink = { href: string; label: string; adminOnly?: boolean };
@@ -198,6 +199,9 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
               );
             })}
           </nav>
+
+          {/* World clocks — Indianapolis / Chicago / Israel by default */}
+          <SidebarClocks collapsed={collapsed} />
 
           {/* Collapse toggle — desktop only */}
           <div
