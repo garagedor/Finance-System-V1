@@ -60,7 +60,7 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
         const saved = localStorage.getItem(columnsKey);
         if (!saved) return null;
         try {
-            return JSON.parse(saved) as { order?: string[]; widths?: Record<string, number>; hidden?: string[] };
+            return JSON.parse(saved) as { order?: string[]; widths?: Record<string, number>; hidden?: string[]; sig?: string };
         } catch { return null; }
     }, [columnsKey]);
 
@@ -116,15 +116,22 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
         sessionStorage.setItem(persistenceKey, JSON.stringify(stateToSave));
     }, [persistenceKey, filters, logic, sortBy, sortDir, data.search]);
 
+    const columns = buildColumns(data);
+    const columnKeySignature = useMemo(() => columns.map((c) => c.key).join('|'), [columns]);
+
     useEffect(() => {
-        // Persist column layout to localStorage so it survives navigation.
+        // Persist column layout to localStorage so it survives navigation. We
+        // also stash a signature of the current column-key set so that when
+        // the entity adds/removes columns the saved layout gets invalidated
+        // on next load (instead of silently appending new columns to the end).
         const payload = {
             order: columnOrder as string[],
             widths: columnWidths,
             hidden: data.hiddenColumns,
+            sig: columnKeySignature,
         };
         localStorage.setItem(columnsKey, JSON.stringify(payload));
-    }, [columnsKey, columnOrder, columnWidths, data.hiddenColumns]);
+    }, [columnsKey, columnOrder, columnWidths, data.hiddenColumns, columnKeySignature]);
 
     useEffect(() => {
         if (snackbar) {
@@ -139,17 +146,25 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
         }
     }, [data.activeFilterLogic]);
 
-    const columns = buildColumns(data);
-    const columnKeySignature = useMemo(() => columns.map((c) => c.key).join('|'), [columns]);
-
     useEffect(() => {
         const defaultOrder = columns.map((c) => c.key);
+        const savedSig = initialColumns?.sig;
+        const savedMatchesCurrent = savedSig === columnKeySignature;
         setColumnOrder((prev) => {
+            // First mount with no saved layout — use the entity's canonical order.
             if (!prev.length) return defaultOrder;
-            const missing = defaultOrder.filter((k) => !prev.includes(k));
-            const stillValid = prev.filter((k) => defaultOrder.includes(k));
-            return [...stillValid, ...missing];
+            // Saved layout matches the current column set — preserve user's order.
+            if (savedMatchesCurrent) return prev;
+            // Column set changed (entity added/removed columns) — reset to
+            // canonical order so the new layout matches what the developer
+            // intended instead of having new columns appended at the end.
+            return defaultOrder;
         });
+        if (!savedMatchesCurrent) {
+            // Drop any stale hidden-column flags that refer to keys that no
+            // longer exist; keep flags for keys still present.
+            data.setHiddenColumns(data.hiddenColumns.filter((k) => defaultOrder.includes(k as keyof T)));
+        }
     }, [columnKeySignature]);
 
     const filterableColumns = useMemo(

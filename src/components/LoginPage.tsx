@@ -11,6 +11,8 @@ interface LoginPageProps {
 export default function LoginPage({ onLogin }: LoginPageProps) {
     const [name, setName] = useState('');
     const [password, setPassword] = useState('');
+    const [mfaCode, setMfaCode] = useState('');
+    const [mfaRequired, setMfaRequired] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -61,12 +63,17 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             const res = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name, password }),
+                body: JSON.stringify({ name, password, mfa_code: mfaRequired ? mfaCode : undefined }),
             });
 
             const data = await res.json();
 
             if (!res.ok) {
+                if (data.mfa_required) {
+                    setMfaRequired(true);
+                    setError(mfaRequired ? (data.error || 'Invalid 2FA code') : '');
+                    return;
+                }
                 setError(data.error || 'Login failed');
 
                 // If rate limited, initiate client-side lockout for 5 minutes
@@ -86,6 +93,8 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
             // Clear form and call onLogin
             setName('');
             setPassword('');
+            setMfaCode('');
+            setMfaRequired(false);
             setLockoutTime(null);
             onLogin(data);
         } catch (err) {
@@ -142,10 +151,30 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
                             placeholder="Enter your password"
-                            disabled={loading}
+                            disabled={loading || mfaRequired}
                             className="login-input w-full rounded-xl border border-white/10 bg-[#1e293b] px-4 py-3 text-sm text-white placeholder:text-slate-500 transition-all focus:border-indigo-500 focus:bg-[#1e2d45] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50"
                         />
                     </div>
+
+                    {mfaRequired && (
+                        <div className="flex flex-col gap-1.5">
+                            <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                                2FA Code
+                            </label>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                autoComplete="one-time-code"
+                                value={mfaCode}
+                                onChange={(e) => setMfaCode(e.target.value)}
+                                placeholder="6-digit code from your authenticator"
+                                disabled={loading}
+                                autoFocus
+                                className="login-input w-full rounded-xl border border-white/10 bg-[#1e293b] px-4 py-3 text-sm tracking-widest text-white placeholder:text-slate-500 transition-all focus:border-indigo-500 focus:bg-[#1e2d45] focus:outline-none focus:ring-2 focus:ring-indigo-500/20 disabled:opacity-50"
+                            />
+                            <p className="text-xs text-slate-500">Or use a backup code.</p>
+                        </div>
+                    )}
 
                     {error && (
                         <div className="flex items-start gap-2.5 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400 animate-fade-up">

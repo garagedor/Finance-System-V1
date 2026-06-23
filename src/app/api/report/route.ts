@@ -10,9 +10,8 @@ import {
   calcTotalAfterFee,
   calcStandardShare,
   calcTipsTotal,
-  calcTechShare,
-  calcProviderShare,
   calcLmOwesCompany,
+  computeChargeback,
   toNumber,
 } from '../utils/calculations';
 
@@ -332,10 +331,23 @@ export async function GET(req: NextRequest) {
 
     if (type === 'dispute') {
       const disputeCol = db.collection<Dispute>(DISPUTE_COLLECTION);
-      const disputeFilter = buildDateRangeFilter('disputeDate', startDate, endDate);
-      const disputes = await disputeCol.find(disputeFilter).toArray();
+      // Load ALL disputes — many rows have a blank `disputeDate` and would
+      // be excluded by a MongoDB date filter. We apply the date window
+      // below against the linked Job's date (with the dispute date as
+      // fallback), so disputes without their own date still surface.
+      const disputes = await disputeCol.find({}).toArray();
       const jobIds = disputes.map((d: any) => (d as any).jobId as string).filter(Boolean);
       const jobMap = await buildJobMap(jobCol, jobIds);
+
+      const inRange = (raw: string | null | undefined): boolean => {
+        if (!startDate && !endDate) return true;
+        if (!raw) return true; // no date to test against → include
+        const t = Date.parse(raw);
+        if (Number.isNaN(t)) return true;
+        if (startDate && t < startDate.getTime()) return false;
+        if (endDate && t > endDate.getTime()) return false;
+        return true;
+      };
 
       const filtered = disputes.flatMap((d: any) => {
         const dispute = d as Dispute & { _id?: any };
@@ -343,6 +355,9 @@ export async function GET(req: NextRequest) {
         const job = jobMap.get(jobId) || jobMap.get(jobId.trim()) || jobMap.get(parseObjectId(jobId)?.toString() || '');
 
         if (!filterJobByParams(job, techs, locations, providers)) return [];
+        // Filter by dispute date if set, otherwise by linked Job date.
+        const dateForRange = (dispute as any).disputeDate || job?.date || '';
+        if (!inRange(dateForRange)) return [];
 
         const {
           totalPaid,
@@ -362,9 +377,34 @@ export async function GET(req: NextRequest) {
         const status = (dispute as any).status ?? '';
         const newBalance = 0;
         const disputedShare = toNumber(newBalance) - toNumber(oldBalance);
-        const techShare = calcTechShare(netoTips, disputed, totalProfit, techProfitPercent);
-        const locationManagerShare = calcTechShare(netoTips, disputed, totalProfit, managerProfitPercent);
-        const providerShare = calcProviderShare(netoTips, disputed, totalProfit, providerPercent);
+        // Chargeback breakdown — see computeChargeback in utils/calculations.
+        // The 40%-side gets the tip + their op-rev share + any parts-loss
+        // overrun; provider/company only see op-rev share. The 40%-side is
+        // then split between the tech and the area manager by their
+        // configured payout %.
+        const gross = calcPaidSum(job!);
+        const grossTips =
+          toNumber(job!.tipsCard) + toNumber(job!.tipsFinance) +
+          toNumber(job!.tipsCompanyCash) + toNumber(job!.tipsCheck);
+        const cb = computeChargeback({
+          totalCharge: gross,
+          parts,
+          tip: grossTips,
+          refund: disputed,
+          techPct: techProfitPercent,
+          amPoolPct: managerProfitPercent,
+          providerPct: providerPercent,
+        });
+        const techShare = cb.techShare;
+        const locationManagerShare = cb.managerShare;
+        const providerShare = cb.providerShare;
+        const companyShare = cb.companyShare;
+        const amPoolShare = cb.amPoolShare;
+        // AM's net liability after notionally passing the tech's cut on —
+        // informational only. Settlement still recovers the full amPoolShare
+        // from the AM. amPoolShare ALWAYS equals locationManagerShare under
+        // the current model; we keep both for backwards compatibility.
+        const amNetPortion = amPoolShare - techShare;
 
         return [
           {
@@ -387,6 +427,10 @@ export async function GET(req: NextRequest) {
             techShare,
             locationManagerShare,
             providerShare,
+            companyShare,
+            amPoolShare,
+            amNetPortion,
+            isSubcontractor: cb.isSubcontractor,
             lmParts: toNumber(job?.lmParts || 0),
             lmCash: toNumber(job?.lmCash || 0),
             lmCheck: toNumber(job?.lmCheck || 0),
@@ -426,10 +470,21 @@ export async function GET(req: NextRequest) {
 
     // refund report
     const refundCol = db.collection<Refund>(REFUND_COLLECTION);
-    const refundFilter = buildDateRangeFilter('dateRefunded', startDate, endDate);
-    const refunds = await refundCol.find(refundFilter).toArray();
+    // Load ALL refunds, filter by date below using job-date fallback so
+    // refunds with empty `dateRefunded` still surface.
+    const refunds = await refundCol.find({}).toArray();
     const refundJobIds = refunds.map((r: any) => (r as any).jobId as string).filter(Boolean);
     const refundJobMap = await buildJobMap(jobCol, refundJobIds);
+
+    const inRefundRange = (raw: string | null | undefined): boolean => {
+      if (!startDate && !endDate) return true;
+      if (!raw) return true;
+      const t = Date.parse(raw);
+      if (Number.isNaN(t)) return true;
+      if (startDate && t < startDate.getTime()) return false;
+      if (endDate && t > endDate.getTime()) return false;
+      return true;
+    };
 
     const refundRowsAll = refunds.flatMap((r: any) => {
       const refund = r as Refund & { _id?: any };
@@ -437,6 +492,8 @@ export async function GET(req: NextRequest) {
       const job = refundJobMap.get(jobId) || refundJobMap.get(jobId.trim()) || refundJobMap.get(parseObjectId(jobId)?.toString() || '');
 
       if (!filterJobByParams(job, techs, locations, providers)) return [];
+      const dateForRange = (refund as any).dateRefunded || job?.date || '';
+      if (!inRefundRange(dateForRange)) return [];
 
       const {
         totalPaid,
@@ -456,9 +513,26 @@ export async function GET(req: NextRequest) {
       const reason = (refund as any).reason ?? '';
       const newBalance = 0;
       const disputedShare = toNumber(newBalance) - toNumber(oldBalance);
-      const techShare = calcTechShare(netoTips, refunded, totalProfit, techProfitPercent);
-      const locationManagerShare = calcTechShare(netoTips, refunded, totalProfit, managerProfitPercent);
-      const providerShare = calcProviderShare(netoTips, refunded, totalProfit, providerPercent);
+      // See computeChargeback for the full allocation logic.
+      const gross = calcPaidSum(job!);
+      const grossTips =
+        toNumber(job!.tipsCard) + toNumber(job!.tipsFinance) +
+        toNumber(job!.tipsCompanyCash) + toNumber(job!.tipsCheck);
+      const cb = computeChargeback({
+        totalCharge: gross,
+        parts,
+        tip: grossTips,
+        refund: refunded,
+        techPct: techProfitPercent,
+        amPoolPct: managerProfitPercent,
+        providerPct: providerPercent,
+      });
+      const techShare = cb.techShare;
+      const locationManagerShare = cb.managerShare;
+      const providerShare = cb.providerShare;
+      const companyShare = cb.companyShare;
+      const amPoolShare = cb.amPoolShare;
+      const amNetPortion = amPoolShare - techShare;
 
       return [
         {
@@ -481,6 +555,10 @@ export async function GET(req: NextRequest) {
           techShare,
           locationManagerShare,
           providerShare,
+          companyShare,
+          amPoolShare,
+          amNetPortion,
+          isSubcontractor: cb.isSubcontractor,
           lmParts: toNumber(job?.lmParts || 0),
           lmCash: toNumber(job?.lmCash || 0),
           lmCheck: toNumber(job?.lmCheck || 0),

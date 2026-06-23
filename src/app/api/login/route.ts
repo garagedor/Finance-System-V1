@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient, Collection } from 'mongodb';
 import bcrypt from 'bcryptjs';
-import { SignJWT } from 'jose';
 import type { User, AuthUser } from '../../../types/user';
+import { computeEffectivePermissions, signSessionToken } from '@/lib/rbac';
+import { ensureRbacReady } from '@/lib/rbac-seed';
 
 const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const USERS_COLLECTION = 'users';
-
-const JWT_SECRET = new TextEncoder().encode('super-secret-key-for-development');
 
 let cachedClient: MongoClient | null = null;
 
@@ -53,8 +52,9 @@ export async function POST(req: NextRequest) {
             }
         }
 
-        let { name, password } = await req.json();
+        let { name, password, mfa_code } = await req.json();
         name = name?.trim();
+        const mfaCode: string | undefined = typeof mfa_code === 'string' ? mfa_code.trim() : undefined;
 
         if (!name || !password) {
             return NextResponse.json(
@@ -112,20 +112,95 @@ export async function POST(req: NextRequest) {
         // Reset rate limits on successful login
         rateLimiter.delete(ip);
 
-        // Return user without password
-        const authUser: AuthUser = {
+        // Refuse login for explicitly-deactivated accounts.
+        if (user.active === false) {
+            return NextResponse.json(
+                { error: 'Account is disabled. Contact an administrator.' },
+                { status: 403 }
+            );
+        }
+
+        // Second factor: if the user has TOTP enabled, require a valid code
+        // before issuing a session. Frontend pattern: first request fails
+        // with mfa_required=true, then re-submits with mfa_code.
+        if (user.totp_enabled && user.totp_secret) {
+            const { verifyCode } = await import('@/lib/totp');
+            const bcryptLib = await import('bcryptjs');
+            if (!mfaCode) {
+                return NextResponse.json(
+                    { error: '2FA required', mfa_required: true },
+                    { status: 401 }
+                );
+            }
+            // Try TOTP first
+            const step = verifyCode({ secret: user.totp_secret, code: mfaCode });
+            let mfaOk = false;
+            if (step !== null && step !== user.totp_last_step) {
+                mfaOk = true;
+                await usersCollection.updateOne(
+                    { _id: user._id },
+                    { $set: { totp_last_step: step } }
+                ).catch(() => undefined);
+            } else if (user.totp_backup_codes && user.totp_backup_codes.length > 0) {
+                // Try a backup code; if matched, remove it.
+                for (let i = 0; i < user.totp_backup_codes.length; i++) {
+                    if (await bcryptLib.default.compare(mfaCode, user.totp_backup_codes[i])) {
+                        mfaOk = true;
+                        const remaining = [...user.totp_backup_codes];
+                        remaining.splice(i, 1);
+                        await usersCollection.updateOne(
+                            { _id: user._id },
+                            { $set: { totp_backup_codes: remaining } }
+                        ).catch(() => undefined);
+                        break;
+                    }
+                }
+            }
+            if (!mfaOk) {
+                const currentAttempts = rateLimiter.get(ip)?.attempts || 0;
+                rateLimiter.set(ip, { attempts: currentAttempts + 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+                return NextResponse.json(
+                    { error: 'Invalid 2FA code', mfa_required: true },
+                    { status: 401 }
+                );
+            }
+        }
+
+        // Ensure RBAC seeds + migration have run before we resolve permissions.
+        await ensureRbacReady();
+
+        const userType = user.type || 'simple';
+        const permissions = await computeEffectivePermissions({
+            type: userType,
+            role_id: user.role_id,
+            _id: user._id?.toString(),
+        });
+
+        // Return user without password. Include `permissions` so the client
+        // can show/hide nav items immediately after login.
+        const authUser: AuthUser & { permissions: string[] } = {
             _id: user._id?.toString(),
             name: user.name,
-            type: user.type || 'simple',
+            type: userType,
+            role_id: user.role_id,
+            active: user.active ?? true,
+            permissions,
         };
 
-        // Create JWT
-        const alg = 'HS256';
-        const jwt = await new SignJWT({ ...authUser })
-            .setProtectedHeader({ alg })
-            .setIssuedAt()
-            .setExpirationTime('7d')
-            .sign(JWT_SECRET);
+        // Stamp last login (best-effort)
+        usersCollection.updateOne(
+            { _id: user._id },
+            { $set: { last_login_at: new Date().toISOString() } }
+        ).catch(() => { /* ignore */ });
+
+        const jwt = await signSessionToken({
+            _id: user._id?.toString(),
+            name: user.name,
+            type: userType,
+            role_id: user.role_id,
+            permissions,
+            active: user.active ?? true,
+        });
 
         const response = NextResponse.json(authUser);
 

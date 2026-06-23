@@ -140,7 +140,9 @@ export async function GET(req: NextRequest) {
                             }
                         ]
                     },
-                    valCompanyParts: toNumber('$companyParts')
+                    // Total parts cost on the job — tech parts + company parts
+                    // + LM parts. The KPI label is "Parts" (all kinds).
+                    valCompanyParts: { $add: [toNumber('$techParts'), toNumber('$companyParts'), toNumber('$lmParts')] }
                 },
             },
             {
@@ -264,7 +266,8 @@ export async function GET(req: NextRequest) {
                         { $sort: { _id: 1 } }
                     ],
                     totalCompanyParts: [
-                        { $match: { location: { $nin: [null, ''] } } },
+                        // Closed-only — parts on open / X-close jobs don't roll into this KPI.
+                        { $match: { status: 'Closed', location: { $nin: [null, ''] } } },
                         {
                             $group: {
                                 _id: '$location',
@@ -291,12 +294,61 @@ export async function GET(req: NextRequest) {
                             }
                         }
                     ],
+                    // Finance fee margin: tech is charged 10%, processor takes
+                    // 7.5%, so the company keeps 2.5% of every closed-job finance payment.
+                    financeFeeProfit: [
+                        { $match: { status: 'Closed' } },
+                        {
+                            $group: {
+                                _id: null,
+                                totalFinanceFeeProfit: { $sum: { $multiply: [toNumber('$totalPaidFinance'), 0.025] } },
+                                count: {
+                                    $sum: {
+                                        $cond: [{ $gt: [toNumber('$totalPaidFinance'), 0] }, 1, 0]
+                                    }
+                                }
+                            }
+                        }
+                    ],
+                    // Company check fee margin: tech is charged 10%, bank/handling
+                    // takes 5%, so the company keeps 5% of every closed-job check payment.
+                    checkFeeProfit: [
+                        { $match: { status: 'Closed' } },
+                        {
+                            $group: {
+                                _id: null,
+                                totalCheckFeeProfit: { $sum: { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.05] } },
+                                count: {
+                                    $sum: {
+                                        $cond: [{ $gt: [toNumber('$totalPaidCompanyCheck'), 0] }, 1, 0]
+                                    }
+                                }
+                            }
+                        }
+                    ],
                     totalSales: [
                         { $match: { status: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
                                 totalSales: { $sum: '$valTotalAmount' },
+                                count: { $sum: 1 }
+                            }
+                        }
+                    ],
+                    // Operational profit per the spec (locked 2026-06-01):
+                    //   totalSales − all payment fees − all parts
+                    // Closed-only. Equivalent to sum(valTotalAmount − valPaymentFee − valParts).
+                    totalProfit: [
+                        { $match: { status: 'Closed' } },
+                        {
+                            $group: {
+                                _id: null,
+                                totalProfit: { $sum: { $subtract: [
+                                    { $subtract: ['$valTotalAmount', '$valPaymentFee'] },
+                                    '$valParts'
+                                ] } },
+                                totalFees: { $sum: '$valPaymentFee' },
                                 count: { $sum: 1 }
                             }
                         }

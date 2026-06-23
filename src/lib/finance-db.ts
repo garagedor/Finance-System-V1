@@ -93,6 +93,10 @@ export const FINANCE_COLLECTIONS = {
   bankTxnSynced:    "finance_bank_txn_synced",    // transactions synced from Plaid
   bankSyncLog:      "finance_bank_sync_log",      // sync activity audit
   reconMatch:       "finance_recon_match",        // confirmed reconciliation matches
+  // ─── Area-manager / technician running-balance ledger ───
+  ledger:           "finance_ledger",              // ledger holders (person+role+location)
+  ledgerEntry:      "finance_ledger_entry",        // append-only balance movements
+  techRate:         "finance_technician_rate",     // per-tech dispute/refund % override
   // ─── RBAC + audit ───
   role:             "finance_role",                // role definitions
   auditLog:         "finance_audit",               // unified audit log (replaces finance_role_audit)
@@ -154,6 +158,11 @@ export async function ensureFinanceIndexes(): Promise<void> {
     db.collection(FINANCE_COLLECTIONS.bankSyncLog).createIndex({ item_id: 1, started_at: -1 }),
     db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ bank_txn_id: 1 }),
     db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ matched_kind: 1, matched_id: 1 }),
+    // Ledger
+    db.collection(FINANCE_COLLECTIONS.ledger).createIndex({ role: 1, location: 1 }),
+    db.collection(FINANCE_COLLECTIONS.ledger).createIndex({ holder_name: 1 }),
+    db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ ledger_id: 1, date: 1, _id: 1 }),
+    db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ ledger_id: 1, created_at: 1 }),
     // RBAC
     db.collection(FINANCE_COLLECTIONS.role).createIndex({ key: 1 }, { unique: true, sparse: true }),
     db.collection(FINANCE_COLLECTIONS.role).createIndex({ name: 1 }, { unique: true }),
