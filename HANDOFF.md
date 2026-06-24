@@ -42,6 +42,14 @@ caught up, and ask what they want to work on next (then ask "local or online?").
     fields need it. Login does NOT need it (JWT secret falls back to a default).
 
 ## 2. Working rules (follow these)
+- **The user's command vocabulary (honor this exactly):**
+  - When the user says **"save"** / **"save my work"** → commit + push to the
+    **`wip/transfer`** workbench branch ONLY. This is a safe backup — it must NOT
+    deploy/go live. Briefly confirm what you saved.
+  - When the user says **"deploy"** / **"put it live"** → that's the only action that
+    pushes to `main` (auto-deploys the live site). **Double-check with the user first**
+    and stage only the relevant files.
+  - Default any ambiguous "save it" to the safe workbench backup, never to `main`.
 - **Before each distinct task, ASK "local or online?"** and route accordingly.
 - **Online** = push to `origin/main` → auto-deploys. **Stage ONLY the relevant files
   — never `git add -A` onto main.** The working tree carries lots of unrelated WIP.
