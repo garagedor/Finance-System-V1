@@ -50,6 +50,9 @@ caught up, and ask what they want to work on next (then ask "local or online?").
     pushes to `main` (auto-deploys the live site). **Double-check with the user first**
     and stage only the relevant files.
   - Default any ambiguous "save it" to the safe workbench backup, never to `main`.
+- **Keep `WORKLOG.md` updated.** It's the shared running log between machines/sessions.
+  Read its top entries when you start; add a new top entry (tagged DATA/LIVE/LOCAL)
+  whenever you make a change. That's how the two sessions stay in sync.
 - **Before each distinct task, ASK "local or online?"** and route accordingly.
 - **Online** = push to `origin/main` → auto-deploys. **Stage ONLY the relevant files
   — never `git add -A` onto main.** The working tree carries lots of unrelated WIP.
