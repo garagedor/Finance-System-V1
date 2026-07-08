@@ -194,18 +194,100 @@ const userColumns: ColumnConfig<User>[] = [
   { key: 'type', label: 'Type', type: 'select', options: ['admin', 'office', 'location-manager', 'simple'] },
 ];
 
+// Dispute status pipeline — concrete options so the picker doesn't allow typos.
+const DISPUTE_STATUS_OPTIONS = ['in review', 'open', 'partial', 'won', 'lost', 'settled', 'closed'];
+
+const dash = () => <span style={{ color: '#94a3b8' }}>—</span>;
+const money = (n?: number) => (n != null ? `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : null);
+
+// Column order matches the operations spreadsheet. Every column is editable:
+// the user can override any Job-derived value per-dispute (overrides are
+// stored on the Dispute doc and take precedence over Job lookup on read).
 const disputeColumns: ColumnConfig<Dispute>[] = [
-  { key: 'jobId', label: 'Job ID', type: 'text', editable: false },
-  { key: 'totalDisputed', label: 'Total Disputed', type: 'currency' },
-  { key: 'disputeDate', label: 'Dispute Date', type: 'date' },
-  { key: 'dueDate', label: 'Due Date', type: 'date' },
-  { key: 'status', label: 'Status', type: 'text' },
-  { key: 'isTechOffset', label: 'Tech Offset', type: 'boolean' },
-  { key: 'isPrOffset', label: 'PR Offset', type: 'boolean' },
+  {
+    key: 'jobAddress', label: 'Address', type: 'text', editable: true,
+    renderCell: ({ row }) => {
+      const r = row as Dispute;
+      return (
+        <div style={{ fontSize: 12, lineHeight: 1.35 }}>
+          <div style={{ fontWeight: 500 }}>{r.jobAddress ?? dash()}</div>
+          <div style={{ color: '#94a3b8', fontFamily: 'ui-monospace, SF Mono, monospace', fontSize: 10 }}>
+            {r.jobId?.slice(0, 10) ?? '—'}
+          </div>
+        </div>
+      );
+    },
+  },
+  { key: 'jobCustomerName', label: 'Name', type: 'text', editable: true },
+  { key: 'jobPhoneNumber',  label: 'Phone Number', type: 'text', editable: true },
+  {
+    key: 'jobTechFullName', label: 'Tech Name', type: 'text', editable: true,
+    renderCell: ({ row }) => {
+      const r = row as Dispute;
+      const full = r.jobTechFullName;
+      const short = r.jobTech;
+      if (!full && !short) return dash();
+      return (
+        <span style={{ fontSize: 12 }}>
+          {full ?? short}
+          {full && short && full !== short && (
+            <span style={{ color: '#94a3b8', marginLeft: 6, fontSize: 10 }}>({short})</span>
+          )}
+        </span>
+      );
+    },
+  },
+  { key: 'jobProvider',        label: 'Provider', type: 'text', editable: true },
+  { key: 'jobLocationManager', label: 'Location Manager', type: 'text', editable: true },
+  { key: 'jobTotalInclTip',    label: 'Jo. Total inc Tip', type: 'currency', editable: true },
+  { key: 'totalDisputed',      label: 'Money Disputed', type: 'currency', editable: true },
+  { key: 'jobPartsTotal',      label: 'Parts', type: 'currency', editable: true },
+  { key: 'jobTipsTotal',       label: 'Tip', type: 'currency', editable: true },
+  { key: 'status',             label: 'Status', type: 'select', options: DISPUTE_STATUS_OPTIONS, editable: true },
+  { key: 'jobDate',            label: 'Job Date', type: 'text', editable: true },
+  { key: 'dateLost',           label: 'Date Lost', type: 'date', editable: true },
+  { key: 'messageFound',       label: 'Message Found', type: 'multiline', editable: true },
+  { key: 'isTechOffset',       label: 'Taken Tech', type: 'boolean', editable: true },
+  { key: 'isPrOffset',         label: 'Taken PR', type: 'boolean', editable: true },
+  { key: 'isDeposit',          label: 'Is Deposit', type: 'boolean', editable: true },
 ];
 
 const refundColumns: ColumnConfig<Refund>[] = [
-  { key: 'jobId', label: 'Job ID', type: 'text', editable: false },
+  {
+    key: 'jobAddress',
+    label: 'Job',
+    type: 'text',
+    editable: false,
+    renderCell: ({ row }) => {
+      const r = row as Refund;
+      return (
+        <div style={{ fontSize: 12, lineHeight: 1.35 }}>
+          <div style={{ fontWeight: 500 }}>{r.jobAddress ?? <span style={{ color: '#94a3b8' }}>—</span>}</div>
+          <div style={{ color: '#94a3b8', fontFamily: 'ui-monospace, SF Mono, monospace', fontSize: 10 }}>
+            {r.jobId?.slice(0, 10) ?? '—'}
+          </div>
+        </div>
+      );
+    },
+  },
+  { key: 'jobDate',     label: 'Job Date', type: 'text', editable: false },
+  {
+    key: 'jobTech',
+    label: 'Tech / Area',
+    type: 'text',
+    editable: false,
+    renderCell: ({ row }) => {
+      const r = row as Refund;
+      if (!r.jobTech && !r.jobLocation) return <span style={{ color: '#94a3b8' }}>—</span>;
+      return (
+        <span style={{ fontSize: 12 }}>
+          {r.jobTech ?? '—'} {r.jobLocation ? <span style={{ color: '#94a3b8' }}>· {r.jobLocation}</span> : null}
+        </span>
+      );
+    },
+  },
+  { key: 'jobProvider', label: 'Provider', type: 'text', editable: false },
+  { key: 'jobTotalAmount', label: 'Job Total', type: 'currency', editable: false },
   { key: 'refundTotal', label: 'Refund Total', type: 'currency' },
   { key: 'dateRefunded', label: 'Date Refunded', type: 'date' },
   { key: 'dueDate', label: 'Due Date', type: 'date' },

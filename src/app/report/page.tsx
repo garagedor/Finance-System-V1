@@ -46,6 +46,13 @@ type DisputeRow = {
   techShare: number;
   locationManagerShare: number;
   providerShare: number;
+  companyShare?: number;
+  amPoolShare?: number;
+  /** AM's net liability after notionally passing the tech's portion on.
+   *  Informational only — settlement still recovers the full amPoolShare. */
+  amNetPortion?: number;
+  /** True when tech's configured % exceeds the 40% pool — subcontractor case. */
+  isSubcontractor?: boolean;
 };
 
 type RefundRow = {
@@ -68,6 +75,13 @@ type RefundRow = {
   techShare: number;
   locationManagerShare: number;
   providerShare: number;
+  companyShare?: number;
+  amPoolShare?: number;
+  /** AM's net liability after notionally passing the tech's portion on.
+   *  Informational only — settlement still recovers the full amPoolShare. */
+  amNetPortion?: number;
+  /** True when tech's configured % exceeds the 40% pool — subcontractor case. */
+  isSubcontractor?: boolean;
 };
 
 type ProviderRow = {
@@ -345,12 +359,44 @@ export default function ReportPage() {
     { key: 'totalAfterFee', label: 'Total After Fee', format: 'currency' },
     { key: 'parts', label: 'Parts', format: 'currency' },
     { key: 'netoTips', label: 'Neto Tips', format: 'currency' },
-    { key: 'oldBalance', label: 'Old Balance', format: 'currency' },
     { key: 'disputed', label: 'Disputed', format: 'currency' },
-    { key: 'newBalance', label: 'New Balance', format: 'currency' },
-    { key: 'disputedShare', label: 'Disputed Share', format: 'currency' },
-    { key: 'techShare', label: 'Tech Share', format: 'currency' },
-    { key: 'locationManagerShare', label: 'Location Manager Share', format: 'currency' },
+    { key: 'locationManagerShare', label: 'AM Share (40%)', format: 'currency' },
+    {
+      key: 'techShare', label: 'Tech Chargeback (info)', format: 'currency',
+      // Informational only — does NOT reduce the AM's recovery. Shows how
+      // much of the AM's 40% notionally belongs to the technician based on
+      // their configured profitPercent. Appends a "SUB" pill when techPct
+      // exceeds the 40% pool (subcontractor — AM eats the gap).
+      render: (r: DisputeRow | RefundRow) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.85 }}>
+          {formatCurrency(r.techShare)}
+          {r.isSubcontractor && (
+            <span
+              title="Subcontractor — techPct > 40% pool. AM owes tech more than AM recovers."
+              style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                padding: '1px 5px',
+                background: 'rgba(245,158,11,0.15)',
+                color: '#fcd34d',
+                border: '1px solid rgba(245,158,11,0.35)',
+                borderRadius: 3,
+              }}
+            >
+              SUB
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'amNetPortion', label: 'AM Net (info)', format: 'currency',
+      // Informational only — AM Share minus the tech's notional cut.
+      render: (r: DisputeRow | RefundRow) => (
+        <span style={{ opacity: 0.85 }}>{formatCurrency(r.amNetPortion ?? 0)}</span>
+      ),
+    },
     { key: 'providerShare', label: 'Provider Share', format: 'currency' },
   ];
 
@@ -364,13 +410,45 @@ export default function ReportPage() {
     { key: 'totalAfterFee', label: 'Total After Fee', format: 'currency' },
     { key: 'parts', label: 'Parts', format: 'currency' },
     { key: 'netoTips', label: 'Neto Tips', format: 'currency' },
-    { key: 'oldBalance', label: 'Old Balance', format: 'currency' },
     { key: 'refunded', label: 'Refunded', format: 'currency' },
     { key: 'reason', label: 'Reason' },
-    { key: 'newBalance', label: 'New Balance', format: 'currency' },
-    { key: 'disputedShare', label: 'Disputed Share', format: 'currency' },
-    { key: 'techShare', label: 'Tech Share', format: 'currency' },
-    { key: 'locationManagerShare', label: 'Location Manager Share', format: 'currency' },
+    { key: 'locationManagerShare', label: 'AM Share (40%)', format: 'currency' },
+    {
+      key: 'techShare', label: 'Tech Chargeback (info)', format: 'currency',
+      // Informational only — does NOT reduce the AM's recovery. Shows how
+      // much of the AM's 40% notionally belongs to the technician based on
+      // their configured profitPercent. Appends a "SUB" pill when techPct
+      // exceeds the 40% pool (subcontractor — AM eats the gap).
+      render: (r: DisputeRow | RefundRow) => (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: 0.85 }}>
+          {formatCurrency(r.techShare)}
+          {r.isSubcontractor && (
+            <span
+              title="Subcontractor — techPct > 40% pool. AM owes tech more than AM recovers."
+              style={{
+                fontSize: 9,
+                fontWeight: 600,
+                letterSpacing: '0.05em',
+                padding: '1px 5px',
+                background: 'rgba(245,158,11,0.15)',
+                color: '#fcd34d',
+                border: '1px solid rgba(245,158,11,0.35)',
+                borderRadius: 3,
+              }}
+            >
+              SUB
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'amNetPortion', label: 'AM Net (info)', format: 'currency',
+      // Informational only — AM Share minus the tech's notional cut.
+      render: (r: DisputeRow | RefundRow) => (
+        <span style={{ opacity: 0.85 }}>{formatCurrency(r.amNetPortion ?? 0)}</span>
+      ),
+    },
     { key: 'providerShare', label: 'Provider Share', format: 'currency' },
   ];
 

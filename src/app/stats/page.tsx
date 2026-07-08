@@ -28,6 +28,8 @@ type StatsResponse = {
     totalAmount: number;
     totalPaid: number;
     totalProfit: number;
+    /** totalSales − all payment fees − all parts (Closed only). */
+    jobsProfit: number;
     avgTicket: number;
     avgTicketWithoutPenalty: number;
     avgClosedTicket: number;
@@ -45,6 +47,7 @@ const emptyStats: StatsResponse = {
     totalAmount: 0,
     totalPaid: 0,
     totalProfit: 0,
+    jobsProfit: 0,
     avgTicket: 0,
     avgTicketWithoutPenalty: 0,
     avgClosedTicket: 0,
@@ -441,8 +444,10 @@ export default function StatsPage() {
               </div>
             </div>
             <div className="metric-card metric-card-feature">
-              <div className="muted small">Total Profit</div>
-              <div className="metric-value metric-value-feature">{formatCurrency(stats.summary.totalProfit || 0)}</div>
+              <div className="muted small" title="Total Sales − all payment fees − all parts (Closed only)">
+                Jobs Profit
+              </div>
+              <div className="metric-value metric-value-feature">{formatCurrency(stats.summary.jobsProfit || 0)}</div>
             </div>
           </div>
 

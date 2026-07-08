@@ -19,7 +19,13 @@ type DashboardData = {
   companyNetProfit: Array<{ _id: string; totalNetProfit: number; count?: number }>;
   totalCompanyParts: Array<{ _id: string; totalParts: number; count?: number }>;
   cardFeeProfit?: Array<{ _id: any; totalCardFeeProfit: number; count?: number }>;
+  /** Finance fee profit: 2.5% of totalPaidFinance (10% charged − 7.5% processor). */
+  financeFeeProfit?: Array<{ _id: any; totalFinanceFeeProfit: number; count?: number }>;
+  /** Company check fee profit: 5% of totalPaidCompanyCheck (10% charged − 5% bank). */
+  checkFeeProfit?: Array<{ _id: any; totalCheckFeeProfit: number; count?: number }>;
   totalSales?: Array<{ _id: any; totalSales: number; count?: number }>;
+  /** Operational profit: totalSales − all payment fees − all parts (Closed only). */
+  totalProfit?: Array<{ _id: any; totalProfit: number; totalFees: number; count?: number }>;
 };
 
 export default function HomePage() {
@@ -143,14 +149,24 @@ export default function HomePage() {
     const totalPenalty = data.companyPenaltyLoss.reduce((s, l) => s + (l.totalPenaltyLoss || 0), 0);
     const totalParts   = data.totalCompanyParts.reduce((s, l) => s + (l.totalParts || 0), 0);
     const cardFeeProfit = (data.cardFeeProfit || []).reduce((s, r) => s + (r.totalCardFeeProfit || 0), 0);
+    const financeFeeProfit = (data.financeFeeProfit || []).reduce((s, r) => s + (r.totalFinanceFeeProfit || 0), 0);
+    const checkFeeProfit   = (data.checkFeeProfit   || []).reduce((s, r) => s + (r.totalCheckFeeProfit   || 0), 0);
+    const financeFeeJobs   = (data.financeFeeProfit || []).reduce((s, r) => s + (r.count || 0), 0);
+    const checkFeeJobs     = (data.checkFeeProfit   || []).reduce((s, r) => s + (r.count || 0), 0);
     const totalSales   = (data.totalSales || []).reduce((s, r) => s + (r.totalSales || 0), 0);
+    const totalOpProfit = (data.totalProfit || []).reduce((s, r) => s + (r.totalProfit || 0), 0);
+    const totalFees     = (data.totalProfit || []).reduce((s, r) => s + (r.totalFees || 0), 0);
     // Per-KPI underlying job counts (basis-of-calculation).
     const profitJobs   = data.companyNetProfit.reduce((s, l) => s + (l.count || 0), 0);
     const penaltyJobs  = data.companyPenaltyLoss.reduce((s, l) => s + (l.count || 0), 0);
     const partsJobs    = data.totalCompanyParts.reduce((s, l) => s + (l.count || 0), 0);
     const cardFeeJobs  = (data.cardFeeProfit || []).reduce((s, r) => s + (r.count || 0), 0);
     const salesJobs    = (data.totalSales || []).reduce((s, r) => s + (r.count || 0), 0);
-    return { totalJobs, totalSales, totalProfit, totalPenalty, totalParts, cardFeeProfit, salesJobs, profitJobs, penaltyJobs, partsJobs, cardFeeJobs };
+    // Net Profit (locked 2026-06-01):
+    //   (Jobs Profit × 10%) − penalty loss + card fee profit + finance fee profit + check fee profit
+    // The 10% is the official company slice of the operational profit pool.
+    const netProfit = (totalOpProfit * 0.10) - totalPenalty + cardFeeProfit + financeFeeProfit + checkFeeProfit;
+    return { totalJobs, totalSales, totalProfit, totalOpProfit, totalFees, totalPenalty, totalParts, cardFeeProfit, financeFeeProfit, checkFeeProfit, financeFeeJobs, checkFeeJobs, netProfit, salesJobs, profitJobs, penaltyJobs, partsJobs, cardFeeJobs };
   }, [data]);
 
   // ── Initial skeleton ──
@@ -258,7 +274,7 @@ export default function HomePage() {
         {kpis && (
           <>
             {/* Headline metrics — large, side-by-side. */}
-            <section className="grid grid-cols-1 gap-4 md:grid-cols-2 stagger">
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-3 stagger">
               <FeatureKpiCard
                 label="Total Sales"
                 value={formatCurrency(kpis.totalSales)}
@@ -267,10 +283,17 @@ export default function HomePage() {
                 jobCount={kpis.salesJobs}
               />
               <FeatureKpiCard
-                label="Net Profit"
-                value={formatCurrency(kpis.totalProfit)}
+                label="Jobs Profit"
+                value={formatCurrency(kpis.totalOpProfit)}
                 icon={<FiTrendingUp size={22} />}
-                accent={kpis.totalProfit >= 0 ? 'emerald' : 'red'}
+                accent={kpis.totalOpProfit >= 0 ? 'emerald' : 'red'}
+                jobCount={kpis.profitJobs}
+              />
+              <FeatureKpiCard
+                label="Net Profit"
+                value={formatCurrency(kpis.netProfit)}
+                icon={<FiTrendingUp size={22} />}
+                accent={kpis.netProfit >= 0 ? 'emerald' : 'red'}
                 jobCount={kpis.profitJobs}
               />
             </section>
@@ -303,6 +326,20 @@ export default function HomePage() {
                 icon={<FiCreditCard size={16} />}
                 accent="violet"
                 jobCount={kpis.cardFeeJobs}
+              />
+              <KpiCard
+                label="Finance Fee Profit"
+                value={formatCurrency(kpis.financeFeeProfit)}
+                icon={<FiCreditCard size={16} />}
+                accent="violet"
+                jobCount={kpis.financeFeeJobs}
+              />
+              <KpiCard
+                label="Check Fee Profit"
+                value={formatCurrency(kpis.checkFeeProfit)}
+                icon={<FiCreditCard size={16} />}
+                accent="violet"
+                jobCount={kpis.checkFeeJobs}
               />
             </section>
           </>
