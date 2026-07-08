@@ -21,6 +21,20 @@ session is fully caught up after a `git pull` ("get the latest").
 
 ## Log
 
+### 2026-07-08 — Mac — LIVE
+- **BIG DEPLOY:** merged `wip/transfer` into `main` (commit `70049d3`) → Vercel
+  auto-deploy. Ships the full Portal (dashboard, banking, reconcile, imports,
+  admin/users/roles, TOTP), the **append-only Area-Manager / Technician Ledger**
+  (first prod release), Plaid integration, and legacy-route rewrites
+  (`disputes`, `home-stats`, `login`, `report`, `refunds`). 151 files.
+- Rollback path: Vercel Dashboard → project → Deployments → previous good one →
+  "Promote to Production" (instant, no rebuild). Rollback does NOT undo DB writes.
+- Pending post-deploy check: verify `PLAID_ENV`, `SUPABASE_*`, `FINANCE_ENCRYPTION_KEY`
+  are set in Vercel; without them, bank-sync / verify-reports / encrypted-field
+  features silently break in prod. Core app + login work regardless.
+- Also pushed `chore: package-lock 'peer: true' bump` (`2036ede`) as the pre-merge
+  clean-up on `wip/transfer`.
+
 ### 2026-06-24 — Windows PC — setup
 - Created this shared WORKLOG.md so the Windows and Mac sessions stay in sync.
 - Pushed all WIP + `HANDOFF.md` to branch **`wip/transfer`** for the move to the Mac.
