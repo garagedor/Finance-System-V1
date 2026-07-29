@@ -21,6 +21,27 @@ session is fully caught up after a `git pull` ("get the latest").
 
 ## Log
 
+### 2026-07-29 — Windows PC — LOCAL (premium voice + DB fix + CRM-wide AI)
+- **Premium Voice Upgrade** (JARVIS Phase 1 acceptance gate): replaced browser TTS as
+  primary with **ElevenLabs** (key server-side only, raw HTTPS streaming, barge-in,
+  browser fallback). Separate spoken-narration layer (`voice/narration.ts` strips
+  markdown/emoji/URLs/bullets; verified symbol-free + segmented). New `voice/server-types.ts`
+  (`ServerTtsProvider` iface), `providers/elevenlabs.ts`, `server.ts`, `settings.ts`
+  (`finance_ai_voice_settings`). Routes `POST /api/portal/ai/voice/tts` (streams audio,
+  DB-optional so a DB blip can't mute it) + `GET|POST /voices` (male-filtered, never returns
+  key). Client `TtsController.ts` + orb integration (provider indicator, fallback banner).
+  **Voice Settings** screen `/portal/ai/voice` (preview/pick male voice, sliders, EN/HE).
+  Owner accepted: previews play, male voice, saves persist.
+- **Local DB fix:** WSL resolver (172.18.0.1) can't do SRV lookups → all DB calls failed
+  (querySrv ENOTFOUND, surfaced as "SSL alert 80"/"can't reach database"). Fix: LOCAL-ONLY
+  non-SRV `MONGODB_URI` in `.env.local` (direct hosts + replicaSet atlas-2tgm12-shard-0);
+  online/Vercel keeps SRV. Hardened `finance-db.ts connect()` + voice settings with
+  DNS/TLS retries. Dev server run via `systemd-run --user --no-block` (survives; plain
+  Bash launches die exit 144).
+- **CRM-wide AI:** relaxed the orb's portal-only gate → assistant orb now shows across the
+  legacy CRM too (for AI-permitted users); added "AI Workspace" link to the CRM menu
+  (`layout.tsx` + `AuthShell.tsx` permission-gated nav). Not deployed.
+
 ### 2026-07-29 — Windows PC — LOCAL (JARVIS Phase 1)
 - Started **JARVIS Live Executive Mode** (plan approved: `.claude/plans/sprightly-frolicking-
   rivest.md`). **Phase 1 — Live Assistant Foundation** done, READ-ONLY, no navigation yet.
@@ -163,6 +184,19 @@ session is fully caught up after a `git pull` ("get the latest").
   last sync was 2026-07-08 (16 days old). Ran a manual sync → added 340 new bank
   transactions, removed 31, into `finance_bank_txn_synced`. Awaiting user detail on
   exactly what looked broken (possible stale-data UI warning vs a real error).
+### 2026-07-08 — Mac — LIVE
+- **BIG DEPLOY:** merged `wip/transfer` into `main` (commit `70049d3`) → Vercel
+  auto-deploy. Ships the full Portal (dashboard, banking, reconcile, imports,
+  admin/users/roles, TOTP), the **append-only Area-Manager / Technician Ledger**
+  (first prod release), Plaid integration, and legacy-route rewrites
+  (`disputes`, `home-stats`, `login`, `report`, `refunds`). 151 files.
+- Rollback path: Vercel Dashboard → project → Deployments → previous good one →
+  "Promote to Production" (instant, no rebuild). Rollback does NOT undo DB writes.
+- Pending post-deploy check: verify `PLAID_ENV`, `SUPABASE_*`, `FINANCE_ENCRYPTION_KEY`
+  are set in Vercel; without them, bank-sync / verify-reports / encrypted-field
+  features silently break in prod. Core app + login work regardless.
+- Also pushed `chore: package-lock 'peer: true' bump` (`2036ede`) as the pre-merge
+  clean-up on `wip/transfer`.
 
 ### 2026-06-24 — Windows PC — setup
 - Created this shared WORKLOG.md so the Windows and Mac sessions stay in sync.
