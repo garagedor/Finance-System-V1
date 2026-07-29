@@ -28,6 +28,7 @@ export default function RootLayout({
     { href: "/payment-method-report", label: "Payment Methods" },
     { href: "/verify-reports", label: "Verify Reports" },
     { href: "/portal/dashboard", label: "Finance Portal" },
+    { href: "/portal/ai", label: "AI Workspace", permission: "system:ai:view" },
     { href: "/admin/users", label: "Admin", adminOnly: true },
   ];
 

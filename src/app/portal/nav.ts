@@ -23,6 +23,7 @@ import {
   FiShield,
   FiUpload,
   FiLock,
+  FiCpu,
 } from "react-icons/fi";
 import type { ComponentType } from "react";
 import type { Permission } from "@/types/rbac";
@@ -33,7 +34,7 @@ export type FinanceModule = {
   section: string;
   title: string;
   icon: ComponentType<{ size?: number; className?: string }>;
-  group: "overview" | "field" | "money" | "people" | "tracking" | "system" | "admin" | "tools" | "me";
+  group: "overview" | "ai" | "field" | "money" | "people" | "tracking" | "system" | "admin" | "tools" | "me";
   /** Permission required to see this nav entry. Multiple = any-of. */
   requires: Permission | Permission[];
 };
@@ -47,6 +48,16 @@ export const FINANCE_NAV: FinanceModule[] = [
     icon: FiPieChart,
     group: "overview",
     requires: "finance:dashboard:view",
+  },
+  // AI Workspace
+  {
+    href: "/portal/ai",
+    label: "AI Workspace",
+    section: "AI",
+    title: "AI Workspace",
+    icon: FiCpu,
+    group: "ai",
+    requires: "system:ai:view",
   },
   // Money in & out
   {
@@ -223,6 +234,7 @@ export const FINANCE_NAV: FinanceModule[] = [
 
 export const FINANCE_GROUPS: Array<{ key: FinanceModule["group"]; label: string }> = [
   { key: "overview", label: "Overview" },
+  { key: "ai", label: "AI" },
   { key: "money", label: "Money" },
   { key: "people", label: "People" },
   { key: "tracking", label: "Tracking" },

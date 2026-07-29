@@ -5,9 +5,10 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   FiLogOut, FiUser, FiHome, FiGrid, FiBarChart2, FiShield,
-  FiDollarSign, FiFileText, FiChevronLeft, FiChevronRight, FiMenu, FiPieChart, FiCreditCard, FiCheckSquare,
+  FiDollarSign, FiFileText, FiChevronLeft, FiChevronRight, FiMenu, FiPieChart, FiCreditCard, FiCheckSquare, FiCpu,
 } from 'react-icons/fi';
 import LoginPage from './LoginPage';
+import LiveAssistant from '@/components/live/LiveAssistant';
 import type { AuthUser } from '@/types/user';
 import {
   FINANCE_NAV,
@@ -17,7 +18,7 @@ import {
   visibleNavFor,
 } from '@/app/portal/nav';
 
-type NavLink = { href: string; label: string; adminOnly?: boolean };
+type NavLink = { href: string; label: string; adminOnly?: boolean; permission?: string };
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -43,6 +44,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number; className?:
   '/payment-method-report': FiCreditCard,
   '/verify-reports': FiCheckSquare,
   '/portal/dashboard': FiPieChart,
+  '/portal/ai': FiCpu,
   '/admin/users': FiShield,
   '/admin/roles': FiShield,
 };
@@ -245,6 +247,10 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
             ) : (
               navLinks
                 .filter((link) => !link.adminOnly || user.type === 'admin')
+                .filter(
+                  (link) =>
+                    !link.permission || user.type === 'admin' || (user.permissions ?? []).includes(link.permission),
+                )
                 .map((link) => {
                 const Icon = NAV_ICONS[link.href] || FiGrid;
                 const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
@@ -371,6 +377,8 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
           </main>
         </div>
       </div>
+      {/* Global JARVIS live assistant — persists across route changes */}
+      <LiveAssistant />
     </AuthContext.Provider>
   );
 }

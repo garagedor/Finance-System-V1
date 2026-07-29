@@ -19,27 +19,48 @@ let _db: Db | null = null;
 let _connecting: Promise<void> | null = null;
 let _lastConnectError: { message: string; code?: string; at: number } | null = null;
 
+// Transient network/DNS/TLS errors worth retrying. Atlas SRV lookups
+// occasionally fail with querySrv ENOTFOUND / EAI_AGAIN (flaky resolver,
+// especially in WSL), and TLS handshakes can drop ("SSL alert number 80").
+// These are momentary — a couple of quick retries recover without a restart.
+function isTransientConnErr(msg: string): boolean {
+  return /ENOTFOUND|querySrv|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAGAIN|SSL|TLS|timed out|topology|ServerSelection|pool/i.test(
+    msg,
+  );
+}
+
 async function connect(): Promise<void> {
   if (_db) return;
   if (_connecting) return _connecting;
   _connecting = (async () => {
-    try {
-      const client = new MongoClient(MONGODB_URI, {
-        serverSelectionTimeoutMS: 8000,
-        // Re-use the same socket pool the rest of the CRM uses.
-        maxPoolSize: 20,
-      });
-      await client.connect();
-      _client = client;
-      _db = client.db(DB_NAME);
-      _lastConnectError = null;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const code = (e as { code?: string })?.code;
-      _lastConnectError = { message: msg, code, at: Date.now() };
-      _connecting = null; // allow retry on next call
-      throw e;
+    let lastErr: unknown;
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      try {
+        const client = new MongoClient(MONGODB_URI, {
+          serverSelectionTimeoutMS: 8000,
+          // Re-use the same socket pool the rest of the CRM uses.
+          maxPoolSize: 20,
+        });
+        await client.connect();
+        _client = client;
+        _db = client.db(DB_NAME);
+        _lastConnectError = null;
+        return;
+      } catch (e) {
+        lastErr = e;
+        const msg = e instanceof Error ? e.message : String(e);
+        if (attempt < 4 && isTransientConnErr(msg)) {
+          await new Promise((r) => setTimeout(r, 300 * attempt)); // 0.3s, 0.6s, 0.9s
+          continue;
+        }
+        break;
+      }
     }
+    const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
+    const code = (lastErr as { code?: string })?.code;
+    _lastConnectError = { message: msg, code, at: Date.now() };
+    _connecting = null; // allow retry on next call
+    throw lastErr;
   })();
   return _connecting;
 }
@@ -97,6 +118,12 @@ export const FINANCE_COLLECTIONS = {
   ledger:           "finance_ledger",              // ledger holders (person+role+location)
   ledgerEntry:      "finance_ledger_entry",        // append-only balance movements
   techRate:         "finance_technician_rate",     // per-tech dispute/refund % override
+  // ─── AI proactive engine ───
+  aiAlert:          "finance_ai_alert",            // proactive alerts from detectors
+  aiBrief:          "finance_ai_brief",            // daily executive Morning Brief
+  aiDetectorConfig: "finance_ai_detector_config",  // per-detector enable/disable + tunables
+  aiSession:        "finance_ai_session",          // live JARVIS session audit log
+  aiVoiceSettings:  "finance_ai_voice_settings",   // premium TTS voice settings (global)
   // ─── RBAC + audit ───
   role:             "finance_role",                // role definitions
   auditLog:         "finance_audit",               // unified audit log (replaces finance_role_audit)

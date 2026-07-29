@@ -15,6 +15,7 @@ export type PermissionAction =
   | "export"
   | "manage"
   | "run"
+  | "live"
   | "connect"
   | "disconnect"
   | "sync"
@@ -64,6 +65,9 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDef> = [
   p("system", "roles", "delete", "Delete custom roles"),
   p("system", "integrations", "view", "View integrations (Plaid, etc.)"),
   p("system", "integrations", "edit", "Configure integrations"),
+  p("system", "ai", "view", "View AI Workspace"),
+  p("system", "ai", "manage", "Run AI actions & automations"),
+  p("system", "ai", "live", "Use the live voice assistant"),
 
   // ── CRM (legacy main app) ─────────────────────────────────────────────
   p("crm", "home", "view", "CRM home dashboard"),
