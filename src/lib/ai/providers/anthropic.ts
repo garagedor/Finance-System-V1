@@ -5,6 +5,7 @@ import type {
   AgentResult,
   AiBlock,
   AiProvider,
+  NavIntent,
   ProviderRunInput,
   SynthesisInput,
   SynthesisResult,
@@ -48,6 +49,23 @@ const PRESENT_TOOL: Anthropic.Tool = {
           areaManager: { type: "string" },
           sources: { type: "array", items: { type: "string" }, description: "Which datasets/tools informed the answer" },
           notes: { type: "string", description: "Any caveats — stale data, missing info, assumptions." },
+        },
+      },
+      navigation: {
+        type: "object",
+        description:
+          "OPTIONAL. Only in live voice mode, and only when opening a page would materially help the owner SEE this answer, include a navigation. Use ONLY a routeId from the allowlist provided in the system prompt — never invent a path. It is a suggestion; it is validated server-side and dropped if not permitted.",
+        properties: {
+          routeId: { type: "string", description: "An exact routeId from the allowlist, e.g. /portal/expenses" },
+          params: {
+            type: "object",
+            description: "Optional URL filters for that route, using only the filter keys the allowlist lists for it.",
+          },
+          highlightAnchor: {
+            type: "string",
+            description: "Optional anchor id to highlight on the destination page (only ids the allowlist lists for that route).",
+          },
+          reason: { type: "string", description: "One short spoken sentence, e.g. 'Let me pull up your expenses.'" },
         },
       },
     },
@@ -124,6 +142,7 @@ export class AnthropicProvider implements AiProvider {
     }));
 
     let blocks: AiBlock[] = [];
+    let navigation: NavIntent | undefined;
     let fallbackText = "";
     let inTok = 0;
     let outTok = 0;
@@ -161,7 +180,7 @@ export class AnthropicProvider implements AiProvider {
 
       const present = toolUses.find((t) => t.name === "present_report");
       if (present) {
-        const inp = present.input as { blocks?: unknown; trace?: Partial<Trace> };
+        const inp = present.input as { blocks?: unknown; trace?: Partial<Trace>; navigation?: unknown };
         blocks = sanitizeBlocks(inp.blocks);
         if (inp.trace) {
           trace.dateRange = inp.trace.dateRange ?? trace.dateRange;
@@ -170,6 +189,19 @@ export class AnthropicProvider implements AiProvider {
           trace.areaManager = inp.trace.areaManager;
           trace.notes = inp.trace.notes;
           if (Array.isArray(inp.trace.sources)) trace.sources = inp.trace.sources;
+        }
+        // Raw, UNVALIDATED navigation suggestion — the orchestrator sanitizes it
+        // against the permission-scoped allowlist before anything is emitted.
+        if (inp.navigation && typeof inp.navigation === "object") {
+          const n = inp.navigation as Record<string, unknown>;
+          if (typeof n.routeId === "string") {
+            navigation = {
+              routeId: n.routeId,
+              params: n.params && typeof n.params === "object" ? (n.params as Record<string, string>) : undefined,
+              highlightAnchor: typeof n.highlightAnchor === "string" ? n.highlightAnchor : undefined,
+              reason: typeof n.reason === "string" ? n.reason : undefined,
+            };
+          }
         }
         break;
       }
@@ -231,6 +263,6 @@ export class AnthropicProvider implements AiProvider {
       for (const f of trace.freshness) if (!seen.has(f.source)) seen.set(f.source, f.lastSync);
       trace.freshness = [...seen.entries()].map(([source, lastSync]) => ({ source, lastSync }));
     }
-    return { blocks, trace };
+    return { blocks, trace, navigation };
   }
 }

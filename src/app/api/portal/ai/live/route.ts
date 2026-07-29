@@ -54,12 +54,21 @@ export async function POST(req: NextRequest) {
       ctx,
     });
     // fire-and-forget audit
+    const pagesOpened = [
+      ...new Set(
+        (plan.steps ?? [])
+          .filter((st) => st.type === "navigate" || st.type === "apply_filter" || st.type === "highlight")
+          .map((st) => (st as { routeId?: string }).routeId)
+          .filter((r): r is string => !!r),
+      ),
+    ];
     appendLiveSession({
       sessionId,
       userName: s.name,
       command: messages[messages.length - 1]?.content ?? "",
       leadPersona: plan.leadPersona,
       toolsUsed: (plan.trace?.toolsUsed ?? []).map((t) => t.name),
+      pagesOpened: pagesOpened.length ? pagesOpened : undefined,
       model: plan.trace?.model,
       provider: plan.trace?.provider,
       usage: plan.trace?.usage

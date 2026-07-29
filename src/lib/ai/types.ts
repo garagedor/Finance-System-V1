@@ -41,7 +41,17 @@ export type Trace = {
   usage?: { inputTokens: number; outputTokens: number; cacheReadTokens: number; requests: number };
 };
 
-export type AgentResult = { blocks: AiBlock[]; trace: Trace };
+/** A navigation the model PROPOSES alongside its answer (live mode only). It is
+ *  only a suggestion — the orchestrator validates routeId/params/anchor against
+ *  the permission-scoped capability allowlist before any step is emitted. */
+export type NavIntent = {
+  routeId: string;
+  params?: Record<string, string>;
+  highlightAnchor?: string;
+  reason?: string;
+};
+
+export type AgentResult = { blocks: AiBlock[]; trace: Trace; navigation?: NavIntent };
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 

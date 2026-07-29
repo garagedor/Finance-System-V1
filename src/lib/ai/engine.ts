@@ -2,6 +2,7 @@ import "server-only";
 import { getExecutive } from "@/app/portal/ai/executives";
 import { AnthropicProvider } from "./providers/anthropic";
 import { ALL_TOOL_NAMES, toolsFor } from "./tools";
+import { navigableRoutesFor } from "./live/nav/capabilities";
 import type { AgentResult, ChatMessage, ToolContext } from "./types";
 
 // The engine is provider-independent: it resolves the active provider, gives it
@@ -26,6 +27,21 @@ function providerFor(): AnthropicProvider {
 
 const LIVE_NARRATION = `LIVE VOICE MODE: the owner will HEAR your answer, not read it. Make the FIRST text block a spoken narration — 2 to 5 short, conversational sentences a senior executive would say out loud. Verbalize numbers and money in words (e.g. "approximately eight hundred sixty-one thousand dollars"), keep it concise, and use NO markdown, symbols, emoji, URLs, or table syntax in that first block. Put all the exact figures, KPI cards, tables, and long lists in the LATER blocks (those are shown on screen only, not spoken).`;
 
+const LIVE_NAV_HEADER = `LIVE NAVIGATION: You may take the owner to a page so they can SEE the evidence while you talk. Only when opening a specific page would materially help them see THIS answer, include a "navigation" object in present_report: a routeId from the list below, optionally "params" using only that route's listed filter keys, optionally a "highlightAnchor" from that route's listed ids, and a one-sentence "reason" to say out loud. Do NOT navigate for greetings, casual questions, or when the on-screen blocks already suffice. Never use a routeId, filter key, or anchor that is not listed. Navigable pages for this user:`;
+
+/** Build the live navigation allowlist prompt from what THIS session may open. */
+function buildNavPrompt(ctx: ToolContext): string {
+  const routes = navigableRoutesFor({ permissions: ctx.session.permissions, type: ctx.session.type });
+  if (routes.length === 0) return "";
+  const lines = routes.map((r) => {
+    const parts = [`${r.routeId} — ${r.label}`];
+    if (r.params.length) parts.push(`filters: ${r.params.join(", ")}`);
+    if (r.anchors.length) parts.push(`highlight ids: ${r.anchors.join(", ")}`);
+    return `- ${parts.join("  |  ")}`;
+  });
+  return `${LIVE_NAV_HEADER}\n${lines.join("\n")}`;
+}
+
 export async function runAssistant(opts: {
   executive?: string;
   messages: ChatMessage[];
@@ -40,7 +56,8 @@ export async function runAssistant(opts: {
   const tools = toolsFor(allow, opts.ctx);
 
   const today = new Date().toISOString().slice(0, 10);
-  const system = `${persona}\n\n${SHARED_RULES}${opts.live ? `\n\n${LIVE_NARRATION}` : ""}\n\nToday's date is ${today}. The company is LBS Garage Door (US, Indianapolis area).`;
+  const navPrompt = opts.live ? buildNavPrompt(opts.ctx) : "";
+  const system = `${persona}\n\n${SHARED_RULES}${opts.live ? `\n\n${LIVE_NARRATION}` : ""}${navPrompt ? `\n\n${navPrompt}` : ""}\n\nToday's date is ${today}. The company is LBS Garage Door (US, Indianapolis area).`;
 
   return providerFor().run({ system, messages: opts.messages, tools, ctx: opts.ctx });
 }

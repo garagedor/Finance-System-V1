@@ -5,11 +5,12 @@
 // and shows evidence — no navigation or writes yet.
 
 import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthShell";
 import Link from "next/link";
 import { createWebSpeechVoice } from "@/lib/ai/live/voice/web-speech";
 import type { VoiceProvider } from "@/lib/ai/live/voice/types";
+import { sanitizeNav, hrefFor, resolveCapability } from "@/lib/ai/live/nav/capabilities";
 import { TtsController } from "./TtsController";
 import AiBlocksLite from "./AiBlocksLite";
 
@@ -34,6 +35,7 @@ const STATE_LABEL: Record<OrbState, string> = {
 export default function LiveAssistant() {
   const { user } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
 
   const [open, setOpen] = useState(false);
   const [orb, setOrb] = useState<OrbState>("idle");
@@ -45,6 +47,8 @@ export default function LiveAssistant() {
 
   const [voiceLabel, setVoiceLabel] = useState("Device voice");
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
+  const [navEnabled, setNavEnabled] = useState(true);
+  const navEnabledRef = useRef(true);
   const voiceRef = useRef<VoiceProvider | null>(null);
   const ttsRef = useRef<TtsController | null>(null);
   const sessionIdRef = useRef<string>("");
@@ -100,7 +104,55 @@ export default function LiveAssistant() {
     return ttsRef.current?.speak(text, lang) ?? Promise.resolve();
   }
 
-  async function runPlan(plan: { steps: { type: string; text?: string; blocks?: unknown[]; question?: string; lang?: string }[] }) {
+  function navSession() {
+    return { permissions: user?.permissions ?? [], type: user?.type };
+  }
+
+  // Scroll to and briefly flash an allowlisted anchor. The page may still be
+  // mounting after router.push, so retry a few times before giving up.
+  function flashAnchor(anchorId: string) {
+    if (typeof document === "undefined") return;
+    const tryFlash = (attempt: number) => {
+      if (cancelRef.current) return;
+      const el = document.getElementById(anchorId);
+      if (!el) {
+        if (attempt < 6) setTimeout(() => tryFlash(attempt + 1), 250);
+        return;
+      }
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.add("ai-flash");
+      setTimeout(() => el.classList.remove("ai-flash"), 2200);
+    };
+    tryFlash(0);
+  }
+
+  // Navigate — but only after client-side re-validation against the same
+  // permission-scoped allowlist the server used (defense in depth), and only
+  // when the session has navigation enabled.
+  function doNavigate(routeId: string, params?: Record<string, string>) {
+    if (!navEnabledRef.current) return;
+    const nav = sanitizeNav({ routeId, params }, navSession());
+    if (!nav) return;
+    const label = resolveCapability(nav.routeId)?.label ?? "the page";
+    setSubtitle(`Opening ${label}…`);
+    router.push(hrefFor(nav.routeId, nav.params));
+  }
+
+  async function runPlan(plan: {
+    steps: {
+      type: string;
+      text?: string;
+      blocks?: unknown[];
+      question?: string;
+      lang?: string;
+      routeId?: string;
+      params?: Record<string, string>;
+      anchorId?: string;
+      filterKey?: string;
+      value?: string;
+      ms?: number;
+    }[];
+  }) {
     cancelRef.current = false;
     // one assistant message we fill in as steps run
     let assistantText = "";
@@ -139,6 +191,14 @@ export default function LiveAssistant() {
         setSubtitle(step.question);
         await speak(step.question, step.lang || "en");
         setSubtitle("");
+      } else if (step.type === "navigate" && step.routeId) {
+        doNavigate(step.routeId, step.params);
+      } else if (step.type === "apply_filter" && step.routeId && step.filterKey) {
+        doNavigate(step.routeId, { [step.filterKey]: step.value ?? "" });
+      } else if (step.type === "highlight" && step.anchorId) {
+        if (navEnabledRef.current) flashAnchor(step.anchorId);
+      } else if (step.type === "pause") {
+        await new Promise((r) => setTimeout(r, Math.min(2000, step.ms ?? 400)));
       }
     }
     setOrb("idle");
@@ -271,6 +331,18 @@ export default function LiveAssistant() {
                 <Link href="/portal/ai/voice" style={{ color: "#64748b", textDecoration: "underline" }}>settings</Link>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !navEnabledRef.current;
+                navEnabledRef.current = next;
+                setNavEnabled(next);
+              }}
+              title={navEnabled ? "Navigation on — JARVIS can open pages for you" : "Navigation off — voice + evidence only"}
+              style={{ ...iconBtn, opacity: navEnabled ? 1 : 0.45 }}
+            >
+              🧭
+            </button>
             <button type="button" onClick={() => setMuted((m) => !m)} title={muted ? "Voice off" : "Voice on"} style={iconBtn}>
               {muted ? "🔇" : "🔊"}
             </button>
@@ -335,7 +407,9 @@ export default function LiveAssistant() {
         </div>
       )}
 
-      <style>{`@keyframes aiPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }`}</style>
+      <style>{`@keyframes aiPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+@keyframes aiFlash { 0%,100% { box-shadow: 0 0 0 0 rgba(129,140,248,0); } 35% { box-shadow: 0 0 0 3px rgba(129,140,248,0.9), 0 0 22px 6px rgba(129,140,248,0.5); } }
+.ai-flash { animation: aiFlash 1.1s ease-in-out 2; outline: 2px solid rgba(129,140,248,0.75); outline-offset: 3px; border-radius: 12px; }`}</style>
     </>
   );
 }

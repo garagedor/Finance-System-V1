@@ -102,29 +102,34 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           label="Total Revenue"
           value={fmt$(d.totalRevenue)}
           sub={`${d.jobCount.toLocaleString()} closed jobs · +${fmt$(d.manualIncome)} manual`}
+          anchorId="ai-revenue"
         />
         <Kpi
           label="Gross Profit"
           value={fmt$(d.grossProfit)}
           sub={d.totalRevenue > 0 ? `${fmtPct(d.grossProfit / d.totalRevenue)} margin` : "—"}
           tone="up"
+          anchorId="ai-gross-profit"
         />
         <Kpi
           label="Net Profit"
           value={fmt$(d.netProfit)}
           sub="after expenses & payouts"
           tone={d.netProfit < 0 ? "down" : "up"}
+          anchorId="ai-net-profit"
         />
         <Kpi
           label="Operating Expenses"
           value={fmt$(d.totalExpenses)}
           sub={d.unpaidExpenses > 0 ? `${fmt$(d.unpaidExpenses)} unpaid` : "all paid"}
           tone="down"
+          anchorId="ai-expenses"
         />
         <Kpi
           label="Cash on Hand"
           value={fmt$(d.cashOnHand)}
           sub={`${d.bankAccounts.length} bank account(s)`}
+          anchorId="ai-cash"
         />
       </section>
 
@@ -134,11 +139,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           value={fmt$(d.outstandingPayables)}
           sub="unpaid expenses + payouts + debts"
           tone="down"
+          anchorId="ai-payables"
         />
         <Kpi
           label="Outstanding Receivables (disputes)"
           value={fmt$(d.outstandingReceivables)}
           sub={`${d.openDisputes} open dispute(s)`}
+          anchorId="ai-receivables"
         />
       </section>
 
@@ -619,14 +626,16 @@ function Kpi({
   value,
   sub,
   tone,
+  anchorId,
 }: {
   label: string;
   value: string;
   sub?: string;
   tone?: "up" | "down";
+  anchorId?: string;
 }) {
   return (
-    <div className="portal-kpi">
+    <div className="portal-kpi" id={anchorId}>
       <div className="portal-kpi-label">{label}</div>
       <div className={`portal-kpi-value ${tone === "up" ? "portal-kpi-trend-up" : tone === "down" ? "portal-kpi-trend-down" : ""}`}>
         {value}
