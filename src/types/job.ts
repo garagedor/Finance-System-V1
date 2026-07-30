@@ -6,6 +6,9 @@ export type JobRow = {
     /** Normalized real Date derived from `date` (additive; legacy `date` preserved).
      *  Maintained on write; indexed for fast date-range queries. */
     jobDateNormalized?: Date | null;
+    /** Canonical form of `status` (trimmed + de-typo'd; additive, legacy `status`
+     *  preserved). Maintained on write; reports still read `status` for now. */
+    statusCanonical?: string;
     address?: string;
     location?: string;
     totalAmount?: number;

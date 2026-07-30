@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient, Db, Collection, ObjectId } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
+import { canonicalStatus } from "@/lib/status-canonical";
 import type { JobRow } from '../../../types/job';
 
 const DB_NAME = 'ag';
@@ -478,6 +479,10 @@ export async function PUT(req: NextRequest) {
         if ('date' in body) {
             update.jobDateNormalized = normalizeJobDate(body.date);
         }
+        // Keep the canonical status in sync whenever `status` is part of the edit.
+        if ('status' in body) {
+            update.statusCanonical = canonicalStatus(body.status);
+        }
         if ((body as any).approvals !== undefined) {
             (update as any).approvals = normalizeApprovals((body as any).approvals);
         }
@@ -514,6 +519,8 @@ export async function POST(req: NextRequest) {
         // matching the backfill which left missing-date docs without the field).
         const normalized = normalizeJobDate(doc.date);
         if (normalized) doc.jobDateNormalized = normalized;
+        // Populate the canonical status on create (when a status is present).
+        if (typeof doc.status === 'string' && doc.status.trim()) doc.statusCanonical = canonicalStatus(doc.status);
 
         const { collection } = await connectToDatabase();
 
