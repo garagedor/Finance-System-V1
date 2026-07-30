@@ -65,3 +65,31 @@ real bug in the *current* code:
 
 **DATA-QUALITY EXCEPTION (for final report):** 5 `Job` docs have a blank/missing `provider`.
 Not deleted or altered — flagged here for review. They caused the home-stats inflation above.
+
+## Phase 4 — Additive Job.date normalization ✅ (field live; reads not yet switched)
+Added `jobDateNormalized` (BSON Date) via `scripts/perf/migrations/backfill-jobdate.mjs`,
+computed with the SAME `$dateFromString` the endpoints use (so value == current query-time parse).
+- Inventory (read-only first): 47,971 Job docs — 42,395 clean ISO `YYYY-MM-DD`, 5,576
+  missing/empty, ~4 empty strings, **0 ambiguous**, 0 unparseable.
+- Sample-tested 100 docs (field added, legacy `date` unchanged), then full batched backfill:
+  **42,395 written, 0 exceptions, 0 mismatches** (field == parse(date) everywhere).
+- Legacy `date` string **untouched** (still string in all 42,399). Reversible via `--rollback` ($unset).
+- Missing-date docs left without the field (flagged, not fabricated). Exceptions log:
+  `perf-remediation/migrations/jobdate-exceptions.json` (empty — none).
+- **API note:** `/api/jobs` returns raw Job docs, so it now includes `jobDateNormalized`
+  (additive, non-breaking; all other values identical). Baseline re-blessed. No other endpoint's
+  shape changed.
+- **NOT YET DONE (next unit):** new Job writes must populate `jobDateNormalized`, and endpoint
+  date-`$match`es must switch from `$dateFromString $expr` to `{ jobDateNormalized: {$gte,$lte} }`
+  to actually use the index. That read-switch is output-neutral (same value) and will be
+  parity-verified per endpoint. Gated on write-path maintenance first (correctness).
+
+## Phase 6 — Measured index strategy ✅ (additive, no drops)
+`scripts/perf/migrations/create-indexes.mjs`. Job indexes 1 → 5:
+- `jobDateNormalized_-1`, `tech_1_jobDateNormalized_-1`, `status_1_jobDateNormalized_-1`,
+  `location_1_jobDateNormalized_-1`.
+- **Evidence:** year-range query `COLLSCAN examined=47,971 → IXSCAN examined=30,801` (only
+  matching docs). Narrow ranges (a week/month dashboard) benefit far more. Total index size
+  **3.97 MB** (collection 24.8 MB) — negligible write overhead. No existing index dropped.
+- Indexes are inert until Phase 2 read-switch lands (existing `$dateFromString` queries can't
+  use them). Parity confirmed unchanged after creation.
