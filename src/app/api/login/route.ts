@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient, Collection } from 'mongodb';
+import { MongoClient, Collection } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 import bcrypt from 'bcryptjs';
 import type { User, AuthUser } from '../../../types/user';
 import { computeEffectivePermissions, signSessionToken } from '@/lib/rbac';
 import { ensureRbacReady } from '@/lib/rbac-seed';
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const USERS_COLLECTION = 'users';
 
@@ -17,7 +17,7 @@ async function connectToDatabase(): Promise<Collection<User>> {
         return db.collection<User>(USERS_COLLECTION);
     }
 
-    const client = new MongoClient(MONGODB_URI);
+    const client = await getMongoClient();
     await client.connect();
     cachedClient = client;
 

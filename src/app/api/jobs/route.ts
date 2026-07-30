@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
+import { MongoClient, Db, Collection, ObjectId } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../types/job';
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const COLLECTION_NAME = 'Job';
 
@@ -41,7 +41,7 @@ async function connectToDatabase(): Promise<{ client: MongoClient; db: Db; colle
         return { client: cachedClient, db, collection };
     }
 
-    const client = new MongoClient(MONGODB_URI);
+    const client = await getMongoClient();
     await client.connect();
     cachedClient = client;
 

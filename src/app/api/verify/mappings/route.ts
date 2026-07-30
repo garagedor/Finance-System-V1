@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient } from 'mongodb';
+import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../../types/job';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../lib/supabase-server';
 import {
@@ -9,20 +9,11 @@ import {
   upsertAreaMapping,
 } from '../../../../lib/verify/mapping-store';
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
 const TECHNICIAN_COLLECTION = 'Technician';
 const LOCATION_COLLECTION = 'Location';
 
-let cachedMongo: MongoClient | null = null;
-async function getMongoClient(): Promise<MongoClient> {
-  if (cachedMongo) return cachedMongo;
-  const c = new MongoClient(MONGODB_URI);
-  await c.connect();
-  cachedMongo = c;
-  return c;
-}
 
 // GET — list every Supabase user/area, every CRM tech/location, and current mappings.
 export async function GET(_req: NextRequest) {

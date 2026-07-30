@@ -10,7 +10,8 @@
 // response with download headers.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient } from 'mongodb';
+import { MongoClient } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 import { renderToBuffer } from '@react-pdf/renderer';
 import { createElement } from 'react';
 import { readFile } from 'fs/promises';
@@ -56,7 +57,6 @@ async function loadLogoDataUrl(): Promise<string | null> {
 // available in Edge. PDFs aren't latency-sensitive enough to justify Edge.
 export const runtime = 'nodejs';
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
 const TECH_COLLECTION = 'Technician';
@@ -68,7 +68,7 @@ type Mode = 'tech' | 'location';
 let cachedClient: MongoClient | null = null;
 async function getClient(): Promise<MongoClient> {
     if (cachedClient) return cachedClient;
-    const client = new MongoClient(MONGODB_URI);
+    const client = await getMongoClient();
     await client.connect();
     cachedClient = client;
     return client;

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient, ObjectId } from 'mongodb';
+import { MongoClient, ObjectId } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 import type { Dispute, JobRow, Provider, Technician, Refund } from '../../../types/job';
 import {
   calcJobProfit,
@@ -15,7 +16,6 @@ import {
   toNumber,
 } from '../utils/calculations';
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
 const DISPUTE_COLLECTION = 'Dispute';
@@ -30,7 +30,7 @@ let cachedClient: MongoClient | null = null;
 
 async function getClient(): Promise<MongoClient> {
   if (cachedClient) return cachedClient;
-  const client = new MongoClient(MONGODB_URI);
+  const client = await getMongoClient();
   await client.connect();
   cachedClient = client;
   return client;

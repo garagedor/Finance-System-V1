@@ -5,17 +5,15 @@ import { STRIPPED_SYNTHETIC_FIELDS } from '../../../types/job';
 import { normalizeRefundRow } from '../../utils/refundUtils';
 import { createCrudHandlers } from '../utils/crudHandlers';
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient, ObjectId, Db } from 'mongodb';
+import { ObjectId, Db } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 
-const MONGODB_URI =
-  process.env.MONGODB_URI ??
-  'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = process.env.MONGODB_DB ?? 'ag';
 
 let _cachedDb: Db | null = null;
 async function db(): Promise<Db> {
   if (_cachedDb) return _cachedDb;
-  const c = new MongoClient(MONGODB_URI);
+  const c = await getMongoClient();
   await c.connect();
   _cachedDb = c.db(DB_NAME);
   return _cachedDb;

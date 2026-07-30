@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient, ObjectId } from 'mongodb';
+import { ObjectId } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../../../types/job';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../../lib/supabase-server';
 import { matchTechWithMapping, matchAreaWithMapping } from '../../../../../lib/verify/mapping';
@@ -8,18 +9,9 @@ import { getNote, getJobNotesForReport, upsertNote } from '../../../../../lib/ve
 import { getLinksForReport } from '../../../../../lib/verify/links-store';
 import { compare, deriveCrmMethod, type SupabaseReportJob, type CrmJob } from '../../../../../lib/verify/compare';
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
 
-let cachedMongo: MongoClient | null = null;
-async function getMongoClient(): Promise<MongoClient> {
-  if (cachedMongo) return cachedMongo;
-  const c = new MongoClient(MONGODB_URI);
-  await c.connect();
-  cachedMongo = c;
-  return c;
-}
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isSupabaseConfigured()) {

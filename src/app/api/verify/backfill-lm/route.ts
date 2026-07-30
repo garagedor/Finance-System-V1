@@ -7,7 +7,7 @@
 // Admin-only. Dry-run by default; pass ?dryRun=false to actually write.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient } from 'mongodb';
+import { getMongoClient } from "@/lib/mongo";
 import { jwtVerify } from 'jose';
 import type { JobRow } from '../../../../types/job';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../lib/supabase-server';
@@ -15,19 +15,10 @@ import { getTechMappingByUserId } from '../../../../lib/verify/mapping-store';
 import { getLinksForReport } from '../../../../lib/verify/links-store';
 import { compare, deriveCrmMethod, type SupabaseReportJob, type CrmJob } from '../../../../lib/verify/compare';
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
 const JWT_SECRET = new TextEncoder().encode('super-secret-key-for-development');
 
-let cachedMongo: MongoClient | null = null;
-async function getMongoClient(): Promise<MongoClient> {
-  if (cachedMongo) return cachedMongo;
-  const c = new MongoClient(MONGODB_URI);
-  await c.connect();
-  cachedMongo = c;
-  return c;
-}
 
 async function requireAdmin(request: NextRequest): Promise<NextResponse | null> {
   const session = request.cookies.get('session')?.value;

@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MongoClient, ObjectId } from 'mongodb';
+import { MongoClient, ObjectId } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 import { requirePermission } from '@/lib/rbac';
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 
 let cachedClient: MongoClient | null = null;
 async function getClient(): Promise<MongoClient> {
   if (cachedClient) return cachedClient;
-  const c = new MongoClient(MONGODB_URI);
+  const c = await getMongoClient();
   await c.connect();
   cachedClient = c;
   return c;

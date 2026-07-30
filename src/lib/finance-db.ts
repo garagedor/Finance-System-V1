@@ -7,11 +7,9 @@
 // `coll(name)` is SYNCHRONOUS — call `ensureFinanceIndexes()` at the top of
 // any server function that hits the DB and the cached client is established.
 
-import { MongoClient, type Db, type Collection, type Document } from "mongodb";
+import { type MongoClient, type Db, type Collection, type Document } from "mongodb";
+import { getMongoClient } from "./mongo";
 
-const MONGODB_URI =
-  process.env.MONGODB_URI ??
-  "mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net";
 const DB_NAME = process.env.MONGODB_DB ?? "ag";
 
 let _client: MongoClient | null = null;
@@ -19,51 +17,29 @@ let _db: Db | null = null;
 let _connecting: Promise<void> | null = null;
 let _lastConnectError: { message: string; code?: string; at: number } | null = null;
 
-// Transient network/DNS/TLS errors worth retrying. Atlas SRV lookups
-// occasionally fail with querySrv ENOTFOUND / EAI_AGAIN (flaky resolver,
-// especially in WSL), and TLS handshakes can drop ("SSL alert number 80").
-// These are momentary — a couple of quick retries recover without a restart.
-function isTransientConnErr(msg: string): boolean {
-  return /ENOTFOUND|querySrv|EAI_AGAIN|ETIMEDOUT|ECONNRESET|ECONNREFUSED|EAGAIN|SSL|TLS|timed out|topology|ServerSelection|pool/i.test(
-    msg,
-  );
-}
-
+// Delegates to the single shared client in ./mongo (globalThis-cached, with its
+// own transient-error retry + serverless pool). This keeps ONE connection pool
+// for the whole app instead of a second one here. Public API below is unchanged.
 async function connect(): Promise<void> {
   if (_db) return;
   if (_connecting) return _connecting;
   _connecting = (async () => {
-    let lastErr: unknown;
-    for (let attempt = 1; attempt <= 4; attempt++) {
-      try {
-        const client = new MongoClient(MONGODB_URI, {
-          serverSelectionTimeoutMS: 8000,
-          // Re-use the same socket pool the rest of the CRM uses.
-          maxPoolSize: 20,
-        });
-        await client.connect();
-        _client = client;
-        _db = client.db(DB_NAME);
-        _lastConnectError = null;
-        return;
-      } catch (e) {
-        lastErr = e;
-        const msg = e instanceof Error ? e.message : String(e);
-        if (attempt < 4 && isTransientConnErr(msg)) {
-          await new Promise((r) => setTimeout(r, 300 * attempt)); // 0.3s, 0.6s, 0.9s
-          continue;
-        }
-        break;
-      }
+    try {
+      const client = await getMongoClient();
+      _client = client;
+      _db = client.db(DB_NAME);
+      _lastConnectError = null;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const code = (e as { code?: string })?.code;
+      _lastConnectError = { message: msg, code, at: Date.now() };
+      _connecting = null; // allow retry on next call
+      throw e;
     }
-    const msg = lastErr instanceof Error ? lastErr.message : String(lastErr);
-    const code = (lastErr as { code?: string })?.code;
-    _lastConnectError = { message: msg, code, at: Date.now() };
-    _connecting = null; // allow retry on next call
-    throw lastErr;
   })();
   return _connecting;
 }
+void _client;
 
 export async function getDb(): Promise<Db> {
   await connect();

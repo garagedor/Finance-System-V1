@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Collection, Db, MongoClient, ObjectId, type Document } from 'mongodb';
+import { Collection, Db, MongoClient, ObjectId, type Document } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 import { normalizeDate } from '@/app/utils/jobUtils';
 
-const MONGODB_URI ='mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 
 export type CrudOptions<T extends Document> = {
@@ -32,7 +32,7 @@ async function connectToDatabase<T extends Document>(
     return { client: cachedClient, db, collection };
   }
 
-  const client = new MongoClient(MONGODB_URI);
+  const client = await getMongoClient();
   await client.connect();
   cachedClient = client;
 

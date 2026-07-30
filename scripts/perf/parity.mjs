@@ -10,6 +10,22 @@ const A = new URL(`../../perf-remediation/${baseDir}/`, import.meta.url);
 const B = new URL(`../../perf-remediation/${afterDir}/`, import.meta.url);
 
 const EPS = 1e-6; // tolerate float noise only; business totals must otherwise match
+
+// Canonicalize: deep-sort arrays by the JSON of their (already key-sorted)
+// elements. Applied identically to BOTH sides, so it erases pure element-order
+// differences (some endpoints group without a stable sort — the VALUES are what
+// matter for financial parity) while still surfacing any value/type change.
+function canon(v) {
+  if (Array.isArray(v)) {
+    const items = v.map(canon);
+    return [...items].sort((x, y) => (JSON.stringify(x) < JSON.stringify(y) ? -1 : 1));
+  }
+  if (v && typeof v === "object") {
+    return Object.keys(v).sort().reduce((o, k) => { o[k] = canon(v[k]); return o; }, {});
+  }
+  return v;
+}
+
 function diff(a, b, path, out) {
   if (a === b) return;
   const ta = a === null ? "null" : typeof a, tb = b === null ? "null" : typeof b;
@@ -39,7 +55,7 @@ for (const f of files) {
   try { a = JSON.parse(readFileSync(new URL(f, A))); } catch { console.log(`? ${f}: no baseline`); continue; }
   try { b = JSON.parse(readFileSync(new URL(f, B))); } catch { console.log(`✗ ${f}: MISSING in ${afterDir}`); mismatches++; continue; }
   const out = [];
-  diff(a, b, "", out);
+  diff(canon(a), canon(b), "", out);
   if (out.length === 0) { console.log(`✓ ${f.replace(".json", "").padEnd(26)} identical`); }
   else {
     mismatches += out.length;
