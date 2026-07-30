@@ -14,6 +14,12 @@ import { sanitizeNav, hrefFor, resolveCapability } from "@/lib/ai/live/nav/capab
 import { TtsController } from "./TtsController";
 import AiBlocksLite from "./AiBlocksLite";
 
+// Instant spoken acknowledgements played the moment a question is submitted, so
+// the assistant starts talking within ~200ms instead of after the model's
+// multi-second reasoning. Rotated for variety; matched to the question's language.
+const LEAD_INS_EN = ["One moment…", "Let me pull that up.", "Looking into that now…", "On it — checking the numbers.", "Give me a second…"];
+const LEAD_INS_HE = ["רגע אחד…", "בודק את זה…", "מסתכל על הנתונים…"];
+
 type OrbState = "idle" | "listening" | "thinking" | "speaking";
 type Msg =
   | { role: "user"; text: string }
@@ -212,6 +218,12 @@ export default function LiveAssistant() {
     const history: Msg[] = [...msgs, { role: "user", text: clean }];
     setMsgs(history);
     setOrb("thinking");
+    // Speak an instant lead-in (fire-and-forget) so there's no dead air while the
+    // model reasons. It finishes long before the plan returns; the real narration
+    // then plays via runPlan. Honors mute (speak() no-ops when muted).
+    const leadLang = /[֐-׿]/.test(clean) ? "he" : "en";
+    const leadPool = leadLang === "he" ? LEAD_INS_HE : LEAD_INS_EN;
+    void speak(leadPool[Math.floor(Math.random() * leadPool.length)], leadLang);
     try {
       const res = await fetch("/api/portal/ai/live", {
         method: "POST",
