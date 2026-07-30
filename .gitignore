@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# perf remediation: local-only financial snapshots + logs (PUBLIC repo — never commit real financials)
+/perf-remediation/*
+!/perf-remediation/*.md
+# stray local file containing a DB password (never commit)
+_plaidstatus.mjs
