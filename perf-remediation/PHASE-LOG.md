@@ -206,3 +206,15 @@ each whole chart into its own component and `dynamic(ssr:false)`-imported it:
   do that headlessly).
 - **Not done:** EditJobModal / LinkPickerModal are defined *inside* verify-reports/page.tsx
   (1818 LOC) — lazy-loading them needs extracting them to separate files first (deferred).
+
+## Phase 9c — Extract + lazy-load verify-reports modals ✅
+Extracted `EditJobModal` (+ its Field/NumField/SectionLabel helpers + input/readonly styles +
+EditableJob type) and `LinkPickerModal` (+ CrmPickerOption type) from the 1818-line
+verify-reports/page.tsx into their own files, then `dynamic(ssr:false)`-imported them (loaded only
+when a user opens edit/link). `modalCloseStyle` (used by both) duplicated into each. Verified the
+page's editing/linkingFor state is `useState<any>` so no types needed threading back.
+- page.tsx: **1818 → 1339 lines**; new EditJobModal.tsx (272) + LinkPickerModal.tsx (225).
+- typecheck clean (proves all deps resolved), build green, /verify-reports returns 200.
+- Needs a browser smoke-test: open a job's Edit modal and the Link-to-CRM picker.
+
+— This completes the deferred front-end lazy-loading. All chart pages + every modal now load on demand.
