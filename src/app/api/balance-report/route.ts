@@ -62,16 +62,19 @@ export async function GET(req: NextRequest) {
       if (startDateStr) techQueryFilter.date.$gte = startDateStr;
       if (endDateStr) techQueryFilter.date.$lte = endDateStr;
     }
-    const activeTechs = await jobCol.distinct('tech', techQueryFilter);
+    // Independent reads — run concurrently instead of three serial round-trips.
+    const [activeTechs, techDocs, userDocs] = await Promise.all([
+      jobCol.distinct('tech', techQueryFilter),
+      techCol.find({}).toArray(),
+      userCol.find({}).toArray(),
+    ]);
 
-    const techDocs = await techCol.find({}).toArray();
     const techMap = new Map<string, Technician>();
     techDocs.forEach((t: any) => {
       const key = (t as any)._id?.toString() || '';
       techMap.set(key, { ...(t as Technician), _id: key });
     });
 
-    const userDocs = await userCol.find({}).toArray();
     const userRoleMap = new Map<string, string>();
     userDocs.forEach((u: any) => {
       if (u.name) userRoleMap.set(u.name, u.type || 'simple');

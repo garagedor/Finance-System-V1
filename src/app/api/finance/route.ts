@@ -66,21 +66,6 @@ export async function GET(req: NextRequest) {
     const techCol = db.collection<Technician>(TECH_COLLECTION);
     const locationCol = db.collection<Location>(LOCATION_COLLECTION);
 
-    const techDocs = await techCol.find({}).toArray();
-    const techMap = new Map<string, Technician>();
-    techDocs.forEach((t: any) => {
-      const id = (t as any)._id?.toString() || '';
-      techMap.set(id, { ...(t as Technician), _id: id });
-    });
-
-    // Location → managerProfitPercent (the "40%" — varies per location)
-    const locationDocs = await locationCol.find({}).toArray();
-    const locationPctMap = new Map<string, number>();
-    locationDocs.forEach((l: any) => {
-      const id = (l as any)._id?.toString() || '';
-      locationPctMap.set(id, toNumber(l.managerProfitPercent));
-    });
-
     const filter: Record<string, any> = {};
     if (startDate || endDate) {
       filter.date = {};
@@ -90,7 +75,25 @@ export async function GET(req: NextRequest) {
     if (techs.length > 0) filter.tech = { $in: techs };
     if (locations.length > 0) filter.location = { $in: locations };
 
-    const jobs = await jobCol.find(filter).toArray();
+    // Independent reads — run concurrently instead of serially.
+    const [techDocs, locationDocs, jobs] = await Promise.all([
+      techCol.find({}).toArray(),
+      locationCol.find({}).toArray(),
+      jobCol.find(filter).toArray(),
+    ]);
+
+    const techMap = new Map<string, Technician>();
+    techDocs.forEach((t: any) => {
+      const id = (t as any)._id?.toString() || '';
+      techMap.set(id, { ...(t as Technician), _id: id });
+    });
+
+    // Location → managerProfitPercent (the "40%" — varies per location)
+    const locationPctMap = new Map<string, number>();
+    locationDocs.forEach((l: any) => {
+      const id = (l as any)._id?.toString() || '';
+      locationPctMap.set(id, toNumber(l.managerProfitPercent));
+    });
 
     // View 1 — closed jobs only, ORIGINAL formulas
     const techBalanceAgg = new Map<string, TechBalanceRow>();
