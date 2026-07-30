@@ -1,5 +1,6 @@
 import "server-only";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
+import { createTtlCache } from "@/lib/ttl-cache";
 
 export type NarrationDetail = "concise" | "standard" | "detailed";
 
@@ -45,12 +46,18 @@ async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
   throw lastErr;
 }
 
+// Global (not per-user) config that changes rarely — cache it for 60s and
+// clear on write. Removes a Frankfurt round-trip from every voice request.
+const _voiceCache = createTtlCache<VoiceSettings>(60_000);
+
 export async function getVoiceSettings(): Promise<VoiceSettings> {
-  return withRetry(async () => {
-    await ensureFinanceIndexes();
-    const d = await coll<VoiceSettings>(FINANCE_COLLECTIONS.aiVoiceSettings).findOne({ _id: "voice" });
-    return { ...VOICE_DEFAULTS, ...(d ?? {}) };
-  });
+  return _voiceCache.get(() =>
+    withRetry(async () => {
+      await ensureFinanceIndexes();
+      const d = await coll<VoiceSettings>(FINANCE_COLLECTIONS.aiVoiceSettings).findOne({ _id: "voice" });
+      return { ...VOICE_DEFAULTS, ...(d ?? {}) };
+    }),
+  );
 }
 
 export async function setVoiceSettings(patch: Partial<VoiceSettings>): Promise<void> {
@@ -64,4 +71,5 @@ export async function setVoiceSettings(patch: Partial<VoiceSettings>): Promise<v
     await ensureFinanceIndexes();
     await coll<VoiceSettings>(FINANCE_COLLECTIONS.aiVoiceSettings).updateOne({ _id: "voice" }, { $set: set }, { upsert: true });
   });
+  _voiceCache.clear(); // reflect the write immediately
 }

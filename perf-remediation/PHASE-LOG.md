@@ -135,3 +135,30 @@ cookie). Now calls `computeBalanceReport()` **in-process** per tech — 0 HTTP s
   modals are defined *inside* the big page files. Both need component extraction + `dynamic()`
   wrappers — safe to do but must be validated in a real browser (can't here), so left for a
   browser-in-the-loop pass rather than shipped untested.
+
+## Phase 5 — Non-destructive status canonicalization ✅
+`src/lib/status-canonical.ts` (alias table + `canonicalStatus()` + known-vocab). jobs POST/PUT
+populate `statusCanonical` beside untouched legacy `status`. Reads unchanged → parity preserved.
+21 distinct statuses; variants (' X close'×13, 'Client Fixed It '×913, 'Customer Cenceled'×1)
+= 927 jobs that WOULD reclassify if reads switch (only the 13 ' X close' touch financials).
+0 unknown statuses. Unit map 6/6. Switching reads = separate owner-approved correction.
+
+## Phase 8 — Cache reference data ✅
+`src/lib/ttl-cache.ts` (global-only, 60s TTL, clear-on-write). Wrapped `getVoiceSettings` and
+`getAllDetectorConfig` (both global, low-change) + invalidate in their setters. Removes a
+Frankfurt round-trip from every voice/detector read. No per-user/tenant/financial data cached.
+Parity 13/13 identical.
+
+## Phase 10 — Middleware / double-JWT ✅ (retained by design, documented)
+Investigated: middleware verifies the session JWT on every /api/* (401), routes verify again for
+PERMISSIONS (403). This is NOT removable redundancy — the middleware is the only auth gate for any
+unguarded legacy API route (flagged in the RBAC audit). Documented the security rationale in
+`middleware.ts`; did NOT weaken it. Next 16 `proxy` rename is cosmetic and left for a pass that can
+validate real auth flows in a browser.
+
+## Phase 11 — Production observability ✅
+`src/lib/server-timing.ts` — standard `Server-Timing` response header (durations only, never
+bodies/identities/secrets; no sampling needed). Wired into home-stats (`db` + `total`). New
+admin-only `GET /api/portal/admin/diagnostics` exposes `mongoHealth()` (connection state, pool
+size, live DB ping ms, Vercel region) with NO URI/credentials. Verified header emits + endpoint
+returns. Pattern ready to extend to other hot routes.

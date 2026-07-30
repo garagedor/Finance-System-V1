@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
+import { ServerTiming } from "@/lib/server-timing";
 import { JobRow } from '../../../types/job';
 
 const DB_NAME = 'ag';
@@ -344,9 +345,12 @@ export async function GET(req: NextRequest) {
             },
         ];
 
+        const timing = new ServerTiming();
+        timing.start('db');
         const [result] = await collection.aggregate(pipeline).toArray();
+        timing.end('db', 'home-stats aggregate');
 
-        return NextResponse.json(result || {});
+        return timing.apply(NextResponse.json(result || {}));
     } catch (err) {
         console.error('GET /api/home-stats error', err);
         return NextResponse.json({ error: 'Failed to load home stats' }, { status: 500 });

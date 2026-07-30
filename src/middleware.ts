@@ -2,6 +2,17 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
+// SECURITY NOTE (perf review, Phase 10): this middleware verifies the session
+// JWT on every /api/* request and returns 401 when it's missing/invalid. Routes
+// ALSO verify (via readSession/requirePermission) to enforce PERMISSIONS (403).
+// That looks like a duplicate verify, but it is intentional defense-in-depth:
+// the middleware is the ONLY auth gate protecting any legacy API route that does
+// not self-check. It must NOT be removed to "save a verify" — doing so would
+// expose those routes. The per-route check adds authorization on top. If the
+// double signature-verify is ever eliminated, every /api route must first be
+// proven to enforce its own auth. (Next 16 renames this convention to `proxy`;
+// migrating is cosmetic and should be validated against real auth flows.)
+
 // MUST resolve the secret exactly like the signer (src/lib/rbac.ts) — otherwise
 // every real token fails verification and the whole API locks out.
 const JWT_SECRET = new TextEncoder().encode(
