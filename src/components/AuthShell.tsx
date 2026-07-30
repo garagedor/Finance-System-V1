@@ -9,6 +9,7 @@ import {
 } from 'react-icons/fi';
 import LoginPage from './LoginPage';
 import dynamic from 'next/dynamic';
+import SidebarClocks from './SidebarClocks';
 // Lazy-load the voice assistant: it's browser-only (TTS/audio/streaming) and not
 // needed for first paint, so keep it out of the shared layout bundle and hydrate
 // it after the page is interactive, only for users who can use it.
@@ -280,6 +281,9 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
               })
             )}
           </nav>
+
+          {/* World clocks — Indianapolis / Chicago / Israel by default */}
+          <SidebarClocks collapsed={collapsed} />
 
           {/* Collapse toggle — desktop only */}
           <div
