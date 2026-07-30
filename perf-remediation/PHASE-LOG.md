@@ -114,3 +114,24 @@ docs. Added `jobDateNormalized?: Date` to the `JobRow` type.
   old path to avoid parity risk; both still work, just not yet index-switched.
 
 Job indexes now: `_id`, `jobDateNormalized_-1`, `tech+date`, `status+date`, `location+date`, `date_1` (6 total).
+
+## Phase 3 — Eliminate crm-report HTTP N+1 ✅
+Extracted balance-report's computation into `computeBalanceReport()` (GET is now a thin
+wrapper). `crm-report` location roll-up called `/api/balance-report` over HTTP once per
+technician (N+1: re-entered middleware/auth, reloaded reference data each time, forwarded the
+cookie). Now calls `computeBalanceReport()` **in-process** per tech — 0 HTTP self-fetches.
+- **Identical numbers proven** by unchanged balance-report parity (both modes); crm-report
+  derives purely from the same function output (no lossy JSON round-trip: all fields are
+  numbers/strings). Auth still enforced by crm-report's own session gate.
+- typecheck clean; grep confirms `fetch(` count in crm-report = 0.
+
+## Phase 9 — Front-end lazy-loading ◐ (biggest win done)
+- **LiveAssistant** (429 LOC voice/TTS/streaming) was statically imported into the shared
+  `AuthShell` layout → shipped + hydrated on EVERY route for EVERY user. Now
+  `dynamic(ssr:false)` + rendered only for admins / users with a `system:ai*` permission:
+  out of the shared bundle, off first-paint, not loaded for non-AI users. Build green.
+- **Deferred (needs browser verification):** recharts is imported inline across 5 finance
+  pages (stats, balance-report, payment-method-report, home, ChatPanel); the edit/link/row
+  modals are defined *inside* the big page files. Both need component extraction + `dynamic()`
+  wrappers — safe to do but must be validated in a real browser (can't here), so left for a
+  browser-in-the-loop pass rather than shipped untested.
