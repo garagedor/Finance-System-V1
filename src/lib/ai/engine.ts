@@ -59,5 +59,16 @@ export async function runAssistant(opts: {
   const navPrompt = opts.live ? buildNavPrompt(opts.ctx) : "";
   const system = `${persona}\n\n${SHARED_RULES}${opts.live ? `\n\n${LIVE_NARRATION}` : ""}${navPrompt ? `\n\n${navPrompt}` : ""}\n\nToday's date is ${today}. The company is LBS Garage Door (US, Indianapolis area).`;
 
-  return providerFor().run({ system, messages: opts.messages, tools, ctx: opts.ctx });
+  // Live voice mode is latency-critical: run at LOW reasoning effort so the
+  // model makes fewer, more-consolidated tool calls and starts answering fast.
+  // The deterministic DB tools do the heavy financial work; the model only
+  // orchestrates + narrates, which low effort handles well. The full-report
+  // (non-live) path keeps the model's default (high) for maximum rigor.
+  return providerFor().run({
+    system,
+    messages: opts.messages,
+    tools,
+    ctx: opts.ctx,
+    ...(opts.live ? { effort: "low" as const } : {}),
+  });
 }

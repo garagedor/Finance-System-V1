@@ -129,7 +129,9 @@ export class AnthropicProvider implements AiProvider {
   }
 
   async run(input: ProviderRunInput): Promise<AgentResult> {
-    const resolved = await resolveModel();
+    // The live voice path (effort "low") prefers ANTHROPIC_LIVE_MODEL for speed;
+    // the full-report path uses the default (most-capable) model.
+    const resolved = await resolveModel({ fast: input.effort === "low" });
     const client = anthropicClient();
     const anthropicTools = toAnthropicTools(input.tools);
     const byName = new Map(input.tools.map((t) => [t.name, t]));
@@ -149,17 +151,30 @@ export class AnthropicProvider implements AiProvider {
     let cacheRead = 0;
     let requests = 0;
 
+    // Reasoning effort (live path passes "low" for speed). Only sent when the
+    // resolved model reports effort support — the provider owns model behavior.
+    const effortCfg =
+      input.effort && resolved.supportsEffort
+        ? { output_config: { effort: input.effort } }
+        : {};
+
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const resp = await client.messages.create({
-        model: resolved.id,
-        max_tokens: Math.min(MAX_TOKENS, resolved.maxOutputTokens || MAX_TOKENS),
-        system: input.system,
-        // Only enable adaptive thinking when the resolved model reports support
-        // for it — the provider owns model behavior, not the engine.
-        ...(resolved.supportsAdaptiveThinking ? { thinking: { type: "adaptive" as const } } : {}),
-        tools: anthropicTools,
-        messages,
-      });
+      // Stream the turn (SDK-recommended for large max_tokens — avoids HTTP
+      // timeouts on long agentic turns); finalMessage() yields the complete
+      // response, so the rest of the loop is unchanged.
+      const resp = await client.messages
+        .stream({
+          model: resolved.id,
+          max_tokens: Math.min(MAX_TOKENS, resolved.maxOutputTokens || MAX_TOKENS),
+          system: input.system,
+          // Only enable adaptive thinking when the resolved model reports support
+          // for it — the provider owns model behavior, not the engine.
+          ...(resolved.supportsAdaptiveThinking ? { thinking: { type: "adaptive" as const } } : {}),
+          ...effortCfg,
+          tools: anthropicTools,
+          messages,
+        })
+        .finalMessage();
 
       requests++;
       inTok += resp.usage?.input_tokens ?? 0;

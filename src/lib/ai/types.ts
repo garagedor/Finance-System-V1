@@ -76,11 +76,16 @@ export type ToolDef = {
   ) => Promise<{ data: unknown; summary: string; freshness?: { source: string; lastSync: string }[] }>;
 };
 
+export type AiEffort = "low" | "medium" | "high" | "xhigh" | "max";
+
 export type ProviderRunInput = {
   system: string;
   messages: ChatMessage[];
   tools: ToolDef[];
   ctx: ToolContext;
+  /** Reasoning effort. Lower = faster, fewer/consolidated tool calls (used for
+   *  the live voice path). Omitted = the model's default (high). */
+  effort?: AiEffort;
 };
 
 /** One-shot structured completion — the model fills a single schema-shaped

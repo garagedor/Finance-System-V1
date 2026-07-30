@@ -36,6 +36,7 @@ export type ModelStatus = {
 export type ResolvedModel = {
   id: string;
   supportsAdaptiveThinking: boolean;
+  supportsEffort: boolean;
   maxOutputTokens: number;
 };
 
@@ -90,6 +91,7 @@ function toResolved(m: ApiModel): ResolvedModel {
   return {
     id: m.id,
     supportsAdaptiveThinking: capSupported(m.capabilities, ["thinking", "types", "adaptive"]),
+    supportsEffort: capSupported(m.capabilities, ["effort", "low"]),
     maxOutputTokens: typeof m.max_tokens === "number" && m.max_tokens > 0 ? m.max_tokens : 8192,
   };
 }
@@ -201,9 +203,31 @@ async function resolveFresh(): Promise<{ resolved: ResolvedModel; status: ModelS
   };
 }
 
-/** Resolve the model to use (cached). Throws AiConfigError on misconfiguration. */
-export async function resolveModel(): Promise<ResolvedModel> {
+// Optional faster model for the latency-critical live voice path, e.g.
+// ANTHROPIC_LIVE_MODEL=claude-sonnet-5. Validated against the Models API like
+// ANTHROPIC_MODEL — never a hardcoded id. Unset → the live path uses the same
+// (most-capable) model as everything else.
+let _fastCache: { resolved: ResolvedModel; at: number } | null = null;
+
+/** Resolve the model to use (cached). Throws AiConfigError on misconfiguration.
+ *  `opts.fast` prefers ANTHROPIC_LIVE_MODEL when set (falls back to the default
+ *  model on any error), for the speed-sensitive live voice path. */
+export async function resolveModel(opts?: { fast?: boolean }): Promise<ResolvedModel> {
   if (!hasAnthropicKey()) throw new AiConfigError("no_key", "ANTHROPIC_API_KEY is not set.");
+  if (opts?.fast) {
+    const liveId = process.env.ANTHROPIC_LIVE_MODEL?.trim();
+    if (liveId) {
+      if (_fastCache && Date.now() - _fastCache.at < CACHE_TTL_MS) return _fastCache.resolved;
+      try {
+        const m = (await anthropicClient().models.retrieve(liveId)) as unknown as ApiModel;
+        const resolved = toResolved(m);
+        _fastCache = { resolved, at: Date.now() };
+        return resolved;
+      } catch {
+        // Invalid/unreachable live model → fall through to the default model.
+      }
+    }
+  }
   if (_cache && Date.now() - _cache.at < CACHE_TTL_MS) return _cache.resolved;
   const r = await resolveFresh();
   _cache = { ...r, at: Date.now() };
