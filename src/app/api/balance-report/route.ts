@@ -41,13 +41,16 @@ const inclusiveEnd = (value: string | null) => {
   return d;
 };
 
-export async function GET(req: NextRequest) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const startDateStr = searchParams.get('startDate');
-    const endDateStr = searchParams.get('endDate');
-    const techFilter = searchParams.get('tech') || '';
-    const mode = (searchParams.get('mode') as Mode) || 'tech';
+/** Core Balance Report computation, callable in-process (no HTTP round-trip).
+ *  The GET handler is a thin wrapper; crm-report calls this directly to avoid a
+ *  per-technician self-fetch N+1. Returns the exact same object the GET returns. */
+export async function computeBalanceReport(opts: {
+  startDateStr: string | null;
+  endDateStr: string | null;
+  techFilter: string;
+  mode: Mode;
+}) {
+    const { startDateStr, endDateStr, techFilter, mode } = opts;
     const client = await getClient();
     const db = client.db(DB_NAME);
     const jobCol = db.collection<JobRow>(JOB_COLLECTION);
@@ -269,7 +272,7 @@ export async function GET(req: NextRequest) {
       .sort(([a], [b]) => (a > b ? 1 : -1))
       .map(([date, amount]) => ({ date, amount }));
 
-    return NextResponse.json({
+    return {
       rows,
       totals: {
         assigned: toNumber(assigned),
@@ -286,7 +289,19 @@ export async function GET(req: NextRequest) {
       byDate,
       appliedPct: mode === 'location' ? locationPct : (techForLocation?.profitPercent ?? 0),
       activeTechs,
+    };
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const result = await computeBalanceReport({
+      startDateStr: searchParams.get('startDate'),
+      endDateStr: searchParams.get('endDate'),
+      techFilter: searchParams.get('tech') || '',
+      mode: (searchParams.get('mode') as Mode) || 'tech',
     });
+    return NextResponse.json(result);
   } catch (err) {
     console.error('GET /api/balance-report error', err);
     return NextResponse.json({ error: 'Failed to load balance report' }, { status: 500 });

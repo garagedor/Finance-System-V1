@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, getDb, newId } from "@/lib/finance-db";
 import { readPortalSession } from "@/lib/portal-auth";
+import { computeBalanceReport } from "@/app/api/balance-report/route";
 import type { LedgerEntryRecord, LedgerRecord, LedgerReportMeta } from "@/types/finance-ledger";
 
 interface ReportRow {
@@ -32,25 +33,24 @@ function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-/** Pull one technician's Balance Report and sum its CLOSED-job headline. */
+/** Compute one technician's Balance Report IN-PROCESS and sum its CLOSED-job
+ *  headline. Previously this self-fetched /api/balance-report over HTTP once per
+ *  technician (an N+1 that re-entered middleware/auth and reloaded reference data
+ *  each time). Calling computeBalanceReport directly yields identical numbers with
+ *  no HTTP round-trip. Auth is already enforced by this route's own session gate. */
 async function fetchTechReport(
-  origin: string,
   tech: string,
   mode: "tech" | "location",
   start: string,
   end: string,
-  cookie: string,
 ): Promise<TechReport> {
-  const url =
-    `${origin}/api/balance-report` +
-    `?tech=${encodeURIComponent(tech)}&mode=${mode}` +
-    `&startDate=${encodeURIComponent(start)}&endDate=${encodeURIComponent(end)}`;
-  // Forward the caller's session cookie — /api/* is auth-gated by middleware,
-  // so this server-to-server call must carry the logged-in user's session.
-  const r = await fetch(url, { cache: "no-store", headers: cookie ? { cookie } : undefined });
-  if (!r.ok) throw new Error(`Balance report failed for "${tech}" (HTTP ${r.status})`);
-  const snap = (await r.json()) as { rows?: ReportRow[]; totals?: { profit?: number } };
-  const rows = Array.isArray(snap.rows) ? snap.rows : [];
+  const snap = await computeBalanceReport({
+    startDateStr: start,
+    endDateStr: end,
+    techFilter: tech,
+    mode,
+  });
+  const rows = Array.isArray(snap.rows) ? (snap.rows as ReportRow[]) : [];
   const closed = rows.filter((j) => (j.status ?? "") === "Closed");
   return {
     closed,
@@ -84,8 +84,6 @@ export async function POST(
     if (!subject) return NextResponse.json({ error: "Subject (tech / location) is required" }, { status: 400 });
     if (!start || !end) return NextResponse.json({ error: "Date range is required" }, { status: 400 });
 
-    const origin = req.nextUrl.origin;
-    const cookie = req.headers.get("cookie") ?? "";
     let balance = 0;
     let balanceWithTips = 0;
     let profit = 0;
@@ -93,7 +91,7 @@ export async function POST(
     let techBreakdown: NonNullable<LedgerReportMeta["techs"]> | null = null;
 
     if (mode === "tech") {
-      const rep = await fetchTechReport(origin, subject, "tech", start, end, cookie);
+      const rep = await fetchTechReport(subject, "tech", start, end);
       balance = rep.balance;
       balanceWithTips = rep.balanceWithTips;
       profit = rep.profit;
@@ -116,7 +114,7 @@ export async function POST(
 
       const reports = await Promise.all(
         techNames.map((name) =>
-          fetchTechReport(origin, name, "location", start, end, cookie)
+          fetchTechReport(name, "location", start, end)
             .then((rep) => ({ name, rep }))
             .catch(() => ({ name, rep: null as TechReport | null })),
         ),
