@@ -8,7 +8,11 @@ import {
   FiDollarSign, FiFileText, FiChevronLeft, FiChevronRight, FiMenu, FiPieChart, FiCreditCard, FiCheckSquare, FiCpu,
 } from 'react-icons/fi';
 import LoginPage from './LoginPage';
-import LiveAssistant from '@/components/live/LiveAssistant';
+import dynamic from 'next/dynamic';
+// Lazy-load the voice assistant: it's browser-only (TTS/audio/streaming) and not
+// needed for first paint, so keep it out of the shared layout bundle and hydrate
+// it after the page is interactive, only for users who can use it.
+const LiveAssistant = dynamic(() => import('@/components/live/LiveAssistant'), { ssr: false });
 import type { AuthUser } from '@/types/user';
 import {
   FINANCE_NAV,
@@ -378,7 +382,7 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
         </div>
       </div>
       {/* Global JARVIS live assistant — persists across route changes */}
-      <LiveAssistant />
+      {(user.type === 'admin' || (user.permissions ?? []).some((p) => p.startsWith('system:ai'))) && <LiveAssistant />}
     </AuthContext.Provider>
   );
 }
