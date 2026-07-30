@@ -37,5 +37,25 @@ Credential now lives in ONE place instead of 27 (full rotation is a separate app
   · disputes −24% · jobs −26%. Query-bound endpoints (home-stats) unchanged — that's Phase 2.
   The larger, unmeasured win is on Vercel cold/serverless: no per-request TLS+SCRAM handshake.
 
-**Files:** new `src/lib/mongo.ts`; modified `src/lib/finance-db.ts` + 27 route/store files
+**Files:** new `src/lib/mongo.ts`; modified `src/lib/finance-db.ts` + 30 route/store files
 (connection wiring only — no business logic touched).
+
+## Phase 2 — Remove over-fetching ◐ (in progress)
+**home-stats (7.8s, worst endpoint) — attempted, reverted, DATA-QUALITY FINDING:**
+Tried replacing the correlated per-document Provider `$lookup` (scans all 113 providers
+per job) with two hash-join lookups. **Parity FAILED (27 diffs)** and the harness caught a
+real bug in the *current* code:
+- **5 Job docs have a blank/missing `provider`**, and the `$or [_id==p, name==p]` matches
+  **all 113 providers** for each → `$unwind` multiplies each of those 5 jobs into 113 rows.
+- Effect: the home dashboard **over-counts** — those 5 jobs are counted 113× in
+  `jobsByLocation` / `techStats` / `locationStats` (~560 phantom rows), inflating counts and
+  skewing `avgTicket` / `closedPct` denominators. (Confirmed: 30,339 jobs match 1 provider,
+  457 match 0, **5 match 113**.)
+- The rewrite *corrected* this (de-duplicated) — which is why numbers changed. Per the
+  financial-parity mandate, **reverted to preserve exact current output.** home-stats is now
+  byte-identical to baseline again.
+- **Decision needed from owner:** (a) preserve exact current numbers (keep the 113× inflation),
+  or (b) apply the de-dup as a documented data-quality correction (also removes the per-doc
+  Provider scan → big speedup). Speed for home-stats otherwise comes from the output-neutral
+  date-index path (Phases 4+6), which does NOT change any number.
+- Verify script: `scripts/perf/dq-provider-dup.mjs`.
