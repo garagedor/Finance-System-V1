@@ -27,26 +27,13 @@ export async function GET(req: NextRequest) {
 
         const matchStage: any = {};
         if (startDate || endDate) {
-            matchStage.$expr = {
-                $and: [],
-            };
-
-            if (startDate) {
-                matchStage.$expr.$and.push({
-                    $gte: [
-                        { $dateFromString: { dateString: '$date', onError: new Date(0) } },
-                        new Date(startDate),
-                    ],
-                });
-            }
-            if (endDate) {
-                matchStage.$expr.$and.push({
-                    $lte: [
-                        { $dateFromString: { dateString: '$date', onError: new Date(0) } },
-                        new Date(endDate),
-                    ],
-                });
-            }
+            // Index-backed range on the normalized date. Identical result set to
+            // the previous $dateFromString match (jobDateNormalized === that parse;
+            // missing/blank dates are excluded from a bounded range either way),
+            // but now uses the jobDateNormalized index instead of a full scan.
+            matchStage.jobDateNormalized = {};
+            if (startDate) matchStage.jobDateNormalized.$gte = new Date(startDate);
+            if (endDate) matchStage.jobDateNormalized.$lte = new Date(endDate);
         }
 
         // Helper for safe number conversion in aggregation

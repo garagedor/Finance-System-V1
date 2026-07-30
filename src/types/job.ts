@@ -3,6 +3,9 @@ export type JobRow = {
     tech?: string
     status?: string;
     date?: string;
+    /** Normalized real Date derived from `date` (additive; legacy `date` preserved).
+     *  Maintained on write; indexed for fast date-range queries. */
+    jobDateNormalized?: Date | null;
     address?: string;
     location?: string;
     totalAmount?: number;

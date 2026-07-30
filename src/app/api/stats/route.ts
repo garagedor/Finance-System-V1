@@ -60,7 +60,10 @@ export async function GET(req: NextRequest) {
       const range: any = {};
       if (startDate) range.$gte = new Date(startDate);
       if (endDate) range.$lte = new Date(endDate);
-      matchStage.dateParsed = { ...(range.$gte ? { $gte: range.$gte } : {}), ...(range.$lte ? { $lte: range.$lte } : {}) };
+      // Range on the indexed jobDateNormalized (== dateParsed value). Kept
+      // dateParsed above for the day grouping; the optimizer pushes this $match
+      // ahead of the $addFields so it uses the index instead of a full scan.
+      matchStage.jobDateNormalized = { ...(range.$gte ? { $gte: range.$gte } : {}), ...(range.$lte ? { $lte: range.$lte } : {}) };
     }
     const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 

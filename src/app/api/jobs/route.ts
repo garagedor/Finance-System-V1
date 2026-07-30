@@ -452,6 +452,17 @@ export async function GET(req: NextRequest) {
     }
 }
 
+/** Derive the normalized Date from a `date` string, matching the stored
+ *  jobDateNormalized (backfilled with the same date-only semantics). Returns
+ *  null for missing/blank/unparseable so index-scoped reads stay correct. */
+function normalizeJobDate(raw: unknown): Date | null {
+    if (typeof raw !== 'string') return null;
+    const s = raw.trim();
+    if (!s) return null;
+    const d = new Date(s.slice(0, 10)); // 'YYYY-MM-DD' -> UTC midnight (same as $dateFromString)
+    return Number.isNaN(d.getTime()) ? null : d;
+}
+
 export async function PUT(req: NextRequest) {
     try {
         const body = await req.json();
@@ -463,6 +474,10 @@ export async function PUT(req: NextRequest) {
         const update: Partial<JobRow> = { ...body };
         delete (update as any)._id;
         delete (update as any).id;
+        // Keep the normalized date in sync whenever `date` is part of the edit.
+        if ('date' in body) {
+            update.jobDateNormalized = normalizeJobDate(body.date);
+        }
         if ((body as any).approvals !== undefined) {
             (update as any).approvals = normalizeApprovals((body as any).approvals);
         }
@@ -495,6 +510,10 @@ export async function POST(req: NextRequest) {
             ...(body as JobRow),
             approvals: normalizeApprovals((body as any).approvals),
         };
+        // Populate the normalized date on create (only when a valid date exists,
+        // matching the backfill which left missing-date docs without the field).
+        const normalized = normalizeJobDate(doc.date);
+        if (normalized) doc.jobDateNormalized = normalized;
 
         const { collection } = await connectToDatabase();
 

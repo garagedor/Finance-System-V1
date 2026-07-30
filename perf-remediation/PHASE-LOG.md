@@ -93,3 +93,24 @@ computed with the SAME `$dateFromString` the endpoints use (so value == current 
   **3.97 MB** (collection 24.8 MB) — negligible write overhead. No existing index dropped.
 - Indexes are inert until Phase 2 read-switch lands (existing `$dateFromString` queries can't
   use them). Parity confirmed unchanged after creation.
+
+## Phase 4/2 — Write-path maintenance + read-switch to indexed date ✅ (partial)
+**Write-path:** `jobs/route.ts` is the ONLY Job writer (import writes finance_* only).
+Added `normalizeJobDate()` + populate `jobDateNormalized` on POST (create) and PUT (when
+`date` is edited). Verified the JS helper reproduces the backfilled value **500/500** on real
+docs. Added `jobDateNormalized?: Date` to the `JobRow` type.
+
+**Read-switch (output-neutral, index-backed):**
+- `home-stats` + `stats`: date-range `$match` switched from `$dateFromString $expr` (always
+  COLLSCAN 47,971) to `{ jobDateNormalized: {$gte,$lte} }` (IXSCAN). Parity identical.
+- Added `{ date: 1 }` string index → `finance` + `balance-report` (which compare the ISO
+  `date` string directly) become index-backed with **zero code change**.
+- **Proof (1-week range):** old always COLLSCAN 47,971; new IXSCAN examines **1,492 (2–3ms)**
+  — ~32× fewer docs examined. Full-year ranges benefit less (they match most docs); the win
+  scales as the dashboard range narrows (the common case).
+- Full parity: **13/13 identical.**
+- **Deferred (careful follow-ups):** `jobs` (complex 2-path date+sort logic) and `report`
+  (filters multiple date fields incl. dispute/refund dates, not just Job.date) — left on the
+  old path to avoid parity risk; both still work, just not yet index-switched.
+
+Job indexes now: `_id`, `jobDateNormalized_-1`, `tech+date`, `status+date`, `location+date`, `date_1` (6 total).
