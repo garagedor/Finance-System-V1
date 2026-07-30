@@ -1,9 +1,9 @@
-import { MongoClient, Collection } from 'mongodb';
+import { MongoClient, Collection } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 
 // Admin-only notes attached to a Lovable weekly report. Stored in OUR Mongo
 // (not Lovable's Supabase) so the tech never sees them on their app.
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const REPORT_NOTE_COLLECTION = 'WeeklyReportAdminNote';
 const JOB_NOTE_COLLECTION = 'WeeklyReportJobAdminNote';
@@ -26,7 +26,7 @@ export type WeeklyReportJobNote = {
 let cached: MongoClient | null = null;
 async function client(): Promise<MongoClient> {
   if (cached) return cached;
-  const c = new MongoClient(MONGODB_URI);
+  const c = await getMongoClient();
   await c.connect();
   cached = c;
   return c;

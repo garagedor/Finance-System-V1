@@ -1,11 +1,11 @@
-import { MongoClient, Collection } from 'mongodb';
+import { MongoClient, Collection } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 
 // Manual pairing overrides between a Lovable weekly_report_job and a CRM Job.
 // When set, the verify-reports compare uses the override instead of running
 // the auto-matcher (date/address/customer). Stored in OUR Mongo so the tech
 // app never sees these admin decisions.
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const LINK_COLLECTION = 'WeeklyReportJobLink';
 
@@ -20,7 +20,7 @@ export type WeeklyReportJobLink = {
 let cached: MongoClient | null = null;
 async function client(): Promise<MongoClient> {
   if (cached) return cached;
-  const c = new MongoClient(MONGODB_URI);
+  const c = await getMongoClient();
   await c.connect();
   cached = c;
   return c;

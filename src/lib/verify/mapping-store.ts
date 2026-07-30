@@ -1,4 +1,5 @@
-import { MongoClient, Collection } from 'mongodb';
+import { MongoClient, Collection } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
 
 // MongoDB-backed storage for identity mappings between the Lovable balance app
 // (Supabase) and the CRM (this app's Mongo). One Supabase user/area can map to
@@ -6,7 +7,6 @@ import { MongoClient, Collection } from 'mongodb';
 // "Bar Kadosh"). Empty `crmTechNames` / `crmLocationNames` means "no mapping" —
 // the matcher falls back to exact-match in that case.
 
-const MONGODB_URI = 'mongodb+srv://garagedoorcrm_db_user:ONTt9lY8NvV3Ayvn@cluster0.4jpiqpk.mongodb.net';
 const DB_NAME = 'ag';
 const TECH_COLLECTION = 'TechNameMapping';
 const AREA_COLLECTION = 'AreaNameMapping';
@@ -28,7 +28,7 @@ export type AreaMapping = {
 let cached: MongoClient | null = null;
 async function client(): Promise<MongoClient> {
   if (cached) return cached;
-  const c = new MongoClient(MONGODB_URI);
+  const c = await getMongoClient();
   await c.connect();
   cached = c;
   return c;
