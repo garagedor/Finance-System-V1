@@ -151,21 +151,17 @@ const buildJobPipeline = (
   page: number,
   pageSize: number
 ) => {
-  const pipeline: any[] = [
-    {
-      $addFields: {
-        dateParsed: {
-          $dateFromString: { dateString: '$date', onError: null, onNull: null },
-        },
-      },
-    },
-  ];
+  // Index-backed date range + sort on jobDateNormalized (== the old
+  // $dateFromString value; missing/blank dates excluded from a bounded range
+  // and sorted as null either way). Row output uses job.date, not this field,
+  // so the result set, order, page rows, and totals are unchanged — but the
+  // $match/$sort now use the index instead of a per-doc parse + full scan.
+  const pipeline: any[] = [];
 
   if (startDate || endDate) {
-    const range: any = {};
-    if (startDate) range.$gte = startDate;
-    if (endDate) range.$lte = endDate;
-    match.dateParsed = { ...(range.$gte ? { $gte: range.$gte } : {}), ...(range.$lte ? { $lte: range.$lte } : {}) };
+    match.jobDateNormalized = {};
+    if (startDate) match.jobDateNormalized.$gte = startDate;
+    if (endDate) match.jobDateNormalized.$lte = endDate;
   }
 
   if (Object.keys(match).length) {
@@ -175,7 +171,7 @@ const buildJobPipeline = (
   return {
     dataPipeline: [
       ...pipeline,
-      { $sort: { dateParsed: -1, _id: -1 } },
+      { $sort: { jobDateNormalized: -1, _id: -1 } },
       { $skip: (page - 1) * pageSize },
       { $limit: pageSize },
     ],

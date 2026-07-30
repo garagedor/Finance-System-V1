@@ -178,3 +178,16 @@ Changed exactly where expected: payment-method (926 = variant-job status display
 ("OTHER") change traced to the 13 ' X close' jobs now correctly categorized; **Closed-based core
 figures (totalSales, totalProfit, companyNetProfit) unchanged.** Baseline re-blessed to current data.
 Backfill script: scripts/perf/migrations/backfill-status.mjs (idempotent/reversible via $unset).
+
+## Phase 2b — Finish report + jobs date-switch ✅
+- **report** (penalty/provider): `buildJobPipeline` now matches + sorts on `jobDateNormalized`
+  instead of a per-doc `$dateFromString` + full-scan (`$addFields dateParsed` removed; rows use
+  `job.date`, so output unchanged). Penalty month query: **COLLSCAN 47,971 → IXSCAN 5,167**.
+  Dispute/refund left as-is (208 / 6 docs — negligible; already JS-sliced).
+- **jobs** (sortBy=date path): switched from an in-memory `dateParsed` sort to an indexed
+  `{ date: 1 }` string sort — same chronological order (ISO strings sort lexicographically),
+  covers EVERY job including ones lacking `jobDateNormalized` (no backfill gap), and drops the
+  per-doc parse. Main paginated list already used `{date:1}` for its filter. Frontend does not
+  consume `dateParsed` (confirmed).
+- **Verification:** old-vs-new on identical current data — all 13 harness endpoints IDENTICAL;
+  jobs `sortBy=date` row order byte-identical. Backfills re-run first to close the live new-job gap.

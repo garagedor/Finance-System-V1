@@ -398,17 +398,13 @@ export async function GET(req: NextRequest) {
 
         let rowsRaw: any[];
         if (sortByDate) {
-            // Use aggregation pipeline to parse date and sort chronologically
+            // Sort chronologically on the ISO `date` string directly — it sorts
+            // lexicographically == chronologically, uses the {date:1} index (no
+            // per-doc $dateFromString / in-memory sort), and covers every job
+            // (including ones created before jobDateNormalized was backfilled).
             const pipeline: any[] = [
                 { $match: matchQuery },
-                {
-                    $addFields: {
-                        dateParsed: {
-                            $dateFromString: { dateString: '$date', onError: null, onNull: null },
-                        },
-                    },
-                },
-                { $sort: { dateParsed: sortDir, _id: sortDir } },
+                { $sort: { date: sortDir, _id: sortDir } },
             ];
             if (!limitFirst50) {
                 pipeline.push({ $skip: skip });
