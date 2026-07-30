@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  PieChart, Pie, Cell, Tooltip as RTooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, TooltipProps,
-} from 'recharts';
+import dynamic from 'next/dynamic';
+import type { TooltipProps } from 'recharts';
+// recharts loads lazily (browser-only, off the payment-method initial bundle).
+const PiePmrChart = dynamic(() => import('./PmrCharts').then((m) => ({ default: m.PiePmrChart })), { ssr: false, loading: () => null });
+const BarPmrChart = dynamic(() => import('./PmrCharts').then((m) => ({ default: m.BarPmrChart })), { ssr: false, loading: () => null });
 import { FiCreditCard, FiBriefcase, FiTrendingUp, FiPercent, FiLayers } from 'react-icons/fi';
 import { useAuth } from '@/components/AuthShell';
 import DateRangePicker from '@/components/DateRangePicker';
@@ -348,14 +349,7 @@ export default function PaymentMethodReportPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr', gap: 16, padding: '0 16px 16px', alignItems: 'start' }}>
             <div style={{ minHeight: 240 }}>
               {piePayload.length ? (
-                <ResponsiveContainer width="100%" height={240}>
-                  <PieChart>
-                    <Pie data={piePayload} dataKey="value" nameKey="name" innerRadius={55} outerRadius={95} paddingAngle={1}>
-                      {piePayload.map((d, i) => <Cell key={i} fill={d.color} />)}
-                    </Pie>
-                    <RTooltip content={<PiePmrTooltip />} isAnimationActive={false} />
-                  </PieChart>
-                </ResponsiveContainer>
+                <PiePmrChart data={piePayload} Tooltip={PiePmrTooltip} />
               ) : (
                 <EmptyState size="sm" title="No payments collected" />
               )}
@@ -401,18 +395,7 @@ export default function PaymentMethodReportPage() {
           </div>
           <div style={{ padding: '0 16px 16px', minHeight: 280 }}>
             {barData.length ? (
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={barData} margin={{ top: 6, right: 12, bottom: 6, left: 0 }}>
-                  <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                  <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${Math.round(v / 1000)}k`} />
-                  <RTooltip content={<StackPmrTooltip />} cursor={{ fill: 'rgba(255,255,255,0.04)' }} />
-                  <Legend wrapperStyle={{ fontSize: 11, color: '#94a3b8' }} />
-                  {METHODS.map((m) => (
-                    <Bar key={m.key} dataKey={m.key} stackId="a" fill={m.color} name={m.label} />
-                  ))}
-                </BarChart>
-              </ResponsiveContainer>
+              <BarPmrChart data={barData} methods={METHODS} Tooltip={StackPmrTooltip} />
             ) : (
               <EmptyState size="sm" title="No date data" />
             )}

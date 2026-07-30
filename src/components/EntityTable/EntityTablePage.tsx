@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
 import { FiPlus, FiTrash2, FiChevronDown, FiChevronUp, FiEdit2, FiX, FiSearch, FiSliders, FiColumns, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { RowEditModal } from '@/components/RowEditModal';
+import dynamic from 'next/dynamic';
+// Lazy-load the row-edit modal — only pulled in when a user opens it. Cast keeps
+// the generic component type at the call site through next/dynamic.
+const RowEditModal = dynamic(
+  () => import('@/components/RowEditModal').then((m) => ({ default: m.RowEditModal })),
+  { ssr: false },
+) as typeof import('@/components/RowEditModal').RowEditModal;
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { ColumnsOrder } from '@/components/ColumnsOrder';
 import { EntityTableFilters } from './EntityTableFilters';

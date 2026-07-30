@@ -7,17 +7,9 @@
 // shows an "activate" state instead.
 
 import { useRef, useState } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip as RTooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import dynamic from "next/dynamic";
+// recharts loads lazily (browser-only, off the AI chat panel's initial bundle).
+const ChatChart = dynamic(() => import("./ChatChart"), { ssr: false, loading: () => null });
 
 type ApiMsg = { role: "user" | "assistant"; content: string };
 
@@ -117,30 +109,11 @@ function BlockView({ b }: { b: Block }) {
     );
   }
   if (b.type === "chart") {
-    const colors = ["#818cf8", "#34d399", "#f59e0b", "#f472b6"];
     return (
       <div>
         {b.title && <div style={{ fontSize: 12.5, fontWeight: 600, color: "#cbd5e1", marginBottom: 6 }}>{b.title}</div>}
         <div style={{ height: 220 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            {b.chartType === "bar" ? (
-              <BarChart data={b.data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey={b.xKey} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <RTooltip contentStyle={{ background: "#1a2236", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 12 }} />
-                {b.series.map((s, i) => <Bar key={s.key} dataKey={s.key} name={s.label} fill={colors[i % colors.length]} radius={[4, 4, 0, 0]} />)}
-              </BarChart>
-            ) : (
-              <LineChart data={b.data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey={b.xKey} tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <RTooltip contentStyle={{ background: "#1a2236", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 12 }} />
-                {b.series.map((s, i) => <Line key={s.key} type="monotone" dataKey={s.key} name={s.label} stroke={colors[i % colors.length]} dot={false} strokeWidth={2} />)}
-              </LineChart>
-            )}
-          </ResponsiveContainer>
+          <ChatChart b={b} />
         </div>
       </div>
     );

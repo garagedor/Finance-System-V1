@@ -11,14 +11,10 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { FiBriefcase, FiTrendingUp, FiCheckCircle, FiPercent, FiChevronDown, FiDownload, FiEye, FiX } from 'react-icons/fi';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  TooltipProps,
-} from 'recharts';
+import dynamic from 'next/dynamic';
+import type { TooltipProps } from 'recharts';
+// recharts loads lazily (browser-only, off the balance-report initial bundle).
+const StatusPieChart = dynamic(() => import('./StatusPieChart'), { ssr: false, loading: () => null });
 
 type BalanceRow = {
   id: string;
@@ -982,24 +978,7 @@ export default function BalanceReportPage() {
             <div className="chart-body">
               <div className="pie-shell">
                 {statusPieData.length ? (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={statusPieData}
-                        dataKey="value"
-                        nameKey="name"
-                        innerRadius={55}
-                        outerRadius={80}
-                        paddingAngle={1}
-                        animationDuration={650}
-                      >
-                        {statusPieData.map((entry, idx) => (
-                          <Cell key={`${entry.name}-${idx}`} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip content={<PieTooltip />} isAnimationActive={false} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <StatusPieChart data={statusPieData} PieTooltip={PieTooltip} />
                 ) : (
                   <EmptyState size="sm" title="No data" />
                 )}

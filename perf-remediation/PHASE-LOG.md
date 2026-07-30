@@ -191,3 +191,18 @@ Backfill script: scripts/perf/migrations/backfill-status.mjs (idempotent/reversi
   consume `dateParsed` (confirmed).
 - **Verification:** old-vs-new on identical current data — all 13 harness endpoints IDENTICAL;
   jobs `sortBy=date` row order byte-identical. Backfills re-run first to close the live new-job gap.
+
+## Phase 9b — Lazy-load recharts + modals ✅
+recharts introspects its children by type, so per-component lazy-wrapping breaks it — extracted
+each whole chart into its own component and `dynamic(ssr:false)`-imported it:
+- stats → `DonutCard.tsx`; home → `LocationBarChart.tsx`; balance-report → `StatusPieChart.tsx`;
+  payment-method → `PmrCharts.tsx` (Pie+Bar); AI chat → `ChatChart.tsx`. Pages keep only the
+  `import type { TooltipProps }` (erased at build). Verified: **no page statically imports recharts
+  values anymore** — the runtime lives only in the dynamically-imported chart chunks.
+- Modals: `DisputeRefundModal` (entityConfigs) and `RowEditModal` (EntityTablePage, generic —
+  preserved via `as typeof` cast) now `dynamic(ssr:false)`, loaded only when opened.
+- Validation: typecheck clean, build green, all 5 chart pages return 200 (SSR renders; charts
+  hydrate client-side). **Needs a browser smoke-test** to confirm charts render visually (can't
+  do that headlessly).
+- **Not done:** EditJobModal / LinkPickerModal are defined *inside* verify-reports/page.tsx
+  (1818 LOC) — lazy-loading them needs extracting them to separate files first (deferred).

@@ -5,7 +5,12 @@ import { FiCheck, FiLoader, FiX } from 'react-icons/fi';
 import type { ColumnConfig } from '@/app/utils/jobUtils';
 import { getRowId, normalizeApprovals } from '@/app/utils/jobUtils';
 import type { EntityTablePageProps } from '@/components/EntityTable';
-import { DisputeRefundModal } from '@/components/DisputeRefundModal';
+import dynamic from 'next/dynamic';
+// Lazy-load the dispute/refund modal — only pulled in when a user opens it.
+const DisputeRefundModal = dynamic(
+  () => import('@/components/DisputeRefundModal').then((m) => ({ default: m.DisputeRefundModal })),
+  { ssr: false },
+);
 import { useDisputeData } from '@/app/utils/useDisputeData';
 import { useJobData } from '@/app/utils/useJobData';
 import { useJobStatusData } from '@/app/utils/useJobStatusData';
