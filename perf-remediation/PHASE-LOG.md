@@ -54,8 +54,14 @@ real bug in the *current* code:
 - The rewrite *corrected* this (de-duplicated) — which is why numbers changed. Per the
   financial-parity mandate, **reverted to preserve exact current output.** home-stats is now
   byte-identical to baseline again.
-- **Decision needed from owner:** (a) preserve exact current numbers (keep the 113× inflation),
-  or (b) apply the de-dup as a documented data-quality correction (also removes the per-doc
-  Provider scan → big speedup). Speed for home-stats otherwise comes from the output-neutral
-  date-index path (Phases 4+6), which does NOT change any number.
+- **RESOLVED — owner approved the correction (2026-07-30).** Applied the two-hash-lookup
+  rewrite. Verified the change is surgical: **only `count` / `avgTicket` / `closedPct` moved**;
+  no revenue/profit figure changed (the 5 blank-provider jobs weren't in the money facets).
+  Total `jobsByLocation` count **31,360 → 30,800** (−560 = 5 jobs × 112 phantom rows removed).
+  Baseline snapshot re-blessed to the corrected numbers so later phases parity-check against
+  the correct values. Endpoint also modestly faster (7,964 → ~6,775ms); its big win still
+  comes from the output-neutral date-index path (Phases 4+6).
 - Verify script: `scripts/perf/dq-provider-dup.mjs`.
+
+**DATA-QUALITY EXCEPTION (for final report):** 5 `Job` docs have a blank/missing `provider`.
+Not deleted or altered — flagged here for review. They caused the home-stats inflation above.

@@ -71,29 +71,29 @@ export async function GET(req: NextRequest) {
                     preserveNullAndEmptyArrays: true,
                 },
             },
+            // Provider profit %: resolve by _id first, else by name — two plain
+            // (hash-join) lookups instead of a correlated per-document sub-pipeline.
+            // DATA-QUALITY CORRECTION (owner-approved 2026-07-30): the old
+            // correlated `$or [_id==p, name==p]` matched ALL 113 providers for the
+            // 5 jobs whose `provider` is blank, so `$unwind` counted each of those
+            // jobs 113× — inflating jobsByLocation/techStats/locationStats counts
+            // and skewing avgTicket/closedPct. Resolving to a single provider doc
+            // (or none) counts every job exactly once. Also removes the per-document
+            // Provider scan that dominated latency.
             {
-                $lookup: {
-                    from: 'Provider',
-                    let: { providerStr: '$provider' },
-                    pipeline: [
-                        {
-                            $match: {
-                                $expr: {
-                                    $or: [
-                                        { $eq: ['$_id', '$$providerStr'] },
-                                        { $eq: ['$name', '$$providerStr'] }
-                                    ]
-                                }
-                            }
-                        }
-                    ],
-                    as: 'providerData',
-                },
+                $lookup: { from: 'Provider', localField: 'provider', foreignField: '_id', as: 'provById' },
             },
             {
-                $unwind: {
-                    path: '$providerData',
-                    preserveNullAndEmptyArrays: true,
+                $lookup: { from: 'Provider', localField: 'provider', foreignField: 'name', as: 'provByName' },
+            },
+            {
+                $addFields: {
+                    providerData: {
+                        $ifNull: [
+                            { $arrayElemAt: ['$provById', 0] },
+                            { $arrayElemAt: ['$provByName', 0] },
+                        ],
+                    },
                 },
             },
             {
