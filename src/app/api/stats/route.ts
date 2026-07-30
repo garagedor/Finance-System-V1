@@ -153,14 +153,14 @@ export async function GET(req: NextRequest) {
               totalAmount: { $sum: '$valTotalAmount' },
               totalPaid: { $sum: toNumberAgg('$totalPaid') },
               closedCount: {
-                $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] },
+                $sum: { $cond: [{ $eq: ['$statusCanonical', 'Closed'] }, 1, 0] },
               },
               // Profit per job = totalPaid − feeNoCheck − parts
               // (matches the report page provider-tab column subtraction)
               profitClosedOrXClose: {
                 $sum: {
                   $cond: [
-                    { $or: [{ $eq: ['$status', 'Closed'] }, { $eq: ['$status', 'X close'] }] },
+                    { $or: [{ $eq: ['$statusCanonical', 'Closed'] }, { $eq: ['$statusCanonical', 'X close'] }] },
                     { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
                     0,
                   ],
@@ -169,7 +169,7 @@ export async function GET(req: NextRequest) {
               profitClosedOnly: {
                 $sum: {
                   $cond: [
-                    { $eq: ['$status', 'Closed'] },
+                    { $eq: ['$statusCanonical', 'Closed'] },
                     { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
                     0,
                   ],
@@ -179,7 +179,7 @@ export async function GET(req: NextRequest) {
               jobsProfit: {
                 $sum: {
                   $cond: [
-                    { $eq: ['$status', 'Closed'] },
+                    { $eq: ['$statusCanonical', 'Closed'] },
                     { $subtract: [{ $subtract: ['$valTotalAmount', '$valFeeAllKinds'] }, '$valParts'] },
                     0,
                   ],
@@ -224,10 +224,10 @@ export async function GET(req: NextRequest) {
           { $sort: { count: -1, _id: 1 } },
         ],
         byStatus: [
-          { $match: { status: { $exists: true, $nin: [null, ''] } } },
+          { $match: { statusCanonical: { $exists: true, $nin: [null, ''] } } },
           {
             $group: {
-              _id: '$status',
+              _id: '$statusCanonical',
               count: { $sum: 1 },
             },
           },

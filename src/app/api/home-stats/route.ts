@@ -166,11 +166,11 @@ export async function GET(req: NextRequest) {
                                 // by ALL assigned jobs (X-close still in count).
                                 sumProfitExclXClose: {
                                     $sum: {
-                                        $cond: [{ $ne: ['$status', 'X close'] }, '$valTotalProfit', 0]
+                                        $cond: [{ $ne: ['$statusCanonical', 'X close'] }, '$valTotalProfit', 0]
                                     }
                                 },
                                 closedCount: {
-                                    $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] }
+                                    $sum: { $cond: [{ $eq: ['$statusCanonical', 'Closed'] }, 1, 0] }
                                 }
                             },
                         },
@@ -194,11 +194,11 @@ export async function GET(req: NextRequest) {
                                 // by ALL assigned jobs (X-close still in count).
                                 sumProfitExclXClose: {
                                     $sum: {
-                                        $cond: [{ $ne: ['$status', 'X close'] }, '$valTotalProfit', 0]
+                                        $cond: [{ $ne: ['$statusCanonical', 'X close'] }, '$valTotalProfit', 0]
                                     }
                                 },
                                 closedCount: {
-                                    $sum: { $cond: [{ $eq: ['$status', 'Closed'] }, 1, 0] }
+                                    $sum: { $cond: [{ $eq: ['$statusCanonical', 'Closed'] }, 1, 0] }
                                 }
                             },
                         },
@@ -212,7 +212,7 @@ export async function GET(req: NextRequest) {
                         }
                     ],
                     companyPenaltyLoss: [
-                        { $match: { status: 'X close', location: { $nin: [null, ''] } } },
+                        { $match: { statusCanonical: 'X close', location: { $nin: [null, ''] } } },
                         {
                             $addFields: {
                                 penaltyBase: '$valTotalProfit'
@@ -228,7 +228,7 @@ export async function GET(req: NextRequest) {
                         { $sort: { _id: 1 } }
                     ],
                     companyNetProfit: [
-                        { $match: { status: 'Closed', location: { $nin: [null, ''] } } },
+                        { $match: { statusCanonical: 'Closed', location: { $nin: [null, ''] } } },
                         {
                             $addFields: {
                                 netProfitCalc: {
@@ -255,7 +255,7 @@ export async function GET(req: NextRequest) {
                     ],
                     totalCompanyParts: [
                         // Closed-only — parts on open / X-close jobs don't roll into this KPI.
-                        { $match: { status: 'Closed', location: { $nin: [null, ''] } } },
+                        { $match: { statusCanonical: 'Closed', location: { $nin: [null, ''] } } },
                         {
                             $group: {
                                 _id: '$location',
@@ -268,7 +268,7 @@ export async function GET(req: NextRequest) {
                     // Card-fee margin: tech is charged 5%, processor takes 3%,
                     // so the company keeps 2% of every closed-job card payment.
                     cardFeeProfit: [
-                        { $match: { status: 'Closed' } },
+                        { $match: { statusCanonical: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
@@ -285,7 +285,7 @@ export async function GET(req: NextRequest) {
                     // Finance fee margin: tech is charged 10%, processor takes
                     // 7.5%, so the company keeps 2.5% of every closed-job finance payment.
                     financeFeeProfit: [
-                        { $match: { status: 'Closed' } },
+                        { $match: { statusCanonical: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
@@ -301,7 +301,7 @@ export async function GET(req: NextRequest) {
                     // Company check fee margin: tech is charged 10%, bank/handling
                     // takes 5%, so the company keeps 5% of every closed-job check payment.
                     checkFeeProfit: [
-                        { $match: { status: 'Closed' } },
+                        { $match: { statusCanonical: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
@@ -315,7 +315,7 @@ export async function GET(req: NextRequest) {
                         }
                     ],
                     totalSales: [
-                        { $match: { status: 'Closed' } },
+                        { $match: { statusCanonical: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
@@ -328,7 +328,7 @@ export async function GET(req: NextRequest) {
                     //   totalSales − all payment fees − all parts
                     // Closed-only. Equivalent to sum(valTotalAmount − valPaymentFee − valParts).
                     totalProfit: [
-                        { $match: { status: 'Closed' } },
+                        { $match: { statusCanonical: 'Closed' } },
                         {
                             $group: {
                                 _id: null,

@@ -9,6 +9,7 @@ import {
   calcStandardShare,
   toNumber,
 } from '../utils/calculations';
+import { canonicalStatus } from '@/lib/status-canonical';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -200,7 +201,7 @@ export async function computeBalanceReport(opts: {
         address: job.address || '',
         tech: job.tech || '',
         location: job.location || '',
-        status: job.status || '',
+        status: canonicalStatus(job.status),
         totalAmount: toNumber(job.totalAmount || 0),
         techPaidCash: toNumber(job.techPaidCash || 0),
         totalPaidCard: toNumber(job.totalPaidCard || 0),

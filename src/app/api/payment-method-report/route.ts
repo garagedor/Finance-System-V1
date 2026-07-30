@@ -3,6 +3,7 @@ import { MongoClient } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../types/job';
 import { toNumber } from '../utils/calculations';
+import { canonicalStatus } from '@/lib/status-canonical';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
     if (techs.length) filter.tech = { $in: techs };
     if (locations.length) filter.location = { $in: locations };
     if (providers.length) filter.provider = { $in: providers };
-    if (statuses.length) filter.status = { $in: statuses };
+    if (statuses.length) filter.statusCanonical = { $in: statuses };
     // Method filter: OR semantics — at least one selected method has a non-zero amount.
     // Uses $expr + $convert so that string-stored numeric values (e.g. "100")
     // are coerced before comparison; bare {$gt: 0} would silently exclude them
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest) {
         tech: job.tech || '',
         location: job.location || '',
         provider: job.provider || '',
-        status: job.status || '',
+        status: canonicalStatus(job.status),
         techPaidCash: perMethod.techPaidCash,
         totalPaidCard: perMethod.totalPaidCard,
         totalPaidCompanyCheck: perMethod.totalPaidCompanyCheck,

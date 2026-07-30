@@ -162,3 +162,19 @@ bodies/identities/secrets; no sampling needed). Wired into home-stats (`db` + `t
 admin-only `GET /api/portal/admin/diagnostics` exposes `mongoHealth()` (connection state, pool
 size, live DB ping ms, Vercel region) with NO URI/credentials. Verified header emits + endpoint
 returns. Pattern ready to extend to other hot routes.
+
+## Phase 5b — Switch status READS to canonical ✅ (owner-approved correction)
+Backfilled `statusCanonical` on 41,738 docs (927 variants normalized: 913 'Client Fixed It ',
+13 ' X close', 1 'Customer Cenceled'); legacy `status` untouched. Switched reads:
+home-stats/stats/report match on `$statusCanonical`; balance-report/payment-method display+filter
+via `canonicalStatus()`. payment-method status filter → statusCanonical too.
+
+**Verification (isolated from live data drift):** the DB gained ~31 new jobs mid-session, so the
+hours-old baseline had drifted (new 2026-07-30 jobs, jobsScanned 30801→30832). Compared OLD code
+vs NEW code on the SAME current data (git-stash technique): finance + jobs-page1 + disputes +
+refunds + report-dispute/refund + balance-report-location = **identical** (drift was not my code).
+Changed exactly where expected: payment-method (926 = variant-job status displays), balance-report-tech
+(58), stats (33), home-stats (24), report-penalty (4), report-provider (5). Every non-status
+("OTHER") change traced to the 13 ' X close' jobs now correctly categorized; **Closed-based core
+figures (totalSales, totalProfit, companyNetProfit) unchanged.** Baseline re-blessed to current data.
+Backfill script: scripts/perf/migrations/backfill-status.mjs (idempotent/reversible via $unset).

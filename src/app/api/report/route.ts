@@ -224,7 +224,7 @@ export async function GET(req: NextRequest) {
       if (techs.length > 0) match.tech = { $in: techs };
       if (locations.length) match.location = { $in: locations };
       if (providers.length) match.provider = { $in: providers };
-      match.status = 'X close';
+      match.statusCanonical = 'X close';
 
       const { dataPipeline, countPipeline } = buildJobPipeline(match, startDate, endDate, page, pageSize);
 
@@ -279,7 +279,7 @@ export async function GET(req: NextRequest) {
       if (techs.length > 0) match.tech = { $in: techs };
       if (locations.length) match.location = { $in: locations };
       if (providers.length) match.provider = { $in: providers };
-      match.status = { $in: ['Closed', 'X close'] };
+      match.statusCanonical = { $in: ['Closed', 'X close'] };
 
       const { dataPipeline, countPipeline } = buildJobPipeline(match, startDate, endDate, page, pageSize);
 
