@@ -21,13 +21,17 @@ export interface TextToSpeech {
 }
 
 export interface SpeechToText {
-  /** Start listening. Emits partial + final transcripts. */
-  start(handlers: {
-    onPartial?: (text: string) => void;
-    onFinal: (text: string) => void;
-    onError?: (e: unknown) => void;
-    onEnd?: () => void;
-  }): void;
+  /** Start listening. Emits partial + final transcripts. `continuous` keeps the
+   *  session open across utterances (used for always-on wake-word listening). */
+  start(
+    handlers: {
+      onPartial?: (text: string) => void;
+      onFinal: (text: string) => void;
+      onError?: (e: unknown) => void;
+      onEnd?: () => void;
+    },
+    opts?: { continuous?: boolean },
+  ): void;
   stop(): void;
   readonly available: boolean;
 }

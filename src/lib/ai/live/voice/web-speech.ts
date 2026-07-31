@@ -65,16 +65,22 @@ class WebSTT implements SpeechToText {
       this.rec.continuous = false;
     }
   }
-  start(h: {
-    onPartial?: (t: string) => void;
-    onFinal: (t: string) => void;
-    onError?: (e: unknown) => void;
-    onEnd?: () => void;
-  }): void {
+  start(
+    h: {
+      onPartial?: (t: string) => void;
+      onFinal: (t: string) => void;
+      onError?: (e: unknown) => void;
+      onEnd?: () => void;
+    },
+    opts?: { continuous?: boolean },
+  ): void {
     if (!this.rec) {
       h.onError?.(new Error("Speech recognition is not available in this browser."));
       return;
     }
+    // Reset per-call so a continuous wake-word session and a one-shot command
+    // capture can share the same recognizer instance without leaking mode.
+    this.rec.continuous = !!opts?.continuous;
     this.rec.onresult = (ev: any) => {
       let interim = "";
       let final = "";

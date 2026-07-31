@@ -20,6 +20,13 @@ import AiBlocksLite from "./AiBlocksLite";
 const LEAD_INS_EN = ["One moment…", "Let me pull that up.", "Looking into that now…", "On it — checking the numbers.", "Give me a second…"];
 const LEAD_INS_HE = ["רגע אחד…", "בודק את זה…", "מסתכל על הנתונים…"];
 
+// Wake word. When "always listen" is armed, we scan the continuous transcript for
+// this phrase; on a match the assistant wakes and asks for a command. "jervis"/
+// "jarvus" catch common mishears of "jarvis".
+const WAKE_RE = /\b(?:hi|hey|hello|ok|okay|yo)?\s*(?:jarvis|jervis|jarvus)\b/i;
+const WAKE_ACKS = ["I'm here. What's your command?", "Standing by. What do you need?", "Ready when you are — go ahead."];
+type WakeState = "off" | "armed" | "awaiting" | "busy";
+
 type OrbState = "idle" | "listening" | "thinking" | "speaking";
 type Msg =
   | { role: "user"; text: string }
@@ -61,6 +68,11 @@ export default function LiveAssistant() {
   const [spotlight, setSpotlight] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   const [reduceMotion, setReduceMotion] = useState(false);
   const spotlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Wake-word ("Hey JARVIS") always-listen mode. ref mirrors state for use inside
+  // the recognition callbacks (which capture stale state otherwise).
+  const [wakeState, setWakeState] = useState<WakeState>("off");
+  const wakeModeRef = useRef(false);
+  const wakeStateRef = useRef<WakeState>("off");
 
   const [voiceLabel, setVoiceLabel] = useState("Device voice");
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
@@ -116,6 +128,14 @@ export default function LiveAssistant() {
     const h = () => setReduceMotion(mq.matches);
     mq.addEventListener?.("change", h);
     return () => mq.removeEventListener?.("change", h);
+  }, []);
+
+  // Stop always-listening if the assistant unmounts (logout / navigation away).
+  useEffect(() => {
+    return () => {
+      wakeModeRef.current = false;
+      voiceRef.current?.stt?.stop();
+    };
   }, []);
 
   // Proactive Morning Brief: on the first portal visit each day, quietly OFFER
@@ -354,6 +374,7 @@ export default function LiveAssistant() {
     setSubtitle("");
     clearSpotlight();
     setOrb("idle");
+    if (wakeModeRef.current) armWake(); // stay armed for the wake word
   }
 
   // Morning-brief offer actions. "Play" runs the prepared presentation (voice +
@@ -375,7 +396,133 @@ export default function LiveAssistant() {
     setBriefOffer(null);
   }
 
-  const color = STATE_COLOR[orb];
+  // ── Wake word: "Hey JARVIS" always-listen ──────────────────────────────────
+  // Continuous recognition scans for the wake phrase. On a match the assistant
+  // acknowledges and waits for the command, runs it, then re-arms. The mic is
+  // stopped while the assistant is speaking/answering, so it never hears itself.
+  function setWake(s: WakeState) {
+    wakeStateRef.current = s;
+    setWakeState(s);
+  }
+  function startRecognition(continuous: boolean) {
+    const stt = voiceRef.current?.stt;
+    if (!stt) return;
+    stt.start(
+      {
+        onPartial: (t) => {
+          if (wakeStateRef.current === "awaiting") setSubtitle(t);
+        },
+        onFinal: (t) => onWakeFinal(t),
+        onError: (e) => onWakeError(e),
+        onEnd: () => onWakeEnd(),
+      },
+      { continuous },
+    );
+  }
+  function armWake() {
+    if (!wakeModeRef.current) return;
+    voiceRef.current?.stt?.stop(); // clean state before (re)starting
+    setWake("armed");
+    setOrb("idle");
+    setSubtitle("");
+    setTimeout(() => {
+      if (wakeModeRef.current && wakeStateRef.current === "armed") startRecognition(true);
+    }, 150);
+  }
+  function commandAfter(text: string): string {
+    const m = text.match(WAKE_RE);
+    if (!m) return text.trim();
+    return text.slice((m.index ?? 0) + m[0].length).replace(/^[\s,.:;!?-]+/, "").trim();
+  }
+  function onWakeFinal(text: string) {
+    const state = wakeStateRef.current;
+    if (state === "armed") {
+      if (!WAKE_RE.test(text)) return; // ignore everything until the wake word
+      voiceRef.current?.stt?.stop();
+      const inline = commandAfter(text);
+      if (inline.split(/\s+/).filter(Boolean).length >= 2) {
+        void runWakeCommand(inline); // "hey jarvis, how are expenses" → answer directly
+      } else {
+        void wakeAck(); // just "hey jarvis" → acknowledge, then listen for the command
+      }
+    } else if (state === "awaiting") {
+      voiceRef.current?.stt?.stop();
+      const cmd = commandAfter(text);
+      if (cmd) void runWakeCommand(cmd);
+      else armWake();
+    }
+  }
+  async function wakeAck() {
+    setWake("awaiting");
+    setOrb("speaking");
+    const ack = WAKE_ACKS[Math.floor(Math.random() * WAKE_ACKS.length)];
+    setSubtitle(ack);
+    await speak(ack, "en");
+    if (!wakeModeRef.current) return;
+    setWake("awaiting");
+    setOrb("listening");
+    setSubtitle("Listening for your command…");
+    startRecognition(false); // capture a single command utterance
+  }
+  async function runWakeCommand(text: string) {
+    setWake("busy");
+    setSubtitle("");
+    voiceRef.current?.stt?.stop();
+    await submit(text);
+    if (wakeModeRef.current) armWake(); // resume listening for the wake word
+    else setWake("off");
+  }
+  function onWakeEnd() {
+    if (!wakeModeRef.current) return;
+    const state = wakeStateRef.current;
+    if (state === "armed") {
+      setTimeout(() => {
+        if (wakeModeRef.current && wakeStateRef.current === "armed") startRecognition(true);
+      }, 300); // recognition times out on silence — restart to stay armed
+    } else if (state === "awaiting") {
+      setSubtitle("");
+      armWake(); // no command heard — back to waiting for the wake word
+    }
+    // "busy": runWakeCommand re-arms after the answer finishes.
+  }
+  function onWakeError(e: unknown) {
+    const err = (e as { error?: string })?.error;
+    if (err === "not-allowed" || err === "service-not-allowed") {
+      disableWake();
+      setError("Microphone access is blocked. Allow the mic to use “Hey JARVIS.”");
+    }
+    // "no-speech" / "aborted" / "network" are benign — onEnd restarts.
+  }
+  function enableWake() {
+    if (!voiceRef.current?.stt?.available) {
+      setError("Voice input isn't supported in this browser. Try Chrome or Edge.");
+      return;
+    }
+    wakeModeRef.current = true;
+    setError(null);
+    setOpen(true);
+    armWake();
+  }
+  function disableWake() {
+    wakeModeRef.current = false;
+    voiceRef.current?.stt?.stop();
+    setSubtitle("");
+    setWake("off");
+    setOrb("idle");
+  }
+  function toggleWake() {
+    if (wakeModeRef.current) disableWake();
+    else enableWake();
+  }
+
+  const wakeActive = wakeState === "armed" || wakeState === "awaiting";
+  const color = wakeActive ? STATE_COLOR.listening : STATE_COLOR[orb];
+  const statusText =
+    wakeState === "armed"
+      ? "Listening for “Hey JARVIS”…"
+      : wakeState === "awaiting"
+        ? "Listening…"
+        : STATE_LABEL[orb];
 
   return (
     <>
@@ -431,10 +578,26 @@ export default function LiveAssistant() {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: "#e2e8f0" }}>AI Executive</div>
               <div style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {STATE_LABEL[orb]} · <span style={{ color: "#818cf8" }}>{voiceLabel}</span>{" "}
+                {statusText} · <span style={{ color: "#818cf8" }}>{voiceLabel}</span>{" "}
                 <Link href="/portal/ai/voice" style={{ color: "#64748b", textDecoration: "underline" }}>settings</Link>
               </div>
             </div>
+            <button
+              type="button"
+              onClick={toggleWake}
+              title={
+                wakeActive
+                  ? "Always-listening on — say “Hey JARVIS”. Click to turn off."
+                  : "Turn on always-listening — then just say “Hey JARVIS”"
+              }
+              style={{
+                ...iconBtn,
+                background: wakeActive ? "rgba(52,211,153,0.22)" : "rgba(255,255,255,0.06)",
+                boxShadow: wakeActive ? "0 0 0 1px rgba(52,211,153,0.5)" : undefined,
+              }}
+            >
+              👂
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -516,9 +679,11 @@ export default function LiveAssistant() {
             }}
             style={{ display: "flex", gap: 7, padding: 11, borderTop: "1px solid rgba(255,255,255,0.08)", alignItems: "center" }}
           >
-            <button type="button" onClick={toggleMic} title="Voice input" style={{ ...iconBtn, background: orb === "listening" ? "rgba(52,211,153,0.25)" : "rgba(255,255,255,0.06)" }}>
-              🎙
-            </button>
+            {wakeState === "off" && (
+              <button type="button" onClick={toggleMic} title="Voice input" style={{ ...iconBtn, background: orb === "listening" ? "rgba(52,211,153,0.25)" : "rgba(255,255,255,0.06)" }}>
+                🎙
+              </button>
+            )}
             {(orb === "speaking" || orb === "thinking" || orb === "listening") && (
               <button type="button" onClick={stopAll} title="Stop" style={{ ...iconBtn, background: "rgba(248,113,113,0.18)" }}>■</button>
             )}
