@@ -56,6 +56,11 @@ export default function LiveAssistant() {
     date: string;
     plan: unknown;
   } | null>(null);
+  // Cinematic layer (Phase C): spotlight rect for the focused element + a
+  // reduced-motion flag so we honor the OS accessibility preference.
+  const [spotlight, setSpotlight] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const spotlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [voiceLabel, setVoiceLabel] = useState("Device voice");
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
@@ -103,6 +108,16 @@ export default function LiveAssistant() {
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
   }, [msgs, subtitle]);
 
+  // Respect the OS "reduce motion" preference for the animated flourishes.
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReduceMotion(mq.matches);
+    const h = () => setReduceMotion(mq.matches);
+    mq.addEventListener?.("change", h);
+    return () => mq.removeEventListener?.("change", h);
+  }, []);
+
   // Proactive Morning Brief: on the first portal visit each day, quietly OFFER
   // the brief the AI already prepared (cron-precomputed). We offer a card, never
   // auto-play audio — respectful ("intelligent silence"), and browsers block
@@ -147,8 +162,17 @@ export default function LiveAssistant() {
     return { permissions: user?.permissions ?? [], type: user?.type };
   }
 
-  // Scroll to and briefly flash an allowlisted anchor. The page may still be
-  // mounting after router.push, so retry a few times before giving up.
+  function clearSpotlight() {
+    if (spotlightTimer.current) {
+      clearTimeout(spotlightTimer.current);
+      spotlightTimer.current = null;
+    }
+    setSpotlight(null);
+  }
+
+  // Scroll to an allowlisted anchor, ring it, and SPOTLIGHT it — dim the rest of
+  // the page around the focused figure. The page may still be mounting after
+  // router.push, so retry a few times before giving up.
   function flashAnchor(anchorId: string) {
     if (typeof document === "undefined") return;
     const tryFlash = (attempt: number) => {
@@ -158,9 +182,19 @@ export default function LiveAssistant() {
         if (attempt < 6) setTimeout(() => tryFlash(attempt + 1), 250);
         return;
       }
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
       el.classList.add("ai-flash");
-      setTimeout(() => el.classList.remove("ai-flash"), 2200);
+      setTimeout(() => el.classList.remove("ai-flash"), 2600);
+      // Once the scroll settles, snapshot the element and light it up.
+      setTimeout(() => {
+        if (cancelRef.current) return;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 && r.height === 0) return;
+        const pad = 8;
+        if (spotlightTimer.current) clearTimeout(spotlightTimer.current);
+        setSpotlight({ top: r.top - pad, left: r.left - pad, width: r.width + pad * 2, height: r.height + pad * 2 });
+        spotlightTimer.current = setTimeout(() => setSpotlight(null), 3400);
+      }, reduceMotion ? 60 : 480);
     };
     tryFlash(0);
   }
@@ -172,6 +206,7 @@ export default function LiveAssistant() {
     if (!navEnabledRef.current) return;
     const nav = sanitizeNav({ routeId, params }, navSession());
     if (!nav) return;
+    clearSpotlight(); // leaving the page — drop any focus overlay
     const label = resolveCapability(nav.routeId)?.label ?? "the page";
     setSubtitle(`Opening ${label}…`);
     router.push(hrefFor(nav.routeId, nav.params));
@@ -317,6 +352,7 @@ export default function LiveAssistant() {
     voiceRef.current?.stt?.stop();
     listeningRef.current = false;
     setSubtitle("");
+    clearSpotlight();
     setOrb("idle");
   }
 
@@ -360,7 +396,7 @@ export default function LiveAssistant() {
           cursor: "pointer",
           background: `radial-gradient(circle at 35% 30%, ${color}, #0d1526 78%)`,
           boxShadow: `0 0 0 1px ${color}55, 0 8px 28px ${color}44`,
-          animation: orb === "idle" ? undefined : "aiPulse 1.4s ease-in-out infinite",
+          animation: orb === "idle" || reduceMotion ? undefined : "aiPulse 1.4s ease-in-out infinite",
         }}
       >
         <span style={{ fontSize: 22 }}>🤖</span>
@@ -387,7 +423,11 @@ export default function LiveAssistant() {
         >
           {/* Header */}
           <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-            <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}` }} />
+            {orb === "speaking" ? (
+              <Waveform color={color} reduceMotion={reduceMotion} />
+            ) : (
+              <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}` }} />
+            )}
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: "#e2e8f0" }}>AI Executive</div>
               <div style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
@@ -468,13 +508,6 @@ export default function LiveAssistant() {
             {error && <div style={{ color: "#f87171", fontSize: 12 }}>{error}</div>}
           </div>
 
-          {/* Live subtitle while speaking */}
-          {subtitle && (
-            <div style={{ padding: "8px 14px", borderTop: "1px solid rgba(255,255,255,0.06)", fontSize: 12, color: "#c7d2fe", background: "rgba(99,102,241,0.06)" }}>
-              {subtitle}
-            </div>
-          )}
-
           {/* Controls */}
           <form
             onSubmit={(e) => {
@@ -495,7 +528,59 @@ export default function LiveAssistant() {
         </div>
       )}
 
+      {/* Cinematic spotlight — dims the page around the focused figure */}
+      {spotlight && (
+        <div
+          aria-hidden
+          style={{
+            position: "fixed",
+            top: spotlight.top,
+            left: spotlight.left,
+            width: spotlight.width,
+            height: spotlight.height,
+            zIndex: 55,
+            pointerEvents: "none",
+            borderRadius: 12,
+            boxShadow:
+              "0 0 0 9999px rgba(3,7,18,0.55), 0 0 0 2px rgba(129,140,248,0.9), 0 0 26px 6px rgba(129,140,248,0.45)",
+            transition: reduceMotion ? "none" : "top 0.35s ease, left 0.35s ease, width 0.35s ease, height 0.35s ease",
+            animation: reduceMotion ? undefined : "aiSpotIn 0.3s ease",
+          }}
+        />
+      )}
+
+      {/* Cinematic caption — narration centered over the whole screen while speaking */}
+      {subtitle && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 92,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 58,
+            maxWidth: "min(680px, calc(100vw - 120px))",
+            padding: "10px 18px",
+            borderRadius: 12,
+            background: "rgba(8,12,24,0.82)",
+            border: "1px solid rgba(129,140,248,0.3)",
+            backdropFilter: "blur(6px)",
+            WebkitBackdropFilter: "blur(6px)",
+            color: "#e8edfb",
+            fontSize: 15,
+            lineHeight: 1.45,
+            textAlign: "center",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+            animation: reduceMotion ? undefined : "aiCaptionIn 0.25s ease",
+          }}
+        >
+          {subtitle}
+        </div>
+      )}
+
       <style>{`@keyframes aiPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+@keyframes aiWave { 0%,100% { height: 4px; opacity: 0.6; } 50% { height: 13px; opacity: 1; } }
+@keyframes aiSpotIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes aiCaptionIn { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @keyframes aiFlash { 0%,100% { box-shadow: 0 0 0 0 rgba(129,140,248,0); } 35% { box-shadow: 0 0 0 3px rgba(129,140,248,0.9), 0 0 22px 6px rgba(129,140,248,0.5); } }
 .ai-flash { animation: aiFlash 1.1s ease-in-out 2; outline: 2px solid rgba(129,140,248,0.75); outline-offset: 3px; border-radius: 12px; }`}</style>
     </>
@@ -515,3 +600,24 @@ const iconBtn: React.CSSProperties = {
   placeItems: "center",
   flexShrink: 0,
 };
+
+// Subtle audio-style waveform shown while the assistant is speaking. Purely
+// decorative (aria-hidden); static bars when the user prefers reduced motion.
+function Waveform({ color, reduceMotion }: { color: string; reduceMotion: boolean }) {
+  return (
+    <span aria-hidden style={{ display: "inline-flex", alignItems: "flex-end", gap: 2, height: 13, width: 20 }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span
+          key={i}
+          style={{
+            width: 2.5,
+            height: reduceMotion ? 9 : 4,
+            borderRadius: 2,
+            background: color,
+            animation: reduceMotion ? undefined : `aiWave 0.9s ease-in-out ${i * 0.12}s infinite`,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
