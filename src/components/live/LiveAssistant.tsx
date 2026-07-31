@@ -50,6 +50,12 @@ export default function LiveAssistant() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [subtitle, setSubtitle] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [briefOffer, setBriefOffer] = useState<{
+    headline: string;
+    alertCount: number;
+    date: string;
+    plan: unknown;
+  } | null>(null);
 
   const [voiceLabel, setVoiceLabel] = useState("Device voice");
   const [fallbackNote, setFallbackNote] = useState<string | null>(null);
@@ -96,6 +102,33 @@ export default function LiveAssistant() {
   useEffect(() => {
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight }));
   }, [msgs, subtitle]);
+
+  // Proactive Morning Brief: on the first portal visit each day, quietly OFFER
+  // the brief the AI already prepared (cron-precomputed). We offer a card, never
+  // auto-play audio — respectful ("intelligent silence"), and browsers block
+  // autoplay sound anyway. Once per day per browser via a localStorage stamp.
+  useEffect(() => {
+    if (!user) return;
+    const p = user.permissions ?? [];
+    const allowed = user.type === "admin" || p.includes("system:ai:view") || p.includes("system:ai:live");
+    if (!allowed || typeof window === "undefined") return;
+    if (!window.location.pathname.startsWith("/portal")) return; // portal-scoped
+    const day = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem("lbs.morningBriefDate") === day) return;
+    let cancelled = false;
+    fetch("/api/portal/ai/brief/plan")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.offer || !d.plan) return;
+        localStorage.setItem("lbs.morningBriefDate", day); // shown today — don't re-offer
+        setBriefOffer({ headline: d.headline, alertCount: d.alertCount, date: d.date, plan: d.plan });
+        setOpen(true);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // Show for authenticated AI-permitted users everywhere in the app (finance
   // portal AND the legacy CRM) — the orb is self-contained, so it answers from
@@ -287,6 +320,25 @@ export default function LiveAssistant() {
     setOrb("idle");
   }
 
+  // Morning-brief offer actions. "Play" runs the prepared presentation (voice +
+  // guided tour). "Show summary" just drops the evidence into the transcript,
+  // silently. "Dismiss" clears it. (The once-per-day stamp is already set.)
+  function playBrief() {
+    const plan = briefOffer?.plan;
+    setBriefOffer(null);
+    if (plan) void runPlan(plan as Parameters<typeof runPlan>[0]);
+  }
+  function showBriefSummary() {
+    const headline = briefOffer?.headline ?? "Here's your morning brief.";
+    const plan = briefOffer?.plan as { steps?: { type: string; blocks?: unknown[] }[] } | undefined;
+    const blocks = plan?.steps?.find((s) => s.type === "show_evidence")?.blocks;
+    setBriefOffer(null);
+    if (blocks?.length) setMsgs((m) => [...m, { role: "assistant", text: headline, blocks }]);
+  }
+  function dismissBrief() {
+    setBriefOffer(null);
+  }
+
   const color = STATE_COLOR[orb];
 
   return (
@@ -363,6 +415,30 @@ export default function LiveAssistant() {
           {fallbackNote && (
             <div style={{ padding: "6px 14px", fontSize: 11, color: "#fcd9a3", background: "rgba(245,158,11,0.1)", borderBottom: "1px solid rgba(245,158,11,0.25)" }}>
               {fallbackNote}
+            </div>
+          )}
+
+          {/* Proactive Morning Brief offer (once per day) */}
+          {briefOffer && (
+            <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "rgba(245,158,11,0.08)" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#fcd9a3", marginBottom: 4 }}>☀️ Good morning</div>
+              <div style={{ fontSize: 12.5, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 9 }}>
+                {briefOffer.headline}
+                {briefOffer.alertCount > 0 && (
+                  <> · <b>{briefOffer.alertCount}</b> item{briefOffer.alertCount === 1 ? "" : "s"} flagged.</>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <button type="button" onClick={playBrief} className="portal-btn portal-btn-primary" style={{ fontSize: 12 }}>
+                  ▶ Walk me through it
+                </button>
+                <button type="button" onClick={showBriefSummary} className="portal-btn" style={{ fontSize: 12 }}>
+                  Show summary
+                </button>
+                <button type="button" onClick={dismissBrief} className="portal-btn" style={{ fontSize: 12 }}>
+                  Dismiss
+                </button>
+              </div>
             </div>
           )}
 
