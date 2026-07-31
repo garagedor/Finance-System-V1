@@ -151,9 +151,9 @@ export default async function IncomePage({
       />
 
       <section className="portal-grid-4">
-        <StatPill label="Total revenue" value={fmt$(grandTotal)} />
-        <StatPill label="CRM jobs revenue" value={fmt$(d.crmRevenue)} />
-        <StatPill label="Manual income" value={fmt$(d.manualTotal)} />
+        <StatPill label="Total revenue" value={fmt$(grandTotal)} anchorId="ai-inc-total" />
+        <StatPill label="CRM jobs revenue" value={fmt$(d.crmRevenue)} anchorId="ai-inc-crm" />
+        <StatPill label="Manual income" value={fmt$(d.manualTotal)} anchorId="ai-inc-manual" />
         <StatPill label="Closed CRM jobs" value={d.crmJobCount.toLocaleString()} />
       </section>
 

@@ -130,9 +130,9 @@ export default async function ExpensesPage({
       />
 
       <section className="portal-grid-4">
-        <StatPill label="Total" value={fmt$(d.total)} />
-        <StatPill label="Paid" value={<span className="money-pos">{fmt$(d.paid)}</span>} />
-        <StatPill label="Unpaid" value={<span className="money-neg">{fmt$(d.unpaid)}</span>} />
+        <StatPill label="Total" value={fmt$(d.total)} anchorId="ai-exp-total" />
+        <StatPill label="Paid" value={<span className="money-pos">{fmt$(d.paid)}</span>} anchorId="ai-exp-paid" />
+        <StatPill label="Unpaid" value={<span className="money-neg">{fmt$(d.unpaid)}</span>} anchorId="ai-exp-unpaid" />
         <StatPill label="Entries" value={d.rows.length.toLocaleString()} />
       </section>
 

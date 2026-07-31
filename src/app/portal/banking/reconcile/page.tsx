@@ -67,10 +67,10 @@ export default async function ReconcilePage({
       <BankingTabs active="reconcile" />
 
       <section className="portal-grid-4">
-        <StatPill label="Unmatched (period)" value={d.unmatchedTotal.toLocaleString()} />
-        <StatPill label="Unmatched $" value={<span className="money-neg">{fmt$(d.unmatchedSum)}</span>} />
+        <StatPill label="Unmatched (period)" value={d.unmatchedTotal.toLocaleString()} anchorId="ai-recon-unmatched" />
+        <StatPill label="Unmatched $" value={<span className="money-neg">{fmt$(d.unmatchedSum)}</span>} anchorId="ai-recon-unmatched-sum" />
         <StatPill label="Matched" value={<span className="money-pos">{d.matchedCount.toLocaleString()}</span>} />
-        <StatPill label="Match rate" value={`${d.matchPct.toFixed(0)}%`} />
+        <StatPill label="Match rate" value={`${d.matchPct.toFixed(0)}%`} anchorId="ai-recon-rate" />
       </section>
 
       <FilterBar>

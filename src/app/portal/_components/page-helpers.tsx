@@ -26,9 +26,19 @@ export function PageHeader({
   );
 }
 
-export function StatPill({ label, value }: { label: string; value: ReactNode }) {
+export function StatPill({
+  label,
+  value,
+  anchorId,
+}: {
+  label: string;
+  value: ReactNode;
+  /** Optional stable id so the live assistant can spotlight this figure
+   *  (only ids registered in the nav capability allowlist are ever targeted). */
+  anchorId?: string;
+}) {
   return (
-    <div className="portal-kpi" style={{ padding: "12px 14px" }}>
+    <div className="portal-kpi" id={anchorId} style={{ padding: "12px 14px" }}>
       <div className="portal-kpi-label">{label}</div>
       <div className="portal-kpi-value" style={{ fontSize: 18 }}>{value}</div>
     </div>

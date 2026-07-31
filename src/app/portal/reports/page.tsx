@@ -62,7 +62,7 @@ export default async function ReportsPage({
       />
 
       <section className="portal-grid-4">
-        <StatPill label="Total saved" value={d.rows.length.toLocaleString()} />
+        <StatPill label="Total saved" value={d.rows.length.toLocaleString()} anchorId="ai-rep-total" />
         <StatPill label="Tech reports" value={(d.byType.tech_report ?? 0).toLocaleString()} />
         <StatPill label="AM reports" value={(d.byType.area_manager_report ?? 0).toLocaleString()} />
         <StatPill label="Expense reports" value={(d.byType.expense_report ?? 0).toLocaleString()} />
