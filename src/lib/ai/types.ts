@@ -51,7 +51,25 @@ export type NavIntent = {
   reason?: string;
 };
 
-export type AgentResult = { blocks: AiBlock[]; trace: Trace; navigation?: NavIntent };
+/** One stop in a guided Presentation: a place to take the owner (validated
+ *  against the permission-scoped allowlist exactly like NavIntent) plus an
+ *  optional spoken line for that stop. A Presentation is an ORDERED sequence of
+ *  these — it turns a one-hop answer into a guided tour of the real pages while
+ *  the assistant narrates. Every stop is still server-validated + client-rechecked
+ *  and read-only; the sequence only lets the model choreograph several hops. */
+export type PresentationAct = {
+  routeId: string;
+  params?: Record<string, string>;
+  highlightAnchor?: string;
+  say?: string;
+};
+
+export type AgentResult = {
+  blocks: AiBlock[];
+  trace: Trace;
+  navigation?: NavIntent;
+  presentation?: PresentationAct[];
+};
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 

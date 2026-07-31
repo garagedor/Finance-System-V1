@@ -6,6 +6,7 @@ import type {
   AiBlock,
   AiProvider,
   NavIntent,
+  PresentationAct,
   ProviderRunInput,
   SynthesisInput,
   SynthesisResult,
@@ -54,7 +55,7 @@ const PRESENT_TOOL: Anthropic.Tool = {
       navigation: {
         type: "object",
         description:
-          "OPTIONAL. Only in live voice mode, and only when opening a page would materially help the owner SEE this answer, include a navigation. Use ONLY a routeId from the allowlist provided in the system prompt — never invent a path. It is a suggestion; it is validated server-side and dropped if not permitted.",
+          "OPTIONAL. Only in live voice mode, and only when opening a SINGLE page would materially help the owner SEE this answer, include a navigation. Use ONLY a routeId from the allowlist provided in the system prompt — never invent a path. It is a suggestion; it is validated server-side and dropped if not permitted. For an answer with several places worth showing in sequence, use `presentation` instead.",
         properties: {
           routeId: { type: "string", description: "An exact routeId from the allowlist, e.g. /portal/expenses" },
           params: {
@@ -67,6 +68,14 @@ const PRESENT_TOOL: Anthropic.Tool = {
           },
           reason: { type: "string", description: "One short spoken sentence, e.g. 'Let me pull up your expenses.'" },
         },
+      },
+      presentation: {
+        type: "array",
+        description:
+          "OPTIONAL, live voice mode only. A GUIDED TOUR: an ORDERED list of stops that walks the owner through the real pages so they SEE the answer unfold, instead of a single hop. Use it when the answer has more than one place worth showing in sequence (e.g. open the dashboard, then filtered expenses, then a specific report). Each item is an object: " +
+          '{routeId (an exact routeId from the allowlist), params? (only that route\'s listed filter keys), highlightAnchor? (only that route\'s listed ids), say? (one short spoken sentence for THIS stop, e.g. "Now look at Chicago\'s expenses.")}. ' +
+          "Use ONLY allowlisted routeIds / params / anchors — every stop is validated server-side and silently dropped if not permitted (read-only: you can view and highlight, never change anything). Prefer this over `navigation` when there is more than one place to look; use neither for greetings or when the on-screen blocks already suffice. At most ~6 stops.",
+        items: { type: "object" },
       },
     },
     required: ["blocks"],
@@ -145,6 +154,7 @@ export class AnthropicProvider implements AiProvider {
 
     let blocks: AiBlock[] = [];
     let navigation: NavIntent | undefined;
+    let presentation: PresentationAct[] | undefined;
     let fallbackText = "";
     let inTok = 0;
     let outTok = 0;
@@ -195,7 +205,12 @@ export class AnthropicProvider implements AiProvider {
 
       const present = toolUses.find((t) => t.name === "present_report");
       if (present) {
-        const inp = present.input as { blocks?: unknown; trace?: Partial<Trace>; navigation?: unknown };
+        const inp = present.input as {
+          blocks?: unknown;
+          trace?: Partial<Trace>;
+          navigation?: unknown;
+          presentation?: unknown;
+        };
         blocks = sanitizeBlocks(inp.blocks);
         if (inp.trace) {
           trace.dateRange = inp.trace.dateRange ?? trace.dateRange;
@@ -217,6 +232,24 @@ export class AnthropicProvider implements AiProvider {
               reason: typeof n.reason === "string" ? n.reason : undefined,
             };
           }
+        }
+        // Raw, UNVALIDATED guided-tour proposal — same treatment: shape it here,
+        // permission-validate EACH stop in the orchestrator. Capped so a runaway
+        // plan can't produce an unbounded tour.
+        if (Array.isArray(inp.presentation)) {
+          const acts: PresentationAct[] = [];
+          for (const raw of inp.presentation) {
+            if (!raw || typeof raw !== "object") continue;
+            const a = raw as Record<string, unknown>;
+            if (typeof a.routeId !== "string") continue;
+            acts.push({
+              routeId: a.routeId,
+              params: a.params && typeof a.params === "object" ? (a.params as Record<string, string>) : undefined,
+              highlightAnchor: typeof a.highlightAnchor === "string" ? a.highlightAnchor : undefined,
+              say: typeof a.say === "string" ? a.say : undefined,
+            });
+          }
+          if (acts.length) presentation = acts.slice(0, 6);
         }
         break;
       }
@@ -278,6 +311,6 @@ export class AnthropicProvider implements AiProvider {
       for (const f of trace.freshness) if (!seen.has(f.source)) seen.set(f.source, f.lastSync);
       trace.freshness = [...seen.entries()].map(([source, lastSync]) => ({ source, lastSync }));
     }
-    return { blocks, trace, navigation };
+    return { blocks, trace, navigation, presentation };
   }
 }
