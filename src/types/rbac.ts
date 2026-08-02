@@ -153,6 +153,11 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDef> = [
 
   p("finance", "settings", "view", "View finance settings"),
   p("finance", "settings", "edit", "Edit finance settings"),
+
+  p("finance", "tasks", "view", "View the team task board"),
+  p("finance", "tasks", "create", "Create tasks"),
+  p("finance", "tasks", "edit", "Edit / move tasks"),
+  p("finance", "tasks", "delete", "Delete tasks"),
 ] as const;
 
 /** Map from key → definition, for O(1) lookup. */
@@ -202,6 +207,7 @@ export type AuditKind =
   | "bank_txn"
   | "recon_match"
   | "report"
+  | "task"
   | "auth";
 
 /** Audit row written on every mutation that touches money or access. */

@@ -24,6 +24,7 @@ import {
   FiUpload,
   FiLock,
   FiCpu,
+  FiCheckSquare,
 } from "react-icons/fi";
 import type { ComponentType } from "react";
 import type { Permission } from "@/types/rbac";
@@ -34,7 +35,7 @@ export type FinanceModule = {
   section: string;
   title: string;
   icon: ComponentType<{ size?: number; className?: string }>;
-  group: "overview" | "ai" | "field" | "money" | "people" | "tracking" | "system" | "admin" | "tools" | "me";
+  group: "overview" | "ai" | "work" | "field" | "money" | "people" | "tracking" | "system" | "admin" | "tools" | "me";
   /** Permission required to see this nav entry. Multiple = any-of. */
   requires: Permission | Permission[];
 };
@@ -58,6 +59,16 @@ export const FINANCE_NAV: FinanceModule[] = [
     icon: FiCpu,
     group: "ai",
     requires: "system:ai:view",
+  },
+  // Team task board
+  {
+    href: "/portal/tasks",
+    label: "Task Board",
+    section: "Team",
+    title: "Task Board",
+    icon: FiCheckSquare,
+    group: "work",
+    requires: "finance:tasks:view",
   },
   // Money in & out
   {
@@ -235,6 +246,7 @@ export const FINANCE_NAV: FinanceModule[] = [
 export const FINANCE_GROUPS: Array<{ key: FinanceModule["group"]; label: string }> = [
   { key: "overview", label: "Overview" },
   { key: "ai", label: "AI" },
+  { key: "work", label: "Team" },
   { key: "money", label: "Money" },
   { key: "people", label: "People" },
   { key: "tracking", label: "Tracking" },

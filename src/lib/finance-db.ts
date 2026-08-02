@@ -100,6 +100,8 @@ export const FINANCE_COLLECTIONS = {
   aiDetectorConfig: "finance_ai_detector_config",  // per-detector enable/disable + tunables
   aiSession:        "finance_ai_session",          // live JARVIS session audit log
   aiVoiceSettings:  "finance_ai_voice_settings",   // premium TTS voice settings (global)
+  // ─── Management task board ───
+  task:             "finance_task",                // Kanban tasks (management team)
   // ─── RBAC + audit ───
   role:             "finance_role",                // role definitions
   auditLog:         "finance_audit",               // unified audit log (replaces finance_role_audit)
@@ -166,6 +168,10 @@ export async function ensureFinanceIndexes(): Promise<void> {
     db.collection(FINANCE_COLLECTIONS.ledger).createIndex({ holder_name: 1 }),
     db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ ledger_id: 1, date: 1, _id: 1 }),
     db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ ledger_id: 1, created_at: 1 }),
+    // Tasks
+    db.collection(FINANCE_COLLECTIONS.task).createIndex({ status: 1, order: 1 }),
+    db.collection(FINANCE_COLLECTIONS.task).createIndex({ assignee_id: 1, status: 1 }),
+    db.collection(FINANCE_COLLECTIONS.task).createIndex({ due_date: 1 }, { sparse: true }),
     // RBAC
     db.collection(FINANCE_COLLECTIONS.role).createIndex({ key: 1 }, { unique: true, sparse: true }),
     db.collection(FINANCE_COLLECTIONS.role).createIndex({ name: 1 }, { unique: true }),

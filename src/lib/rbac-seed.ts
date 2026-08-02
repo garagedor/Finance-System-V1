@@ -66,6 +66,7 @@ function seedTemplates(): SeedTemplate[] {
         "finance:documents:view",
         "finance:banking:view",
         "finance:settings:view",
+        "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit",
       ],
     },
     {
@@ -92,6 +93,7 @@ function seedTemplates(): SeedTemplate[] {
         "finance:documents:view", "finance:documents:create", "finance:documents:edit", "finance:documents:delete",
         "finance:banking:view", "finance:banking:connect", "finance:banking:disconnect", "finance:banking:sync", "finance:banking:reconcile",
         "finance:settings:view",
+        "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit", "finance:tasks:delete",
       ],
     },
     {
@@ -121,6 +123,7 @@ function seedTemplates(): SeedTemplate[] {
         "finance:disputes:view", "finance:disputes:edit",
         "finance:documents:view",
         "finance:banking:view",
+        "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit",
       ],
     },
     {
@@ -187,6 +190,41 @@ export async function migrateUsersToRoles(db: Db): Promise<{ migrated: number; m
   return { migrated, missing };
 }
 
+/** Grant the finance:tasks:* permissions to the management system roles that
+ *  already exist (the seeder never overwrites an existing role, so a DB
+ *  installed before the Task Board shipped won't have these perms yet). Purely
+ *  additive (union) and idempotent — never removes anything a user customised. */
+export async function backfillTasksPermissions(db: Db): Promise<void> {
+  const rolesColl = db.collection<RoleRecord>(FINANCE_COLLECTIONS.role);
+  const grants: Record<string, Permission[]> = {
+    [SYSTEM_ROLE_KEYS.admin]: [
+      "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit", "finance:tasks:delete",
+    ],
+    [SYSTEM_ROLE_KEYS.office]: [
+      "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit",
+    ],
+    [SYSTEM_ROLE_KEYS.bookkeeper]: [
+      "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit", "finance:tasks:delete",
+    ],
+    [SYSTEM_ROLE_KEYS.locationManager]: [
+      "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit",
+    ],
+  };
+  for (const [key, perms] of Object.entries(grants)) {
+    const role = await rolesColl.findOne({ key });
+    if (!role) continue;
+    const missing = perms.filter((p) => !role.permissions.includes(p));
+    if (missing.length === 0) continue;
+    await rolesColl.updateOne(
+      { _id: role._id },
+      {
+        $addToSet: { permissions: { $each: missing } },
+        $set: { updated_at: new Date().toISOString(), updated_by: "system-seed" },
+      }
+    );
+  }
+}
+
 /** One-shot init: ensures indexes, seeds roles, migrates users. Safe to call
  *  many times — internal flag short-circuits subsequent calls in the same
  *  Node process. */
@@ -195,6 +233,7 @@ export async function ensureRbacReady(): Promise<void> {
   await ensureFinanceIndexes();
   const db = await getDb();
   await seedSystemRoles(db);
+  await backfillTasksPermissions(db);
   await migrateUsersToRoles(db);
   _seeded = true;
 }

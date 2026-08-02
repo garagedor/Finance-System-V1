@@ -93,6 +93,32 @@ export interface ExpenseRecord {
   created_by?: string;
 }
 
+// ─── Tasks (management Kanban board) ───────────────────────────────────────
+
+/** Board columns. Order here = left-to-right column order on the board. */
+export type TaskStatus = "todo" | "in_progress" | "blocked" | "done";
+export type TaskPriority = "low" | "medium" | "high" | "urgent";
+
+export interface TaskRecord {
+  _id: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  priority: TaskPriority;
+  /** users._id of the assignee (a login account), if assigned. */
+  assignee_id?: string;
+  /** Denormalized assignee name so the card renders without a lookup. */
+  assignee_name?: string;
+  /** Due date, ISO yyyy-mm-dd. */
+  due_date?: string;
+  /** Sort position within a column (lower = higher on the board). */
+  order: number;
+  created_at: string;
+  created_by?: string;
+  updated_at?: string;
+  updated_by?: string;
+}
+
 // ─── Position profile + Payout ─────────────────────────────────────────────
 
 export type PayoutComponentKind =
