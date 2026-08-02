@@ -140,13 +140,18 @@ export default async function IncomePage({
           </>
         }
         actions={
-          <EntryFormModal
-            endpoint="/api/portal/income"
-            title="Income"
-            fields={INCOME_FIELDS}
-            triggerLabel="+ Add manual income"
-            primary
-          />
+          <>
+            <Link href="/portal/income/recurring" className="portal-btn">
+              ↻ Recurring
+            </Link>
+            <EntryFormModal
+              endpoint="/api/portal/income"
+              title="Income"
+              fields={INCOME_FIELDS}
+              triggerLabel="+ Add manual income"
+              primary
+            />
+          </>
         }
       />
 

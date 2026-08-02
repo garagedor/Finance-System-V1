@@ -79,6 +79,7 @@ function seedTemplates(): SeedTemplate[] {
         // Finance full
         "finance:dashboard:view",
         "finance:income:view", "finance:income:create", "finance:income:edit", "finance:income:delete",
+        "finance:recurring_income:view", "finance:recurring_income:create", "finance:recurring_income:edit", "finance:recurring_income:delete", "finance:recurring_income:run",
         "finance:expenses:view", "finance:expenses:create", "finance:expenses:edit", "finance:expenses:delete",
         "finance:recurring_expenses:view", "finance:recurring_expenses:create", "finance:recurring_expenses:edit", "finance:recurring_expenses:delete", "finance:recurring_expenses:run",
         "finance:payouts:view", "finance:payouts:create", "finance:payouts:edit", "finance:payouts:delete",
@@ -190,21 +191,28 @@ export async function migrateUsersToRoles(db: Db): Promise<{ migrated: number; m
   return { migrated, missing };
 }
 
-/** Grant the finance:tasks:* permissions to the management system roles that
- *  already exist (the seeder never overwrites an existing role, so a DB
- *  installed before the Task Board shipped won't have these perms yet). Purely
- *  additive (union) and idempotent — never removes anything a user customised. */
+/** Grant newly-shipped finance permissions to the system roles that already
+ *  exist (the seeder never overwrites an existing role, so a DB installed
+ *  before a feature shipped won't have its perms yet). Purely additive (union)
+ *  and idempotent — never removes anything a user customised. Covers the Task
+ *  Board (finance:tasks:*) and recurring income (finance:recurring_income:*). */
 export async function backfillTasksPermissions(db: Db): Promise<void> {
   const rolesColl = db.collection<RoleRecord>(FINANCE_COLLECTIONS.role);
+  const RECURRING_INCOME: Permission[] = [
+    "finance:recurring_income:view", "finance:recurring_income:create",
+    "finance:recurring_income:edit", "finance:recurring_income:delete", "finance:recurring_income:run",
+  ];
   const grants: Record<string, Permission[]> = {
     [SYSTEM_ROLE_KEYS.admin]: [
       "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit", "finance:tasks:delete",
+      ...RECURRING_INCOME,
     ],
     [SYSTEM_ROLE_KEYS.office]: [
       "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit",
     ],
     [SYSTEM_ROLE_KEYS.bookkeeper]: [
       "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit", "finance:tasks:delete",
+      ...RECURRING_INCOME,
     ],
     [SYSTEM_ROLE_KEYS.locationManager]: [
       "finance:tasks:view", "finance:tasks:create", "finance:tasks:edit",

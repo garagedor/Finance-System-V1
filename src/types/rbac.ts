@@ -99,6 +99,12 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDef> = [
   p("finance", "income", "edit", "Edit income"),
   p("finance", "income", "delete", "Delete income"),
 
+  p("finance", "recurring_income", "view", "View recurring income"),
+  p("finance", "recurring_income", "create", "Create recurring income"),
+  p("finance", "recurring_income", "edit", "Edit recurring income"),
+  p("finance", "recurring_income", "delete", "Delete recurring income"),
+  p("finance", "recurring_income", "run", "Run recurring income generator"),
+
   p("finance", "expenses", "view", "View expenses"),
   p("finance", "expenses", "create", "Create expenses"),
   p("finance", "expenses", "edit", "Edit expenses"),
@@ -204,6 +210,7 @@ export type AuditKind =
   | "dispute"
   | "settlement"
   | "recurring_expense"
+  | "recurring_income"
   | "bank_txn"
   | "recon_match"
   | "report"

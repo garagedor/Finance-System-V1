@@ -84,6 +84,7 @@ export const FINANCE_COLLECTIONS = {
   report:           "finance_saved_report",
   position:         "finance_position",
   recurringExpense: "finance_recurring_expense",
+  recurringIncome:  "finance_recurring_income",
   // ─── Plaid integration (read-only) ───
   plaidInstitution: "finance_plaid_institution",  // connected institutions (encrypted access_token)
   bankAccountSynced:"finance_bank_account_synced",// accounts synced from Plaid
@@ -151,6 +152,8 @@ export async function ensureFinanceIndexes(): Promise<void> {
     db.collection(FINANCE_COLLECTIONS.followUpComm).createIndex({ recipient_id: 1 }),
     db.collection(FINANCE_COLLECTIONS.recurringExpense).createIndex({ active: 1, next_due_date: 1 }),
     db.collection(FINANCE_COLLECTIONS.expense).createIndex({ recurring_id: 1 }, { sparse: true }),
+    db.collection(FINANCE_COLLECTIONS.recurringIncome).createIndex({ active: 1, next_due_date: 1 }),
+    db.collection(FINANCE_COLLECTIONS.income).createIndex({ recurring_id: 1 }, { sparse: true }),
     // Plaid
     db.collection(FINANCE_COLLECTIONS.plaidInstitution).createIndex({ item_id: 1 }, { unique: true }),
     db.collection(FINANCE_COLLECTIONS.plaidInstitution).createIndex({ status: 1 }),
