@@ -92,6 +92,10 @@ export interface LedgerEntryRecord {
   bank_txn_id?: string | null;
   // payment matched to a portal payout (finance_payout).
   payout_id?: string | null;
+  // linked to a finance_income entry (the holder paid us; booked as income) OR
+  // a finance_expense entry (we paid them; booked as expense). See lib/ledger-link.
+  income_id?: string | null;
+  expense_id?: string | null;
 
   source: "manual" | "crm" | "imported";
   created_at: string;

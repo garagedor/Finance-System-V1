@@ -12,7 +12,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { readPortalSession } from "@/lib/portal-auth";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes, newId } from "@/lib/finance-db";
 import type { ExpenseRecord, RecurringExpenseRecord } from "@/types/finance";
+import type { LedgerRecord } from "@/types/finance-ledger";
 import { dueDatesUpTo, nextDueAfter } from "@/lib/recurring-schedule";
+import { postLinkedLedgerEntry } from "@/lib/ledger-link";
 
 export async function POST(req: NextRequest) {
   const session = await readPortalSession();
@@ -25,6 +27,7 @@ export async function POST(req: NextRequest) {
 
   const tColl = coll<RecurringExpenseRecord>(FINANCE_COLLECTIONS.recurringExpense);
   const eColl = coll<ExpenseRecord>(FINANCE_COLLECTIONS.expense);
+  const lColl = coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger);
 
   const templates = await tColl
     .find(oneId ? { _id: oneId } : { active: true })
@@ -45,6 +48,10 @@ export async function POST(req: NextRequest) {
     let skipped = 0;
     let lastGenerated = t.last_generated_for;
 
+    // Resolve the linked ledger once (if any) so each generated expense can also
+    // post a POSITIVE mirror entry (we paid them).
+    const ledger = t.ledger_id ? await lColl.findOne({ _id: t.ledger_id }) : null;
+
     for (const due of dueDates) {
       // Idempotency: skip if an expense already exists for (template, date).
       const existing = await eColl.findOne({ recurring_id: t._id, date: due });
@@ -63,6 +70,8 @@ export async function POST(req: NextRequest) {
         description: t.name,
         status: t.default_status,
         recurring_id: t._id,
+        ledger_id: ledger?._id,
+        ledger_holder: ledger?.holder_name,
         created_at: new Date().toISOString(),
         created_by: `recurring:${session.name}`,
       };
@@ -71,6 +80,13 @@ export async function POST(req: NextRequest) {
         exp.paid_by = session.name;
       }
       await eColl.insertOne(exp);
+      if (ledger) {
+        const entryId = await postLinkedLedgerEntry({
+          ledgerId: ledger._id, kind: "expense", refId: exp._id,
+          amount: exp.amount, date: exp.date, description: exp.description, actor: `recurring:${session.name}`,
+        });
+        await eColl.updateOne({ _id: exp._id }, { $set: { ledger_entry_id: entryId } });
+      }
       generated++;
       lastGenerated = due;
     }

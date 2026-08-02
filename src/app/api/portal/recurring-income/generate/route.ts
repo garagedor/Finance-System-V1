@@ -11,7 +11,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { readPortalSession } from "@/lib/portal-auth";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes, newId } from "@/lib/finance-db";
 import type { ManualIncomeRecord, RecurringIncomeRecord } from "@/types/finance";
+import type { LedgerRecord } from "@/types/finance-ledger";
 import { dueDatesUpTo, nextDueAfter } from "@/lib/recurring-schedule";
+import { postLinkedLedgerEntry } from "@/lib/ledger-link";
 
 export async function POST(req: NextRequest) {
   const session = await readPortalSession();
@@ -24,6 +26,7 @@ export async function POST(req: NextRequest) {
 
   const tColl = coll<RecurringIncomeRecord>(FINANCE_COLLECTIONS.recurringIncome);
   const iColl = coll<ManualIncomeRecord>(FINANCE_COLLECTIONS.income);
+  const lColl = coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger);
 
   const templates = await tColl
     .find(oneId ? { _id: oneId } : { active: true })
@@ -44,6 +47,10 @@ export async function POST(req: NextRequest) {
     let skipped = 0;
     let lastGenerated = t.last_generated_for;
 
+    // Resolve the linked ledger once (if any) so each generated income can also
+    // post a NEGATIVE mirror entry (they paid us).
+    const ledger = t.ledger_id ? await lColl.findOne({ _id: t.ledger_id }) : null;
+
     for (const due of dueDates) {
       // Idempotency: skip if an income entry already exists for (template, date).
       const existing = await iColl.findOne({ recurring_id: t._id, date: due });
@@ -60,10 +67,19 @@ export async function POST(req: NextRequest) {
         related_person_id: t.related_person_id,
         notes: t.notes ? `${t.notes}\n[Auto-generated from recurring "${t.name}"]` : `[Auto-generated from recurring "${t.name}"]`,
         recurring_id: t._id,
+        ledger_id: ledger?._id,
+        ledger_holder: ledger?.holder_name,
         created_at: new Date().toISOString(),
         created_by: `recurring:${session.name}`,
       };
       await iColl.insertOne(inc);
+      if (ledger) {
+        const entryId = await postLinkedLedgerEntry({
+          ledgerId: ledger._id, kind: "income", refId: inc._id,
+          amount: inc.amount, date: inc.date, description: inc.description, actor: `recurring:${session.name}`,
+        });
+        await iColl.updateOne({ _id: inc._id }, { $set: { ledger_entry_id: entryId } });
+      }
       generated++;
       lastGenerated = due;
     }

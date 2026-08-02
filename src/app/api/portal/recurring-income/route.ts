@@ -44,6 +44,7 @@ const crud = makeCrud<RecurringIncomeRecord>({
       next_due_date: next,
       active: body.active !== false,
       total_generated: mode === "create" ? 0 : Number(body.total_generated ?? 0),
+      ledger_id: body.ledger_id ? String(body.ledger_id) : null,
     };
   },
 });

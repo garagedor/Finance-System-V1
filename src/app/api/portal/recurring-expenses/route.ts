@@ -45,6 +45,7 @@ const crud = makeCrud<RecurringExpenseRecord>({
       default_status: body.default_status === "paid" ? "paid" : "unpaid",
       active: body.active !== false,
       total_generated: mode === "create" ? 0 : Number(body.total_generated ?? 0),
+      ledger_id: body.ledger_id ? String(body.ledger_id) : null,
     };
   },
 });

@@ -5,6 +5,10 @@ import { fmt$, fmtDate, lastNDays } from "../format";
 import { PageHeader, StatPill, FilterBar, FilterField, CardShell, Empty, StatusPill } from "../_components/page-helpers";
 import EntryFormModal, { type FieldDef } from "../_components/EntryFormModal";
 import RowActions from "../_components/RowActions";
+import LedgerExpenseModal, { type LedgerOption } from "./LedgerExpenseModal";
+import type { LedgerRecord } from "@/types/finance-ledger";
+
+const LEDGER_EXPENSE_ENDPOINT = "/api/portal/expenses/from-ledger";
 
 export const dynamic = "force-dynamic";
 
@@ -92,7 +96,19 @@ async function loadExpenses(sp: SP) {
   const byCat: Record<string, number> = {};
   for (const r of rows) byCat[r.category] = (byCat[r.category] ?? 0) + r.amount;
 
-  return { range, rows, total, unpaid, paid, byCat };
+  // Active ledgers for the "expense to a ledger" picker.
+  const ledgerRows = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger)
+    .find({ status: "active" })
+    .sort({ holder_name: 1 })
+    .toArray();
+  const ledgers: LedgerOption[] = ledgerRows.map((l) => ({
+    _id: l._id,
+    holder_name: l.holder_name,
+    location: l.location,
+    role: l.role,
+  }));
+
+  return { range, rows, total, unpaid, paid, byCat, ledgers };
 }
 
 export default async function ExpensesPage({
@@ -118,6 +134,7 @@ export default async function ExpensesPage({
             <Link href="/portal/expenses/recurring" className="portal-btn">
               ↻ Recurring
             </Link>
+            <LedgerExpenseModal ledgers={d.ledgers} />
             <EntryFormModal
               endpoint="/api/portal/expenses"
               title="Expense"
@@ -196,7 +213,14 @@ export default async function ExpensesPage({
               {d.rows.map((r) => (
                 <tr key={r._id}>
                   <td className="small mono">{fmtDate(r.date)}</td>
-                  <td className="small">{labelForCat(r.category)}</td>
+                  <td className="small">
+                    {labelForCat(r.category)}
+                    {r.ledger_id && (
+                      <div className="small" style={{ color: "#818cf8" }}>
+                        ↪ to {r.ledger_holder ?? "ledger"}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     {r.description ?? "—"}
                     {r.notes && <div className="muted small">{r.notes}</div>}
@@ -206,11 +230,33 @@ export default async function ExpensesPage({
                   <td><StatusPill status={r.status} /></td>
                   <td className="right money money-neg">−{fmt$(r.amount)}</td>
                   <td className="right">
-                    <RowActions
-                      endpoint="/api/portal/expenses"
-                      id={r._id}
-                      currentStatus={r.status}
-                    />
+                    {r.ledger_id ? (
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        <LedgerExpenseModal
+                          ledgers={d.ledgers}
+                          initial={{
+                            _id: r._id,
+                            ledger_id: r.ledger_id,
+                            ledger_holder: r.ledger_holder,
+                            amount: r.amount,
+                            date: r.date,
+                            description: r.description,
+                            category: r.category,
+                            payment_method: r.payment_method,
+                            related_area: r.related_area,
+                            status: r.status,
+                            notes: r.notes,
+                          }}
+                        />
+                        <RowActions endpoint={LEDGER_EXPENSE_ENDPOINT} id={r._id} canToggleStatus={false} />
+                      </div>
+                    ) : (
+                      <RowActions
+                        endpoint="/api/portal/expenses"
+                        id={r._id}
+                        currentStatus={r.status}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}

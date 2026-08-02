@@ -6,7 +6,11 @@ import { fmt$, fmtDate, lastNDays } from "../format";
 import { PageHeader, StatPill, FilterBar, FilterField, CardShell, Empty } from "../_components/page-helpers";
 import EntryFormModal, { type FieldDef } from "../_components/EntryFormModal";
 import RowActions from "../_components/RowActions";
+import LedgerIncomeModal, { type LedgerOption } from "./LedgerIncomeModal";
+import type { LedgerRecord } from "@/types/finance-ledger";
 import type { Document } from "mongodb";
+
+const LEDGER_INCOME_ENDPOINT = "/api/portal/income/from-ledger";
 
 export const dynamic = "force-dynamic";
 
@@ -117,7 +121,19 @@ async function loadIncome(sp: SP) {
   const crmRevenue = crmAgg[0]?.total ?? 0;
   const crmJobCount = crmAgg[0]?.count ?? 0;
 
-  return { range, rows, bySource, manualTotal, crmRevenue, crmJobCount };
+  // Active ledgers for the "income from a ledger" picker.
+  const ledgerRows = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger)
+    .find({ status: "active" })
+    .sort({ holder_name: 1 })
+    .toArray();
+  const ledgers: LedgerOption[] = ledgerRows.map((l) => ({
+    _id: l._id,
+    holder_name: l.holder_name,
+    location: l.location,
+    role: l.role,
+  }));
+
+  return { range, rows, bySource, manualTotal, crmRevenue, crmJobCount, ledgers };
 }
 
 export default async function IncomePage({
@@ -144,6 +160,7 @@ export default async function IncomePage({
             <Link href="/portal/income/recurring" className="portal-btn">
               ↻ Recurring
             </Link>
+            <LedgerIncomeModal ledgers={d.ledgers} />
             <EntryFormModal
               endpoint="/api/portal/income"
               title="Income"
@@ -214,7 +231,14 @@ export default async function IncomePage({
               {d.rows.map((r) => (
                 <tr key={r._id}>
                   <td className="small mono">{fmtDate(r.date)}</td>
-                  <td className="small">{labelForSource(r.source)}</td>
+                  <td className="small">
+                    {labelForSource(r.source)}
+                    {r.ledger_id && (
+                      <div className="small" style={{ color: "#818cf8" }}>
+                        ↩ from {r.ledger_holder ?? "ledger"}
+                      </div>
+                    )}
+                  </td>
                   <td>
                     {r.description}
                     {r.notes && <div className="muted small">{r.notes}</div>}
@@ -223,11 +247,32 @@ export default async function IncomePage({
                   <td className="muted small">{r.payment_method ?? "—"}</td>
                   <td className="right money money-pos">+{fmt$(r.amount)}</td>
                   <td className="right">
-                    <RowActions
-                      endpoint="/api/portal/income"
-                      id={r._id}
-                      canToggleStatus={false}
-                    />
+                    {r.ledger_id ? (
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        <LedgerIncomeModal
+                          ledgers={d.ledgers}
+                          initial={{
+                            _id: r._id,
+                            ledger_id: r.ledger_id,
+                            ledger_holder: r.ledger_holder,
+                            amount: r.amount,
+                            date: r.date,
+                            description: r.description,
+                            source: r.source,
+                            payment_method: r.payment_method,
+                            related_area: r.related_area,
+                            notes: r.notes,
+                          }}
+                        />
+                        <RowActions endpoint={LEDGER_INCOME_ENDPOINT} id={r._id} canToggleStatus={false} />
+                      </div>
+                    ) : (
+                      <RowActions
+                        endpoint="/api/portal/income"
+                        id={r._id}
+                        canToggleStatus={false}
+                      />
+                    )}
                   </td>
                 </tr>
               ))}

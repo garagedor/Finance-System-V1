@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
 import type { ManualIncomeRecord, RecurringIncomeRecord } from "@/types/finance";
+import type { LedgerRecord } from "@/types/finance-ledger";
 import { fmt$, fmtDate } from "../../format";
 import {
   PageHeader, StatPill, CardShell, Empty, BackLink,
@@ -40,7 +41,9 @@ const PAYMENT_METHODS = [
   { value: "cash", label: "Cash" }, { value: "other", label: "Other" },
 ];
 
-function buildFields(initial?: RecurringIncomeRecord): FieldDef[] {
+type LedgerOpt = { value: string; label: string };
+
+function buildFields(ledgerOpts: LedgerOpt[], initial?: RecurringIncomeRecord): FieldDef[] {
   return [
     { name: "name", label: "Template name", kind: "text", required: true,
       placeholder: "e.g. Monthly retainer, Quarterly parts margin",
@@ -72,6 +75,9 @@ function buildFields(initial?: RecurringIncomeRecord): FieldDef[] {
     { name: "active", label: "Active", kind: "boolean", width: "half",
       defaultValue: initial?.active ?? true,
       help: "Pause to stop generating without deleting the template." },
+    { name: "ledger_id", label: "Pull from a ledger (optional)", kind: "select",
+      options: ledgerOpts, defaultValue: initial?.ledger_id,
+      help: "If set, each generated income also posts −amount on this ledger (they paid us)." },
     { name: "notes", label: "Notes", kind: "textarea",
       defaultValue: initial?.notes },
   ];
@@ -104,7 +110,15 @@ async function load() {
     .reduce((s, t) => s + estimateMonthly(t), 0);
   const dueNow = templates.filter((t) => t.active && t.next_due_date <= today).length;
 
-  return { templates, stats, today, activeCount, monthlyEstimate, dueNow };
+  // Active ledgers for the "pull from a ledger" picker + name lookup.
+  const ledgerRows = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger)
+    .find({ status: "active" }).sort({ holder_name: 1 }).toArray();
+  const ledgerOpts: LedgerOpt[] = ledgerRows.map((l) => ({
+    value: l._id, label: `${l.holder_name} · ${l.location}`,
+  }));
+  const ledgerName = new Map(ledgerRows.map((l) => [l._id, `${l.holder_name} · ${l.location}`]));
+
+  return { templates, stats, today, activeCount, monthlyEstimate, dueNow, ledgerOpts, ledgerName };
 }
 
 function estimateMonthly(t: RecurringIncomeRecord): number {
@@ -135,7 +149,7 @@ export default async function RecurringIncomePage() {
             <EntryFormModal
               endpoint="/api/portal/recurring-income"
               title="Recurring template"
-              fields={buildFields()}
+              fields={buildFields(d.ledgerOpts)}
               triggerLabel="+ New template"
               primary
             />
@@ -164,7 +178,7 @@ export default async function RecurringIncomePage() {
               <EntryFormModal
                 endpoint="/api/portal/recurring-income"
                 title="Recurring template"
-                fields={buildFields()}
+                fields={buildFields(d.ledgerOpts)}
                 triggerLabel="+ Add your first template"
               />
             }
@@ -199,7 +213,14 @@ export default async function RecurringIncomePage() {
                       <strong>{t.name}</strong>
                       {t.notes && <div className="muted small">{t.notes.split("\n")[0]}</div>}
                     </td>
-                    <td className="small muted">{labelForSource(t.source)}</td>
+                    <td className="small muted">
+                      {labelForSource(t.source)}
+                      {t.ledger_id && (
+                        <div className="small" style={{ color: "#818cf8" }}>
+                          ↩ {d.ledgerName.get(t.ledger_id) ?? "ledger"}
+                        </div>
+                      )}
+                    </td>
                     <td className="small">
                       {labelForFreq(t.frequency)}
                       {t.frequency === "custom" && t.custom_interval_days && (
@@ -227,7 +248,7 @@ export default async function RecurringIncomePage() {
                       <EntryFormModal
                         endpoint="/api/portal/recurring-income"
                         title="Recurring template"
-                        fields={buildFields(t)}
+                        fields={buildFields(d.ledgerOpts, t)}
                         initial={t as unknown as Record<string, unknown> & { _id?: string }}
                         triggerLabel="Edit"
                       />
