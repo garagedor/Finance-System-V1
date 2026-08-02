@@ -9,6 +9,7 @@ import {
 import EntryFormModal, { type FieldDef } from "../../_components/EntryFormModal";
 import RowActions from "../../_components/RowActions";
 import GenerateButton from "./GenerateButton";
+import UndoRunButton from "../../_components/UndoRunButton";
 
 export const dynamic = "force-dynamic";
 
@@ -263,6 +264,13 @@ export default async function RecurringExpensesPage() {
                     <td className="right" style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                       {t.active && t.next_due_date <= d.today && (
                         <GenerateButton templateId={t._id} label="Run" />
+                      )}
+                      {t.last_run_at && (
+                        <UndoRunButton
+                          endpoint="/api/portal/recurring-expenses/undo"
+                          templateId={t._id}
+                          count={t.last_run_count}
+                        />
                       )}
                       <EntryFormModal
                         endpoint="/api/portal/recurring-expenses"

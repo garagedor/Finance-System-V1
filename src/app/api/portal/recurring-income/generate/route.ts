@@ -48,8 +48,11 @@ export async function POST(req: NextRequest) {
     let lastGenerated = t.last_generated_for;
 
     // Resolve the linked ledger once (if any) so each generated income can also
-    // post a NEGATIVE mirror entry (they paid us).
+    // post a mirror entry (they owe the company). One run timestamp stamps every
+    // entry created this run, so the whole run can be undone later.
     const ledger = t.ledger_id ? await lColl.findOne({ _id: t.ledger_id }) : null;
+    const runTs = new Date().toISOString();
+    const prevNextDue = t.next_due_date;
 
     for (const due of dueDates) {
       // Idempotency: skip if an income entry already exists for (template, date).
@@ -67,6 +70,7 @@ export async function POST(req: NextRequest) {
         related_person_id: t.related_person_id,
         notes: t.notes ? `${t.notes}\n[Auto-generated from recurring "${t.name}"]` : `[Auto-generated from recurring "${t.name}"]`,
         recurring_id: t._id,
+        generated_run: runTs,
         ledger_id: ledger?._id,
         ledger_holder: ledger?.holder_name,
         created_at: new Date().toISOString(),
@@ -101,6 +105,9 @@ export async function POST(req: NextRequest) {
             next_due_date: nextDue,
             last_generated_at: new Date().toISOString(),
             last_generated_for: lastGenerated ?? t.last_generated_for,
+            ...(generated > 0
+              ? { last_run_at: runTs, last_run_count: generated, prev_next_due: prevNextDue }
+              : {}),
           },
           $inc: { total_generated: generated },
         }
