@@ -4,9 +4,12 @@ import "server-only";
 // ledger, keeping the two in lock-step.
 //
 // Sign convention (see finance-ledger.ts): positive = the person owes the
-// company; negative = the company owes the person.
-//   • income  → they paid us   → NEGATIVE ledger movement (they owe less)
-//   • expense → we paid them   → POSITIVE ledger movement (we owe them less)
+// company; negative = the company owes the person. Both linked flows move the
+// balance the SAME way — they increase what the holder owes the company:
+//   • income  → office charge (we charge them)   → POSITIVE (they owe us)
+//   • expense → advance / payment to them        → POSITIVE (we owe them less)
+// The holder settling up (an actual payment they make) is recorded separately
+// via the ledger's "Record payment" (they paid us → negative).
 //
 // Lifecycle for both directions:
 //   create → post the mirror ledger entry, linked back to the income/expense
@@ -18,17 +21,12 @@ import type { LedgerEntryRecord, LedgerEntryType } from "@/types/finance-ledger"
 
 export type LedgerLinkKind = "income" | "expense";
 
-/** income = they paid us → negative; expense = we paid them → positive. */
-function signedAmount(kind: LedgerLinkKind, amount: number): number {
-  const a = Math.abs(amount);
-  return kind === "income" ? -a : a;
-}
 function entryType(kind: LedgerLinkKind): LedgerEntryType {
   return kind === "income" ? "office_charge" : "payment";
 }
 function entryDescription(kind: LedgerLinkKind, desc?: string | null): string {
   const base = kind === "income"
-    ? "Paid to company — booked as income"
+    ? "Charge — booked as income"
     : "Paid by company — booked as expense";
   return desc ? `${base}: ${desc}` : base;
 }
@@ -49,7 +47,7 @@ export async function postLinkedLedgerEntry(opts: {
     ledger_id: opts.ledgerId,
     type: entryType(opts.kind),
     date: opts.date,
-    amount: signedAmount(opts.kind, opts.amount),
+    amount: Math.abs(opts.amount), // holder owes the company more
     description: entryDescription(opts.kind, opts.description),
     income_id: opts.kind === "income" ? opts.refId : null,
     expense_id: opts.kind === "expense" ? opts.refId : null,
@@ -73,7 +71,7 @@ export async function resyncLinkedLedgerEntry(
     { _id: entryId },
     {
       $set: {
-        amount: signedAmount(kind, src.amount),
+        amount: Math.abs(src.amount),
         date: src.date,
         description: entryDescription(kind, src.description),
       },

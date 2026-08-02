@@ -77,7 +77,7 @@ function buildFields(ledgerOpts: LedgerOpt[], initial?: RecurringIncomeRecord): 
       help: "Pause to stop generating without deleting the template." },
     { name: "ledger_id", label: "Pull from a ledger (optional)", kind: "select",
       options: ledgerOpts, defaultValue: initial?.ledger_id,
-      help: "If set, each generated income also posts −amount on this ledger (they paid us)." },
+      help: "If set, each generated income also posts +amount on this ledger (charged to them — they owe the company)." },
     { name: "notes", label: "Notes", kind: "textarea",
       defaultValue: initial?.notes },
   ];

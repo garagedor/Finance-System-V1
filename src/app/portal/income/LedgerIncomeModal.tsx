@@ -149,7 +149,7 @@ export default function LedgerIncomeModal({
               <button onClick={() => setOpen(false)} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
             <p className="muted small" style={{ marginTop: 0, marginBottom: 16 }}>
-              Records +income here and a matching −{amount || "0"} on the holder&apos;s ledger (they paid us).
+              Records +income here and a matching +{amount || "0"} on the holder&apos;s ledger (charged to them — they owe the company).
             </p>
 
             <form onSubmit={onSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
