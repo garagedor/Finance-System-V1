@@ -92,6 +92,10 @@ export interface BankTransactionSyncedRecord {
   ignored_at?: string;
   ignored_by?: string;
   notes?: string;
+  // Expense grouping (trips / projects / ad-hoc situations). A txn belongs to at
+  // most one group; group_category is its bucket within that group's breakdown.
+  group_id?: string;
+  group_category?: string;
   created_at: string;
   updated_at?: string;
 }

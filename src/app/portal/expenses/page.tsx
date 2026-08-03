@@ -134,6 +134,9 @@ export default async function ExpensesPage({
             <Link href="/portal/expenses/recurring" className="portal-btn">
               ↻ Recurring
             </Link>
+            <Link href="/portal/expenses/groups" className="portal-btn">
+              ⊞ Unexpected
+            </Link>
             <LedgerExpenseModal ledgers={d.ledgers} />
             <EntryFormModal
               endpoint="/api/portal/expenses"

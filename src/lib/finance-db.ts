@@ -103,6 +103,8 @@ export const FINANCE_COLLECTIONS = {
   aiVoiceSettings:  "finance_ai_voice_settings",   // premium TTS voice settings (global)
   // ─── Management task board ───
   task:             "finance_task",                // Kanban tasks (management team)
+  // ─── Expense groups (trips / projects / ad-hoc spend) ───
+  expenseGroup:     "finance_expense_group",       // labeled buckets over bank txns
   // ─── RBAC + audit ───
   role:             "finance_role",                // role definitions
   auditLog:         "finance_audit",               // unified audit log (replaces finance_role_audit)
@@ -163,6 +165,8 @@ export async function ensureFinanceIndexes(): Promise<void> {
     db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ date: -1 }),
     db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ account_id: 1, date: -1 }),
     db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ recon_status: 1, date: -1 }),
+    db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ group_id: 1 }, { sparse: true }),
+    db.collection(FINANCE_COLLECTIONS.expenseGroup).createIndex({ status: 1, created_at: -1 }),
     db.collection(FINANCE_COLLECTIONS.bankSyncLog).createIndex({ item_id: 1, started_at: -1 }),
     db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ bank_txn_id: 1 }),
     db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ matched_kind: 1, matched_id: 1 }),

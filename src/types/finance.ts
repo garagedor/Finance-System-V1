@@ -375,6 +375,24 @@ export interface SettlementRecord {
   created_by?: string;
 }
 
+// ─── Expense group (trips / projects / ad-hoc "unexpected" spend) ───────────
+
+/** A labeled bucket that groups bank transactions so an ad-hoc event — a
+ *  business trip, an emergency repair, a one-off project — can be totalled and
+ *  broken down by category. Generic: any situation, not just trips. The group
+ *  never duplicates money; its total is the sum of the bank txns tagged to it
+ *  (via BankTransactionSyncedRecord.group_id). */
+export interface ExpenseGroupRecord {
+  _id: string;
+  name: string;                  // "Chicago trip — Aug 2026", "Emergency HVAC", …
+  note?: string;
+  status: "open" | "closed";
+  created_at: string;
+  created_by?: string;
+  updated_at?: string;
+  updated_by?: string;
+}
+
 // ─── Saved report ──────────────────────────────────────────────────────────
 
 export type ReportType =
