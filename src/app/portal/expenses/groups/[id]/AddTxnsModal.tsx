@@ -3,7 +3,7 @@
 // Picker to add bank transactions to a group. Lists transactions not yet in any
 // group (searchable), lets you check several, and tags them to this group.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { fmt$, fmtDate } from "../../../format";
 
@@ -70,6 +70,31 @@ export default function AddTxnsModal({
 
   const toggle = (id: string) =>
     setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  // Column sort (click a header to sort; click again to flip direction).
+  type SortKey = "date" | "description" | "category" | "amount";
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const onSort = (key: SortKey) => {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "date" || key === "amount" ? "desc" : "asc"); }
+  };
+  const arrow = (key: SortKey) => (sortKey === key ? (sortDir === "asc" ? " ▲" : " ▼") : "");
+  const sortedRows = useMemo(() => {
+    const arr = [...rows];
+    arr.sort((a, b) => {
+      let c = 0;
+      if (sortKey === "amount") c = a.amount - b.amount;
+      else if (sortKey === "date") c = a.date.localeCompare(b.date);
+      else {
+        const av = String(a[sortKey] ?? "").toLowerCase();
+        const bv = String(b[sortKey] ?? "").toLowerCase();
+        c = av.localeCompare(bv);
+      }
+      return sortDir === "asc" ? c : -c;
+    });
+    return arr;
+  }, [rows, sortKey, sortDir]);
 
   const allSelected = rows.length > 0 && rows.every((r) => sel.has(r._id));
   const toggleAll = () =>
@@ -186,11 +211,14 @@ export default function AddTxnsModal({
                       <th style={{ width: 32 }}>
                         <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select all shown" />
                       </th>
-                      <th>Date</th><th>Description</th><th>Category</th><th className="right">Amount</th>
+                      <th onClick={() => onSort("date")} style={{ cursor: "pointer", userSelect: "none" }}>Date{arrow("date")}</th>
+                      <th onClick={() => onSort("description")} style={{ cursor: "pointer", userSelect: "none" }}>Description{arrow("description")}</th>
+                      <th onClick={() => onSort("category")} style={{ cursor: "pointer", userSelect: "none" }}>Category{arrow("category")}</th>
+                      <th className="right" onClick={() => onSort("amount")} style={{ cursor: "pointer", userSelect: "none" }}>Amount{arrow("amount")}</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((r) => (
+                    {sortedRows.map((r) => (
                       <tr key={r._id} style={{ cursor: "pointer", background: sel.has(r._id) ? "rgba(129,140,248,0.10)" : undefined }}
                         onClick={() => toggle(r._id)}>
                         <td onClick={(e) => e.stopPropagation()}>
