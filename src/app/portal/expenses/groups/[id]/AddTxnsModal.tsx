@@ -71,6 +71,15 @@ export default function AddTxnsModal({
   const toggle = (id: string) =>
     setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const allSelected = rows.length > 0 && rows.every((r) => sel.has(r._id));
+  const toggleAll = () =>
+    setSel((s) => {
+      const n = new Set(s);
+      if (rows.length > 0 && rows.every((r) => n.has(r._id))) rows.forEach((r) => n.delete(r._id));
+      else rows.forEach((r) => n.add(r._id));
+      return n;
+    });
+
   const add = async () => {
     if (sel.size === 0) return;
     setBusy(true);
@@ -173,7 +182,12 @@ export default function AddTxnsModal({
               ) : (
                 <table className="portal-table" style={{ margin: 0 }}>
                   <thead>
-                    <tr><th style={{ width: 32 }}></th><th>Date</th><th>Description</th><th>Category</th><th className="right">Amount</th></tr>
+                    <tr>
+                      <th style={{ width: 32 }}>
+                        <input type="checkbox" checked={allSelected} onChange={toggleAll} title="Select all shown" />
+                      </th>
+                      <th>Date</th><th>Description</th><th>Category</th><th className="right">Amount</th>
+                    </tr>
                   </thead>
                   <tbody>
                     {rows.map((r) => (
@@ -198,7 +212,14 @@ export default function AddTxnsModal({
             {err && <div className="portal-alert portal-alert-error" style={{ marginTop: 10 }}>{err}</div>}
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14 }}>
-              <span className="muted small">{sel.size} selected</span>
+              <span className="muted small" style={{ display: "inline-flex", alignItems: "center", gap: 10 }}>
+                {sel.size} selected
+                {rows.length > 0 && (
+                  <button type="button" className="portal-btn portal-btn-ghost" style={{ padding: "2px 8px", fontSize: 11 }} onClick={toggleAll}>
+                    {allSelected ? "Clear all" : `Select all ${rows.length}`}
+                  </button>
+                )}
+              </span>
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="portal-btn portal-btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
                 <button className="portal-btn portal-btn-primary" onClick={add} disabled={busy || sel.size === 0}>
