@@ -16,11 +16,13 @@ export default function GroupTxnControls({
   txnId,
   category,
   suggestions,
+  overrides,
   remove,
 }: {
   txnId: string;
   category?: string;
   suggestions?: string[];
+  overrides?: Record<string, string> | null;
   remove?: boolean;
 }) {
   const router = useRouter();
@@ -60,7 +62,7 @@ export default function GroupTxnControls({
 
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
-      <CategoryDot category={value} />
+      <CategoryDot category={value} overrides={overrides} />
       <input
         list={LIST_ID}
         className="portal-input"

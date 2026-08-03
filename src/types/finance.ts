@@ -387,6 +387,9 @@ export interface ExpenseGroupRecord {
   name: string;                  // "Chicago trip — Aug 2026", "Emergency HVAC", …
   note?: string;
   status: "open" | "closed";
+  /** Custom color per category (key = lowercased category name → hex). Overrides
+   *  the deterministic default color for this group's chips. */
+  category_colors?: Record<string, string>;
   created_at: string;
   created_by?: string;
   updated_at?: string;

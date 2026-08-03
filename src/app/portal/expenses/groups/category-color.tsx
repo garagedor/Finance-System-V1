@@ -7,8 +7,13 @@ const PALETTE = [
   "#f472b6", "#a3e635", "#fb923c", "#2dd4bf", "#38bdf8", "#e879f9",
 ];
 
-export function categoryColor(category: string | null | undefined): { color: string; bg: string } {
+export function categoryColor(
+  category: string | null | undefined,
+  overrides?: Record<string, string> | null,
+): { color: string; bg: string } {
   const key = (category || "other").trim().toLowerCase();
+  const override = overrides?.[key];
+  if (override) return { color: override, bg: override + "22" };
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   const color = PALETTE[h % PALETTE.length];
@@ -16,8 +21,14 @@ export function categoryColor(category: string | null | undefined): { color: str
 }
 
 /** A small pill: colored dot + category label. */
-export function CategoryChip({ category }: { category: string | null | undefined }) {
-  const { color, bg } = categoryColor(category);
+export function CategoryChip({
+  category,
+  overrides,
+}: {
+  category: string | null | undefined;
+  overrides?: Record<string, string> | null;
+}) {
+  const { color, bg } = categoryColor(category, overrides);
   const label = category || "other";
   return (
     <span
@@ -34,7 +45,13 @@ export function CategoryChip({ category }: { category: string | null | undefined
 }
 
 /** Just the colored dot (used beside the editable category input). */
-export function CategoryDot({ category }: { category: string | null | undefined }) {
-  const { color } = categoryColor(category);
+export function CategoryDot({
+  category,
+  overrides,
+}: {
+  category: string | null | undefined;
+  overrides?: Record<string, string> | null;
+}) {
+  const { color } = categoryColor(category, overrides);
   return <span style={{ width: 9, height: 9, borderRadius: 999, background: color, flex: "0 0 auto" }} />;
 }

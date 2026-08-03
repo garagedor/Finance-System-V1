@@ -7,7 +7,8 @@ import { PageHeader, StatPill, CardShell, Empty, BackLink } from "../../../_comp
 import EntryFormModal, { type FieldDef } from "../../../_components/EntryFormModal";
 import AddTxnsModal from "./AddTxnsModal";
 import GroupTxnControls from "./GroupTxnControls";
-import { CategoryChip } from "../category-color";
+import CategoryManager from "./CategoryManager";
+import { categoryColor } from "../category-color";
 
 export const dynamic = "force-dynamic";
 
@@ -45,7 +46,9 @@ async function load(id: string) {
     if (t.amount < 0) cur.spent += -t.amount;
     byCat.set(cat, cur);
   }
-  const breakdown = [...byCat.entries()].map(([cat, v]) => ({ cat, ...v })).sort((a, b) => b.spent - a.spent);
+  const breakdown = [...byCat.entries()]
+    .map(([cat, v]) => ({ name: cat, ...v, color: categoryColor(cat, group.category_colors).color }))
+    .sort((a, b) => b.spent - a.spent);
   return { group, txns, spent, net, breakdown, accounts };
 }
 
@@ -83,22 +86,8 @@ export default async function ExpenseGroupPage({ params }: { params: Promise<{ i
       </section>
 
       {d.breakdown.length > 0 && (
-        <CardShell title="Breakdown by category">
-          <table className="portal-table">
-            <thead>
-              <tr><th>Category</th><th className="right">Txns</th><th className="right">Spent</th><th className="right">% of spend</th></tr>
-            </thead>
-            <tbody>
-              {d.breakdown.map((b) => (
-                <tr key={b.cat}>
-                  <td><CategoryChip category={b.cat} /></td>
-                  <td className="right small">{b.count}</td>
-                  <td className="right money money-neg">{fmt$(b.spent)}</td>
-                  <td className="right muted small">{d.spent > 0 ? `${((b.spent / d.spent) * 100).toFixed(1)}%` : "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <CardShell title="Breakdown by category" subtitle="Rename a category or change its color here — it applies to every transaction in this group">
+          <CategoryManager groupId={d.group._id} categories={d.breakdown} totalSpent={d.spent} />
         </CardShell>
       )}
 
@@ -131,7 +120,7 @@ export default async function ExpenseGroupPage({ params }: { params: Promise<{ i
                     )}
                   </td>
                   <td>
-                    <GroupTxnControls txnId={t._id} category={t.group_category ?? "other"} suggestions={CATEGORY_SUGGESTIONS} />
+                    <GroupTxnControls txnId={t._id} category={t.group_category ?? "other"} suggestions={CATEGORY_SUGGESTIONS} overrides={d.group.category_colors} />
                   </td>
                   <td className={`right money ${t.amount < 0 ? "money-neg" : "money-pos"}`}>
                     {t.amount < 0 ? "−" : "+"}{fmt$(Math.abs(t.amount))}
