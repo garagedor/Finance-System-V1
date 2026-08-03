@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
 import type { ExpenseGroupRecord } from "@/types/finance";
-import type { BankTransactionSyncedRecord } from "@/types/finance-plaid";
+import type { BankTransactionSyncedRecord, BankAccountSyncedRecord } from "@/types/finance-plaid";
 import { fmt$, fmtDate } from "../../../format";
 import { PageHeader, StatPill, CardShell, Empty, BackLink } from "../../../_components/page-helpers";
 import EntryFormModal, { type FieldDef } from "../../../_components/EntryFormModal";
@@ -30,6 +30,9 @@ async function load(id: string) {
   if (!group) return null;
   const txns = await coll<BankTransactionSyncedRecord>(FINANCE_COLLECTIONS.bankTxnSynced)
     .find({ group_id: id }).sort({ date: -1, _id: -1 }).toArray();
+  const accountRows = await coll<BankAccountSyncedRecord>(FINANCE_COLLECTIONS.bankAccountSynced)
+    .find({ active: true }).toArray();
+  const accounts = accountRows.map((a) => ({ account_id: a.account_id, name: a.name, mask: a.mask ?? null }));
 
   let spent = 0, net = 0;
   const byCat = new Map<string, { spent: number; count: number }>();
@@ -43,7 +46,7 @@ async function load(id: string) {
     byCat.set(cat, cur);
   }
   const breakdown = [...byCat.entries()].map(([cat, v]) => ({ cat, ...v })).sort((a, b) => b.spent - a.spent);
-  return { group, txns, spent, net, breakdown };
+  return { group, txns, spent, net, breakdown, accounts };
 }
 
 export default async function ExpenseGroupPage({ params }: { params: Promise<{ id: string }> }) {
@@ -60,7 +63,7 @@ export default async function ExpenseGroupPage({ params }: { params: Promise<{ i
         subtitle={d.group.note ?? undefined}
         actions={
           <>
-            <AddTxnsModal groupId={d.group._id} suggestions={CATEGORY_SUGGESTIONS} />
+            <AddTxnsModal groupId={d.group._id} accounts={d.accounts} suggestions={CATEGORY_SUGGESTIONS} />
             <EntryFormModal
               endpoint="/api/portal/expense-groups"
               title="Group"
@@ -102,12 +105,12 @@ export default async function ExpenseGroupPage({ params }: { params: Promise<{ i
       <CardShell
         title="Transactions"
         subtitle={`${d.txns.length} tagged to this group`}
-        actions={<AddTxnsModal groupId={d.group._id} suggestions={CATEGORY_SUGGESTIONS} label="+ Add transactions" />}
+        actions={<AddTxnsModal groupId={d.group._id} accounts={d.accounts} suggestions={CATEGORY_SUGGESTIONS} label="+ Add transactions" />}
       >
         {d.txns.length === 0 ? (
           <Empty
             message="No transactions yet. Add bank transactions to this group."
-            action={<AddTxnsModal groupId={d.group._id} suggestions={CATEGORY_SUGGESTIONS} label="+ Add transactions" />}
+            action={<AddTxnsModal groupId={d.group._id} accounts={d.accounts} suggestions={CATEGORY_SUGGESTIONS} label="+ Add transactions" />}
           />
         ) : (
           <table className="portal-table">

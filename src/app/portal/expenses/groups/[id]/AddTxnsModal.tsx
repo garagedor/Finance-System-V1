@@ -11,12 +11,15 @@ type Avail = {
   _id: string; date: string; description: string;
   merchant_name: string | null; amount: number; category: string | null; account: string | null;
 };
+type Account = { account_id: string; name: string; mask: string | null };
 
 export default function AddTxnsModal({
   groupId,
+  accounts = [],
   label,
 }: {
   groupId: string;
+  accounts?: Account[];
   suggestions?: string[];
   label?: string;
 }) {
@@ -24,8 +27,14 @@ export default function AddTxnsModal({
   const [open, setOpen] = useState(false);
   const [rows, setRows] = useState<Avail[]>([]);
   const [sel, setSel] = useState<Set<string>>(new Set());
+  // Filters — mirror the Banking transactions page.
   const [q, setQ] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [accountId, setAccountId] = useState("");
   const [dir, setDir] = useState<"out" | "in" | "">("out");
+  const [recon, setRecon] = useState("");
+  const [pending, setPending] = useState("");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -34,16 +43,30 @@ export default function AddTxnsModal({
     setLoading(true);
     setErr(null);
     try {
-      const p = new URLSearchParams({ limit: "150" });
+      const p = new URLSearchParams({ limit: "200" });
       if (q.trim()) p.set("q", q.trim());
+      if (from) p.set("from", from);
+      if (to) p.set("to", to);
+      if (accountId) p.set("account_id", accountId);
       if (dir) p.set("direction", dir);
+      if (recon) p.set("recon", recon);
+      if (pending) p.set("pending", pending);
       const res = await fetch(`/api/portal/expense-groups/available?${p.toString()}`);
       const j = await res.json();
       setRows(Array.isArray(j.rows) ? j.rows : []);
     } catch { setRows([]); } finally { setLoading(false); }
-  }, [q, dir]);
+  }, [q, from, to, accountId, dir, recon, pending]);
 
-  useEffect(() => { if (open) search(); }, [open, dir, search]);
+  const clearFilters = () => {
+    setQ(""); setFrom(""); setTo(""); setAccountId(""); setDir("out"); setRecon(""); setPending("");
+  };
+
+  // Auto-apply filters, debounced so typing in Search doesn't hammer the API.
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(search, 250);
+    return () => clearTimeout(t);
+  }, [open, search]);
 
   const toggle = (id: string) =>
     setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -87,16 +110,59 @@ export default function AddTxnsModal({
               <button onClick={() => setOpen(false)} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
 
-            <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-              <input className="portal-input" placeholder="Search description / merchant" value={q}
-                onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") search(); }}
-                style={{ flex: 1, minWidth: 180 }} />
-              <select className="portal-select" value={dir} onChange={(e) => setDir(e.target.value as "out" | "in" | "")}>
-                <option value="out">Money out</option>
-                <option value="in">Money in</option>
-                <option value="">Both</option>
-              </select>
-              <button className="portal-btn" onClick={search} disabled={loading}>{loading ? "…" : "Search"}</button>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, marginBottom: 6 }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span className="portal-label">From</span>
+                <input type="date" className="portal-input" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span className="portal-label">To</span>
+                <input type="date" className="portal-input" value={to} onChange={(e) => setTo(e.target.value)} />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span className="portal-label">Account</span>
+                <select className="portal-select" value={accountId} onChange={(e) => setAccountId(e.target.value)}>
+                  <option value="">All accounts</option>
+                  {accounts.map((a) => (
+                    <option key={a.account_id} value={a.account_id}>{a.name}{a.mask ? ` ··${a.mask}` : ""}</option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span className="portal-label">Direction</span>
+                <select className="portal-select" value={dir} onChange={(e) => setDir(e.target.value as "out" | "in" | "")}>
+                  <option value="out">Money out</option>
+                  <option value="in">Money in</option>
+                  <option value="">Both</option>
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span className="portal-label">Reconciliation</span>
+                <select className="portal-select" value={recon} onChange={(e) => setRecon(e.target.value)}>
+                  <option value="">All</option>
+                  <option value="unmatched">Unmatched</option>
+                  <option value="matched">Matched</option>
+                  <option value="ignored">Ignored</option>
+                  <option value="pending_review">Pending review</option>
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <span className="portal-label">Pending?</span>
+                <select className="portal-select" value={pending} onChange={(e) => setPending(e.target.value)}>
+                  <option value="">Any</option>
+                  <option value="1">Pending</option>
+                  <option value="0">Posted</option>
+                </select>
+              </label>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "flex-end" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 3, flex: 1 }}>
+                <span className="portal-label">Search</span>
+                <input className="portal-input" placeholder="Merchant / description…" value={q}
+                  onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") search(); }} />
+              </label>
+              <button type="button" className="portal-btn portal-btn-ghost" onClick={clearFilters}>Clear</button>
+              <button type="button" className="portal-btn" onClick={search} disabled={loading}>{loading ? "…" : "Search"}</button>
             </div>
 
             <div style={{ maxHeight: 360, overflowY: "auto", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>

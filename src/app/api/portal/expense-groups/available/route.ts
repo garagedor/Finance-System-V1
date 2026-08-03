@@ -16,12 +16,22 @@ export async function GET(req: NextRequest) {
   const q = sp.get("q")?.trim();
   const from = sp.get("from");
   const to = sp.get("to");
-  const dir = sp.get("direction"); // "out" | "in"
+  const dir = sp.get("direction");       // "out" | "in"
+  const accountId = sp.get("account_id");
+  const recon = sp.get("recon");         // unmatched | matched | ignored | pending_review
+  const pending = sp.get("pending");     // "1" | "0"
   const limit = Math.min(Number(sp.get("limit") ?? 100), 300);
 
+  // Only transactions not already in a group are selectable.
   const filter: Filter<BankTransactionSyncedRecord> = { group_id: { $exists: false } };
   if (from || to) filter.date = { ...(from ? { $gte: from } : {}), ...(to ? { $lte: to } : {}) };
   if (dir === "out" || dir === "in") filter.direction = dir;
+  if (accountId) filter.account_id = accountId;
+  if (recon === "unmatched" || recon === "matched" || recon === "ignored" || recon === "pending_review") {
+    filter.recon_status = recon;
+  }
+  if (pending === "1") filter.pending = true;
+  else if (pending === "0") filter.pending = false;
   if (q) {
     filter.$or = [
       { description: { $regex: q, $options: "i" } },
