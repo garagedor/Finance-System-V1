@@ -31,10 +31,23 @@ export async function PATCH(req: NextRequest) {
     const rename = to !== from;
 
     // Bulk-rename the category on every transaction in this group that uses it.
+    // The "other" bucket in the breakdown also covers empty/missing categories,
+    // so renaming it should catch those too.
     let renamed = 0;
     if (rename) {
+      const match =
+        from.toLowerCase() === "other"
+          ? {
+              group_id: groupId,
+              $or: [
+                { group_category: from },
+                { group_category: { $in: [null, ""] } },
+                { group_category: { $exists: false } },
+              ],
+            }
+          : { group_id: groupId, group_category: from };
       const r = await coll<BankTransactionSyncedRecord>(FINANCE_COLLECTIONS.bankTxnSynced).updateMany(
-        { group_id: groupId, group_category: from },
+        match as never,
         { $set: { group_category: to, updated_at: new Date().toISOString() } },
       );
       renamed = r.modifiedCount ?? 0;

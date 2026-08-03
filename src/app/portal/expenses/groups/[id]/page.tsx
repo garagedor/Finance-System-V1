@@ -120,7 +120,7 @@ export default async function ExpenseGroupPage({ params }: { params: Promise<{ i
                     )}
                   </td>
                   <td>
-                    <GroupTxnControls txnId={t._id} category={t.group_category ?? "other"} suggestions={CATEGORY_SUGGESTIONS} overrides={d.group.category_colors} />
+                    <GroupTxnControls key={`gc-${t._id}-${t.group_category ?? "other"}`} txnId={t._id} category={t.group_category ?? "other"} suggestions={CATEGORY_SUGGESTIONS} overrides={d.group.category_colors} />
                   </td>
                   <td className={`right money ${t.amount < 0 ? "money-neg" : "money-pos"}`}>
                     {t.amount < 0 ? "−" : "+"}{fmt$(Math.abs(t.amount))}
