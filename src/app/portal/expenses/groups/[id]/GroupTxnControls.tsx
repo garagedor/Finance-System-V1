@@ -7,6 +7,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { CategoryDot } from "../category-color";
 
 const ENDPOINT = "/api/portal/expense-groups/txns";
 const LIST_ID = "group-cat-suggestions";
@@ -58,7 +59,8 @@ export default function GroupTxnControls({
   };
 
   return (
-    <>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
+      <CategoryDot category={value} />
       <input
         list={LIST_ID}
         className="portal-input"
@@ -74,6 +76,6 @@ export default function GroupTxnControls({
           {suggestions.map((s) => <option key={s} value={s} />)}
         </datalist>
       )}
-    </>
+    </span>
   );
 }

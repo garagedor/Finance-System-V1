@@ -7,6 +7,7 @@ import { PageHeader, StatPill, CardShell, Empty, BackLink } from "../../../_comp
 import EntryFormModal, { type FieldDef } from "../../../_components/EntryFormModal";
 import AddTxnsModal from "./AddTxnsModal";
 import GroupTxnControls from "./GroupTxnControls";
+import { CategoryChip } from "../category-color";
 
 export const dynamic = "force-dynamic";
 
@@ -87,7 +88,7 @@ export default async function ExpenseGroupPage({ params }: { params: Promise<{ i
             <tbody>
               {d.breakdown.map((b) => (
                 <tr key={b.cat}>
-                  <td style={{ textTransform: "capitalize" }}>{b.cat}</td>
+                  <td><CategoryChip category={b.cat} /></td>
                   <td className="right small">{b.count}</td>
                   <td className="right money money-neg">{fmt$(b.spent)}</td>
                   <td className="right muted small">{d.spent > 0 ? `${((b.spent / d.spent) * 100).toFixed(1)}%` : "—"}</td>
