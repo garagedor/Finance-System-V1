@@ -11,8 +11,10 @@
 //   • PARTIAL  — disputeAmount < collectedAmount. The tip is recovered first.
 //
 // The tip does NOT create a third type. A partial dispute has two calculation
-// sub-branches for audit only (both display/report as "Partial"):
-//   • partial_within_tip  — disputeAmount <= tipAmount → charge = disputeAmount
+// sub-branches for audit only (both display/report as "Partial"). A chargeback
+// only ever recovers what was actually PAID OUT — i.e. NET of the card fee:
+//   • partial_within_tip  — disputeAmount <= tipAmount →
+//                           charge = disputeAmount × cardNet  (net tip paid out)
 //   • partial_above_tip   — disputeAmount >  tipAmount →
 //                           (disputeAmount − tip) × share + tip × cardNet
 //
@@ -82,8 +84,9 @@ export function disputeShareDetailed({
     branch = "full";
     disputeType = "full";
   } else if (disputeAmount <= tipAmount) {
-    // PARTIAL, within the tip — the whole dispute is assigned.
-    amount = disputeAmount;
+    // PARTIAL, within the tip — recover only the NET tip that was paid out
+    // (the 5% card fee was never received, so it's not recoverable).
+    amount = disputeAmount * cardNetRate;
     branch = "partial_within_tip";
     disputeType = "partial";
   } else {

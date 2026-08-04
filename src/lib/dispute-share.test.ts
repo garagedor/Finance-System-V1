@@ -7,10 +7,19 @@ import { calculateDisputeShare, disputeShareDetailed } from "./dispute-share.ts"
 const base = { totalCharge: 1000, partsCost: 100, tipAmount: 50, sharePercent: 40 };
 
 // ── Owner's worked examples ────────────────────────────────────────────────
-test("owner example A — partial within tip: $70 → $70", () => {
+test("owner example A — partial within tip recovers NET: $70 → $66.50", () => {
+  // 70 × 0.95 = 66.50 (only the net tip was paid out)
   const r = disputeShareDetailed({ totalCharge: 1000, disputeAmount: 70, partsCost: 0, tipAmount: 100, sharePercent: 40 });
-  assert.equal(r.amount, 70);
+  assert.equal(r.amount, 66.5);
   assert.equal(r.disputeType, "partial");
+  assert.equal(r.branch, "partial_within_tip");
+});
+
+test("owner bug — tip-only dispute recovers NET tip: $532.95 → $506.30", () => {
+  // collected 1000 (job 467.05 + tip 532.95); dispute = tip → within tip.
+  // 532.95 × 0.95 = 506.3025 → 506.30
+  const r = disputeShareDetailed({ totalCharge: 1000, disputeAmount: 532.95, partsCost: 0, tipAmount: 532.95, sharePercent: 40 });
+  assert.equal(r.amount, 506.30);
   assert.equal(r.branch, "partial_within_tip");
 });
 
@@ -45,13 +54,15 @@ test("dispute above the collected amount is still FULL (470)", () => {
 });
 
 // ── Partial within tip (<= tip) ────────────────────────────────────────────
-test("dispute smaller than the tip → charge = dispute", () => {
-  assert.equal(calculateDisputeShare({ ...base, disputeAmount: 30 }), 30);
+test("dispute smaller than the tip → net of card fee", () => {
+  // 30 × 0.95 = 28.5
+  assert.equal(calculateDisputeShare({ ...base, disputeAmount: 30 }), 28.5);
 });
 
-test("dispute exactly equal to the tip → charge = dispute (<=)", () => {
+test("dispute exactly equal to the tip → net tip (seamless with above-tip)", () => {
+  // 50 × 0.95 = 47.5 — same as the above-tip formula at the boundary
   const r = disputeShareDetailed({ ...base, disputeAmount: 50 });
-  assert.equal(r.amount, 50);              // was 47.5 under the old (<) rule
+  assert.equal(r.amount, 47.5);
   assert.equal(r.branch, "partial_within_tip");
 });
 
