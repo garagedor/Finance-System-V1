@@ -46,7 +46,8 @@ test("computeDisputeCharge: AM $470, tech@30 $390 (info), own portion $80", () =
   assert.equal(snap.areaManagerCharge, 470);
   assert.equal(snap.technicianChargebackInfo, 390);
   assert.equal(snap.areaManagerOwnPortionInfo, 80);
-  assert.equal(snap.calculationBranch, "full_or_large");
+  assert.equal(snap.calculationBranch, "full");
+  assert.equal(snap.disputeClassification, "full");
   assert.equal(snap.cardFeePercent, 5);
   assert.equal(snap.sourceJobId, "job1");
   assert.equal(snap.sourceDisputeOrRefundId, "disp1");

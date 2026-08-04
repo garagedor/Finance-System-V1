@@ -1,25 +1,30 @@
 // Dispute / refund cost-share calculation.
 //
-// This is the authoritative business logic, transcribed from the owner's Google
-// Sheet (the app's previous `gross × pct` formula was incorrect and is replaced
-// by this). It computes how much of a disputed/refunded charge a given party
-// (at a given profit-share %) is liable for.
+// Authoritative business logic from the owner's Google Sheet (replaces the app's
+// earlier incorrect `gross × pct`). Computes how much of a disputed/refunded
+// charge a given party (at a given profit-share %) is liable for.
 //
-// Original spreadsheet formula (40% Area-Manager column), where
-//   G = total job amount incl. tip, H = disputed amount, I = parts cost,
-//   J = tip amount, 0.95 = net after 5% card fee, 0.4 = share:
+// Classification (corrected): there are only TWO business dispute types —
+//   • FULL     — the entire amount COLLECTED from the customer is disputed
+//                (collected = job amount + tip = totalCharge). i.e.
+//                disputeAmount >= collectedAmount.
+//   • PARTIAL  — disputeAmount < collectedAmount. The tip is recovered first.
 //
-//   =IF( H >= (G-J),
-//        (G*0.95 - I - J)*0.4 + I + J,
-//        IF( H < J,
-//            H,
-//            (H-J)*0.4 + J*0.95 ) )
+// The tip does NOT create a third type. A partial dispute has two calculation
+// sub-branches for audit only (both display/report as "Partial"):
+//   • partial_within_tip  — disputeAmount <= tipAmount → charge = disputeAmount
+//   • partial_above_tip   — disputeAmount >  tipAmount →
+//                           (disputeAmount − tip) × share + tip × cardNet
 //
-// Rounding rule: intermediate values are NOT rounded (to match Google Sheets);
-// only the final result is rounded to two decimals.
+// FULL charge (card fee on the whole charge; parts + tip removed before the %,
+// then added back in full):
+//   (totalCharge × cardNet − parts − tip) × share + parts + tip
+//
+// Rounding: intermediates are NOT rounded (to match Google Sheets); only the
+// final result is rounded to two decimals.
 
 export type DisputeShareInput = {
-  /** G — total job amount, including tip. */
+  /** G — total job amount, including tip. This IS the "collected" amount. */
   totalCharge: number;
   /** H — the disputed / refunded amount. */
   disputeAmount: number;
@@ -33,12 +38,18 @@ export type DisputeShareInput = {
   cardFeePercent?: number;
 };
 
-/** Which branch of the spreadsheet formula produced the result. */
-export type DisputeShareBranch = "full_or_large" | "below_tip" | "partial_above_tip";
+/** Business classification (UI/report). */
+export type DisputeType = "full" | "partial";
+
+/** Audit sub-branch. Both partial_* report as "partial". */
+export type DisputeShareBranch = "full" | "partial_within_tip" | "partial_above_tip";
 
 export type DisputeShareResult = {
   /** Final liability, rounded to two decimals. */
   amount: number;
+  /** Business type shown in UI/report. */
+  disputeType: DisputeType;
+  /** Audit sub-branch. */
   branch: DisputeShareBranch;
   /** Echo of the effective rates used, for the stored calculation snapshot. */
   shareRate: number;
@@ -47,7 +58,7 @@ export type DisputeShareResult = {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-/** Full result incl. which branch ran + the rates used — used for snapshots/UI. */
+/** Full result incl. type + branch + the rates used — used for snapshots/UI. */
 export function disputeShareDetailed({
   totalCharge,
   disputeAmount,
@@ -58,27 +69,32 @@ export function disputeShareDetailed({
 }: DisputeShareInput): DisputeShareResult {
   const shareRate = sharePercent / 100;
   const cardNetRate = 1 - cardFeePercent / 100;
+  // The amount actually collected from the customer = job amount + tip.
+  const collectedAmount = totalCharge;
 
   let amount: number;
   let branch: DisputeShareBranch;
+  let disputeType: DisputeType;
 
-  if (disputeAmount >= totalCharge - tipAmount) {
-    // Case 1 — full or large dispute: card fee applied to the whole charge,
-    // parts + tip removed before the % then added back in full.
+  if (disputeAmount >= collectedAmount) {
+    // FULL — the whole collected amount is disputed.
     amount = (totalCharge * cardNetRate - partsCost - tipAmount) * shareRate + partsCost + tipAmount;
-    branch = "full_or_large";
-  } else if (disputeAmount < tipAmount) {
-    // Case 2 — dispute smaller than the tip: the whole dispute is assigned.
+    branch = "full";
+    disputeType = "full";
+  } else if (disputeAmount <= tipAmount) {
+    // PARTIAL, within the tip — the whole dispute is assigned.
     amount = disputeAmount;
-    branch = "below_tip";
+    branch = "partial_within_tip";
+    disputeType = "partial";
   } else {
-    // Case 3 — partial dispute above the tip: % of (dispute − tip), plus 95% of
-    // the tip (the 5% card fee on the tip is not recovered).
+    // PARTIAL, above the tip — % of (dispute − tip), plus the net tip (the 5%
+    // card fee on the tip is not recovered).
     amount = (disputeAmount - tipAmount) * shareRate + tipAmount * cardNetRate;
     branch = "partial_above_tip";
+    disputeType = "partial";
   }
 
-  return { amount: round2(amount), branch, shareRate, cardNetRate };
+  return { amount: round2(amount), disputeType, branch, shareRate, cardNetRate };
 }
 
 /** The party's dispute/refund liability, rounded to two decimals. */

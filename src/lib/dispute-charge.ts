@@ -14,7 +14,7 @@
 // Provider is intentionally NOT computed here (awaiting its own sheet formula).
 
 import type { JobRow } from "@/types/job";
-import { calculateDisputeShare, disputeShareDetailed, type DisputeShareBranch } from "./dispute-share.ts";
+import { calculateDisputeShare, disputeShareDetailed, type DisputeShareBranch, type DisputeType as ShareDisputeType } from "./dispute-share.ts";
 
 const n = (v: unknown): number => {
   if (v == null || v === "") return 0;
@@ -100,6 +100,9 @@ export type DisputeChargeSnapshot = {
   technicianChargebackInfo: number;
   /** areaManagerCharge − technicianChargebackInfo. */
   areaManagerOwnPortionInfo: number;
+  /** Business classification for UI/report: "full" | "partial". */
+  disputeClassification: ShareDisputeType;
+  /** Audit sub-branch: "full" | "partial_within_tip" | "partial_above_tip". */
   calculationBranch: DisputeShareBranch;
   sourceJobId: string | null;
   sourceDisputeOrRefundId: string | null;
@@ -142,6 +145,7 @@ export function computeDisputeCharge(input: ComputeDisputeChargeInput): DisputeC
     areaManagerCharge,
     technicianChargebackInfo,
     areaManagerOwnPortionInfo: round2(areaManagerCharge - technicianChargebackInfo),
+    disputeClassification: am.disputeType,
     calculationBranch: am.branch,
     sourceJobId: input.sourceJobId ?? null,
     sourceDisputeOrRefundId: input.sourceRecordId ?? null,
