@@ -278,6 +278,13 @@ export interface DisputeRecord {
   attachments?: string[];
   notes?: string;
   paid_unpaid_impact?: FinanceStatus;
+  // ── Cost-share posted to the Area Manager ledger (lib/dispute-service). ──
+  area_manager_name?: string;
+  area_manager_charge?: number;          // the amount posted to the AM ledger
+  technician_chargeback_info?: number;   // informational only
+  area_manager_own_portion?: number;     // AM charge − technician info
+  ledger_entry_id?: string;              // the posted finance_ledger_entry
+  charge_snapshot?: Record<string, unknown>;
   created_at: string;
   created_by?: string;
 }
@@ -298,6 +305,13 @@ export interface RefundRecord {
   attachments?: string[];
   notes?: string;
   status: FinanceStatus;          // paid = we sent the money, unpaid = pending
+  // ── Cost-share posted to the Area Manager ledger (lib/dispute-service). ──
+  area_manager_name?: string;
+  area_manager_charge?: number;
+  technician_chargeback_info?: number;
+  area_manager_own_portion?: number;
+  ledger_entry_id?: string;
+  charge_snapshot?: Record<string, unknown>;
   created_at: string;
   created_by?: string;
 }

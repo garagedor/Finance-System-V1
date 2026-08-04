@@ -96,6 +96,11 @@ export interface LedgerEntryRecord {
   // a finance_expense entry (we paid them; booked as expense). See lib/ledger-link.
   income_id?: string | null;
   expense_id?: string | null;
+  // Dispute/refund → AM ledger link + full calculation snapshot. Set by the
+  // shared dispute service (lib/dispute-service). dispute_id is the canonical
+  // finance_dispute / finance_refund record id — also the dedup key.
+  dispute_id?: string | null;
+  charge_snapshot?: Record<string, unknown> | null;
 
   source: "manual" | "crm" | "imported";
   created_at: string;

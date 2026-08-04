@@ -37,7 +37,13 @@ export type JobRow = {
 export type Location = {
     _id: string;
     managerProfitPercent: number;
+    /** @deprecated legacy "default tech" field — NOT the area manager. Do not
+     *  use for AM resolution; use areaManagerName (explicit assignment). */
     technician: string;
+    /** Explicit Area Manager assignment: the person whose ledger a dispute/
+     *  refund charge for this location posts to. Set on the Area Managers page. */
+    areaManagerName?: string;
+    areaManagerId?: string;
 };
 
 export type Technician = {
