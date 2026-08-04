@@ -37,6 +37,8 @@ type DisputeRow = {
   provider: string;
   totalPaid: number;
   totalAfterFee: number;
+  collected?: number;
+  disputeType?: 'full' | 'partial';
   parts: number;
   netoTips: number;
   oldBalance: number;
@@ -65,6 +67,8 @@ type RefundRow = {
   provider: string;
   totalPaid: number;
   totalAfterFee: number;
+  collected?: number;
+  disputeType?: 'full' | 'partial';
   parts: number;
   netoTips: number;
   oldBalance: number;
@@ -357,9 +361,11 @@ export default function ReportPage() {
     { key: 'provider', label: 'Provider', render: (r: DisputeRow) => providerLabel.get(r.provider) || r.provider || '-' },
     { key: 'totalPaid', label: 'Total Paid', format: 'currency' },
     { key: 'totalAfterFee', label: 'Total After Fee', format: 'currency' },
+    { key: 'collected', label: 'Collected', format: 'currency' },
     { key: 'parts', label: 'Parts', format: 'currency' },
     { key: 'netoTips', label: 'Neto Tips', format: 'currency' },
     { key: 'disputed', label: 'Disputed', format: 'currency' },
+    { key: 'disputeType', label: 'Type' },
     { key: 'locationManagerShare', label: 'AM Share (40%)', format: 'currency' },
     {
       key: 'techShare', label: 'Tech Chargeback (info)', format: 'currency',
@@ -408,10 +414,12 @@ export default function ReportPage() {
     { key: 'provider', label: 'Provider', render: (r: RefundRow) => providerLabel.get(r.provider) || r.provider || '-' },
     { key: 'totalPaid', label: 'Total Paid', format: 'currency' },
     { key: 'totalAfterFee', label: 'Total After Fee', format: 'currency' },
+    { key: 'collected', label: 'Collected', format: 'currency' },
     { key: 'parts', label: 'Parts', format: 'currency' },
     { key: 'netoTips', label: 'Neto Tips', format: 'currency' },
     { key: 'refunded', label: 'Refunded', format: 'currency' },
     { key: 'reason', label: 'Reason' },
+    { key: 'disputeType', label: 'Type' },
     { key: 'locationManagerShare', label: 'AM Share (40%)', format: 'currency' },
     {
       key: 'techShare', label: 'Tech Chargeback (info)', format: 'currency',

@@ -15,6 +15,7 @@ import {
   computeChargeback,
   toNumber,
 } from '../utils/calculations';
+import { computeDisputeCharge } from '@/lib/dispute-charge';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -25,6 +26,49 @@ const TECH_COLLECTION = 'Technician';
 const LOCATION_COLLECTION = 'Location';
 
 type ReportType = 'penalty' | 'dispute' | 'refund' | 'provider';
+
+/** Cost-share for a dispute/refund report row, using the AUTHORITATIVE engine
+ *  for the AM charge + technician-info + collected + classification. Provider
+ *  and company shares stay on the legacy allocator until their own Sheet
+ *  formula is confirmed (owner instruction — keep provider isolated). */
+function disputeChargeParts(
+  job: JobRow,
+  amount: number,
+  type: 'dispute' | 'refund',
+  techProfitPercent: number,
+  managerProfitPercent: number,
+  providerPercent: number,
+  parts: number,
+  grossTips: number,
+) {
+  const snap = computeDisputeCharge({
+    job,
+    disputeAmount: amount,
+    type,
+    areaManagerPercent: managerProfitPercent,
+    technicianEffectivePercent: techProfitPercent,
+  });
+  const cb = computeChargeback({
+    totalCharge: calcPaidSum(job),
+    parts,
+    tip: grossTips,
+    refund: amount,
+    techPct: techProfitPercent,
+    amPoolPct: managerProfitPercent,
+    providerPct: providerPercent,
+  });
+  return {
+    collected: snap.totalCharge,                         // engine's total incl tip
+    disputeType: snap.disputeClassification,             // "full" | "partial"
+    techShare: snap.technicianChargebackInfo,            // NEW engine (informational)
+    locationManagerShare: snap.areaManagerCharge,        // NEW engine — the AM charge
+    amPoolShare: snap.areaManagerCharge,                 // NEW engine
+    amNetPortion: snap.areaManagerOwnPortionInfo,        // NEW engine
+    providerShare: cb.providerShare,                     // legacy (isolated)
+    companyShare: cb.companyShare,                       // legacy (isolated)
+    isSubcontractor: cb.isSubcontractor,
+  };
+}
 
 let cachedClient: MongoClient | null = null;
 
@@ -378,29 +422,17 @@ export async function GET(req: NextRequest) {
         // overrun; provider/company only see op-rev share. The 40%-side is
         // then split between the tech and the area manager by their
         // configured payout %.
-        const gross = calcPaidSum(job!);
         const grossTips =
           toNumber(job!.tipsCard) + toNumber(job!.tipsFinance) +
           toNumber(job!.tipsCompanyCash) + toNumber(job!.tipsCheck);
-        const cb = computeChargeback({
-          totalCharge: gross,
-          parts,
-          tip: grossTips,
-          refund: disputed,
-          techPct: techProfitPercent,
-          amPoolPct: managerProfitPercent,
-          providerPct: providerPercent,
-        });
-        const techShare = cb.techShare;
-        const locationManagerShare = cb.managerShare;
-        const providerShare = cb.providerShare;
-        const companyShare = cb.companyShare;
-        const amPoolShare = cb.amPoolShare;
-        // AM's net liability after notionally passing the tech's cut on —
-        // informational only. Settlement still recovers the full amPoolShare
-        // from the AM. amPoolShare ALWAYS equals locationManagerShare under
-        // the current model; we keep both for backwards compatibility.
-        const amNetPortion = amPoolShare - techShare;
+        // Authoritative dispute engine for AM/tech/collected; provider+company legacy.
+        const cp = disputeChargeParts(job!, disputed, 'dispute', techProfitPercent, managerProfitPercent, providerPercent, parts, grossTips);
+        const techShare = cp.techShare;
+        const locationManagerShare = cp.locationManagerShare;
+        const providerShare = cp.providerShare;
+        const companyShare = cp.companyShare;
+        const amPoolShare = cp.amPoolShare;
+        const amNetPortion = cp.amNetPortion;
 
         return [
           {
@@ -414,6 +446,8 @@ export async function GET(req: NextRequest) {
             provider: job?.provider || '',
             totalPaid,
             totalAfterFee,
+            collected: cp.collected,
+            disputeType: cp.disputeType,
             parts,
             netoTips,
             oldBalance,
@@ -426,7 +460,7 @@ export async function GET(req: NextRequest) {
             companyShare,
             amPoolShare,
             amNetPortion,
-            isSubcontractor: cb.isSubcontractor,
+            isSubcontractor: cp.isSubcontractor,
             lmParts: toNumber(job?.lmParts || 0),
             lmCash: toNumber(job?.lmCash || 0),
             lmCheck: toNumber(job?.lmCheck || 0),
@@ -509,26 +543,17 @@ export async function GET(req: NextRequest) {
       const reason = (refund as any).reason ?? '';
       const newBalance = 0;
       const disputedShare = toNumber(newBalance) - toNumber(oldBalance);
-      // See computeChargeback for the full allocation logic.
-      const gross = calcPaidSum(job!);
       const grossTips =
         toNumber(job!.tipsCard) + toNumber(job!.tipsFinance) +
         toNumber(job!.tipsCompanyCash) + toNumber(job!.tipsCheck);
-      const cb = computeChargeback({
-        totalCharge: gross,
-        parts,
-        tip: grossTips,
-        refund: refunded,
-        techPct: techProfitPercent,
-        amPoolPct: managerProfitPercent,
-        providerPct: providerPercent,
-      });
-      const techShare = cb.techShare;
-      const locationManagerShare = cb.managerShare;
-      const providerShare = cb.providerShare;
-      const companyShare = cb.companyShare;
-      const amPoolShare = cb.amPoolShare;
-      const amNetPortion = amPoolShare - techShare;
+      // Authoritative dispute engine for AM/tech/collected; provider+company legacy.
+      const cp = disputeChargeParts(job!, refunded, 'refund', techProfitPercent, managerProfitPercent, providerPercent, parts, grossTips);
+      const techShare = cp.techShare;
+      const locationManagerShare = cp.locationManagerShare;
+      const providerShare = cp.providerShare;
+      const companyShare = cp.companyShare;
+      const amPoolShare = cp.amPoolShare;
+      const amNetPortion = cp.amNetPortion;
 
       return [
         {
@@ -541,6 +566,8 @@ export async function GET(req: NextRequest) {
           provider: job?.provider || '',
           totalPaid,
           totalAfterFee,
+          collected: cp.collected,
+          disputeType: cp.disputeType,
           parts,
           netoTips,
           oldBalance,
@@ -554,7 +581,7 @@ export async function GET(req: NextRequest) {
           companyShare,
           amPoolShare,
           amNetPortion,
-          isSubcontractor: cb.isSubcontractor,
+          isSubcontractor: cp.isSubcontractor,
           lmParts: toNumber(job?.lmParts || 0),
           lmCash: toNumber(job?.lmCash || 0),
           lmCheck: toNumber(job?.lmCheck || 0),
