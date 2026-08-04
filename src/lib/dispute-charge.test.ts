@@ -65,11 +65,12 @@ test("computeDisputeCharge: refund uses the same engine, only type differs", () 
 
 test("computeDisputeCharge: partial dispute below (total-tip) uses partial branch", () => {
   const job = { totalAmount: 950, tipsCard: 50, techParts: 100 };
-  // total incl tip = 1000, tip = 50; H=500 → partial: (500-50)*0.4 + 50*0.95 = 227.5
+  // total incl tip = 1000, tip = 50, netTip = 47.5; H=500 (partial, above net tip):
+  // 47.5 + (500-47.5)*0.40 = 47.5 + 181 = 228.5
   const snap = computeDisputeCharge({
     job, disputeAmount: 500, type: "dispute",
     areaManagerPercent: 40, technicianEffectivePercent: 30,
   });
-  assert.equal(snap.areaManagerCharge, 227.5);
+  assert.equal(snap.areaManagerCharge, 228.5);
   assert.equal(snap.calculationBranch, "partial_above_tip");
 });

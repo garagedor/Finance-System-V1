@@ -10,13 +10,15 @@
 //                disputeAmount >= collectedAmount.
 //   • PARTIAL  — disputeAmount < collectedAmount. The tip is recovered first.
 //
-// The tip does NOT create a third type. A partial dispute has two calculation
-// sub-branches for audit only (both display/report as "Partial"). A chargeback
-// only ever recovers what was actually PAID OUT — i.e. NET of the card fee:
-//   • partial_within_tip  — disputeAmount <= tipAmount →
-//                           charge = disputeAmount × cardNet  (net tip paid out)
-//   • partial_above_tip   — disputeAmount >  tipAmount →
-//                           (disputeAmount − tip) × share + tip × cardNet
+// The tip does NOT create a third type. A PARTIAL dispute first recovers the
+// NET tip the technician actually received (netTip = tip × cardNet, 100% of it);
+// any dispute amount ABOVE the net tip is treated as a JOB dispute and allocated
+// by the party's %. Two audit sub-branches (both display/report as "Partial"):
+//   • partial_within_tip — disputeAmount <= netTip → charge = disputeAmount
+//   • partial_above_tip  — disputeAmount >  netTip →
+//                          netTip + (disputeAmount − netTip) × share
+// The card fee is NOT distributed separately — the excess above the net tip
+// simply follows the normal percentage allocation.
 //
 // FULL charge (card fee on the whole charge; parts + tip removed before the %,
 // then added back in full):
@@ -83,17 +85,14 @@ export function disputeShareDetailed({
     amount = (totalCharge * cardNetRate - partsCost - tipAmount) * shareRate + partsCost + tipAmount;
     branch = "full";
     disputeType = "full";
-  } else if (disputeAmount <= tipAmount) {
-    // PARTIAL, within the tip — recover only the NET tip that was paid out
-    // (the 5% card fee was never received, so it's not recoverable).
-    amount = disputeAmount * cardNetRate;
-    branch = "partial_within_tip";
-    disputeType = "partial";
   } else {
-    // PARTIAL, above the tip — % of (dispute − tip), plus the net tip (the 5%
-    // card fee on the tip is not recovered).
-    amount = (disputeAmount - tipAmount) * shareRate + tipAmount * cardNetRate;
-    branch = "partial_above_tip";
+    // PARTIAL — recover the NET tip the technician actually received first, then
+    // allocate any excess above the net tip by the party's %.
+    const netTip = tipAmount * cardNetRate;
+    const recoveredTip = Math.min(disputeAmount, netTip);
+    const remaining = Math.max(0, disputeAmount - netTip);
+    amount = recoveredTip + remaining * shareRate;
+    branch = disputeAmount <= netTip ? "partial_within_tip" : "partial_above_tip";
     disputeType = "partial";
   }
 
