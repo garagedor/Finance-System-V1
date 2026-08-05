@@ -124,7 +124,10 @@ export default async function ScanpayInboxPage({ searchParams }: { searchParams:
             {t}{t === "queue" ? ` (${d.queueCount})` : t === "verified" ? ` (${d.cmap.verified ?? 0})` : ""}
           </Link>
         ))}
-        <Link href="/portal/disputes/scanpay/refunds" className="portal-btn" style={{ marginLeft: "auto" }}>
+        <Link href="/portal/disputes/scanpay/webhooks" className="portal-btn" style={{ marginLeft: "auto" }}>
+          Webhook log
+        </Link>
+        <Link href="/portal/disputes/scanpay/refunds" className="portal-btn">
           ScanPay refunds →
         </Link>
         <Link href="/portal/disputes" className="portal-btn">
