@@ -105,6 +105,8 @@ export const FINANCE_COLLECTIONS = {
   task:             "finance_task",                // Kanban tasks (management team)
   // ─── Expense groups (trips / projects / ad-hoc spend) ───
   expenseGroup:     "finance_expense_group",       // labeled buckets over bank txns
+  // ─── ScanPay disputes integration ───
+  scanpayDispute:   "finance_scanpay_dispute",     // raw ScanPay disputes inbox (new → matched → posted/ignored)
   // ─── RBAC + audit ───
   role:             "finance_role",                // role definitions
   auditLog:         "finance_audit",               // unified audit log (replaces finance_role_audit)
@@ -146,6 +148,9 @@ export async function ensureFinanceIndexes(): Promise<void> {
     db.collection(FINANCE_COLLECTIONS.debt).createIndex({ status: 1 }),
     db.collection(FINANCE_COLLECTIONS.dispute).createIndex({ date: -1 }),
     db.collection(FINANCE_COLLECTIONS.dispute).createIndex({ job_id: 1 }),
+    db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ disputeId: 1 }, { unique: true }),
+    db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ matchStatus: 1, disputedAt: -1 }),
+    db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ invoiceNumber: 1 }),
     db.collection(FINANCE_COLLECTIONS.refund).createIndex({ date: -1 }),
     db.collection(FINANCE_COLLECTIONS.equipment).createIndex({ date: -1 }),
     db.collection(FINANCE_COLLECTIONS.bankTxn).createIndex({ posted_date: -1 }),

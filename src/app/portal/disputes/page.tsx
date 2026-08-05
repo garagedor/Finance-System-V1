@@ -59,6 +59,7 @@ export default async function DisputesPage({
         subtitle="Pick a job + amount — the engine computes the split and posts the charge to the Area Manager's ledger."
         actions={
           <>
+            <Link href="/portal/disputes/scanpay" className="portal-btn">ScanPay inbox →</Link>
             <DisputeChargeModal type="refund" triggerLabel="+ Refund" />
             <DisputeChargeModal type="dispute" triggerLabel="+ Dispute" primary />
           </>
