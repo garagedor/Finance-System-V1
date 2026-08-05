@@ -231,6 +231,7 @@ export default async function ScanpayInboxPage({ searchParams }: { searchParams:
                         suggestedJobId={r.matchedJobId}
                         suggestedLabel={best?.address ?? null}
                         amount={r.amount}
+                        chargedAt={r.chargedAt ?? null}
                       />
                     </td>
                   </tr>

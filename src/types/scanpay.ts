@@ -88,6 +88,11 @@ export interface ScanpayDisputeRecord {
   computedShare?: ScanpayComputedShare | null;
   computeError?: string | null;
 
+  // Charge tracking: when set, we've charged the parties their slices for this
+  // dispute (manual mark, independent of ledger posting). null = still to charge.
+  chargedAt?: string | null;
+  chargedBy?: string | null;
+
   raw: ScanpayDisputeRaw;
   synced_at: string;
   updated_at: string;

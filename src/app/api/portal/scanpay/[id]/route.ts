@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
-  const body = (await req.json().catch(() => ({}))) as { action?: string; jobId?: string };
+  const body = (await req.json().catch(() => ({}))) as { action?: string; jobId?: string; date?: string };
   const action = body.action;
 
   await ensureFinanceIndexes();
@@ -39,6 +39,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (action === "reopen") {
     await sc.updateOne({ _id: id }, { $set: { matchStatus: rec.matchedJobId ? "matched" : "new", updated_at: new Date().toISOString() } });
     return NextResponse.json({ ok: true, matchStatus: rec.matchedJobId ? "matched" : "new" });
+  }
+
+  // Charge tracking — mark/unmark that the parties' slices were charged for this
+  // dispute (manual, independent of ledger posting).
+  if (action === "charge") {
+    const chargedAt = body.date ? String(body.date) : new Date().toISOString().slice(0, 10);
+    await sc.updateOne({ _id: id }, { $set: { chargedAt, chargedBy: session.name, updated_at: new Date().toISOString() } });
+    return NextResponse.json({ ok: true, chargedAt });
+  }
+  if (action === "uncharge") {
+    await sc.updateOne({ _id: id }, { $set: { chargedAt: null, chargedBy: null, updated_at: new Date().toISOString() } });
+    return NextResponse.json({ ok: true, chargedAt: null });
   }
 
   if (action !== "confirm") {

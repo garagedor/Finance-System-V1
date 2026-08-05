@@ -264,38 +264,38 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
 
           <section className="portal-grid-3">
             {([
-              { title: "Disputes by Provider", shareWord: "charge", rows: d.disputesByProvider },
-              { title: "Disputes by Technician", shareWord: "charge", rows: d.disputesByTechnician },
-              { title: "Disputes by Area Manager", shareWord: "ledger", rows: d.disputesByAreaManager },
-            ]).map((tbl) => {
-              const max = Math.max(1, ...tbl.rows.map((g) => g.disputed));
-              return (
-                <div key={tbl.title} className="portal-card" style={{ padding: 0 }}>
-                  <div className="portal-card-head">
-                    <div className="portal-card-head-title">{tbl.title}</div>
-                    <Link href="/portal/disputes/scanpay" className="portal-card-head-sub" style={{ color: "#818cf8" }}>All →</Link>
-                  </div>
-                  <div style={{ padding: "12px 14px" }}>
-                    {tbl.rows.length === 0 ? (
-                      <div className="portal-empty">No disputes.</div>
-                    ) : (
-                      tbl.rows.slice(0, 6).map((g) => (
-                        <div key={g.name} style={{ padding: "8px 4px" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
-                            <span style={{ fontWeight: 500 }}>{g.name}</span>
-                            <span className="money" style={{ fontWeight: 600 }}>{fmt$(g.disputed)}</span>
-                          </div>
-                          <div className="portal-bar"><div className="portal-bar-fill" style={{ width: `${Math.max(2, (g.disputed / max) * 100)}%` }} /></div>
-                          <div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3 }}>
-                            {g.count} disp · won {fmt$(g.won)} · lost {fmt$(g.lost)} · {tbl.shareWord} {fmt$(g.share)}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
+              { title: "Disputes by Provider", rows: d.disputesByProvider },
+              { title: "Disputes by Technician", rows: d.disputesByTechnician },
+              { title: "Disputes by Area Manager", rows: d.disputesByAreaManager },
+            ]).map((tbl) => (
+              <div key={tbl.title} className="portal-card" style={{ padding: 0 }}>
+                <div className="portal-card-head">
+                  <div className="portal-card-head-title">{tbl.title}</div>
+                  <Link href="/portal/disputes/scanpay" className="portal-card-head-sub" style={{ color: "#818cf8" }}>All →</Link>
                 </div>
-              );
-            })}
+                <div style={{ padding: "12px 14px" }}>
+                  {tbl.rows.length === 0 ? (
+                    <div className="portal-empty">No disputes.</div>
+                  ) : (
+                    tbl.rows.slice(0, 6).map((g) => (
+                      <div key={g.name} style={{ padding: "8px 4px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+                          <span style={{ fontWeight: 500 }}>{g.name}</span>
+                          <span className="money" style={{ fontWeight: 600 }}>{fmt$(g.share)}</span>
+                        </div>
+                        {/* progress = how much of this party's charge is done */}
+                        <div className="portal-bar" title={`${g.share > 0 ? Math.round((g.charged / g.share) * 100) : 0}% charged`}>
+                          <div className="portal-bar-fill" style={{ width: `${g.share > 0 ? Math.round((g.charged / g.share) * 100) : 0}%` }} />
+                        </div>
+                        <div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3 }}>
+                          {g.count} disp · <span className="money-pos">charged {fmt$(g.charged)}</span> · <span className="money-neg">left {fmt$(g.toCharge)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
           </section>
         </>
       )}

@@ -251,7 +251,7 @@ async function computeRefundImpact(range: DateWindow): Promise<{ loss: number; r
 // slice back; if LOST the charge stays. So `share` sums the computed slice over
 // every dispute EXCEPT won ones (won = returned). Provider / tech / AM come from
 // each dispute's matched CRM job; the slice from the sync-time snapshot.
-export interface DisputeGroup { name: string; count: number; disputed: number; won: number; lost: number; share: number }
+export interface DisputeGroup { name: string; count: number; disputed: number; won: number; lost: number; share: number; charged: number; toCharge: number }
 
 async function disputeBreakdowns(range: DateWindow): Promise<{
   count: number; total: number; won: number; lost: number;
@@ -269,13 +269,14 @@ async function disputeBreakdowns(range: DateWindow): Promise<{
   const tech = new Map<string, DisputeGroup>();
   const am = new Map<string, DisputeGroup>();
   let total = 0, won = 0, lost = 0;
-  const bump = (m: Map<string, DisputeGroup>, key: string, amt: number, outcome: string, share: number) => {
-    const g = m.get(key) ?? { name: key, count: 0, disputed: 0, won: 0, lost: 0, share: 0 };
+  const bump = (m: Map<string, DisputeGroup>, key: string, amt: number, outcome: string, share: number, charged: boolean) => {
+    const g = m.get(key) ?? { name: key, count: 0, disputed: 0, won: 0, lost: 0, share: 0, charged: 0, toCharge: 0 };
     g.count++; g.disputed += amt;
     if (outcome === "won") g.won += amt;      // returned — not charged
     else {
       if (outcome === "lost") g.lost += amt;
       g.share += share;                        // charged on filing (pending + lost)
+      if (charged) g.charged += share; else g.toCharge += share;
     }
     m.set(key, g);
   };
@@ -283,17 +284,18 @@ async function disputeBreakdowns(range: DateWindow): Promise<{
     const en = r.matchedJobId ? enrich.get(r.matchedJobId) : undefined;
     const amt = r.amount || 0;
     const cs = r.computedShare;
+    const charged = !!r.chargedAt;
     total += amt;
     if (r.outcome === "lost") lost += amt;
     else if (r.outcome === "won") won += amt;
-    bump(prov, en?.provider || "Unmatched", amt, r.outcome, cs?.providerCharge ?? 0);
-    bump(tech, en?.tech || "Unmatched", amt, r.outcome, cs?.technicianPortion ?? 0);
-    bump(am, en?.areaManager || (en?.areaManagerMissing ? "⚠ unassigned" : "Unmatched"), amt, r.outcome, cs?.amLedgerCharge ?? 0);
+    bump(prov, en?.provider || "Unmatched", amt, r.outcome, cs?.providerCharge ?? 0, charged);
+    bump(tech, en?.tech || "Unmatched", amt, r.outcome, cs?.technicianPortion ?? 0, charged);
+    bump(am, en?.areaManager || (en?.areaManagerMissing ? "⚠ unassigned" : "Unmatched"), amt, r.outcome, cs?.amLedgerCharge ?? 0, charged);
   }
   const fin = (m: Map<string, DisputeGroup>) =>
     [...m.values()]
-      .map((g) => ({ ...g, disputed: round2(g.disputed), won: round2(g.won), lost: round2(g.lost), share: round2(g.share) }))
-      .sort((a, b) => b.disputed - a.disputed);
+      .map((g) => ({ ...g, disputed: round2(g.disputed), won: round2(g.won), lost: round2(g.lost), share: round2(g.share), charged: round2(g.charged), toCharge: round2(g.toCharge) }))
+      .sort((a, b) => b.share - a.share);
   return { count: inRange.length, total: round2(total), won: round2(won), lost: round2(lost), byProvider: fin(prov), byTechnician: fin(tech), byAreaManager: fin(am) };
 }
 

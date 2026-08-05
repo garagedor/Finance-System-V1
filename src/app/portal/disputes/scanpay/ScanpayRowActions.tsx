@@ -8,13 +8,14 @@ type Job = { _id: string; date: string | null; address: string | null; clientNam
 const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ScanpayRowActions({
-  id, matchStatus, suggestedJobId, suggestedLabel, amount,
+  id, matchStatus, suggestedJobId, suggestedLabel, amount, chargedAt,
 }: {
   id: string;
   matchStatus: string;
   suggestedJobId: string | null;
   suggestedLabel: string | null;
   amount: number;
+  chargedAt: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -56,8 +57,25 @@ export default function ScanpayRowActions({
     return () => clearTimeout(t);
   }, [picking, q, search]);
 
+  const chargedToggle = (
+    <button
+      className={`portal-btn ${chargedAt ? "portal-btn-primary" : "portal-btn-ghost"}`}
+      style={{ padding: "4px 10px", fontSize: 11 }}
+      disabled={busy}
+      title={chargedAt ? `Charged ${chargedAt} — click to unmark` : "Mark the parties charged their slices"}
+      onClick={() => act({ action: chargedAt ? "uncharge" : "charge" })}
+    >
+      {chargedAt ? "✅ Charged" : "Mark charged"}
+    </button>
+  );
+
   if (matchStatus === "posted") {
-    return <span className="muted small">✓ posted</span>;
+    return (
+      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+        <span className="muted small">✓ posted</span>
+        {chargedToggle}
+      </div>
+    );
   }
   if (matchStatus === "ignored") {
     return (
@@ -79,6 +97,7 @@ export default function ScanpayRowActions({
         onClick={() => setPicking(true)}>Pick job</button>
       <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
         onClick={() => act({ action: "ignore" })}>Ignore</button>
+      {chargedToggle}
 
       {picking && (
         <div
