@@ -219,7 +219,14 @@ export default async function ScanpayInboxPage({ searchParams }: { searchParams:
                       ) : r.matchedJobId && best ? (
                         <div>
                           <div className="small">{best.address ?? r.matchedJobId}</div>
-                          <div className="muted small">{best.date ? fmtDate(best.date) : "—"} · {best.method} ({best.score})</div>
+                          <div className="muted small">
+                            {en?.jobStatus && (
+                              <span style={{ color: /closed|x close/i.test(en.jobStatus) ? "#34d399" : "#f59e0b", fontWeight: 600 }}>
+                                {en.jobStatus}
+                              </span>
+                            )}
+                            {en?.jobStatus ? " · " : ""}{best.date ? fmtDate(best.date) : "—"} · {best.method} ({best.score})
+                          </div>
                         </div>
                       ) : (
                         <span className="muted small">no match — pick a job</span>
