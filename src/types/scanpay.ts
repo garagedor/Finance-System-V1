@@ -68,6 +68,8 @@ export interface ScanpayDisputeRecord {
   serviceAddress: string;
   technicians: string[];
   scanpayJobId: string;
+  teamId?: number | null;
+  teamName?: string | null;
   disputedAt: string | null;   // ISO — the FILED date (drives dashboard loss month)
   resolvedAt: string | null;   // ISO — the resolution date (drives recovery month)
   paymentDate: string | null;  // original job payment date

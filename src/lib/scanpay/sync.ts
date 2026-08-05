@@ -52,6 +52,8 @@ function toRecordCore(raw: ScanpayDisputeRaw, now: string) {
     serviceAddress: raw.serviceAddress,
     technicians: Array.isArray(raw.technicians) ? raw.technicians : [],
     scanpayJobId: raw.jobId,
+    teamId: raw.teamId ?? null,
+    teamName: raw.teamName ?? null,
     disputedAt: parseScanpayDate(raw.disputedDate),
     resolvedAt: parseScanpayDate(raw.resultDate),
     paymentDate: parseScanpayDate(raw.paymentDate) ?? parseScanpayDate(raw.invoiceCreatedAt),
@@ -76,7 +78,7 @@ export async function syncScanpayDisputes(): Promise<ScanpaySyncSummary> {
     const existing = await c.findOne({ _id: raw.disputeId });
 
     // Preserve human decisions — refresh only volatile fields.
-    if (existing && (existing.matchStatus === "posted" || existing.matchStatus === "ignored" || existing.matchMethod === "manual")) {
+    if (existing && (existing.matchStatus === "posted" || existing.matchStatus === "ignored" || existing.matchStatus === "verified" || existing.matchMethod === "manual")) {
       await c.updateOne({ _id: raw.disputeId }, { $set: { ...core } });
       summary.preserved++;
       summary.updated++;

@@ -61,7 +61,7 @@ export async function syncScanpayRefunds(): Promise<ScanpayRefundSyncSummary> {
     const c0 = core(raw, now);
     const existing = await c.findOne({ _id: raw.id });
 
-    if (existing && (existing.matchStatus === "posted" || existing.matchStatus === "ignored" || existing.matchMethod === "manual")) {
+    if (existing && (existing.matchStatus === "posted" || existing.matchStatus === "ignored" || existing.matchStatus === "verified" || existing.matchMethod === "manual")) {
       await c.updateOne({ _id: raw.id }, { $set: { ...c0 } });
       summary.preserved++; summary.updated++;
       continue;
