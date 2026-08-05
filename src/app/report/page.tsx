@@ -160,6 +160,10 @@ export default function ReportPage() {
   const [totals, setTotals] = useState<any>(null);
   const [totalsCalculated, setTotalsCalculated] = useState(false);
   const [loadingTotals, setLoadingTotals] = useState(false);
+  // Custom column header labels, keyed by "<reportType>:<columnKey>". Persisted
+  // in localStorage so a user's renamed headings stick across sessions.
+  const [headerOverrides, setHeaderOverrides] = useState<Record<string, string>>({});
+  const [editingHeaderKey, setEditingHeaderKey] = useState<string | null>(null);
   const [lookups, setLookups] = useState<Lookups>({
     techs: [],
     locations: [],
@@ -216,9 +220,17 @@ export default function ReportPage() {
       }
     }
 
-    // Always mark as initialized after checking storage, 
+    // Always mark as initialized after checking storage,
     // to allow the first fetch to run with either saved or default filters.
     setIsInitialized(true);
+  }, []);
+
+  // Load any saved custom column-header labels.
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem('report-header-overrides');
+      if (s) setHeaderOverrides(JSON.parse(s));
+    } catch { /* ignore */ }
   }, []);
 
   const providerLabel = useMemo(() => {
@@ -498,6 +510,31 @@ export default function ReportPage() {
           ? refundColumns
           : providerColumns;
 
+  // ── Editable column headers (double-click to rename; persisted per report) ──
+  const headerKey = (colKey: string) => `${activeFilters.type}:${colKey}`;
+  const labelFor = (col: { key: string; label: string }) =>
+    headerOverrides[headerKey(col.key)] ?? col.label;
+  const saveHeader = (colKey: string, value: string, fallback: string) => {
+    setHeaderOverrides((prev) => {
+      const next = { ...prev };
+      const k = headerKey(colKey);
+      const v = value.trim();
+      if (!v || v === fallback) delete next[k];
+      else next[k] = v;
+      try { localStorage.setItem('report-header-overrides', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+  const hasCustomHeaders = activeColumns.some((c) => headerOverrides[headerKey(c.key)] !== undefined);
+  const resetHeaders = () => {
+    setHeaderOverrides((prev) => {
+      const next: Record<string, string> = {};
+      for (const [k, v] of Object.entries(prev)) if (!k.startsWith(`${activeFilters.type}:`)) next[k] = v;
+      try { localStorage.setItem('report-header-overrides', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
   const renderCell = (row: any, col: any) => {
     const value = row[col.key];
     if (col.render) return col.render(row);
@@ -669,6 +706,20 @@ export default function ReportPage() {
               </div>
             </div>
             <div className="rpt-table-actions">
+              <span
+                title="Double-click any column heading to rename it (saved on this device)"
+                style={{ fontSize: 11, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+              >
+                ✎ rename headings
+                {hasCustomHeaders && (
+                  <button
+                    onClick={resetHeaders}
+                    style={{ fontSize: 11, padding: '2px 8px', border: '1px solid rgba(148,163,184,0.4)', borderRadius: 4, background: 'transparent', color: '#818cf8', cursor: 'pointer' }}
+                  >
+                    reset
+                  </button>
+                )}
+              </span>
               <button
                 className={`btn-calculate-totals ${totalsCalculated ? 'calculated' : ''}`}
                 onClick={calculateTotals}
@@ -705,7 +756,7 @@ export default function ReportPage() {
                 <thead>
                   <tr>
                     {activeColumns.map((col) => (
-                      <th key={col.key}>{col.label}</th>
+                      <th key={col.key}>{labelFor(col)}</th>
                     ))}
                   </tr>
                 </thead>
@@ -728,7 +779,25 @@ export default function ReportPage() {
                   <thead>
                     <tr>
                       {activeColumns.map((col) => (
-                        <th key={col.key}>{col.label}</th>
+                        <th
+                          key={col.key}
+                          onDoubleClick={() => setEditingHeaderKey(col.key)}
+                          title="Double-click to rename"
+                          style={{ cursor: 'text', whiteSpace: 'nowrap' }}
+                        >
+                          {editingHeaderKey === col.key ? (
+                            <input
+                              autoFocus
+                              defaultValue={labelFor(col)}
+                              onBlur={(e) => { saveHeader(col.key, e.target.value, col.label); setEditingHeaderKey(null); }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                else if (e.key === 'Escape') setEditingHeaderKey(null);
+                              }}
+                              style={{ font: 'inherit', color: '#111', background: '#fff', border: '1px solid #6366f1', borderRadius: 3, padding: '1px 4px', width: `${Math.max(8, labelFor(col).length + 2)}ch` }}
+                            />
+                          ) : labelFor(col)}
+                        </th>
                       ))}
                     </tr>
                   </thead>
