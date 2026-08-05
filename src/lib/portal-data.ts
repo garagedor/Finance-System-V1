@@ -209,6 +209,39 @@ async function computeDisputeImpact(range: DateWindow): Promise<{
   };
 }
 
+// Refund impact is simpler than disputes: a refund is a pure loss booked on its
+// date (you don't recover a refund). Only the company's slice counts. Only
+// engine-posted refunds carry charge_snapshot.companyCharge.
+export interface RefundImpactRow {
+  _id: string;
+  date: string;
+  customer_name: string | null;
+  job_id: string | null;
+  companySlice: number;
+}
+
+async function computeRefundImpact(range: DateWindow): Promise<{ loss: number; rows: RefundImpactRow[] }> {
+  const c = await coll<RefundRecord>(FINANCE_COLLECTIONS.refund);
+  const rowsRaw = await c.find({ date: { $gte: range.from, $lte: range.to } }).toArray();
+  let loss = 0;
+  const rows: RefundImpactRow[] = [];
+  for (const r of rowsRaw) {
+    const snap = (r.charge_snapshot ?? {}) as Record<string, unknown>;
+    const companySlice = Number(snap.companyCharge ?? 0) || 0;
+    if (companySlice <= 0) continue; // only engine-posted refunds carry a slice
+    loss += companySlice;
+    rows.push({
+      _id: r._id,
+      date: r.date,
+      customer_name: r.customer_name ?? null,
+      job_id: r.job_id ?? null,
+      companySlice: round2(companySlice),
+    });
+  }
+  rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  return { loss: round2(loss), rows };
+}
+
 async function sumRefunds(range: DateWindow): Promise<number> {
   const c = await coll<RefundRecord>(FINANCE_COLLECTIONS.refund);
   const agg = await c
@@ -502,6 +535,8 @@ export interface DashboardData {
   disputeRecoveredSlice: number; // slice recovered on disputes RESOLVED (won) in range
   disputeImpact: number;         // recovered − filed loss
   disputeRows: DisputeImpactRow[];
+  refundLoss: number;            // slice lost on refunds ISSUED in range
+  refundRows: RefundImpactRow[];
   // Breakdowns
   incomeBySource: Array<{ source: string; total: number }>;
   expenseByCategory: Array<{ category: string; total: number; count: number }>;
@@ -648,9 +683,11 @@ export async function fetchDashboardData(range: DateWindow): Promise<DashboardDa
     + crmAgg.checkFeeProfit
     + manualIncome;
   const netProfit = grossProfit - expenses.total - payouts.paid - payouts.unpaid;
-  // Dispute impact is kept OUT of netProfit (which mirrors the CRM home page)
-  // and shown as a separate adjustment line for the filtered period.
-  const netAfterDisputes = round2(netProfit + disputes.impact);
+  // Dispute + refund impact is kept OUT of netProfit (which mirrors the CRM home
+  // page) and shown as a separate adjustment for the filtered period. Disputes
+  // can net positive (won recoveries); refunds are always a loss.
+  const refundImpact = await computeRefundImpact(range);
+  const netAfterDisputes = round2(netProfit + disputes.impact - refundImpact.loss);
 
   const incomeBySource: Array<{ source: string; total: number }> = [
     { source: "crm_jobs", total: jobRevenue },
@@ -672,6 +709,8 @@ export async function fetchDashboardData(range: DateWindow): Promise<DashboardDa
     disputeRecoveredSlice: disputes.recoveredSlice,
     disputeImpact: disputes.impact,
     disputeRows: disputes.rows,
+    refundLoss: refundImpact.loss,
+    refundRows: refundImpact.rows,
     cashOnHand: bankBalanceTotal,
     outstandingPayables: expenses.unpaid + payouts.unpaid + debts.we_owe,
     outstandingReceivables: disputes.open,
