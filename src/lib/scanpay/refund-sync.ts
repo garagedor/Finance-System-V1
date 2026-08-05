@@ -63,6 +63,32 @@ export async function syncScanpayRefunds(): Promise<ScanpayRefundSyncSummary> {
   return summary;
 }
 
+// Incremental sync for the scheduled cron: fully process only BRAND-NEW refunds,
+// lightly refresh existing ones. Fast.
+export async function syncNewScanpayRefunds(): Promise<{ fetched: number; created: number; refreshed: number }> {
+  await ensureFinanceIndexes();
+  const c = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
+  const list = await fetchScanpayRefunds();
+  const now = new Date().toISOString();
+  const existing = new Set(await c.find({}, { projection: { _id: 1 } }).map((d) => d._id).toArray());
+  let created = 0, refreshed = 0;
+  for (const raw of list) {
+    if (!existing.has(raw.id)) {
+      await upsertScanpayRefund(raw);
+      created++;
+    } else {
+      await c.updateOne({ _id: raw.id }, { $set: {
+        originalAmount: parseAmount(raw.amount),
+        paymentDate: parseScanpayDate(raw.createdAt),
+        raw,
+        updated_at: now,
+      } });
+      refreshed++;
+    }
+  }
+  return { fetched: list.length, created, refreshed };
+}
+
 // Upsert a single refund (match + compute share + preserve human decisions).
 // Shared by the full sync and the webhook receiver.
 export async function upsertScanpayRefund(

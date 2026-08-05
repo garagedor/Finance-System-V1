@@ -77,6 +77,34 @@ export async function syncScanpayDisputes(): Promise<ScanpaySyncSummary> {
   return summary;
 }
 
+// Incremental sync for the scheduled cron: fully process only BRAND-NEW disputes
+// (match + share) and lightly refresh existing ones' status/outcome. Fast — it
+// avoids re-matching the whole inbox every run.
+export async function syncNewScanpayDisputes(): Promise<{ fetched: number; created: number; refreshed: number }> {
+  await ensureFinanceIndexes();
+  const c = coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute);
+  const list = await fetchScanpayDisputes();
+  const now = new Date().toISOString();
+  const existing = new Set(await c.find({}, { projection: { _id: 1 } }).map((d) => d._id).toArray());
+  let created = 0, refreshed = 0;
+  for (const raw of list) {
+    if (!existing.has(raw.disputeId)) {
+      await upsertScanpayDispute(raw);
+      created++;
+    } else {
+      await c.updateOne({ _id: raw.disputeId }, { $set: {
+        statusRaw: raw.status,
+        outcome: normalizeOutcome(raw.status),
+        resolvedAt: parseScanpayDate(raw.resultDate),
+        raw,
+        updated_at: now,
+      } });
+      refreshed++;
+    }
+  }
+  return { fetched: list.length, created, refreshed };
+}
+
 // Upsert a single dispute (match + compute share + preserve human decisions).
 // Shared by the full sync and the webhook receiver.
 export async function upsertScanpayDispute(

@@ -27,7 +27,7 @@ export async function middleware(request: NextRequest) {
 
     // Exempt auth-related routes + the ScanPay webhook (external caller; it
     // authenticates with its own shared secret, not the portal session JWT).
-    const exemptRoutes = ['/api/login', '/api/logout', '/api/scanpay/webhook'];
+    const exemptRoutes = ['/api/login', '/api/logout', '/api/scanpay/webhook', '/api/scanpay/cron-sync'];
     if (exemptRoutes.some(route => request.nextUrl.pathname.startsWith(route))) {
         return NextResponse.next();
     }

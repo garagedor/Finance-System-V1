@@ -3,6 +3,10 @@
     {
       "path": "/api/portal/ai/brief/run",
       "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/scanpay/cron-sync",
+      "schedule": "0 * * * *"
     }
   ]
 }
