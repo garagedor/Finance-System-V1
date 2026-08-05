@@ -164,6 +164,9 @@ export default function ReportPage() {
   // in localStorage so a user's renamed headings stick across sessions.
   const [headerOverrides, setHeaderOverrides] = useState<Record<string, string>>({});
   const [editingHeaderKey, setEditingHeaderKey] = useState<string | null>(null);
+  // Custom column ORDER per report type (list of column keys). Persisted too.
+  const [columnOrder, setColumnOrder] = useState<Record<string, string[]>>({});
+  const [dragKey, setDragKey] = useState<string | null>(null);
   const [lookups, setLookups] = useState<Lookups>({
     techs: [],
     locations: [],
@@ -225,11 +228,13 @@ export default function ReportPage() {
     setIsInitialized(true);
   }, []);
 
-  // Load any saved custom column-header labels.
+  // Load any saved custom column-header labels + custom column order.
   useEffect(() => {
     try {
       const s = localStorage.getItem('report-header-overrides');
       if (s) setHeaderOverrides(JSON.parse(s));
+      const o = localStorage.getItem('report-column-order');
+      if (o) setColumnOrder(JSON.parse(o));
     } catch { /* ignore */ }
   }, []);
 
@@ -525,12 +530,47 @@ export default function ReportPage() {
       return next;
     });
   };
-  const hasCustomHeaders = activeColumns.some((c) => headerOverrides[headerKey(c.key)] !== undefined);
+  // Apply the saved column order for this report type; new columns appended.
+  type Col = { key: string; label: string; format?: string; render?: (r: any) => any };
+  const orderedColumns: Col[] = (() => {
+    const cols = activeColumns as unknown as Col[];
+    const saved = columnOrder[activeFilters.type];
+    if (!saved || saved.length === 0) return cols;
+    const byKey = new Map(cols.map((c) => [c.key, c]));
+    const out: Col[] = [];
+    for (const k of saved) { const c = byKey.get(k); if (c) { out.push(c); byKey.delete(k); } }
+    for (const c of cols) if (byKey.has(c.key)) out.push(c);
+    return out;
+  })();
+  const moveColumn = (fromKey: string, toKey: string) => {
+    if (fromKey === toKey) return;
+    const order = orderedColumns.map((c) => c.key);
+    const fromIdx = order.indexOf(fromKey);
+    const toIdx = order.indexOf(toKey);
+    if (fromIdx < 0 || toIdx < 0) return;
+    order.splice(fromIdx, 1);
+    order.splice(toIdx, 0, fromKey);
+    setColumnOrder((prev) => {
+      const next = { ...prev, [activeFilters.type]: order };
+      try { localStorage.setItem('report-column-order', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  };
+
+  const hasCustomHeaders =
+    activeColumns.some((c) => headerOverrides[headerKey(c.key)] !== undefined) ||
+    (columnOrder[activeFilters.type]?.length ?? 0) > 0;
   const resetHeaders = () => {
     setHeaderOverrides((prev) => {
       const next: Record<string, string> = {};
       for (const [k, v] of Object.entries(prev)) if (!k.startsWith(`${activeFilters.type}:`)) next[k] = v;
       try { localStorage.setItem('report-header-overrides', JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+    setColumnOrder((prev) => {
+      const next = { ...prev };
+      delete next[activeFilters.type];
+      try { localStorage.setItem('report-column-order', JSON.stringify(next)); } catch { /* ignore */ }
       return next;
     });
   };
@@ -707,10 +747,10 @@ export default function ReportPage() {
             </div>
             <div className="rpt-table-actions">
               <span
-                title="Double-click any column heading to rename it (saved on this device)"
+                title="Drag a column heading to reorder · double-click to rename (saved on this device)"
                 style={{ fontSize: 11, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 8 }}
               >
-                ✎ rename headings
+                ✎ rename / ⇄ reorder columns
                 {hasCustomHeaders && (
                   <button
                     onClick={resetHeaders}
@@ -755,7 +795,7 @@ export default function ReportPage() {
               <table>
                 <thead>
                   <tr>
-                    {activeColumns.map((col) => (
+                    {orderedColumns.map((col) => (
                       <th key={col.key}>{labelFor(col)}</th>
                     ))}
                   </tr>
@@ -763,7 +803,7 @@ export default function ReportPage() {
                 <tbody>
                   {[...Array(8)].map((_, rIdx) => (
                     <tr key={`sk-${rIdx}`}>
-                      {activeColumns.map((col) => (
+                      {orderedColumns.map((col) => (
                         <td key={col.key}>
                           <span className="rpt-skel" />
                         </td>
@@ -778,12 +818,22 @@ export default function ReportPage() {
                 <table>
                   <thead>
                     <tr>
-                      {activeColumns.map((col) => (
+                      {orderedColumns.map((col) => (
                         <th
                           key={col.key}
+                          draggable={editingHeaderKey !== col.key}
+                          onDragStart={() => setDragKey(col.key)}
+                          onDragOver={(e) => e.preventDefault()}
+                          onDrop={() => { if (dragKey) moveColumn(dragKey, col.key); setDragKey(null); }}
+                          onDragEnd={() => setDragKey(null)}
                           onDoubleClick={() => setEditingHeaderKey(col.key)}
-                          title="Double-click to rename"
-                          style={{ cursor: 'text', whiteSpace: 'nowrap' }}
+                          title="Drag to reorder · double-click to rename"
+                          style={{
+                            cursor: editingHeaderKey === col.key ? 'text' : 'grab',
+                            whiteSpace: 'nowrap',
+                            opacity: dragKey === col.key ? 0.4 : 1,
+                            borderLeft: dragKey && dragKey !== col.key ? '2px solid transparent' : undefined,
+                          }}
                         >
                           {editingHeaderKey === col.key ? (
                             <input
@@ -804,7 +854,7 @@ export default function ReportPage() {
                   <tbody>
                     {rows.map((row: any) => (
                       <tr key={`${row.id || row.disputeId || row.refundId}`}>
-                        {activeColumns.map((col) => (
+                        {orderedColumns.map((col) => (
                           <td key={col.key} title={col.key === 'address' ? row.address : undefined}>
                             {renderCell(row, col)}
                           </td>
@@ -813,7 +863,7 @@ export default function ReportPage() {
                     ))}
                     {!rows.length && !loading && (
                       <tr className="empty-row">
-                        <td colSpan={activeColumns.length}>
+                        <td colSpan={orderedColumns.length}>
                           <EmptyState
                             size="md"
                             title="No matches"
@@ -826,7 +876,7 @@ export default function ReportPage() {
                   {totalsCalculated && totals && rows.length > 0 && (
                     <tfoot>
                       <tr className="totals-row">
-                        {activeColumns.map((col, idx) => {
+                        {orderedColumns.map((col, idx) => {
                           if (idx === 0) return <td key={`total-${col.key}`} className="totals-label">Totals</td>;
                           if (['address', 'tech', 'location', 'status', 'provider', 'reason'].includes(col.key)) {
                             return <td key={`total-${col.key}`}></td>;
