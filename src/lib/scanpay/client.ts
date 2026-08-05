@@ -1,5 +1,5 @@
 import "server-only";
-import type { ScanpayDisputeRaw, ScanpayOutcome } from "@/types/scanpay";
+import type { ScanpayDisputeRaw, ScanpayOutcome, ScanpayRefundRaw } from "@/types/scanpay";
 
 // Thin client for the ScanPay Connect API. The token lives in SCANPAY_API_KEY
 // (.env.local locally / Vercel env in prod) and is never logged.
@@ -23,6 +23,30 @@ export async function fetchScanpayDisputes(): Promise<ScanpayDisputeRaw[]> {
   const body = (await res.json()) as { data?: ScanpayDisputeRaw[] } | ScanpayDisputeRaw[];
   const list = Array.isArray(body) ? body : Array.isArray(body.data) ? body.data : [];
   return list;
+}
+
+// Refunds live inside the payments endpoint, filtered by status and paginated:
+// GET /connect/v1/payments?status=REFUNDED&page=N → { data: { totalCount,
+// currentPage, payments: [...] } }. Pages are 0-indexed, ~10 per page. NOTE:
+// ScanPay does not expose the refunded amount or refund date here — only that
+// the payment was refunded — so those are captured from the human at confirm.
+export async function fetchScanpayRefunds(): Promise<ScanpayRefundRaw[]> {
+  const key = process.env.SCANPAY_API_KEY;
+  if (!key) throw new Error("SCANPAY_API_KEY is not set");
+  const headers = { Authorization: `Bearer ${key}`, Accept: "application/json" };
+  const out: ScanpayRefundRaw[] = [];
+  const MAX_PAGES = 200; // safety backstop (~2000 refunds)
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const res = await fetch(`${BASE}/connect/v1/payments?status=REFUNDED&page=${page}`, { headers, cache: "no-store" });
+    if (!res.ok) throw new Error(`ScanPay refunds fetch failed: HTTP ${res.status} ${res.statusText}`);
+    const body = (await res.json()) as { data?: { totalCount?: number; payments?: ScanpayRefundRaw[] } };
+    const rows = body?.data?.payments ?? [];
+    if (rows.length === 0) break;
+    out.push(...rows);
+    const total = body?.data?.totalCount ?? 0;
+    if (out.length >= total) break;
+  }
+  return out;
 }
 
 // ── Pure parsing helpers (safe to import anywhere) ──────────────────────────

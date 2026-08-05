@@ -107,6 +107,7 @@ export const FINANCE_COLLECTIONS = {
   expenseGroup:     "finance_expense_group",       // labeled buckets over bank txns
   // ─── ScanPay disputes integration ───
   scanpayDispute:   "finance_scanpay_dispute",     // raw ScanPay disputes inbox (new → matched → posted/ignored)
+  scanpayRefund:    "finance_scanpay_refund",      // raw ScanPay refunds inbox (amount/date entered by human)
   // ─── RBAC + audit ───
   role:             "finance_role",                // role definitions
   auditLog:         "finance_audit",               // unified audit log (replaces finance_role_audit)
@@ -151,6 +152,9 @@ export async function ensureFinanceIndexes(): Promise<void> {
     db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ disputeId: 1 }, { unique: true }),
     db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ matchStatus: 1, disputedAt: -1 }),
     db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ invoiceNumber: 1 }),
+    db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ paymentId: 1 }, { unique: true }),
+    db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ matchStatus: 1, paymentDate: -1 }),
+    db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ invoiceNumber: 1 }),
     db.collection(FINANCE_COLLECTIONS.refund).createIndex({ date: -1 }),
     db.collection(FINANCE_COLLECTIONS.equipment).createIndex({ date: -1 }),
     db.collection(FINANCE_COLLECTIONS.bankTxn).createIndex({ posted_date: -1 }),

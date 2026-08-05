@@ -1,7 +1,7 @@
 import "server-only";
 import { getDb } from "@/lib/finance-db";
 import { parseAmount, parseScanpayDate } from "./client";
-import type { ScanpayDisputeRaw, ScanpayJobCandidate } from "@/types/scanpay";
+import type { ScanpayDisputeRaw, ScanpayJobCandidate, ScanpayRefundRaw } from "@/types/scanpay";
 
 // Maps a ScanPay dispute to CRM jobs. Primary = exact invoice-number match
 // (the field we just added). Fallback = address + amount + tech + date scoring
@@ -140,4 +140,41 @@ export async function matchDispute(raw: ScanpayDisputeRaw): Promise<{
     : top[0].score >= 60 && top[0].score - top[1].score >= 15 ? top[0]
     : null;
   return { candidates: top, best };
+}
+
+// Refund → job. Refunds carry NO address, so only the invoice number gives a
+// confident match; otherwise we offer amount-matched candidates for the human.
+export async function matchRefund(raw: ScanpayRefundRaw): Promise<{
+  candidates: ScanpayJobCandidate[];
+  best: ScanpayJobCandidate | null;
+}> {
+  const db = await getDb();
+  const Job = db.collection<JobLite>("Job");
+
+  const inv = normalizeInvoice(raw.invoiceNumber);
+  if (inv) {
+    const hit = await Job.findOne({ invoiceNumber: { $regex: `^${escapeRegex(inv)}$`, $options: "i" } });
+    if (hit) {
+      const c: ScanpayJobCandidate = {
+        jobId: String(hit._id), score: 100, method: "invoice",
+        reason: `invoice ${raw.invoiceNumber} exact`,
+        address: hit.address ?? null, date: hit.date ?? null,
+        totalAmount: hit.totalAmount ?? null, tech: hit.tech ?? null,
+      };
+      return { candidates: [c], best: c };
+    }
+  }
+
+  // Fallback: jobs whose total (or card paid) equals the original payment amount.
+  const amount = parseAmount(raw.amount);
+  if (amount <= 0) return { candidates: [], best: null };
+  const rows = await Job.find({ $or: [{ totalAmount: amount }, { totalPaidCard: amount }] }).limit(10).toArray();
+  const candidates: ScanpayJobCandidate[] = rows.map((j) => ({
+    jobId: String(j._id), score: 40, method: "fallback",
+    reason: "amount match (no address on refunds)",
+    address: j.address ?? null, date: j.date ?? null,
+    totalAmount: j.totalAmount ?? null, tech: j.tech ?? null,
+  }));
+  // Amount alone is not confident enough to auto-suggest — human picks.
+  return { candidates: candidates.slice(0, 5), best: null };
 }

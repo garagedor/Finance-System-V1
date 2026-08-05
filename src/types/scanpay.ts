@@ -87,3 +87,51 @@ export interface ScanpayDisputeRecord {
   synced_at: string;
   updated_at: string;
 }
+
+// ── Refunds ─────────────────────────────────────────────────────────────────
+// Source: GET /connect/v1/payments?status=REFUNDED. ScanPay's API does NOT
+// expose the refunded amount or refund date — only that the payment was
+// refunded — so those are entered by a human at confirm time.
+
+export interface ScanpayRefundRaw {
+  id: string;              // payment id "SP..."
+  invoiceId: string;
+  invoiceNumber: string;   // join key → CRM Job.invoiceNumber
+  amount: string;          // ORIGINAL payment amount (not the refunded amount)
+  billAmount: string;
+  payableAmount: string;
+  serviceFee: string;
+  tipAmount: string;
+  createdAt: string;       // payment date (NOT the refund date)
+  paymentMethod: string;
+  status: string;
+}
+
+export interface ScanpayRefundRecord {
+  _id: string;             // == payment id (dedup key)
+  paymentId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  originalAmount: number;      // what the customer originally paid
+  paymentDate: string | null;  // createdAt
+  paymentMethod: string;
+
+  // Human-entered at confirm (API can't give these):
+  refundAmount: number | null;
+  refundDate: string | null;
+
+  // Matching
+  matchStatus: ScanpayMatchStatus;
+  matchedJobId: string | null;
+  matchMethod: ScanpayMatchMethod | null;
+  matchScore: number | null;
+  candidates: ScanpayJobCandidate[];
+
+  // Posting (shared engine, type "refund")
+  postedRecordId: string | null;   // finance_refund _id
+  ledgerEntryId: string | null;
+
+  raw: ScanpayRefundRaw;
+  synced_at: string;
+  updated_at: string;
+}
