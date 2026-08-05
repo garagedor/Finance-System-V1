@@ -108,6 +108,7 @@ export const FINANCE_COLLECTIONS = {
   // ─── ScanPay disputes integration ───
   scanpayDispute:   "finance_scanpay_dispute",     // raw ScanPay disputes inbox (new → matched → posted/ignored)
   scanpayRefund:    "finance_scanpay_refund",      // raw ScanPay refunds inbox (amount/date entered by human)
+  scanpayWebhookLog:"finance_scanpay_webhook_log", // raw ScanPay webhook events (audit + payload discovery)
   // ─── RBAC + audit ───
   role:             "finance_role",                // role definitions
   auditLog:         "finance_audit",               // unified audit log (replaces finance_role_audit)
@@ -155,6 +156,7 @@ export async function ensureFinanceIndexes(): Promise<void> {
     db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ paymentId: 1 }, { unique: true }),
     db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ matchStatus: 1, paymentDate: -1 }),
     db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ invoiceNumber: 1 }),
+    db.collection(FINANCE_COLLECTIONS.scanpayWebhookLog).createIndex({ received_at: -1 }),
     db.collection(FINANCE_COLLECTIONS.refund).createIndex({ date: -1 }),
     db.collection(FINANCE_COLLECTIONS.equipment).createIndex({ date: -1 }),
     db.collection(FINANCE_COLLECTIONS.bankTxn).createIndex({ posted_date: -1 }),

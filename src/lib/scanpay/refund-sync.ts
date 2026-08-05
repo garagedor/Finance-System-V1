@@ -52,56 +52,58 @@ export async function syncScanpayRefunds(): Promise<ScanpayRefundSyncSummary> {
   };
 
   for (const raw of list) {
-    const c0 = core(raw, now);
-    const existing = await c.findOne({ _id: raw.id });
-
-    if (existing && (existing.matchStatus === "posted" || existing.matchStatus === "ignored" || existing.matchStatus === "verified" || existing.matchMethod === "manual")) {
-      await c.updateOne({ _id: raw.id }, { $set: { ...c0 } });
-      summary.preserved++; summary.updated++;
-      continue;
-    }
-
-    const { candidates, best } = await matchRefund(raw);
-    if (best?.method === "invoice") summary.matchedByInvoice++;
-    else summary.unmatched++;
-
-    // Estimated allocation from the original payment amount (refined on confirm).
-    let computedShare: ScanpayComputedShare | null = null;
-    let computeError: string | null = null;
-    if (best?.jobId) {
-      const cs = await computeRefundShare(best.jobId, c0.originalAmount);
-      computedShare = cs.share;
-      computeError = cs.error;
-    }
-
-    const matchFields = {
-      matchStatus: (best ? "matched" : "new") as ScanpayRefundRecord["matchStatus"],
-      matchedJobId: best?.jobId ?? null,
-      matchMethod: best?.method ?? null,
-      matchScore: best?.score ?? null,
-      candidates,
-      computedShare,
-      computeError,
-    };
-
-    if (!existing) {
-      const doc: ScanpayRefundRecord = {
-        _id: raw.id,
-        ...c0,
-        refundAmount: null,
-        refundDate: null,
-        ...matchFields,
-        postedRecordId: null,
-        ledgerEntryId: null,
-        synced_at: now,
-      };
-      await c.insertOne(doc);
-      summary.created++;
-    } else {
-      await c.updateOne({ _id: raw.id }, { $set: { ...c0, ...matchFields } });
-      summary.updated++;
-    }
+    const res = await upsertScanpayRefund(raw);
+    if (res.action === "created") summary.created++;
+    else summary.updated++;
+    if (res.action === "preserved") summary.preserved++;
+    if (res.matched === "invoice") summary.matchedByInvoice++;
+    else if (res.matched === "none") summary.unmatched++;
   }
 
   return summary;
+}
+
+// Upsert a single refund (match + compute share + preserve human decisions).
+// Shared by the full sync and the webhook receiver.
+export async function upsertScanpayRefund(
+  raw: ScanpayRefundRaw,
+): Promise<{ action: "created" | "updated" | "preserved"; matched: "invoice" | "none" | "preserved" }> {
+  await ensureFinanceIndexes();
+  const c = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
+  const now = new Date().toISOString();
+  const c0 = core(raw, now);
+  const existing = await c.findOne({ _id: raw.id });
+
+  if (existing && (existing.matchStatus === "posted" || existing.matchStatus === "ignored" || existing.matchStatus === "verified" || existing.matchMethod === "manual")) {
+    await c.updateOne({ _id: raw.id }, { $set: { ...c0 } });
+    return { action: "preserved", matched: "preserved" };
+  }
+
+  const { candidates, best } = await matchRefund(raw);
+  const matched = best?.method === "invoice" ? "invoice" : "none";
+
+  let computedShare: ScanpayComputedShare | null = null;
+  let computeError: string | null = null;
+  if (best?.jobId) {
+    const cs = await computeRefundShare(best.jobId, c0.originalAmount);
+    computedShare = cs.share;
+    computeError = cs.error;
+  }
+
+  const matchFields = {
+    matchStatus: (best ? "matched" : "new") as ScanpayRefundRecord["matchStatus"],
+    matchedJobId: best?.jobId ?? null,
+    matchMethod: best?.method ?? null,
+    matchScore: best?.score ?? null,
+    candidates,
+    computedShare,
+    computeError,
+  };
+
+  if (!existing) {
+    await c.insertOne({ _id: raw.id, ...c0, refundAmount: null, refundDate: null, ...matchFields, postedRecordId: null, ledgerEntryId: null, synced_at: now });
+    return { action: "created", matched };
+  }
+  await c.updateOne({ _id: raw.id }, { $set: { ...c0, ...matchFields } });
+  return { action: "updated", matched };
 }
