@@ -51,7 +51,30 @@ async function load() {
   }));
   const weOwe = rows.filter((r) => r.balance < 0).reduce((s, r) => s + r.balance, 0);
   const theyOwe = rows.filter((r) => r.balance > 0).reduce((s, r) => s + r.balance, 0);
-  return { rows, weOwe, theyOwe };
+
+  // One section per role. Canonical roles first, then the rest alphabetically.
+  const ROLE_ORDER = ["area_manager", "technician"];
+  const byRole = new Map<string, typeof rows>();
+  for (const r of rows) {
+    const arr = byRole.get(r.role) ?? [];
+    arr.push(r);
+    byRole.set(r.role, arr);
+  }
+  const groups = [...byRole.entries()]
+    .map(([role, rs]) => ({
+      role,
+      label: ROLE_LABEL[role] ?? role,
+      rows: rs,
+      weOwe: rs.filter((x) => x.balance < 0).reduce((s, x) => s + x.balance, 0),
+      theyOwe: rs.filter((x) => x.balance > 0).reduce((s, x) => s + x.balance, 0),
+    }))
+    .sort((a, b) => {
+      const ai = ROLE_ORDER.indexOf(a.role), bi = ROLE_ORDER.indexOf(b.role);
+      if (ai !== -1 || bi !== -1) return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+      return a.label.localeCompare(b.label);
+    });
+
+  return { rows, weOwe, theyOwe, groups };
 }
 
 export default async function LedgerListPage() {
@@ -61,8 +84,8 @@ export default async function LedgerListPage() {
     <div className="portal-page">
       <PageHeader
         kicker="Tracking"
-        title="Manager & Tech Ledgers"
-        subtitle="Running balance with each area manager / technician · balance = sum of all entries"
+        title="Ledger"
+        subtitle="Running balance with each party, grouped by role · balance = sum of all entries"
         actions={
           <>
             <Link href="/portal/ledger/rates" className="portal-btn">
@@ -86,10 +109,10 @@ export default async function LedgerListPage() {
         <StatPill label="Net" value={<BalanceText n={d.weOwe + d.theyOwe} />} />
       </section>
 
-      <CardShell title="Ledgers" subtitle={`${d.rows.length} total`}>
-        {d.rows.length === 0 ? (
+      {d.rows.length === 0 ? (
+        <CardShell title="Ledgers">
           <Empty
-            message="No ledgers yet. Create one per area manager / technician you settle with."
+            message="No ledgers yet. Create one per party (area manager, technician, provider, …) you settle with."
             action={
               <EntryFormModal
                 endpoint="/api/portal/ledger"
@@ -99,43 +122,49 @@ export default async function LedgerListPage() {
               />
             }
           />
-        ) : (
-          <table className="portal-table">
-            <thead>
-              <tr>
-                <th>Person</th>
-                <th>Role</th>
-                <th>Location / Area</th>
-                <th className="right">Entries</th>
-                <th className="right">Balance</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {d.rows.map((r) => (
-                <tr key={r._id}>
-                  <td>
-                    <Link href={`/portal/ledger/${r._id}`} style={{ color: "#cbd5e1", fontWeight: 600 }}>
-                      {r.holder_name}
-                    </Link>
-                    {r.label && <div className="muted small">{r.label}</div>}
-                  </td>
-                  <td className="small">{ROLE_LABEL[r.role] ?? r.role}</td>
-                  <td className="muted small">{r.location || "—"}</td>
-                  <td className="right muted small">{r.entries.toLocaleString()}</td>
-                  <td className="right"><BalanceText n={r.balance} /></td>
-                  <td className="right">
-                    <Link href={`/portal/ledger/${r._id}`} className="portal-btn"
-                      style={{ padding: "4px 10px", fontSize: 11 }}>
-                      Open →
-                    </Link>
-                  </td>
+        </CardShell>
+      ) : (
+        d.groups.map((g) => (
+          <CardShell
+            key={g.role}
+            title={g.label}
+            subtitle={`${g.rows.length} ledger(s) · we owe ${fmt$(g.weOwe)} · they owe +${fmt$(g.theyOwe)}`}
+          >
+            <table className="portal-table">
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  <th>Location / Area</th>
+                  <th className="right">Entries</th>
+                  <th className="right">Balance</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </CardShell>
+              </thead>
+              <tbody>
+                {g.rows.map((r) => (
+                  <tr key={r._id}>
+                    <td>
+                      <Link href={`/portal/ledger/${r._id}`} style={{ color: "#cbd5e1", fontWeight: 600 }}>
+                        {r.holder_name}
+                      </Link>
+                      {r.label && <div className="muted small">{r.label}</div>}
+                    </td>
+                    <td className="muted small">{r.location || "—"}</td>
+                    <td className="right muted small">{r.entries.toLocaleString()}</td>
+                    <td className="right"><BalanceText n={r.balance} /></td>
+                    <td className="right">
+                      <Link href={`/portal/ledger/${r._id}`} className="portal-btn"
+                        style={{ padding: "4px 10px", fontSize: 11 }}>
+                        Open →
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardShell>
+        ))
+      )}
 
       <p className="muted small" style={{ marginTop: 4 }}>
         <span className="money-neg">Red / negative</span> = company owes them ·{" "}

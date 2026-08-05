@@ -156,9 +156,9 @@ export const FINANCE_NAV: FinanceModule[] = [
   },
   {
     href: "/portal/ledger",
-    label: "Manager & Tech Ledgers",
+    label: "Ledger",
     section: "Tracking",
-    title: "Manager & Tech Ledgers",
+    title: "Ledger",
     icon: FiArchive,
     group: "tracking",
     requires: "finance:area_managers:view",
