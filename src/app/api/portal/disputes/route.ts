@@ -19,6 +19,17 @@ const crud = makeCrud<DisputeRecord>({
   normalize: (body) => {
     const disputed = Number(body.amount_disputed ?? 0);
     const recovered = body.amount_recovered !== undefined ? Number(body.amount_recovered) : 0;
+    const status = ["open", "won", "lost", "partial"].includes(String(body.status)) ? String(body.status) : "open";
+    // A resolved dispute (won/lost/partial) carries the date the recovery lands
+    // on — that's the month the recovery affects the dashboard. Explicit value
+    // wins; otherwise default to today when it first becomes resolved.
+    const isResolved = status === "won" || status === "lost" || status === "partial";
+    const resolvedDate =
+      body.resolved_date != null && String(body.resolved_date).trim()
+        ? String(body.resolved_date)
+        : isResolved
+          ? new Date().toISOString().slice(0, 10)
+          : null;
     return {
       customer_name: body.customer_name ?? null,
       address: body.address ?? null,
@@ -32,7 +43,8 @@ const crud = makeCrud<DisputeRecord>({
       amount_disputed: disputed,
       amount_recovered: recovered,
       amount_open: Math.max(0, disputed - recovered),
-      status: ["open", "won", "lost", "partial"].includes(String(body.status)) ? body.status : "open",
+      status,
+      resolved_date: resolvedDate,
       attachments: Array.isArray(body.attachments) ? body.attachments : [],
       notes: body.notes ?? null,
       paid_unpaid_impact: body.paid_unpaid_impact ?? null,

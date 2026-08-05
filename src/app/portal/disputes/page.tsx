@@ -5,6 +5,7 @@ import { fmt$, fmtDate, lastNDays } from "../format";
 import { PageHeader, StatPill, FilterBar, FilterField, CardShell, Empty, StatusPill } from "../_components/page-helpers";
 import RowActions from "../_components/RowActions";
 import DisputeChargeModal from "../_components/DisputeChargeModal";
+import ResolveDisputeModal from "../_components/ResolveDisputeModal";
 
 export const dynamic = "force-dynamic";
 
@@ -144,7 +145,10 @@ export default async function DisputesPage({
                     <td className="right money money-pos">+{fmt$(r.amount_recovered ?? 0)}</td>
                     <td className="right money" style={{ fontWeight: 600 }}>{fmt$(r.amount_open ?? 0)}</td>
                     <td className="right">
-                      <RowActions endpoint="/api/portal/disputes" id={r._id} canToggleStatus={false} />
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                        <ResolveDisputeModal id={r._id} amountDisputed={r.amount_disputed} currentStatus={r.status} />
+                        <RowActions endpoint="/api/portal/disputes" id={r._id} canToggleStatus={false} />
+                      </div>
                     </td>
                   </tr>
                 ))}

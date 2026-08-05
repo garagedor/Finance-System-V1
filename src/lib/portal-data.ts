@@ -117,18 +117,96 @@ async function sumDebts(): Promise<{ owed_to_us: number; we_owe: number }> {
   return { owed_to_us: 0, we_owe: total };
 }
 
-async function sumDisputes(range: DateWindow): Promise<{ open: number; recovered: number }> {
+// A single dispute's effect on the filtered period. The company only ever eats
+// ITS slice of a dispute (charge_snapshot.companyCharge from the dispute
+// formula — the rest is charged back to provider/tech/AM). Event-based timing:
+//   • the slice is booked as a LOSS in the month the dispute was FILED (date)
+//   • if later WON, the recovered slice is booked as a GAIN in the month it was
+//     RESOLVED (resolved_date) — a loss "leaves as is" (never recovered).
+export interface DisputeImpactRow {
+  _id: string;
+  date: string;                 // filed
+  resolved_date: string | null;
+  customer_name: string | null;
+  job_id: string | null;
+  status: string;
+  amount_disputed: number;
+  companySlice: number;         // our slice of the loss (from the formula)
+  filedInRange: boolean;
+  recoveredInRange: boolean;
+  recoveredSlice: number;       // slice recovered (prorated by amount recovered)
+  periodImpact: number;         // net effect on THIS period's profit
+}
+
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+async function computeDisputeImpact(range: DateWindow): Promise<{
+  open: number;
+  recovered: number;
+  filedLoss: number;       // Σ company slice for disputes filed in range
+  recoveredSlice: number;  // Σ company slice recovered (resolved) in range
+  impact: number;          // recoveredSlice − filedLoss (≤0 when losses dominate)
+  rows: DisputeImpactRow[];
+}> {
   const c = await coll<DisputeRecord>(FINANCE_COLLECTIONS.dispute);
-  const rows = await c
-    .find({ date: { $gte: range.from, $lte: range.to } })
+  // Anything filed in range OR resolved in range touches this period.
+  const rowsRaw = await c
+    .find({
+      $or: [
+        { date: { $gte: range.from, $lte: range.to } },
+        { resolved_date: { $gte: range.from, $lte: range.to } },
+      ],
+    })
     .toArray();
-  let open = 0;
-  let recovered = 0;
-  for (const r of rows) {
-    open += r.amount_open ?? Math.max(0, (r.amount_disputed ?? 0) - (r.amount_recovered ?? 0));
-    recovered += r.amount_recovered ?? 0;
+
+  let open = 0, recovered = 0, filedLoss = 0, recoveredSlice = 0;
+  const rows: DisputeImpactRow[] = [];
+  for (const r of rowsRaw) {
+    const snap = (r.charge_snapshot ?? {}) as Record<string, unknown>;
+    const companySlice = Number(snap.companyCharge ?? 0) || 0;
+    const disputed = r.amount_disputed ?? 0;
+    const rec = r.amount_recovered ?? 0;
+    const filedInRange = r.date >= range.from && r.date <= range.to;
+    const resolvedInRange =
+      !!r.resolved_date && r.resolved_date >= range.from && r.resolved_date <= range.to && rec > 0;
+    const recFraction = disputed > 0 ? Math.min(1, rec / disputed) : 0;
+    const rSlice = resolvedInRange ? companySlice * recFraction : 0;
+
+    if (filedInRange) {
+      open += r.amount_open ?? Math.max(0, disputed - rec);
+      filedLoss += companySlice;
+    }
+    if (resolvedInRange) {
+      recovered += rec;
+      recoveredSlice += rSlice;
+    }
+
+    if (filedInRange || resolvedInRange) {
+      rows.push({
+        _id: r._id,
+        date: r.date,
+        resolved_date: r.resolved_date ?? null,
+        customer_name: r.customer_name ?? null,
+        job_id: r.job_id ?? null,
+        status: r.status,
+        amount_disputed: disputed,
+        companySlice: round2(companySlice),
+        filedInRange,
+        recoveredInRange: resolvedInRange,
+        recoveredSlice: round2(rSlice),
+        periodImpact: round2((filedInRange ? -companySlice : 0) + rSlice),
+      });
+    }
   }
-  return { open, recovered };
+  rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  return {
+    open: round2(open),
+    recovered: round2(recovered),
+    filedLoss: round2(filedLoss),
+    recoveredSlice: round2(recoveredSlice),
+    impact: round2(recoveredSlice - filedLoss),
+    rows,
+  };
 }
 
 async function sumRefunds(range: DateWindow): Promise<number> {
@@ -415,9 +493,15 @@ export interface DashboardData {
   totalExpenses: number;
   unpaidExpenses: number;
   netProfit: number;
+  netAfterDisputes: number;
   cashOnHand: number;
   outstandingPayables: number;
   outstandingReceivables: number;
+  // Dispute impact on the filtered period (company slice only)
+  disputeFiledLoss: number;      // slice lost on disputes FILED in range
+  disputeRecoveredSlice: number; // slice recovered on disputes RESOLVED (won) in range
+  disputeImpact: number;         // recovered − filed loss
+  disputeRows: DisputeImpactRow[];
   // Breakdowns
   incomeBySource: Array<{ source: string; total: number }>;
   expenseByCategory: Array<{ category: string; total: number; count: number }>;
@@ -475,7 +559,7 @@ export async function fetchDashboardData(range: DateWindow): Promise<DashboardDa
     sumManualIncome(range),
     sumPayouts(range),
     sumDebts(),
-    sumDisputes(range),
+    computeDisputeImpact(range),
     sumRefunds(range),
     coll<ExpenseRecord>(FINANCE_COLLECTIONS.expense)
       .find({ date: { $gte: range.from, $lte: range.to } })
@@ -564,6 +648,9 @@ export async function fetchDashboardData(range: DateWindow): Promise<DashboardDa
     + crmAgg.checkFeeProfit
     + manualIncome;
   const netProfit = grossProfit - expenses.total - payouts.paid - payouts.unpaid;
+  // Dispute impact is kept OUT of netProfit (which mirrors the CRM home page)
+  // and shown as a separate adjustment line for the filtered period.
+  const netAfterDisputes = round2(netProfit + disputes.impact);
 
   const incomeBySource: Array<{ source: string; total: number }> = [
     { source: "crm_jobs", total: jobRevenue },
@@ -580,6 +667,11 @@ export async function fetchDashboardData(range: DateWindow): Promise<DashboardDa
     totalExpenses: expenses.total,
     unpaidExpenses: expenses.unpaid,
     netProfit,
+    netAfterDisputes,
+    disputeFiledLoss: disputes.filedLoss,
+    disputeRecoveredSlice: disputes.recoveredSlice,
+    disputeImpact: disputes.impact,
+    disputeRows: disputes.rows,
     cashOnHand: bankBalanceTotal,
     outstandingPayables: expenses.unpaid + payouts.unpaid + debts.we_owe,
     outstandingReceivables: disputes.open,

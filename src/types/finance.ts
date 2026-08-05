@@ -275,6 +275,7 @@ export interface DisputeRecord {
   amount_recovered?: number;
   amount_open?: number;
   status: DisputeStatus;
+  resolved_date?: string;         // when it was won/lost — the recovery is booked in THIS month
   attachments?: string[];
   notes?: string;
   paid_unpaid_impact?: FinanceStatus;

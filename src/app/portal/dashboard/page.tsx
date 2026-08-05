@@ -133,7 +133,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         />
       </section>
 
-      <section className="portal-grid-2">
+      <section className="portal-grid-3">
         <Kpi
           label="Outstanding Payables"
           value={fmt$(d.outstandingPayables)}
@@ -147,7 +147,92 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           sub={`${d.openDisputes} open dispute(s)`}
           anchorId="ai-receivables"
         />
+        <Kpi
+          label="Net after Disputes"
+          value={fmt$(d.netAfterDisputes)}
+          sub={
+            d.disputeImpact === 0
+              ? "no dispute impact this period"
+              : `${d.disputeImpact < 0 ? "−" : "+"}${fmt$(Math.abs(d.disputeImpact))} dispute impact`
+          }
+          tone={d.disputeImpact < 0 ? "down" : d.disputeImpact > 0 ? "up" : undefined}
+          anchorId="ai-net-after-disputes"
+        />
       </section>
+
+      {/* ─── Dispute impact on this period (company slice only) ─── */}
+      {d.disputeRows.length > 0 && (
+        <section className="portal-card" style={{ padding: 0 }} id="ai-dispute-impact">
+          <div className="portal-card-head">
+            <div className="portal-card-head-title">Dispute Impact · this period</div>
+            <Link href="/portal/disputes" className="portal-card-head-sub" style={{ color: "#818cf8" }}>
+              All disputes →
+            </Link>
+          </div>
+
+          {/* The math, mirrored from the KPI */}
+          <div
+            style={{
+              display: "flex", flexWrap: "wrap", gap: 20, padding: "14px 18px",
+              borderBottom: "1px solid rgba(255,255,255,0.06)", alignItems: "baseline",
+            }}
+          >
+            <span className="muted small">Net Profit <strong style={{ color: "#e2e8f0" }}>{fmt$(d.netProfit)}</strong></span>
+            <span className="muted small">
+              Loss (filed this period) <strong className="money-neg">−{fmt$(d.disputeFiledLoss)}</strong>
+            </span>
+            <span className="muted small">
+              Recovered (won this period) <strong className="money-pos">+{fmt$(d.disputeRecoveredSlice)}</strong>
+            </span>
+            <span style={{ marginLeft: "auto", fontWeight: 700 }}>
+              Net after disputes {fmt$(d.netAfterDisputes)}
+            </span>
+          </div>
+
+          <table className="portal-table">
+            <thead>
+              <tr>
+                <th>Filed</th>
+                <th>Customer / Job</th>
+                <th>Status</th>
+                <th className="right">Your slice</th>
+                <th className="right">Loss (filed)</th>
+                <th>Won on</th>
+                <th className="right">Recovered</th>
+                <th className="right">Period impact</th>
+              </tr>
+            </thead>
+            <tbody>
+              {d.disputeRows.map((r) => (
+                <tr key={r._id}>
+                  <td className="small mono">{fmtDate(r.date)}</td>
+                  <td>
+                    <div>{r.customer_name ?? "—"}</div>
+                    {r.job_id && <div className="muted small mono">{r.job_id.slice(0, 10)}</div>}
+                  </td>
+                  <td style={{ textTransform: "capitalize" }} className="small">{r.status}</td>
+                  <td className="right money">{fmt$(r.companySlice)}</td>
+                  <td className="right money money-neg">
+                    {r.filedInRange ? `−${fmt$(r.companySlice)}` : "—"}
+                  </td>
+                  <td className="small mono">{r.recoveredInRange && r.resolved_date ? fmtDate(r.resolved_date) : "—"}</td>
+                  <td className="right money money-pos">
+                    {r.recoveredInRange ? `+${fmt$(r.recoveredSlice)}` : "—"}
+                  </td>
+                  <td className={`right money ${moneyClass(r.periodImpact)}`} style={{ fontWeight: 600 }}>
+                    {r.periodImpact < 0 ? "−" : "+"}{fmt$(Math.abs(r.periodImpact))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="muted small" style={{ padding: "10px 18px" }}>
+            Shows only the company&apos;s slice of each dispute (from the dispute formula). A loss is booked in the
+            month it was filed; if later won, the recovery lands in the month it was resolved. Lost disputes stay as
+            a loss in their filed month.
+          </div>
+        </section>
+      )}
 
       {/* ─── Bank activity (Plaid) ─── */}
       {d.bankAccounts.length > 0 && (
