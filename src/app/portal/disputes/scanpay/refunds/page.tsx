@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
+import { enrichJobs, type JobEnrichment } from "@/lib/scanpay/enrich";
 import type { ScanpayRefundRecord } from "@/types/scanpay";
 import { fmt$, fmtDate } from "../../../format";
-import { PageHeader, StatPill, CardShell, Empty } from "../../../_components/page-helpers";
+import { PageHeader, StatPill, CardShell, Empty, FilterBar, FilterField } from "../../../_components/page-helpers";
 import ScanpayRefundSyncButton from "./ScanpayRefundSyncButton";
 import ScanpayRefundRowActions from "./ScanpayRefundRowActions";
 
@@ -10,29 +11,77 @@ export const dynamic = "force-dynamic";
 
 type Tab = "queue" | "posted" | "ignored";
 
-async function load(tab: Tab) {
+interface Filters {
+  q: string; from: string; to: string; min: string; max: string;
+  tech: string[]; provider: string[]; am: string[]; matched: string[];
+}
+
+const arr = (v: string | string[] | undefined): string[] => (Array.isArray(v) ? v : v ? [v] : []);
+const AM_UNASSIGNED = "⚠ unassigned";
+const rTech = (en?: JobEnrichment) => en?.tech ?? "";
+const rProvider = (en?: JobEnrichment) => en?.provider ?? "";
+const rAM = (en?: JobEnrichment) => (en?.areaManagerMissing ? AM_UNASSIGNED : (en?.areaManager ?? ""));
+
+async function load(tab: Tab, f: Filters) {
   await ensureFinanceIndexes();
   const c = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
   const filter =
     tab === "posted" ? { matchStatus: "posted" as const }
     : tab === "ignored" ? { matchStatus: "ignored" as const }
     : { matchStatus: { $in: ["new", "matched"] as const } };
-  const rows = await c.find(filter).sort({ paymentDate: -1 }).limit(500).toArray();
+  const allRows = await c.find(filter).sort({ paymentDate: -1 }).limit(500).toArray();
 
   const counts = await c.aggregate<{ _id: string; n: number }>([
     { $group: { _id: "$matchStatus", n: { $sum: 1 } } },
   ]).toArray();
   const cmap = Object.fromEntries(counts.map((x) => [x._id, x.n]));
   const queueCount = (cmap.new ?? 0) + (cmap.matched ?? 0);
-  const postedAmt = rows.reduce((s, r) => s + (r.refundAmount ?? 0), 0);
 
-  return { rows, cmap, queueCount, postedAmt };
+  const enrich = await enrichJobs(allRows.map((r) => r.matchedJobId));
+  const en = (r: ScanpayRefundRecord) => (r.matchedJobId ? enrich.get(r.matchedJobId) : undefined);
+
+  const uniq = (a: string[]) => [...new Set(a.filter(Boolean))].sort();
+  const options = {
+    techs: uniq(allRows.map((r) => rTech(en(r)))),
+    providers: uniq(allRows.map((r) => rProvider(en(r)))),
+    ams: uniq(allRows.map((r) => rAM(en(r)))),
+  };
+
+  const ql = f.q.trim().toLowerCase();
+  const minN = f.min ? parseFloat(f.min) : null;
+  const maxN = f.max ? parseFloat(f.max) : null;
+  const rows = allRows.filter((r) => {
+    const e = en(r);
+    if (ql) {
+      const hay = [r.invoiceNumber, r.paymentId, r.paymentMethod, rTech(e), r.candidates?.[0]?.address]
+        .filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(ql)) return false;
+    }
+    if (f.tech.length && !f.tech.includes(rTech(e))) return false;
+    if (f.provider.length && !f.provider.includes(rProvider(e))) return false;
+    if (f.am.length && !f.am.includes(rAM(e))) return false;
+    if (f.matched.length && !f.matched.includes(r.matchedJobId ? "matched" : "unmatched")) return false;
+    const day = r.paymentDate ? r.paymentDate.slice(0, 10) : "";
+    if (f.from && (!day || day < f.from)) return false;
+    if (f.to && (!day || day > f.to)) return false;
+    if (minN != null && r.originalAmount < minN) return false;
+    if (maxN != null && r.originalAmount > maxN) return false;
+    return true;
+  });
+
+  const postedAmt = rows.reduce((s, r) => s + (r.refundAmount ?? 0), 0);
+  return { rows, total: allRows.length, cmap, queueCount, postedAmt, enrich, options };
 }
 
-export default async function ScanpayRefundInboxPage({ searchParams }: { searchParams: Promise<{ tab?: Tab }> }) {
+export default async function ScanpayRefundInboxPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   const tab: Tab = sp.tab === "posted" || sp.tab === "ignored" ? sp.tab : "queue";
-  const d = await load(tab);
+  const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? "" : v ?? "");
+  const f: Filters = {
+    q: str(sp.q), from: str(sp.from), to: str(sp.to), min: str(sp.min), max: str(sp.max),
+    tech: arr(sp.tech), provider: arr(sp.provider), am: arr(sp.am), matched: arr(sp.matched),
+  };
+  const d = await load(tab, f);
 
   return (
     <div className="portal-page">
@@ -60,17 +109,61 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
         <Link href="/portal/disputes/scanpay" className="portal-btn" style={{ marginLeft: "auto" }}>ScanPay disputes →</Link>
       </div>
 
-      <CardShell title={tab === "queue" ? "Needs review" : tab === "posted" ? "Posted to ledger" : "Ignored"} subtitle={`${d.rows.length} entries`}>
+      <FilterBar>
+        <FilterField label="Search">
+          <input className="portal-input" type="search" name="q" defaultValue={f.q} placeholder="invoice / payment id / address / tech" />
+        </FilterField>
+        <FilterField label="Technician">
+          <select className="portal-select" name="tech" defaultValue={f.tech} multiple size={4}>
+            {d.options.techs.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </FilterField>
+        <FilterField label="Provider">
+          <select className="portal-select" name="provider" defaultValue={f.provider} multiple size={4}>
+            {d.options.providers.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </FilterField>
+        <FilterField label="Area Manager">
+          <select className="portal-select" name="am" defaultValue={f.am} multiple size={4}>
+            {d.options.ams.map((x) => <option key={x} value={x}>{x}</option>)}
+          </select>
+        </FilterField>
+        <FilterField label="Match">
+          <select className="portal-select" name="matched" defaultValue={f.matched} multiple size={2}>
+            <option value="matched">Matched</option>
+            <option value="unmatched">Unmatched</option>
+          </select>
+        </FilterField>
+        <FilterField label="From"><input className="portal-input" type="date" name="from" defaultValue={f.from} /></FilterField>
+        <FilterField label="To"><input className="portal-input" type="date" name="to" defaultValue={f.to} /></FilterField>
+        <FilterField label="Min $"><input className="portal-input" style={{ width: 90 }} type="number" step="0.01" name="min" defaultValue={f.min} /></FilterField>
+        <FilterField label="Max $"><input className="portal-input" style={{ width: 90 }} type="number" step="0.01" name="max" defaultValue={f.max} /></FilterField>
+        <input type="hidden" name="tab" value={tab} />
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "flex-end" }}>
+          <span className="muted small">Ctrl / ⌘-click for multiple</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button type="submit" className="portal-btn portal-btn-primary">Apply</button>
+            <Link href={`/portal/disputes/scanpay/refunds?tab=${tab}`} className="portal-btn">Clear</Link>
+          </div>
+        </div>
+      </FilterBar>
+
+      <CardShell title={tab === "queue" ? "Needs review" : tab === "posted" ? "Posted to ledger" : "Ignored"} subtitle={`${d.rows.length} of ${d.total} entries`}>
         {d.rows.length === 0 ? (
           <Empty message={tab === "queue" ? "Nothing to review. Hit Sync to pull refunded payments from ScanPay." : "Nothing here."} />
         ) : (
+          <div style={{ overflowX: "auto" }}>
           <table className="portal-table">
             <thead>
               <tr>
                 <th>Payment date</th>
                 <th>Invoice</th>
+                <th>Tech</th>
+                <th>Provider</th>
+                <th>Area Manager</th>
                 <th className="right">Originally paid</th>
-                <th>Suggested job</th>
+                <th className="right">Collected</th>
+                <th>Matched job</th>
                 <th className="right">Refunded</th>
                 <th className="right">Actions</th>
               </tr>
@@ -78,6 +171,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
             <tbody>
               {d.rows.map((r) => {
                 const best = r.candidates?.[0];
+                const en = r.matchedJobId ? d.enrich.get(r.matchedJobId) : undefined;
                 return (
                   <tr key={r._id}>
                     <td className="small mono">{fmtDate(r.paymentDate ?? "")}</td>
@@ -85,7 +179,13 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
                       <div className="mono small">{r.invoiceNumber || "—"}</div>
                       <div className="muted small">{r.paymentMethod} · {r.paymentId}</div>
                     </td>
+                    <td className="small">{en?.tech ?? "—"}</td>
+                    <td className="small">{en?.provider ?? "—"}</td>
+                    <td className="small">
+                      {en?.areaManager ? en.areaManager : en?.areaManagerMissing ? <span style={{ color: "#f59e0b" }}>⚠ unassigned</span> : "—"}
+                    </td>
                     <td className="right money">{fmt$(r.originalAmount)}</td>
+                    <td className="right money">{en ? fmt$(en.collected) : "—"}</td>
                     <td>
                       {tab === "posted" ? (
                         <span className="muted small">posted · {r.matchMethod}</span>
@@ -114,6 +214,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
               })}
             </tbody>
           </table>
+          </div>
         )}
       </CardShell>
     </div>
