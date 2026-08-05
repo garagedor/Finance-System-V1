@@ -2,7 +2,8 @@ import Link from "next/link";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
 import type { LedgerRecord, LedgerEntryRecord } from "@/types/finance-ledger";
 import { fmt$ } from "../format";
-import { PageHeader, StatPill, CardShell, Empty } from "../_components/page-helpers";
+import { PageHeader, StatPill, CardShell, Empty, FilterBar, FilterField } from "../_components/page-helpers";
+import MultiSelect from "../_components/MultiSelect";
 import EntryFormModal, { type FieldDef } from "../_components/EntryFormModal";
 
 export const dynamic = "force-dynamic";
@@ -77,17 +78,37 @@ async function load() {
   return { rows, weOwe, theyOwe, groups };
 }
 
-export default async function LedgerListPage({ searchParams }: { searchParams: Promise<{ role?: string }> }) {
+export default async function LedgerListPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   const d = await load();
 
+  const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? "" : v ?? "");
+  const arr = (v: string | string[] | undefined) => (Array.isArray(v) ? v : v ? [v] : []);
+  const q = str(sp.q).trim().toLowerCase();
+  const balance = str(sp.balance);            // "" | owe | owed | settled
+  const locFilter = arr(sp.loc);
+
   // Active role tab (a role present in the data, or "all").
-  const active = sp.role && d.groups.some((g) => g.role === sp.role) ? sp.role : "all";
+  const active = sp.role && d.groups.some((g) => g.role === str(sp.role)) ? str(sp.role) : "all";
   const activeGroup = d.groups.find((g) => g.role === active);
-  const rows = active === "all" ? d.rows : activeGroup?.rows ?? [];
-  const weOwe = active === "all" ? d.weOwe : activeGroup?.weOwe ?? 0;
-  const theyOwe = active === "all" ? d.theyOwe : activeGroup?.theyOwe ?? 0;
+  const baseRows = active === "all" ? d.rows : activeGroup?.rows ?? [];
+
+  // Distinct locations in this tab (for the filter dropdown).
+  const locOptions = [...new Set(baseRows.map((r) => r.location).filter(Boolean))].sort();
+
+  // Search + filter within the tab.
+  const rows = baseRows.filter((r) => {
+    if (q && !`${r.holder_name} ${r.location ?? ""} ${r.label ?? ""}`.toLowerCase().includes(q)) return false;
+    if (locFilter.length && !locFilter.includes(r.location)) return false;
+    if (balance === "owe" && !(r.balance < -0.005)) return false;
+    if (balance === "owed" && !(r.balance > 0.005)) return false;
+    if (balance === "settled" && Math.abs(r.balance) > 0.005) return false;
+    return true;
+  });
+  const weOwe = rows.filter((r) => r.balance < 0).reduce((s, r) => s + r.balance, 0);
+  const theyOwe = rows.filter((r) => r.balance > 0).reduce((s, r) => s + r.balance, 0);
   const heading = active === "all" ? "All ledgers" : activeGroup?.label ?? "Ledgers";
+  const filtered = !!q || !!balance || locFilter.length > 0;
 
   return (
     <div className="portal-page">
@@ -136,22 +157,51 @@ export default async function LedgerListPage({ searchParams }: { searchParams: P
         </div>
       )}
 
+      {/* Search + filter within the active tab */}
+      {baseRows.length > 0 && (
+        <FilterBar>
+          <FilterField label="Search">
+            <input className="portal-input" type="search" name="q" defaultValue={q} placeholder="name / location / label" />
+          </FilterField>
+          <FilterField label="Balance">
+            <select className="portal-select" name="balance" defaultValue={balance}>
+              <option value="">All</option>
+              <option value="owe">We owe (negative)</option>
+              <option value="owed">They owe (positive)</option>
+              <option value="settled">Settled ($0)</option>
+            </select>
+          </FilterField>
+          <FilterField label="Location">
+            <MultiSelect name="loc" selected={locFilter} options={locOptions} />
+          </FilterField>
+          {active !== "all" && <input type="hidden" name="role" value={active} />}
+          <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+            <button type="submit" className="portal-btn portal-btn-primary">Apply</button>
+            <Link href={active === "all" ? "/portal/ledger" : `/portal/ledger?role=${encodeURIComponent(active)}`} className="portal-btn">Clear</Link>
+          </div>
+        </FilterBar>
+      )}
+
       <CardShell
         title={heading}
-        subtitle={rows.length ? `${rows.length} ledger(s) · we owe ${fmt$(weOwe)} · they owe +${fmt$(theyOwe)}` : undefined}
+        subtitle={baseRows.length ? `${rows.length}${filtered ? ` of ${baseRows.length}` : ""} ledger(s) · we owe ${fmt$(weOwe)} · they owe +${fmt$(theyOwe)}` : undefined}
       >
         {rows.length === 0 ? (
-          <Empty
-            message="No ledgers yet. Create one per party (area manager, technician, provider, …) you settle with."
-            action={
-              <EntryFormModal
-                endpoint="/api/portal/ledger"
-                title="Ledger"
-                fields={LEDGER_FIELDS}
-                triggerLabel="+ Create your first ledger"
-              />
-            }
-          />
+          filtered ? (
+            <Empty message="No ledgers match the search / filters." />
+          ) : (
+            <Empty
+              message="No ledgers yet. Create one per party (area manager, technician, provider, …) you settle with."
+              action={
+                <EntryFormModal
+                  endpoint="/api/portal/ledger"
+                  title="Ledger"
+                  fields={LEDGER_FIELDS}
+                  triggerLabel="+ Create your first ledger"
+                />
+              }
+            />
+          )
         ) : (
           <table className="portal-table">
             <thead>
