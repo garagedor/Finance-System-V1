@@ -132,6 +132,10 @@ export type Dispute = {
     dateLost?: string;        // ISO date the dispute was ruled lost (or settled)
     messageFound?: string;    // free-text — the message / proof / context found
     isDeposit?: boolean;      // does the dispute relate to a deposit?
+    /** When present, this Dispute row was created from a verified ScanPay
+     *  dispute (id === `scanpay_<disputeId>`); used to dedup + remove on unverify. */
+    scanpayDisputeId?: string;
+    source?: string;          // "scanpay" for ScanPay-sourced dispute rows
     /** Server-injected on GET — read-only mirror of CRM Job fields. */
     job?: LinkedJob;
 } & LinkedJobFlat;

@@ -8,7 +8,7 @@
 // All money math stays in postDisputeCharge — this endpoint only submits inputs.
 
 import { NextRequest, NextResponse } from "next/server";
-import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
+import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, getDb } from "@/lib/finance-db";
 import { readPortalSession } from "@/lib/portal-auth";
 import { postDisputeCharge } from "@/lib/dispute-service";
 import { shareFromSnapshot } from "@/lib/scanpay/share";
@@ -18,6 +18,35 @@ import type { UpdateFilter } from "mongodb";
 
 const dayOf = (iso: string | null): string =>
   iso ? new Date(iso).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+// Mirror a verified ScanPay dispute into the CRM `Dispute` collection so it
+// shows on the CRM Disputes report (which joins Dispute → Job for all job info).
+// Deterministic _id = scanpay_<disputeId> → natural dedup; removed on unverify.
+async function upsertCrmDispute(rec: ScanpayDisputeRecord, jobId: string): Promise<void> {
+  const db = await getDb();
+  const Dispute = db.collection<{ _id: string; [k: string]: unknown }>("Dispute");
+  await Dispute.updateOne(
+    { _id: `scanpay_${rec.disputeId}` },
+    { $set: {
+      jobId,
+      totalDisputed: rec.amount,
+      disputeDate: rec.disputedAt ? rec.disputedAt.slice(0, 10) : "",
+      dueDate: rec.raw?.respondBy ? String(rec.raw.respondBy).slice(0, 10) : "",
+      status: rec.statusRaw || "",
+      dateLost: rec.outcome === "lost" && rec.resolvedAt ? rec.resolvedAt.slice(0, 10) : "",
+      isTechOffset: false,
+      isPrOffset: false,
+      scanpayDisputeId: rec.disputeId,
+      source: "scanpay",
+      updated_at: new Date().toISOString(),
+    } },
+    { upsert: true },
+  );
+}
+async function removeCrmDispute(disputeId: string): Promise<void> {
+  const db = await getDb();
+  await db.collection("Dispute").deleteOne({ _id: `scanpay_${disputeId}` } as never);
+}
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const session = await readPortalSession();
@@ -69,9 +98,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       computeError: dry.ok ? null : dry.error,
       updated_at: new Date().toISOString(),
     } });
+    // Mirror onto the CRM Disputes report.
+    await upsertCrmDispute({ ...rec, matchedJobId: jobId }, jobId);
     return NextResponse.json({ ok: true, matchStatus: "verified" });
   }
   if (action === "unverify") {
+    await removeCrmDispute(rec.disputeId);
     await sc.updateOne({ _id: id }, { $set: { matchStatus: rec.matchedJobId ? "matched" : "new", updated_at: new Date().toISOString() } });
     return NextResponse.json({ ok: true });
   }
