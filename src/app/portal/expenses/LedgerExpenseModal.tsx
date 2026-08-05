@@ -12,7 +12,7 @@ export type LedgerOption = {
   _id: string;
   holder_name: string;
   location: string;
-  role: "area_manager" | "technician";
+  role: string;
 };
 
 const CATEGORY_OPTIONS = [
@@ -118,7 +118,7 @@ export default function LedgerExpenseModal({
   }
 
   const holderLabel = chosen
-    ? `${chosen.holder_name} · ${chosen.location} · ${chosen.role === "technician" ? "Tech" : "AM"}`
+    ? `${chosen.holder_name} · ${chosen.location} · ${chosen.role === "technician" ? "Tech" : chosen.role === "area_manager" ? "AM" : chosen.role}`
     : initial?.ledger_holder ?? "—";
 
   return (
@@ -164,7 +164,7 @@ export default function LedgerExpenseModal({
                     <option value="">— select a ledger —</option>
                     {ledgers.map((l) => (
                       <option key={l._id} value={l._id}>
-                        {l.holder_name} · {l.location} · {l.role === "technician" ? "Tech" : "AM"}
+                        {l.holder_name} · {l.location} · {l.role === "technician" ? "Tech" : l.role === "area_manager" ? "AM" : l.role}
                       </option>
                     ))}
                   </select>

@@ -9,7 +9,9 @@
 //   negative / red  = the company OWES the person/location
 //   positive / green = the person/location OWES the company
 
-export type LedgerRole = "area_manager" | "technician";
+// "area_manager" and "technician" are canonical (code depends on them); any
+// other string is a predefined or user-created role.
+export type LedgerRole = "area_manager" | "technician" | (string & {});
 
 export interface LedgerRecord {
   _id: string;

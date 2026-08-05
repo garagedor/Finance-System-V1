@@ -9,12 +9,19 @@ export const dynamic = "force-dynamic";
 
 const LEDGER_FIELDS: FieldDef[] = [
   { name: "holder_name", label: "Person", kind: "text", required: true, placeholder: "e.g. Yuval" },
-  { name: "role", label: "Role", kind: "select", width: "half", required: true,
+  { name: "role", label: "Role", kind: "combo", width: "half", required: true,
+    placeholder: "Pick or type a new role",
     options: [
-      { value: "area_manager", label: "Area Manager" },
-      { value: "technician", label: "Technician" },
+      { value: "Area Manager", label: "Area Manager" },
+      { value: "Technician", label: "Technician" },
+      { value: "Provider", label: "Provider" },
+      { value: "Subcontractor", label: "Subcontractor" },
+      { value: "Office", label: "Office" },
+      { value: "Vendor", label: "Vendor" },
+      { value: "Partner", label: "Partner" },
+      { value: "Lead Manager", label: "Lead Manager" },
     ],
-    defaultValue: "area_manager" },
+    defaultValue: "Area Manager" },
   { name: "location", label: "Location / Area", kind: "text", width: "half", required: true,
     placeholder: "e.g. Minnesota" },
   { name: "label", label: "Label (optional)", kind: "text", placeholder: "e.g. old card" },

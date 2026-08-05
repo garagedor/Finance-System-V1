@@ -10,6 +10,7 @@ export type FieldKind =
   | "money"
   | "date"
   | "select"
+  | "combo"     // text input + datalist: pick a suggestion OR type a new value
   | "boolean";
 
 export interface FieldDef {
@@ -213,6 +214,25 @@ function renderField(f: FieldDef, currentValue: unknown) {
           </option>
         ))}
       </select>
+    );
+  }
+  if (f.kind === "combo") {
+    const listId = `dl-${f.name}`;
+    return (
+      <>
+        <input
+          name={f.name}
+          className="portal-input"
+          list={listId}
+          placeholder={f.placeholder ?? "Pick one or type a new one"}
+          required={f.required}
+          defaultValue={dv}
+          autoComplete="off"
+        />
+        <datalist id={listId}>
+          {f.options?.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </datalist>
+      </>
     );
   }
   if (f.kind === "boolean") {
