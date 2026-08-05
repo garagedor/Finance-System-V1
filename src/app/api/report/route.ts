@@ -12,7 +12,6 @@ import {
   calcStandardShare,
   calcTipsTotal,
   calcLmOwesCompany,
-  computeChargeback,
   toNumber,
 } from '../utils/calculations';
 import { computeDisputeCharge } from '@/lib/dispute-charge';
@@ -38,35 +37,28 @@ function disputeChargeParts(
   techProfitPercent: number,
   managerProfitPercent: number,
   providerPercent: number,
-  parts: number,
-  grossTips: number,
 ) {
   const snap = computeDisputeCharge({
     job,
     disputeAmount: amount,
     type,
-    areaManagerPercent: managerProfitPercent,
-    technicianEffectivePercent: techProfitPercent,
-  });
-  const cb = computeChargeback({
-    totalCharge: calcPaidSum(job),
-    parts,
-    tip: grossTips,
-    refund: amount,
-    techPct: techProfitPercent,
-    amPoolPct: managerProfitPercent,
-    providerPct: providerPercent,
+    technicianPercent: techProfitPercent,
+    providerPercent,
+    areaManagerPoolPercent: managerProfitPercent,
   });
   return {
-    collected: snap.totalCharge,                         // engine's total incl tip
-    disputeType: snap.disputeClassification,             // "full" | "partial"
-    techShare: snap.technicianChargebackInfo,            // NEW engine (informational)
-    locationManagerShare: snap.areaManagerCharge,        // NEW engine — the AM charge
-    amPoolShare: snap.areaManagerCharge,                 // NEW engine
-    amNetPortion: snap.areaManagerOwnPortionInfo,        // NEW engine
-    providerShare: cb.providerShare,                     // legacy (isolated)
-    companyShare: cb.companyShare,                       // legacy (isolated)
-    isSubcontractor: cb.isSubcontractor,
+    collected: snap.totalCollected,          // job + gross tip (decides full/partial)
+    netTip: snap.netTip,
+    operationalProfit: snap.operationalProfit,
+    disputeType: snap.disputeClassification, // "full" | "partial"
+    techShare: snap.technicianPortion,       // net tip + profit share + parts loss
+    locationManagerShare: snap.amLedgerCharge, // AM ledger charge (tech + AM own)
+    amPoolShare: snap.amLedgerCharge,
+    amNetPortion: snap.areaManagerOwnPortion,
+    providerShare: snap.providerCharge,
+    companyShare: snap.companyCharge,
+    partsLoss: snap.partsLoss,
+    isSubcontractor: false,
   };
 }
 
@@ -425,8 +417,8 @@ export async function GET(req: NextRequest) {
         const grossTips =
           toNumber(job!.tipsCard) + toNumber(job!.tipsFinance) +
           toNumber(job!.tipsCompanyCash) + toNumber(job!.tipsCheck);
-        // Authoritative dispute engine for AM/tech/collected; provider+company legacy.
-        const cp = disputeChargeParts(job!, disputed, 'dispute', techProfitPercent, managerProfitPercent, providerPercent, parts, grossTips);
+        // Authoritative dispute engine — full breakdown (all parties).
+        const cp = disputeChargeParts(job!, disputed, 'dispute', techProfitPercent, managerProfitPercent, providerPercent);
         const techShare = cp.techShare;
         const locationManagerShare = cp.locationManagerShare;
         const providerShare = cp.providerShare;
@@ -447,6 +439,9 @@ export async function GET(req: NextRequest) {
             totalPaid,
             totalAfterFee,
             collected: cp.collected,
+            netTip: cp.netTip,
+            operationalProfit: cp.operationalProfit,
+            partsLoss: cp.partsLoss,
             disputeType: cp.disputeType,
             parts,
             netoTips,
@@ -546,8 +541,8 @@ export async function GET(req: NextRequest) {
       const grossTips =
         toNumber(job!.tipsCard) + toNumber(job!.tipsFinance) +
         toNumber(job!.tipsCompanyCash) + toNumber(job!.tipsCheck);
-      // Authoritative dispute engine for AM/tech/collected; provider+company legacy.
-      const cp = disputeChargeParts(job!, refunded, 'refund', techProfitPercent, managerProfitPercent, providerPercent, parts, grossTips);
+      // Authoritative dispute engine — full breakdown (all parties).
+      const cp = disputeChargeParts(job!, refunded, 'refund', techProfitPercent, managerProfitPercent, providerPercent);
       const techShare = cp.techShare;
       const locationManagerShare = cp.locationManagerShare;
       const providerShare = cp.providerShare;
@@ -567,6 +562,9 @@ export async function GET(req: NextRequest) {
           totalPaid,
           totalAfterFee,
           collected: cp.collected,
+          netTip: cp.netTip,
+          operationalProfit: cp.operationalProfit,
+          partsLoss: cp.partsLoss,
           disputeType: cp.disputeType,
           parts,
           netoTips,

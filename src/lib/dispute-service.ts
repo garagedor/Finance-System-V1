@@ -4,21 +4,22 @@ import "server-only";
 //
 // Both entry points — the Disputes module and the ledger Add-Dispute modal —
 // submit raw inputs to this service; neither calculates or posts on its own.
-// It: resolves the CRM job → pulls total/parts/tip → resolves the job's Area
-// Manager → runs the authoritative Sheet formula (lib/dispute-charge) → creates
-// or updates the canonical dispute/refund record → posts the Area-Manager charge
+// It: resolves the CRM job → derives job/tip/parts → resolves the job's Area
+// Manager + technician % + provider % → runs the authoritative allocation
+// engine (lib/dispute-charge) → creates/updates the canonical dispute/refund
+// record → posts the AM ledger charge (= technician portion + AM own portion)
 // to the AM's ledger (find-or-create) → stores the full snapshot → links the
 // record to the ledger entry → prevents duplicate charging (dedup by record id).
 //
-// The technician figure is informational only — NO technician ledger entry is
-// posted. Provider is not computed (awaiting its own Sheet formula).
+// Only the AM ledger is charged (the company settles with the AM). The provider,
+// company and per-technician figures are computed for the report/snapshot.
 
 import { ObjectId, type Db } from "mongodb";
 import {
   getDb, coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, newId,
 } from "@/lib/finance-db";
 import { getEffectivePct } from "@/lib/portal-tech-rates";
-import { computeDisputeCharge, type DisputeType } from "@/lib/dispute-charge";
+import { computeDisputeCharge, type DisputeKind } from "@/lib/dispute-charge";
 import type { JobRow, Location } from "@/types/job";
 import type { DisputeRecord, RefundRecord } from "@/types/finance";
 import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
@@ -31,7 +32,7 @@ const num = (v: unknown): number => {
 const today = () => new Date().toISOString().slice(0, 10);
 
 export type PostDisputeChargeInput = {
-  type: DisputeType;
+  type: DisputeKind;
   /** CRM Job _id the dispute/refund is attributed to (source of total/parts/tip). */
   jobId: string;
   /** Disputed / refunded amount (H). */
@@ -114,15 +115,20 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     return { ok: false, error: `Location "${location}" has no managerProfitPercent set.` };
   }
 
-  const technicianEffectivePercent = await getEffectivePct(job.tech ?? "");
+  const technicianPercent = await getEffectivePct(job.tech ?? "");
+  const providerDoc = job.provider
+    ? await db.collection("Provider").findOne({ _id: job.provider } as never)
+    : null;
+  const providerPercent = num((providerDoc as { profitPercent?: unknown } | null)?.profitPercent);
   const recordId = input.recordId ?? newId(input.type === "dispute" ? "disp" : "ref");
 
   const snapshot = computeDisputeCharge({
     job,
     disputeAmount: num(input.amount),
     type: input.type,
-    areaManagerPercent,
-    technicianEffectivePercent,
+    technicianPercent,
+    providerPercent,
+    areaManagerPoolPercent: areaManagerPercent,
     sourceJobId: input.jobId,
     sourceRecordId: recordId,
   });
@@ -140,13 +146,12 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     ledger_id: ledger._id,
     type: input.type,
     date,
-    amount: snapshot.areaManagerCharge, // positive = AM owes the company
+    amount: snapshot.amLedgerCharge, // positive = AM owes the company
     description: `${input.type === "dispute" ? "Dispute" : "Refund"} — ${input.customer_name ?? job.address ?? input.jobId} (${amName})`,
     job_ref: input.jobId,
     technician_id: job.tech ?? null,
     dispute_id: recordId,
-    gross_amount: snapshot.totalCharge,
-    pct_applied: areaManagerPercent / 100,
+    gross_amount: snapshot.disputeOrRefundAmount,
     charge_snapshot: snapshot as unknown as Record<string, unknown>,
     source: "crm" as const,
     updated_at: now,
@@ -165,9 +170,9 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     date,
     notes: input.notes ?? undefined,
     area_manager_name: amName,
-    area_manager_charge: snapshot.areaManagerCharge,
-    technician_chargeback_info: snapshot.technicianChargebackInfo,
-    area_manager_own_portion: snapshot.areaManagerOwnPortionInfo,
+    area_manager_charge: snapshot.amLedgerCharge,
+    technician_chargeback_info: snapshot.technicianPortion,
+    area_manager_own_portion: snapshot.areaManagerOwnPortion,
     ledger_entry_id: ledgerEntryId,
     charge_snapshot: snapshot as unknown as Record<string, unknown>,
   };
@@ -217,7 +222,7 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     ledgerEntryId,
     areaManagerName: amName,
     areaManagerPercent,
-    technicianEffectivePercent,
+    technicianEffectivePercent: technicianPercent,
     snapshot,
     created,
     reused: !!existingEntry,

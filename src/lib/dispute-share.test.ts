@@ -1,105 +1,92 @@
 // Run with:  node --test src/lib/dispute-share.test.ts   (Node 24+, strips types)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { calculateDisputeShare, disputeShareDetailed } from "./dispute-share.ts";
+import { computeDisputeAllocation } from "./dispute-share.ts";
 
-// Baseline: collected (incl tip) = 1000, parts = 100, tip = 50 → netTip = 47.5.
-const base = { totalCharge: 1000, partsCost: 100, tipAmount: 50, sharePercent: 40 };
+// Canonical job from the spec examples: Job 1000, Tip 100, Parts 200,
+// Tech 30%, Provider 50%, AM pool 40% (→ Company residual 10%).
+const spec = {
+  jobAmount: 1000, grossTip: 100, partsCost: 200,
+  technicianPercent: 30, providerPercent: 50, areaManagerPoolPercent: 40,
+};
 
-// ── Owner's worked examples ────────────────────────────────────────────────
-test("owner example A — dispute within the net tip: $70 (netTip 95) → $70", () => {
-  // 70 <= netTip(100×0.95=95) → recover the whole $70
-  const r = disputeShareDetailed({ totalCharge: 1000, disputeAmount: 70, partsCost: 0, tipAmount: 100, sharePercent: 40 });
-  assert.equal(r.amount, 70);
-  assert.equal(r.disputeType, "partial");
-  assert.equal(r.branch, "partial_within_tip");
+test("derived amounts: netTip 95, netJob 950, opProfit 750, collected 1100", () => {
+  const a = computeDisputeAllocation({ ...spec, disputeAmount: 650 });
+  assert.equal(a.netTip, 95);
+  assert.equal(a.netJob, 950);
+  assert.equal(a.operationalProfit, 750);
+  assert.equal(a.totalCollected, 1100);
 });
 
-test("owner example — tip-only dispute above net tip: $532.95 (40%) → $516.96", () => {
-  // netTip = 532.95×0.95 = 506.3025; excess 26.6475 × 0.40 = 10.659
-  // 506.3025 + 10.659 = 516.9615 → 516.96
-  const r = disputeShareDetailed({ totalCharge: 1000, disputeAmount: 532.95, partsCost: 0, tipAmount: 532.95, sharePercent: 40 });
-  assert.equal(r.amount, 516.96);
-  assert.equal(r.branch, "partial_above_tip");
+test("§8 partial (does NOT reach parts) — Dispute $650", () => {
+  const a = computeDisputeAllocation({ ...spec, disputeAmount: 650 });
+  assert.equal(a.disputeType, "partial");
+  assert.equal(a.reachesParts, false);
+  assert.equal(a.providerCharge, 277.5);
+  assert.equal(a.technicianPortion, 261.5);   // 95 tip + 166.5 profit
+  assert.equal(a.areaManagerOwnPortion, 55.5);
+  assert.equal(a.companyCharge, 55.5);
+  assert.equal(a.amLedgerCharge, 317);
+  assert.equal(a.partsLoss, 0);
 });
 
-// ── Classification: FULL only when dispute >= collected (incl tip) ──────────
-test("dispute equal to (collected − tip) is PARTIAL", () => {
-  // netTip 47.5; 47.5 + (950-47.5)*0.40 = 47.5 + 361 = 408.5
-  const r = disputeShareDetailed({ ...base, disputeAmount: 950 });
-  assert.equal(r.amount, 408.5);
-  assert.equal(r.disputeType, "partial");
-  assert.equal(r.branch, "partial_above_tip");
+test("§9 partial (reaches parts) — Dispute $920", () => {
+  const a = computeDisputeAllocation({ ...spec, disputeAmount: 920 });
+  assert.equal(a.disputeType, "partial");
+  assert.equal(a.reachesParts, true);
+  assert.equal(a.partsLoss, 75);              // 100% technician
+  assert.equal(a.providerCharge, 375);
+  assert.equal(a.technicianPortion, 395);     // 95 tip + 225 profit + 75 parts
+  assert.equal(a.areaManagerOwnPortion, 75);
+  assert.equal(a.companyCharge, 75);
+  assert.equal(a.amLedgerCharge, 470);
 });
 
-test("dispute equal to the full collected amount is FULL (470)", () => {
-  const r = disputeShareDetailed({ ...base, disputeAmount: 1000 });
-  assert.equal(r.amount, 470);
-  assert.equal(r.disputeType, "full");
-  assert.equal(r.branch, "full");
+test("§11 full dispute — Dispute $1100 (all parts to tech)", () => {
+  const a = computeDisputeAllocation({ ...spec, disputeAmount: 1100 });
+  assert.equal(a.disputeType, "full");
+  assert.equal(a.partsLoss, 200);             // entire parts cost, 100% tech
+  assert.equal(a.providerCharge, 375);
+  assert.equal(a.technicianPortion, 520);     // 95 + 225 + 200
+  assert.equal(a.areaManagerOwnPortion, 75);
+  assert.equal(a.companyCharge, 75);
+  assert.equal(a.amLedgerCharge, 595);
 });
 
-test("dispute above the collected amount is still FULL (470)", () => {
-  assert.equal(calculateDisputeShare({ ...base, disputeAmount: 1500 }), 470);
+test("tip-only dispute recovers net tip + excess by % — $532.95 → AM $516.96", () => {
+  // collected 1000 (job 467.05 + tip 532.95). netTip 506.3025; excess 26.6475.
+  const a = computeDisputeAllocation({
+    jobAmount: 467.05, grossTip: 532.95, partsCost: 0, disputeAmount: 532.95,
+    technicianPercent: 30, providerPercent: 50, areaManagerPoolPercent: 40,
+  });
+  assert.equal(a.disputeType, "partial");
+  assert.equal(a.amLedgerCharge, 516.96);      // 506.3025 + 26.6475×0.40
+  assert.equal(a.reachesParts, false);
 });
 
-// ── Partial: within the net tip (recover the full dispute) ─────────────────
-test("dispute below the net tip → recover the whole dispute", () => {
-  // 30 <= netTip 47.5 → 30
-  assert.equal(calculateDisputeShare({ ...base, disputeAmount: 30 }), 30);
+test("parts loss is 100% technician — never provider/AM/company", () => {
+  // Dispute that reaches parts: only tech's parts portion grows.
+  const a = computeDisputeAllocation({ ...spec, disputeAmount: 920 });
+  // provider/AM-own/company are all computed off operationalRecovered only.
+  assert.equal(a.providerCharge, a.operationalRecovered * 0.5);
+  assert.equal(a.areaManagerOwnPortion, a.operationalRecovered * 0.1);
+  assert.equal(a.companyCharge, a.operationalRecovered * 0.1);
+  // tech carries the parts loss on top.
+  assert.equal(a.technicianPortion, a.tipRecovered + a.operationalRecovered * 0.3 + a.partsLoss);
 });
 
-test("dispute equal to the GROSS tip but above the net tip → above branch", () => {
-  // dispute 50 > netTip 47.5 → 47.5 + (50-47.5)*0.40 = 47.5 + 1 = 48.5
-  const r = disputeShareDetailed({ ...base, disputeAmount: 50 });
-  assert.equal(r.amount, 48.5);
-  assert.equal(r.branch, "partial_above_tip");
+test("technician % variations — AM own = opRec × (40% − tech%)", () => {
+  for (const [tech, amOwn] of [[25, 112.5], [30, 75], [32.5, 56.25], [35, 37.5], [40, 0]] as const) {
+    const a = computeDisputeAllocation({ ...spec, disputeAmount: 920, technicianPercent: tech });
+    assert.equal(a.areaManagerOwnPortion, amOwn);   // 750 × (0.40 − tech/100)
+    // AM ledger is unaffected by the tech/AM split (95 + 750×0.4 + 75 = 470).
+    assert.equal(a.amLedgerCharge, 470);
+  }
 });
 
-// ── Partial: above the net tip ─────────────────────────────────────────────
-test("partial dispute well above the tip", () => {
-  // 47.5 + (500-47.5)*0.40 = 47.5 + 181 = 228.5
-  assert.equal(calculateDisputeShare({ ...base, disputeAmount: 500 }), 228.5);
-});
-
-test("dispute just below the collected amount", () => {
-  // 47.5 + (999-47.5)*0.40 = 47.5 + 380.6 = 428.1
-  assert.equal(calculateDisputeShare({ ...base, disputeAmount: 999 }), 428.1);
-});
-
-// ── Full-branch edges (unchanged) ──────────────────────────────────────────
-test("zero tip (full dispute)", () => {
-  assert.equal(calculateDisputeShare({ totalCharge: 1000, partsCost: 100, tipAmount: 0, sharePercent: 40, disputeAmount: 1000 }), 440);
-});
-
-test("zero parts (full dispute)", () => {
-  assert.equal(calculateDisputeShare({ totalCharge: 1000, partsCost: 0, tipAmount: 50, sharePercent: 40, disputeAmount: 1000 }), 410);
-});
-
-test("technician percentages 25 / 30 / 32.5 / 35 / 40 (full), computed independently", () => {
-  const full = { ...base, disputeAmount: 1000 };
-  assert.equal(calculateDisputeShare({ ...full, sharePercent: 25 }), 350);
-  assert.equal(calculateDisputeShare({ ...full, sharePercent: 30 }), 390);
-  assert.equal(calculateDisputeShare({ ...full, sharePercent: 32.5 }), 410);
-  assert.equal(calculateDisputeShare({ ...full, sharePercent: 35 }), 430);
-  assert.equal(calculateDisputeShare({ ...full, sharePercent: 40 }), 470);
-});
-
-// ── Rounding / fees ────────────────────────────────────────────────────────
-test("decimals + rounding to two cents (full, 32.5%)", () => {
-  assert.equal(calculateDisputeShare({ totalCharge: 333.33, disputeAmount: 333.33, partsCost: 10.10, tipAmount: 5.05, sharePercent: 32.5 }), 113.14);
-});
-
-test("rounding half-up (partial above net tip)", () => {
-  // netTip 9.5; 9.5 + (123.45-9.5)*0.30 = 9.5 + 34.185 = 43.685 → 43.69
-  assert.equal(calculateDisputeShare({ totalCharge: 1000, disputeAmount: 123.45, partsCost: 0, tipAmount: 10, sharePercent: 30 }), 43.69);
-});
-
-test("cardFeePercent default (5) equals passing it explicitly", () => {
-  const i = { ...base, disputeAmount: 1000 };
-  assert.equal(calculateDisputeShare(i), calculateDisputeShare({ ...i, cardFeePercent: 5 }));
-});
-
-test("cardFeePercent override (0 → no fee), full dispute", () => {
-  assert.equal(calculateDisputeShare({ ...base, disputeAmount: 1000, cardFeePercent: 0 }), 490);
+test("company % is the residual (100 − provider − AM pool)", () => {
+  const a = computeDisputeAllocation({ ...spec, disputeAmount: 920, providerPercent: 45 });
+  assert.equal(a.companyPercent, 15);          // 100 − 45 − 40
+  assert.equal(a.companyCharge, 750 * 0.15);   // 112.5
+  assert.equal(a.providerCharge, 750 * 0.45);  // 337.5
 });

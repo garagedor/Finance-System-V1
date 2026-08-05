@@ -38,6 +38,9 @@ type DisputeRow = {
   totalPaid: number;
   totalAfterFee: number;
   collected?: number;
+  netTip?: number;
+  operationalProfit?: number;
+  partsLoss?: number;
   disputeType?: 'full' | 'partial';
   parts: number;
   netoTips: number;
@@ -68,6 +71,9 @@ type RefundRow = {
   totalPaid: number;
   totalAfterFee: number;
   collected?: number;
+  netTip?: number;
+  operationalProfit?: number;
+  partsLoss?: number;
   disputeType?: 'full' | 'partial';
   parts: number;
   netoTips: number;
@@ -362,13 +368,15 @@ export default function ReportPage() {
     { key: 'totalPaid', label: 'Total Paid', format: 'currency' },
     { key: 'totalAfterFee', label: 'Total After Fee', format: 'currency' },
     { key: 'collected', label: 'Collected', format: 'currency' },
+    { key: 'netTip', label: 'Net Tip', format: 'currency' },
+    { key: 'operationalProfit', label: 'Op. Profit', format: 'currency' },
     { key: 'parts', label: 'Parts', format: 'currency' },
     { key: 'netoTips', label: 'Neto Tips', format: 'currency' },
     { key: 'disputed', label: 'Disputed', format: 'currency' },
     { key: 'disputeType', label: 'Type' },
-    { key: 'locationManagerShare', label: 'AM Share (40%)', format: 'currency' },
+    { key: 'locationManagerShare', label: 'AM Ledger', format: 'currency' },
     {
-      key: 'techShare', label: 'Tech Chargeback (info)', format: 'currency',
+      key: 'techShare', label: 'Technician Portion', format: 'currency',
       // Informational only — does NOT reduce the AM's recovery. Shows how
       // much of the AM's 40% notionally belongs to the technician based on
       // their configured profitPercent. Appends a "SUB" pill when techPct
@@ -397,13 +405,15 @@ export default function ReportPage() {
       ),
     },
     {
-      key: 'amNetPortion', label: 'AM Net (info)', format: 'currency',
+      key: 'amNetPortion', label: 'AM Own Portion', format: 'currency',
       // Informational only — AM Share minus the tech's notional cut.
       render: (r: DisputeRow | RefundRow) => (
         <span style={{ opacity: 0.85 }}>{formatCurrency(r.amNetPortion ?? 0)}</span>
       ),
     },
-    { key: 'providerShare', label: 'Provider Share', format: 'currency' },
+    { key: 'providerShare', label: 'Provider Charge', format: 'currency' },
+    { key: 'companyShare', label: 'Company Charge', format: 'currency' },
+    { key: 'partsLoss', label: 'Parts Loss', format: 'currency' },
   ];
 
   const refundColumns = [
@@ -415,14 +425,16 @@ export default function ReportPage() {
     { key: 'totalPaid', label: 'Total Paid', format: 'currency' },
     { key: 'totalAfterFee', label: 'Total After Fee', format: 'currency' },
     { key: 'collected', label: 'Collected', format: 'currency' },
+    { key: 'netTip', label: 'Net Tip', format: 'currency' },
+    { key: 'operationalProfit', label: 'Op. Profit', format: 'currency' },
     { key: 'parts', label: 'Parts', format: 'currency' },
     { key: 'netoTips', label: 'Neto Tips', format: 'currency' },
     { key: 'refunded', label: 'Refunded', format: 'currency' },
     { key: 'reason', label: 'Reason' },
     { key: 'disputeType', label: 'Type' },
-    { key: 'locationManagerShare', label: 'AM Share (40%)', format: 'currency' },
+    { key: 'locationManagerShare', label: 'AM Ledger', format: 'currency' },
     {
-      key: 'techShare', label: 'Tech Chargeback (info)', format: 'currency',
+      key: 'techShare', label: 'Technician Portion', format: 'currency',
       // Informational only — does NOT reduce the AM's recovery. Shows how
       // much of the AM's 40% notionally belongs to the technician based on
       // their configured profitPercent. Appends a "SUB" pill when techPct
@@ -451,13 +463,15 @@ export default function ReportPage() {
       ),
     },
     {
-      key: 'amNetPortion', label: 'AM Net (info)', format: 'currency',
+      key: 'amNetPortion', label: 'AM Own Portion', format: 'currency',
       // Informational only — AM Share minus the tech's notional cut.
       render: (r: DisputeRow | RefundRow) => (
         <span style={{ opacity: 0.85 }}>{formatCurrency(r.amNetPortion ?? 0)}</span>
       ),
     },
-    { key: 'providerShare', label: 'Provider Share', format: 'currency' },
+    { key: 'providerShare', label: 'Provider Charge', format: 'currency' },
+    { key: 'companyShare', label: 'Company Charge', format: 'currency' },
+    { key: 'partsLoss', label: 'Parts Loss', format: 'currency' },
   ];
 
   const providerColumns = [
@@ -468,7 +482,9 @@ export default function ReportPage() {
     { key: 'totalFees', label: 'Total Fees', format: 'currency' },
     { key: 'totalParts', label: 'Total Parts', format: 'currency' },
     { key: 'totalProfit', label: 'Total Profit', format: 'currency' },
-    { key: 'providerShare', label: 'Provider Share', format: 'currency' },
+    { key: 'providerShare', label: 'Provider Charge', format: 'currency' },
+    { key: 'companyShare', label: 'Company Charge', format: 'currency' },
+    { key: 'partsLoss', label: 'Parts Loss', format: 'currency' },
   ];
 
   const activeColumns =

@@ -1,20 +1,17 @@
-// Turns a CRM job + a dispute/refund amount into the full charge breakdown,
-// using the authoritative dispute-share engine (src/lib/dispute-share.ts).
+// Maps a CRM job + a dispute/refund into the full allocation, using the
+// authoritative engine (src/lib/dispute-share.ts → computeDisputeAllocation).
 //
-// Field mapping (verified against the existing job calculations 2026-08-05):
-//   totalCharge (G) = totalAmount + tips        (totalAmount is BEFORE tip;
-//                     falls back to the payment-method buckets if totalAmount
-//                     is missing — see api/refunds/route.ts jobTotal())
-//   partsCost  (I) = techParts + companyParts + lmParts   (all real parts costs)
-//   tipAmount  (J) = tipsCard + tipsFinance + tipsCompanyCash + tipsCheck
+// Field mapping (verified against the existing job calculations):
+//   jobAmount (excl tip) = totalAmount   (falls back to the payment buckets;
+//                          totalAmount is stored BEFORE tip)
+//   grossTip             = tipsCard + tipsFinance + tipsCompanyCash + tipsCheck
+//   partsCost            = techParts + companyParts + lmParts
 //
-// The Area Manager charge is the amount actually posted to the AM's ledger.
-// The technician figure is INFORMATIONAL only (same formula, tech's %), so the
-// AM can see how much of the loss should be charged internally to the tech.
-// Provider is intentionally NOT computed here (awaiting its own sheet formula).
+// The AM ledger charge = technicianPortion + areaManagerOwnPortion. The report
+// shows every party (provider/tech/AM-own/company) + parts loss.
 
 import type { JobRow } from "@/types/job";
-import { calculateDisputeShare, disputeShareDetailed, type DisputeShareBranch, type DisputeType as ShareDisputeType } from "./dispute-share.ts";
+import { computeDisputeAllocation, type DisputeType } from "./dispute-share.ts";
 
 const n = (v: unknown): number => {
   if (v == null || v === "") return 0;
@@ -22,51 +19,49 @@ const n = (v: unknown): number => {
   return Number.isFinite(x) ? x : 0;
 };
 
-export type DisputeType = "dispute" | "refund";
+export type DisputeKind = "dispute" | "refund";
 
 export type JobDisputeInputs = {
-  /** G — total job amount including tip. */
-  totalCharge: number;
-  /** I — consolidated parts cost. */
+  /** Job Amount, excluding tip. */
+  jobAmount: number;
+  /** Gross tip. */
+  grossTip: number;
+  /** Consolidated parts cost. */
   partsCost: number;
-  /** J — consolidated tip. */
-  tipAmount: number;
-  /** Audit: how each consolidated input was derived. */
   sources: {
-    totalCharge: "totalAmount+tips" | "paymentBuckets+tips";
+    jobAmount: "totalAmount" | "paymentBuckets";
+    grossTip: "tipsCard+tipsFinance+tipsCompanyCash+tipsCheck";
     partsCost: "techParts+companyParts+lmParts";
-    tipAmount: "tipsCard+tipsFinance+tipsCompanyCash+tipsCheck";
   };
 };
 
-/** Derive the Sheet's total-incl-tip / parts / tip inputs from a job row. */
+/** Derive Job Amount (excl tip) / gross tip / parts from a job row. */
 export function jobDisputeInputs(job: Partial<JobRow>): JobDisputeInputs {
-  const tipAmount =
+  const grossTip =
     n(job.tipsCard) + n(job.tipsFinance) + n(job.tipsCompanyCash) + n(job.tipsCheck);
   const partsCost = n(job.techParts) + n(job.companyParts) + n(job.lmParts);
 
   const totalAmount = n(job.totalAmount);
-  let base: number;
-  let totalSource: JobDisputeInputs["sources"]["totalCharge"];
+  let jobAmount: number;
+  let jobSource: JobDisputeInputs["sources"]["jobAmount"];
   if (totalAmount > 0) {
-    base = totalAmount;
-    totalSource = "totalAmount+tips";
+    jobAmount = totalAmount;
+    jobSource = "totalAmount";
   } else {
-    // Fallback matches api/refunds jobTotal(): payment buckets, before tip.
-    base =
+    jobAmount =
       n(job.totalPaidCard) + n(job.totalPaidCompanyCheck) + n(job.totalPaidFinance) +
       n(job.totalPaidCompanyCash) + n(job.techPaidCash) + n(job.lmCash) + n(job.lmCheck);
-    totalSource = "paymentBuckets+tips";
+    jobSource = "paymentBuckets";
   }
 
   return {
-    totalCharge: base + tipAmount,
+    jobAmount,
+    grossTip,
     partsCost,
-    tipAmount,
     sources: {
-      totalCharge: totalSource,
+      jobAmount: jobSource,
+      grossTip: "tipsCard+tipsFinance+tipsCompanyCash+tipsCheck",
       partsCost: "techParts+companyParts+lmParts",
-      tipAmount: "tipsCard+tipsFinance+tipsCompanyCash+tipsCheck",
     },
   };
 }
@@ -74,79 +69,92 @@ export function jobDisputeInputs(job: Partial<JobRow>): JobDisputeInputs {
 export type ComputeDisputeChargeInput = {
   job: Partial<JobRow>;
   disputeAmount: number;
-  type: DisputeType;
-  /** Area Manager share % — Location.managerProfitPercent (normally 40). */
-  areaManagerPercent: number;
-  /** Technician effective % — finance override dispute_pct ?? Technician.profitPercent. */
-  technicianEffectivePercent: number;
+  type: DisputeKind;
+  technicianPercent: number;
+  providerPercent: number;
+  areaManagerPoolPercent: number;
   cardFeePercent?: number;
   sourceJobId?: string;
   sourceRecordId?: string;
 };
 
-/** The complete calculation snapshot to store on the dispute/refund + ledger. */
+/** Complete calculation snapshot stored on the dispute/refund + ledger entry. */
 export type DisputeChargeSnapshot = {
-  type: DisputeType;
-  totalCharge: number;
-  disputeOrRefundAmount: number;
+  type: DisputeKind;
+  // Inputs / derived (report + audit).
+  jobAmount: number;
+  grossTip: number;
+  netTip: number;
+  netJob: number;
+  totalCollected: number;
   partsCost: number;
-  tipAmount: number;
+  operationalProfit: number;
+  disputeOrRefundAmount: number;
   cardFeePercent: number;
-  areaManagerPercent: number;
-  technicianEffectivePercent: number;
-  /** The amount actually posted to the Area Manager ledger. */
-  areaManagerCharge: number;
-  /** Informational — the technician's share, same formula, tech %. */
-  technicianChargebackInfo: number;
-  /** areaManagerCharge − technicianChargebackInfo. */
-  areaManagerOwnPortionInfo: number;
-  /** Business classification for UI/report: "full" | "partial". */
-  disputeClassification: ShareDisputeType;
-  /** Audit sub-branch: "full" | "partial_within_tip" | "partial_above_tip". */
-  calculationBranch: DisputeShareBranch;
+  technicianPercent: number;
+  providerPercent: number;
+  areaManagerPoolPercent: number;
+  companyPercent: number;
+  // Recovery + classification.
+  tipRecovered: number;
+  operationalRecovered: number;
+  partsLoss: number;
+  reachesParts: boolean;
+  disputeClassification: DisputeType;
+  // Party charges.
+  providerCharge: number;
+  technicianPortion: number;
+  areaManagerOwnPortion: number;
+  companyCharge: number;
+  /** Posted to the AM ledger = technicianPortion + areaManagerOwnPortion. */
+  amLedgerCharge: number;
+  // Provenance.
   sourceJobId: string | null;
   sourceDisputeOrRefundId: string | null;
   inputSources: JobDisputeInputs["sources"];
   computedAt: string;
 };
 
-const round2 = (x: number) => Math.round(x * 100) / 100;
-
-/** Compute the AM charge + technician informational figure + full snapshot. */
 export function computeDisputeCharge(input: ComputeDisputeChargeInput): DisputeChargeSnapshot {
   const cardFeePercent = input.cardFeePercent ?? 5;
-  const { totalCharge, partsCost, tipAmount, sources } = jobDisputeInputs(input.job);
+  const { jobAmount, grossTip, partsCost, sources } = jobDisputeInputs(input.job);
 
-  const shared = {
-    totalCharge,
-    disputeAmount: input.disputeAmount,
+  const a = computeDisputeAllocation({
+    jobAmount,
+    grossTip,
     partsCost,
-    tipAmount,
+    disputeAmount: input.disputeAmount,
+    technicianPercent: input.technicianPercent,
+    providerPercent: input.providerPercent,
+    areaManagerPoolPercent: input.areaManagerPoolPercent,
     cardFeePercent,
-  };
-
-  const am = disputeShareDetailed({ ...shared, sharePercent: input.areaManagerPercent });
-  const areaManagerCharge = am.amount;
-  // Technician figure — SAME formula, run independently with the tech's %.
-  const technicianChargebackInfo = calculateDisputeShare({
-    ...shared,
-    sharePercent: input.technicianEffectivePercent,
   });
 
   return {
     type: input.type,
-    totalCharge,
-    disputeOrRefundAmount: input.disputeAmount,
+    jobAmount,
+    grossTip,
+    netTip: a.netTip,
+    netJob: a.netJob,
+    totalCollected: a.totalCollected,
     partsCost,
-    tipAmount,
+    operationalProfit: a.operationalProfit,
+    disputeOrRefundAmount: input.disputeAmount,
     cardFeePercent,
-    areaManagerPercent: input.areaManagerPercent,
-    technicianEffectivePercent: input.technicianEffectivePercent,
-    areaManagerCharge,
-    technicianChargebackInfo,
-    areaManagerOwnPortionInfo: round2(areaManagerCharge - technicianChargebackInfo),
-    disputeClassification: am.disputeType,
-    calculationBranch: am.branch,
+    technicianPercent: input.technicianPercent,
+    providerPercent: input.providerPercent,
+    areaManagerPoolPercent: input.areaManagerPoolPercent,
+    companyPercent: a.companyPercent,
+    tipRecovered: a.tipRecovered,
+    operationalRecovered: a.operationalRecovered,
+    partsLoss: a.partsLoss,
+    reachesParts: a.reachesParts,
+    disputeClassification: a.disputeType,
+    providerCharge: a.providerCharge,
+    technicianPortion: a.technicianPortion,
+    areaManagerOwnPortion: a.areaManagerOwnPortion,
+    companyCharge: a.companyCharge,
+    amLedgerCharge: a.amLedgerCharge,
     sourceJobId: input.sourceJobId ?? null,
     sourceDisputeOrRefundId: input.sourceRecordId ?? null,
     inputSources: sources,

@@ -1,105 +1,117 @@
-// Dispute / refund cost-share calculation.
+// Dispute / refund allocation engine — the SINGLE SOURCE OF TRUTH.
 //
-// Authoritative business logic from the owner's Google Sheet (replaces the app's
-// earlier incorrect `gross × pct`). Computes how much of a disputed/refunded
-// charge a given party (at a given profit-share %) is liable for.
+// (Supersedes every earlier dispute formula in this project. Spec: the owner's
+// "Final Dispute & Refund Calculation Specification".)
 //
-// Classification (corrected): there are only TWO business dispute types —
-//   • FULL     — the entire amount COLLECTED from the customer is disputed
-//                (collected = job amount + tip = totalCharge). i.e.
-//                disputeAmount >= collectedAmount.
-//   • PARTIAL  — disputeAmount < collectedAmount. The tip is recovered first.
+// Model
+// ─────
+// A job has a Job Amount (excl tip) and a Gross Tip. A 5% card fee is deducted
+// from BOTH:  netJob = job × 0.95,  netTip = tip × 0.95. The technician actually
+// receives the NET tip. Operational Profit comes only from the job:
+//   operationalProfit = netJob − parts
 //
-// The tip does NOT create a third type. A PARTIAL dispute first recovers the
-// NET tip the technician actually received (netTip = tip × cardNet, 100% of it);
-// any dispute amount ABOVE the net tip is treated as a JOB dispute and allocated
-// by the party's %. Two audit sub-branches (both display/report as "Partial"):
-//   • partial_within_tip — disputeAmount <= netTip → charge = disputeAmount
-//   • partial_above_tip  — disputeAmount >  netTip →
-//                          netTip + (disputeAmount − netTip) × share
-// The card fee is NOT distributed separately — the excess above the net tip
-// simply follows the normal percentage allocation.
+// Operational Profit is split by percentage:
+//   Provider = provider%,  Area-Manager pool = 40% (Tech% inside it, AM-own =
+//   40% − Tech%),  Company = the residual (100 − provider% − 40%).
 //
-// FULL charge (card fee on the whole charge; parts + tip removed before the %,
-// then added back in full):
-//   (totalCharge × cardNet − parts − tip) × share + parts + tip
+// A dispute is FULL when disputeAmount >= totalCollected (job + gross tip),
+// otherwise PARTIAL. Every dispute recovers in this order:
+//   1. the NET tip (100% technician side),
+//   2. Operational Profit (split by the percentages),
+//   3. Parts loss — the excess that eats into parts — which is 100% the
+//      TECHNICIAN's, never shared with provider / AM / company.
 //
-// Rounding: intermediates are NOT rounded (to match Google Sheets); only the
-// final result is rounded to two decimals.
+// AM Ledger charge (what the company settles with the AM) = Technician Portion
+// + Area-Manager Own Portion. Only final values are rounded to two decimals.
 
-export type DisputeShareInput = {
-  /** G — total job amount, including tip. This IS the "collected" amount. */
-  totalCharge: number;
-  /** H — the disputed / refunded amount. */
-  disputeAmount: number;
-  /** I — parts cost. */
+export type DisputeType = "full" | "partial";
+
+export type DisputeAllocationInput = {
+  /** Job Amount, EXCLUDING tip. */
+  jobAmount: number;
+  /** Gross tip (before card fee). */
+  grossTip: number;
+  /** Parts cost. */
   partsCost: number;
-  /** J — tip amount. */
-  tipAmount: number;
-  /** The party's share percentage (e.g. 40 for an Area Manager, or the tech's %). */
-  sharePercent: number;
-  /** Card processing fee percentage. Default 5 (→ 0.95 net). */
+  /** Dispute / refund amount. */
+  disputeAmount: number;
+  /** Technician % (0–100) — override dispute_pct ?? Technician.profitPercent. */
+  technicianPercent: number;
+  /** Provider % (0–100) — Provider.profitPercent. */
+  providerPercent: number;
+  /** Area-Manager pool % (0–100) — Location.managerProfitPercent (normally 40). */
+  areaManagerPoolPercent: number;
+  /** Card processing fee % (default 5). */
   cardFeePercent?: number;
 };
 
-/** Business classification (UI/report). */
-export type DisputeType = "full" | "partial";
-
-/** Audit sub-branch. Both partial_* report as "partial". */
-export type DisputeShareBranch = "full" | "partial_within_tip" | "partial_above_tip";
-
-export type DisputeShareResult = {
-  /** Final liability, rounded to two decimals. */
-  amount: number;
-  /** Business type shown in UI/report. */
+export type DisputeAllocation = {
+  // Derived amounts (for the report + audit snapshot).
+  netTip: number;
+  netJob: number;
+  totalCollected: number;
+  operationalProfit: number;
+  // Recovery breakdown.
+  tipRecovered: number;
+  operationalRecovered: number;
+  partsLoss: number;
+  reachesParts: boolean;
   disputeType: DisputeType;
-  /** Audit sub-branch. */
-  branch: DisputeShareBranch;
-  /** Echo of the effective rates used, for the stored calculation snapshot. */
-  shareRate: number;
-  cardNetRate: number;
+  companyPercent: number;
+  // Party charges (rounded).
+  providerCharge: number;
+  technicianPortion: number;
+  areaManagerOwnPortion: number;
+  companyCharge: number;
+  /** The amount posted to the AM ledger = technicianPortion + areaManagerOwnPortion. */
+  amLedgerCharge: number;
 };
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
-/** Full result incl. type + branch + the rates used — used for snapshots/UI. */
-export function disputeShareDetailed({
-  totalCharge,
-  disputeAmount,
-  partsCost,
-  tipAmount,
-  sharePercent,
-  cardFeePercent = 5,
-}: DisputeShareInput): DisputeShareResult {
-  const shareRate = sharePercent / 100;
-  const cardNetRate = 1 - cardFeePercent / 100;
-  // The amount actually collected from the customer = job amount + tip.
-  const collectedAmount = totalCharge;
+export function computeDisputeAllocation(i: DisputeAllocationInput): DisputeAllocation {
+  const cardNet = 1 - (i.cardFeePercent ?? 5) / 100;
 
-  let amount: number;
-  let branch: DisputeShareBranch;
-  let disputeType: DisputeType;
+  const netTip = i.grossTip * cardNet;
+  const netJob = i.jobAmount * cardNet;
+  const operationalProfit = Math.max(0, netJob - i.partsCost);
+  const totalCollected = i.jobAmount + i.grossTip;
+  const disputeType: DisputeType = i.disputeAmount >= totalCollected ? "full" : "partial";
 
-  if (disputeAmount >= collectedAmount) {
-    // FULL — the whole collected amount is disputed.
-    amount = (totalCharge * cardNetRate - partsCost - tipAmount) * shareRate + partsCost + tipAmount;
-    branch = "full";
-    disputeType = "full";
-  } else {
-    // PARTIAL — recover the NET tip the technician actually received first, then
-    // allocate any excess above the net tip by the party's %.
-    const netTip = tipAmount * cardNetRate;
-    const recoveredTip = Math.min(disputeAmount, netTip);
-    const remaining = Math.max(0, disputeAmount - netTip);
-    amount = recoveredTip + remaining * shareRate;
-    branch = disputeAmount <= netTip ? "partial_within_tip" : "partial_above_tip";
-    disputeType = "partial";
-  }
+  // Recover net tip → operational profit → parts loss, in that order.
+  const tipRecovered = Math.min(i.disputeAmount, netTip);
+  const remaining = Math.max(0, i.disputeAmount - netTip);
+  const operationalRecovered = Math.min(remaining, operationalProfit);
+  const partsLoss = Math.min(Math.max(0, remaining - operationalProfit), i.partsCost);
 
-  return { amount: round2(amount), disputeType, branch, shareRate, cardNetRate };
-}
+  const techRate = i.technicianPercent / 100;
+  const providerRate = i.providerPercent / 100;
+  const amPoolRate = i.areaManagerPoolPercent / 100;
+  const companyPercent = Math.max(0, 100 - i.providerPercent - i.areaManagerPoolPercent);
+  const companyRate = companyPercent / 100;
 
-/** The party's dispute/refund liability, rounded to two decimals. */
-export function calculateDisputeShare(input: DisputeShareInput): number {
-  return disputeShareDetailed(input).amount;
+  // Provider / company only touch operational profit. Parts loss is 100% tech.
+  const providerCharge = operationalRecovered * providerRate;
+  const technicianPortion = tipRecovered + operationalRecovered * techRate + partsLoss;
+  const areaManagerOwnPortion = operationalRecovered * (amPoolRate - techRate);
+  const companyCharge = operationalRecovered * companyRate;
+  const amLedgerCharge = technicianPortion + areaManagerOwnPortion;
+
+  return {
+    netTip: round2(netTip),
+    netJob: round2(netJob),
+    totalCollected: round2(totalCollected),
+    operationalProfit: round2(operationalProfit),
+    tipRecovered: round2(tipRecovered),
+    operationalRecovered: round2(operationalRecovered),
+    partsLoss: round2(partsLoss),
+    reachesParts: partsLoss > 0,
+    disputeType,
+    companyPercent,
+    providerCharge: round2(providerCharge),
+    technicianPortion: round2(technicianPortion),
+    areaManagerOwnPortion: round2(areaManagerOwnPortion),
+    companyCharge: round2(companyCharge),
+    amLedgerCharge: round2(amLedgerCharge),
+  };
 }
