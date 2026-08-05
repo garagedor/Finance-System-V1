@@ -150,6 +150,15 @@ export interface ScanpayRefundRecord {
   postedRecordId: string | null;   // finance_refund _id
   ledgerEntryId: string | null;
 
+  // Engine-computed loss allocation (dry-run; based on the original payment
+  // amount at sync, refined to the actual refunded amount on confirm).
+  computedShare?: ScanpayComputedShare | null;
+  computeError?: string | null;
+
+  // Charge tracking — parties charged their slices for this refund (manual).
+  chargedAt?: string | null;
+  chargedBy?: string | null;
+
   raw: ScanpayRefundRaw;
   synced_at: string;
   updated_at: string;

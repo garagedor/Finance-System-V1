@@ -196,6 +196,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
                         suggestedLabel={best?.address ?? null}
                         originalAmount={r.originalAmount}
                         paymentDate={r.paymentDate}
+                        chargedAt={r.chargedAt ?? null}
                       />
                     </td>
                   </tr>

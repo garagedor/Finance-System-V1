@@ -9,7 +9,7 @@ const money = (n: number) => `$${(Math.round(n * 100) / 100).toLocaleString(unde
 const dayOf = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10));
 
 export default function ScanpayRefundRowActions({
-  id, matchStatus, suggestedJobId, suggestedLabel, originalAmount, paymentDate,
+  id, matchStatus, suggestedJobId, suggestedLabel, originalAmount, paymentDate, chargedAt,
 }: {
   id: string;
   matchStatus: string;
@@ -17,6 +17,7 @@ export default function ScanpayRefundRowActions({
   suggestedLabel: string | null;
   originalAmount: number;
   paymentDate: string | null;
+  chargedAt: string | null;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -70,7 +71,26 @@ export default function ScanpayRefundRowActions({
     await simple({ action: "confirm", jobId, amount: a, date });
   }
 
-  if (matchStatus === "posted") return <span className="muted small">✓ posted</span>;
+  const chargedToggle = (
+    <button
+      className={`portal-btn ${chargedAt ? "portal-btn-primary" : "portal-btn-ghost"}`}
+      style={{ padding: "4px 10px", fontSize: 11 }}
+      disabled={busy}
+      title={chargedAt ? `Charged ${chargedAt} — click to unmark` : "Mark the parties charged their slices"}
+      onClick={() => simple({ action: chargedAt ? "uncharge" : "charge" })}
+    >
+      {chargedAt ? "✅ Charged" : "Mark charged"}
+    </button>
+  );
+
+  if (matchStatus === "posted") {
+    return (
+      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+        <span className="muted small">✓ posted</span>
+        {chargedToggle}
+      </div>
+    );
+  }
   if (matchStatus === "ignored") {
     return <button className="portal-btn" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy} onClick={() => simple({ action: "reopen" })}>Restore</button>;
   }
@@ -79,6 +99,7 @@ export default function ScanpayRefundRowActions({
     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
       <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setOpen(true)}>Confirm & post</button>
       <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy} onClick={() => simple({ action: "ignore" })}>Ignore</button>
+      {chargedToggle}
 
       {open && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 50, overflowY: "auto" }}

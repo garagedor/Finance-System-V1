@@ -300,6 +300,51 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </>
       )}
 
+      {/* ─── Refunds by provider / technician / area manager (from ScanPay) ─── */}
+      {d.refundBreakdownCount > 0 && (
+        <>
+          <section className="portal-grid-2">
+            <Kpi label="Refunds (this period)" value={d.refundBreakdownCount.toLocaleString()} sub="issued in range" />
+            <Kpi label="Total refunded" value={fmt$(d.refundBreakdownTotal)} sub="returned to customers" tone="down" />
+          </section>
+
+          <section className="portal-grid-3">
+            {([
+              { title: "Refunds by Provider", rows: d.refundsByProvider },
+              { title: "Refunds by Technician", rows: d.refundsByTechnician },
+              { title: "Refunds by Area Manager", rows: d.refundsByAreaManager },
+            ]).map((tbl) => (
+              <div key={tbl.title} className="portal-card" style={{ padding: 0 }}>
+                <div className="portal-card-head">
+                  <div className="portal-card-head-title">{tbl.title}</div>
+                  <Link href="/portal/disputes/scanpay/refunds" className="portal-card-head-sub" style={{ color: "#818cf8" }}>All →</Link>
+                </div>
+                <div style={{ padding: "12px 14px" }}>
+                  {tbl.rows.length === 0 ? (
+                    <div className="portal-empty">No refunds.</div>
+                  ) : (
+                    tbl.rows.slice(0, 6).map((g) => (
+                      <div key={g.name} style={{ padding: "8px 4px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+                          <span style={{ fontWeight: 500 }}>{g.name}</span>
+                          <span className="money" style={{ fontWeight: 600 }}>{fmt$(g.share)}</span>
+                        </div>
+                        <div className="portal-bar" title={`${g.share > 0 ? Math.round((g.charged / g.share) * 100) : 0}% charged`}>
+                          <div className="portal-bar-fill" style={{ width: `${g.share > 0 ? Math.round((g.charged / g.share) * 100) : 0}%` }} />
+                        </div>
+                        <div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3 }}>
+                          {g.count} refund · <span className="money-pos">charged {fmt$(g.charged)}</span> · <span className="money-neg">left {fmt$(g.toCharge)}</span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
+
       {/* ─── Bank activity (Plaid) ─── */}
       {d.bankAccounts.length > 0 && (
         <>

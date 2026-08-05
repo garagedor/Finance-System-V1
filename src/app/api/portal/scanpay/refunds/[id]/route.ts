@@ -34,6 +34,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     await sc.updateOne({ _id: id }, { $set: { matchStatus: next, updated_at: new Date().toISOString() } });
     return NextResponse.json({ ok: true, matchStatus: next });
   }
+  if (action === "charge") {
+    const chargedAt = body.date ? String(body.date) : new Date().toISOString().slice(0, 10);
+    await sc.updateOne({ _id: id }, { $set: { chargedAt, chargedBy: session.name, updated_at: new Date().toISOString() } });
+    return NextResponse.json({ ok: true, chargedAt });
+  }
+  if (action === "uncharge") {
+    await sc.updateOne({ _id: id }, { $set: { chargedAt: null, chargedBy: null, updated_at: new Date().toISOString() } });
+    return NextResponse.json({ ok: true, chargedAt: null });
+  }
   if (action !== "confirm") {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
@@ -70,6 +79,16 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       refundDate: date,
       postedRecordId: result.recordId,
       ledgerEntryId: result.ledgerEntryId,
+      // Refine the allocation to the actual refunded amount.
+      computedShare: {
+        providerCharge: result.snapshot.providerCharge,
+        technicianPortion: result.snapshot.technicianPortion,
+        areaManagerOwnPortion: result.snapshot.areaManagerOwnPortion,
+        companyCharge: result.snapshot.companyCharge,
+        amLedgerCharge: result.snapshot.amLedgerCharge,
+        partsLoss: result.snapshot.partsLoss,
+      },
+      computeError: null,
       updated_at: new Date().toISOString(),
     },
   });
