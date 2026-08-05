@@ -33,7 +33,8 @@ export async function enrichJobs(jobIds: (string | null | undefined)[]): Promise
 
   const jobs = await db.collection("Job")
     .find({ $or: or })
-    .project({ provider: 1, tech: 1, location: 1, totalAmount: 1, tipsCard: 1, tipsFinance: 1, tipsCompanyCash: 1, tipsCheck: 1 })
+    .project({ provider: 1, tech: 1, location: 1, totalAmount: 1, tipsCard: 1, tipsFinance: 1, tipsCompanyCash: 1, tipsCheck: 1,
+      totalPaidCard: 1, totalPaidCompanyCheck: 1, totalPaidFinance: 1, totalPaidCompanyCash: 1, techPaidCash: 1, lmCash: 1, lmCheck: 1 })
     .toArray();
 
   const locNames = [...new Set(jobs.map((j) => j.location).filter(Boolean))] as string[];
@@ -49,6 +50,11 @@ export async function enrichJobs(jobIds: (string | null | undefined)[]): Promise
 
   for (const j of jobs) {
     const tips = num(j.tipsCard) + num(j.tipsFinance) + num(j.tipsCompanyCash) + num(j.tipsCheck);
+    // Job amount = totalAmount, else the payment buckets (matches jobDisputeInputs).
+    const ta = num(j.totalAmount);
+    const jobAmount = ta > 0 ? ta
+      : num(j.totalPaidCard) + num(j.totalPaidCompanyCheck) + num(j.totalPaidFinance)
+        + num(j.totalPaidCompanyCash) + num(j.techPaidCash) + num(j.lmCash) + num(j.lmCheck);
     const areaManager = j.location ? (amMap.get(j.location) ?? null) : null;
     map.set(String(j._id), {
       provider: j.provider ?? null,
@@ -56,7 +62,7 @@ export async function enrichJobs(jobIds: (string | null | undefined)[]): Promise
       location: j.location ?? null,
       areaManager,
       areaManagerMissing: !!j.location && !areaManager,
-      collected: num(j.totalAmount) + tips,
+      collected: jobAmount + tips,
     });
   }
   return map;
