@@ -4,6 +4,7 @@ import { fetchScanpayDisputes, parseAmount, parseScanpayDate, normalizeOutcome }
 import { matchDispute } from "./match";
 import { postDisputeCharge } from "@/lib/dispute-service";
 import { shareFromSnapshot } from "./share";
+import { upsertCrmDispute } from "./crm-dispute";
 import type { ScanpayDisputeRaw, ScanpayDisputeRecord, ScanpayComputedShare } from "@/types/scanpay";
 
 // Dry-run the shared engine for a matched dispute → its loss allocation
@@ -80,13 +81,18 @@ export async function syncScanpayDisputes(): Promise<ScanpaySyncSummary> {
 // Incremental sync for the scheduled cron: fully process only BRAND-NEW disputes
 // (match + share) and lightly refresh existing ones' status/outcome. Fast — it
 // avoids re-matching the whole inbox every run.
-export async function syncNewScanpayDisputes(): Promise<{ fetched: number; created: number; refreshed: number }> {
+export async function syncNewScanpayDisputes(): Promise<{ fetched: number; created: number; refreshed: number; statusSynced: number }> {
   await ensureFinanceIndexes();
   const c = coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute);
   const list = await fetchScanpayDisputes();
   const now = new Date().toISOString();
   const existing = new Set(await c.find({}, { projection: { _id: 1 } }).map((d) => d._id).toArray());
-  let created = 0, refreshed = 0;
+  // verified/posted disputes are mirrored to the CRM report — keep those rows'
+  // status in sync too, so a Needs Response → Lost/Won change flows through.
+  const vp = await c.find({ matchStatus: { $in: ["verified", "posted"] } }, { projection: { _id: 1, matchedJobId: 1 } }).toArray();
+  const vpJob = new Map(vp.map((r) => [r._id, r.matchedJobId]));
+
+  let created = 0, refreshed = 0, statusSynced = 0;
   for (const raw of list) {
     if (!existing.has(raw.disputeId)) {
       await upsertScanpayDispute(raw);
@@ -100,9 +106,19 @@ export async function syncNewScanpayDisputes(): Promise<{ fetched: number; creat
         updated_at: now,
       } });
       refreshed++;
+      const jobId = vpJob.get(raw.disputeId);
+      if (jobId) {
+        await upsertCrmDispute({
+          disputeId: raw.disputeId, jobId, amount: parseAmount(raw.amount),
+          disputedAt: parseScanpayDate(raw.disputedDate), statusRaw: raw.status,
+          outcome: normalizeOutcome(raw.status), resolvedAt: parseScanpayDate(raw.resultDate),
+          respondBy: raw.respondBy,
+        });
+        statusSynced++;
+      }
     }
   }
-  return { fetched: list.length, created, refreshed };
+  return { fetched: list.length, created, refreshed, statusSynced };
 }
 
 // Upsert a single dispute (match + compute share + preserve human decisions).
@@ -119,6 +135,14 @@ export async function upsertScanpayDispute(
   // Preserve human decisions — refresh only volatile fields.
   if (existing && (existing.matchStatus === "posted" || existing.matchStatus === "ignored" || existing.matchStatus === "verified" || existing.matchMethod === "manual")) {
     await c.updateOne({ _id: raw.disputeId }, { $set: { ...core } });
+    // Keep the CRM Disputes report row's status in sync for verified/posted.
+    if ((existing.matchStatus === "verified" || existing.matchStatus === "posted") && existing.matchedJobId) {
+      await upsertCrmDispute({
+        disputeId: raw.disputeId, jobId: existing.matchedJobId, amount: core.amount,
+        disputedAt: core.disputedAt, statusRaw: core.statusRaw, outcome: core.outcome,
+        resolvedAt: core.resolvedAt, respondBy: raw.respondBy,
+      });
+    }
     return { action: "preserved", matched: "preserved" };
   }
 
