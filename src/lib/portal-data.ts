@@ -259,7 +259,10 @@ async function disputeBreakdowns(range: DateWindow): Promise<{
 }> {
   const c = coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute);
   const all = await c.find({}).toArray();
+  // Only VERIFIED (human-confirmed match) and POSTED disputes appear on the
+  // report — auto-matched-but-unverified rows don't count until verified.
   const inRange = all.filter((r) => {
+    if (r.matchStatus !== "verified" && r.matchStatus !== "posted") return false;
     const d = r.disputedAt ? r.disputedAt.slice(0, 10) : "";
     return d && d >= range.from && d <= range.to;
   });

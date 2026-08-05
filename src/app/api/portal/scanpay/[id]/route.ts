@@ -53,6 +53,32 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ ok: true, chargedAt: null });
   }
 
+  // Verify — confirm the job match (visible on the dispute report) WITHOUT posting
+  // to the ledger. Recomputes the allocation for the (possibly re-picked) job.
+  if (action === "verify") {
+    const jobId = String(body.jobId ?? rec.matchedJobId ?? "").trim();
+    if (!jobId) return NextResponse.json({ error: "Select a job to verify against" }, { status: 400 });
+    const dry = await postDisputeCharge({ type: "dispute", jobId, amount: rec.amount, actor: session.name, dryRun: true });
+    const computedShare = dry.ok
+      ? { providerCharge: dry.snapshot.providerCharge, technicianPortion: dry.snapshot.technicianPortion,
+          areaManagerOwnPortion: dry.snapshot.areaManagerOwnPortion, companyCharge: dry.snapshot.companyCharge,
+          amLedgerCharge: dry.snapshot.amLedgerCharge, partsLoss: dry.snapshot.partsLoss }
+      : null;
+    await sc.updateOne({ _id: id }, { $set: {
+      matchStatus: "verified",
+      matchedJobId: jobId,
+      matchMethod: body.jobId && body.jobId !== rec.matchedJobId ? "manual" : (rec.matchMethod ?? "manual"),
+      computedShare,
+      computeError: dry.ok ? null : dry.error,
+      updated_at: new Date().toISOString(),
+    } });
+    return NextResponse.json({ ok: true, matchStatus: "verified" });
+  }
+  if (action === "unverify") {
+    await sc.updateOne({ _id: id }, { $set: { matchStatus: rec.matchedJobId ? "matched" : "new", updated_at: new Date().toISOString() } });
+    return NextResponse.json({ ok: true });
+  }
+
   if (action !== "confirm") {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }

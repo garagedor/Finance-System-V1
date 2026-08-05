@@ -38,7 +38,7 @@ export interface ScanpayDisputeRaw {
 }
 
 export type ScanpayOutcome = "won" | "lost" | "pending";
-export type ScanpayMatchStatus = "new" | "matched" | "posted" | "ignored";
+export type ScanpayMatchStatus = "new" | "matched" | "verified" | "posted" | "ignored";
 export type ScanpayMatchMethod = "invoice" | "fallback" | "manual";
 
 export interface ScanpayJobCandidate {

@@ -83,14 +83,31 @@ export default function ScanpayRowActions({
         onClick={() => act({ action: "reopen" })}>Restore</button>
     );
   }
+  // Verified — job confirmed + on the report; next step is Post (full process).
+  if (matchStatus === "verified") {
+    return (
+      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
+        {err && <span className="small" style={{ color: "#f87171", flexBasis: "100%", textAlign: "right" }}>{err}</span>}
+        <span className="muted small" style={{ color: "#34d399" }}>✔ verified</span>
+        <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
+          title={suggestedLabel ?? undefined} onClick={() => act({ action: "confirm", jobId: suggestedJobId ?? undefined })}>
+          Post → ledger
+        </button>
+        <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
+          onClick={() => act({ action: "unverify" })}>Unverify</button>
+        {chargedToggle}
+      </div>
+    );
+  }
 
+  // new / matched — first step is Verify (match the job; shows on the report).
   return (
     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
       {err && <span className="small" style={{ color: "#f87171", flexBasis: "100%", textAlign: "right" }}>{err}</span>}
       {suggestedJobId && (
         <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
-          title={suggestedLabel ?? undefined} onClick={() => act({ action: "confirm", jobId: suggestedJobId })}>
-          Confirm & post
+          title={suggestedLabel ?? undefined} onClick={() => act({ action: "verify", jobId: suggestedJobId })}>
+          Verify
         </button>
       )}
       <button className="portal-btn" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
@@ -128,7 +145,7 @@ export default function ScanpayRowActions({
                         <td className="right money">{money(j.collected)}</td>
                         <td className="right">
                           <button className="portal-btn portal-btn-primary" style={{ padding: "3px 8px", fontSize: 11 }} disabled={busy}
-                            onClick={() => act({ action: "confirm", jobId: j._id })}>Post</button>
+                            onClick={() => act({ action: "verify", jobId: j._id })}>Verify</button>
                         </td>
                       </tr>
                     ))}
