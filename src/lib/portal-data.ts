@@ -246,9 +246,11 @@ async function computeRefundImpact(range: DateWindow): Promise<{ loss: number; r
 
 // Dispute breakdowns for the owner: group the ScanPay disputes (filed in range)
 // by provider / technician / area manager — count, total disputed, won, lost,
-// and the engine-computed SHARE (that party's charge on the LOST disputes).
-// Provider / tech / AM come from each dispute's matched CRM job (enrichment);
-// the share comes from the dry-run snapshot stored at sync time (computedShare).
+// and the engine-computed SHARE each party is charged. Business rule: a party is
+// charged their slice when the dispute is FILED; if it's later WON we give the
+// slice back; if LOST the charge stays. So `share` sums the computed slice over
+// every dispute EXCEPT won ones (won = returned). Provider / tech / AM come from
+// each dispute's matched CRM job; the slice from the sync-time snapshot.
 export interface DisputeGroup { name: string; count: number; disputed: number; won: number; lost: number; share: number }
 
 async function disputeBreakdowns(range: DateWindow): Promise<{
@@ -270,8 +272,11 @@ async function disputeBreakdowns(range: DateWindow): Promise<{
   const bump = (m: Map<string, DisputeGroup>, key: string, amt: number, outcome: string, share: number) => {
     const g = m.get(key) ?? { name: key, count: 0, disputed: 0, won: 0, lost: 0, share: 0 };
     g.count++; g.disputed += amt;
-    if (outcome === "lost") { g.lost += amt; g.share += share; }
-    else if (outcome === "won") g.won += amt;
+    if (outcome === "won") g.won += amt;      // returned — not charged
+    else {
+      if (outcome === "lost") g.lost += amt;
+      g.share += share;                        // charged on filing (pending + lost)
+    }
     m.set(key, g);
   };
   for (const r of inRange) {
