@@ -38,6 +38,7 @@ type DisputeRow = {
   totalPaid: number;
   totalAfterFee: number;
   collected?: number;
+  grossTip?: number;
   netTip?: number;
   operationalProfit?: number;
   partsLoss?: number;
@@ -71,6 +72,7 @@ type RefundRow = {
   totalPaid: number;
   totalAfterFee: number;
   collected?: number;
+  grossTip?: number;
   netTip?: number;
   operationalProfit?: number;
   partsLoss?: number;
@@ -368,9 +370,9 @@ export default function ReportPage() {
     { key: 'totalPaid', label: 'Total Paid', format: 'currency' },
     { key: 'totalAfterFee', label: 'Total After Fee', format: 'currency' },
     { key: 'collected', label: 'Collected', format: 'currency' },
-    { key: 'netTip', label: 'Net Tip', format: 'currency' },
     { key: 'operationalProfit', label: 'Op. Profit', format: 'currency' },
     { key: 'parts', label: 'Parts', format: 'currency' },
+    { key: 'grossTip', label: 'Gross Tip', format: 'currency' },
     { key: 'netoTips', label: 'Neto Tips', format: 'currency' },
     { key: 'disputed', label: 'Disputed', format: 'currency' },
     { key: 'disputeType', label: 'Type' },
@@ -425,9 +427,9 @@ export default function ReportPage() {
     { key: 'totalPaid', label: 'Total Paid', format: 'currency' },
     { key: 'totalAfterFee', label: 'Total After Fee', format: 'currency' },
     { key: 'collected', label: 'Collected', format: 'currency' },
-    { key: 'netTip', label: 'Net Tip', format: 'currency' },
     { key: 'operationalProfit', label: 'Op. Profit', format: 'currency' },
     { key: 'parts', label: 'Parts', format: 'currency' },
+    { key: 'grossTip', label: 'Gross Tip', format: 'currency' },
     { key: 'netoTips', label: 'Neto Tips', format: 'currency' },
     { key: 'refunded', label: 'Refunded', format: 'currency' },
     { key: 'reason', label: 'Reason' },

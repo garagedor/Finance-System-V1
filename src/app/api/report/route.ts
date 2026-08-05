@@ -48,6 +48,7 @@ function disputeChargeParts(
   });
   return {
     collected: snap.totalCollected,          // job + gross tip (decides full/partial)
+    grossTip: snap.grossTip,                 // tip before the card fee
     netTip: snap.netTip,
     operationalProfit: snap.operationalProfit,
     disputeType: snap.disputeClassification, // "full" | "partial"
@@ -439,6 +440,7 @@ export async function GET(req: NextRequest) {
             totalPaid,
             totalAfterFee,
             collected: cp.collected,
+            grossTip: cp.grossTip,
             netTip: cp.netTip,
             operationalProfit: cp.operationalProfit,
             partsLoss: cp.partsLoss,
@@ -562,7 +564,8 @@ export async function GET(req: NextRequest) {
           totalPaid,
           totalAfterFee,
           collected: cp.collected,
-          netTip: cp.netTip,
+          grossTip: cp.grossTip,
+            netTip: cp.netTip,
           operationalProfit: cp.operationalProfit,
           partsLoss: cp.partsLoss,
           disputeType: cp.disputeType,
