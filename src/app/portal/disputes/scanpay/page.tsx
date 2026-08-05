@@ -4,6 +4,7 @@ import { enrichJobs, type JobEnrichment } from "@/lib/scanpay/enrich";
 import type { ScanpayDisputeRecord } from "@/types/scanpay";
 import { fmt$, fmtDate } from "../../format";
 import { PageHeader, StatPill, CardShell, Empty, StatusPill, FilterBar, FilterField } from "../../_components/page-helpers";
+import MultiSelect from "../../_components/MultiSelect";
 import ScanpaySyncButton from "./ScanpaySyncButton";
 import ScanpayRowActions from "./ScanpayRowActions";
 
@@ -135,49 +136,31 @@ export default async function ScanpayInboxPage({ searchParams }: { searchParams:
           <input className="portal-input" type="search" name="q" defaultValue={f.q} placeholder="invoice / customer / address / tech" />
         </FilterField>
         <FilterField label="Outcome">
-          <select className="portal-select" name="outcome" defaultValue={f.outcome} multiple size={3}>
-            <option value="won">Won</option>
-            <option value="lost">Lost</option>
-            <option value="pending">Pending</option>
-          </select>
+          <MultiSelect name="outcome" selected={f.outcome} options={["won", "lost", "pending"]} labels={{ won: "Won", lost: "Lost", pending: "Pending" }} />
         </FilterField>
         <FilterField label="Reason">
-          <select className="portal-select" name="reason" defaultValue={f.reason} multiple size={4}>
-            {d.options.reasons.map((x) => <option key={x} value={x}>{x}</option>)}
-          </select>
+          <MultiSelect name="reason" selected={f.reason} options={d.options.reasons} />
         </FilterField>
         <FilterField label="Technician">
-          <select className="portal-select" name="tech" defaultValue={f.tech} multiple size={4}>
-            {d.options.techs.map((x) => <option key={x} value={x}>{x}</option>)}
-          </select>
+          <MultiSelect name="tech" selected={f.tech} options={d.options.techs} />
         </FilterField>
         <FilterField label="Provider">
-          <select className="portal-select" name="provider" defaultValue={f.provider} multiple size={4}>
-            {d.options.providers.map((x) => <option key={x} value={x}>{x}</option>)}
-          </select>
+          <MultiSelect name="provider" selected={f.provider} options={d.options.providers} />
         </FilterField>
         <FilterField label="Area Manager">
-          <select className="portal-select" name="am" defaultValue={f.am} multiple size={4}>
-            {d.options.ams.map((x) => <option key={x} value={x}>{x}</option>)}
-          </select>
+          <MultiSelect name="am" selected={f.am} options={d.options.ams} />
         </FilterField>
         <FilterField label="Match">
-          <select className="portal-select" name="matched" defaultValue={f.matched} multiple size={2}>
-            <option value="matched">Matched</option>
-            <option value="unmatched">Unmatched</option>
-          </select>
+          <MultiSelect name="matched" selected={f.matched} options={["matched", "unmatched"]} labels={{ matched: "Matched", unmatched: "Unmatched" }} />
         </FilterField>
         <FilterField label="From"><input className="portal-input" type="date" name="from" defaultValue={f.from} /></FilterField>
         <FilterField label="To"><input className="portal-input" type="date" name="to" defaultValue={f.to} /></FilterField>
         <FilterField label="Min $"><input className="portal-input" style={{ width: 90 }} type="number" step="0.01" name="min" defaultValue={f.min} /></FilterField>
         <FilterField label="Max $"><input className="portal-input" style={{ width: 90 }} type="number" step="0.01" name="max" defaultValue={f.max} /></FilterField>
         <input type="hidden" name="tab" value={tab} />
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, justifyContent: "flex-end" }}>
-          <span className="muted small">Ctrl / ⌘-click for multiple</span>
-          <div style={{ display: "flex", gap: 6 }}>
-            <button type="submit" className="portal-btn portal-btn-primary">Apply</button>
-            <Link href={`/portal/disputes/scanpay?tab=${tab}`} className="portal-btn">Clear</Link>
-          </div>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+          <button type="submit" className="portal-btn portal-btn-primary">Apply</button>
+          <Link href={`/portal/disputes/scanpay?tab=${tab}`} className="portal-btn">Clear</Link>
         </div>
       </FilterBar>
 
