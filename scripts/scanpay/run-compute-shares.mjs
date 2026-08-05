@@ -33,6 +33,7 @@ function allocate({ jobAmount, grossTip, partsCost, disputeAmount, technicianPer
     providerCharge: round2(providerCharge), technicianPortion: round2(technicianPortion),
     areaManagerOwnPortion: round2(areaManagerOwnPortion), companyCharge: round2(companyCharge),
     amLedgerCharge: round2(amLedgerCharge), partsLoss: round2(partsLoss),
+    jobCollected: round2(jobAmount + grossTip), jobAmount: round2(jobAmount), grossTip: round2(grossTip),
   };
 }
 
