@@ -43,17 +43,48 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     await sc.updateOne({ _id: id }, { $set: { chargedAt: null, chargedBy: null, updated_at: new Date().toISOString() } });
     return NextResponse.json({ ok: true, chargedAt: null });
   }
+  // Verify — record the job + refunded amount + date and compute the allocation,
+  // making it visible on the refund report WITHOUT posting to the ledger.
+  if (action === "verify") {
+    const jobId = String(body.jobId ?? rec.matchedJobId ?? "").trim();
+    if (!jobId) return NextResponse.json({ error: "Select a job to verify against" }, { status: 400 });
+    const amount = Number(body.amount ?? rec.refundAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: "Enter the refunded amount (greater than 0)" }, { status: 400 });
+    }
+    const date = body.date ? String(body.date) : (rec.refundDate ?? new Date().toISOString().slice(0, 10));
+    const dry = await postDisputeCharge({ type: "refund", jobId, amount, actor: session.name, dryRun: true });
+    const computedShare = dry.ok
+      ? { providerCharge: dry.snapshot.providerCharge, technicianPortion: dry.snapshot.technicianPortion,
+          areaManagerOwnPortion: dry.snapshot.areaManagerOwnPortion, companyCharge: dry.snapshot.companyCharge,
+          amLedgerCharge: dry.snapshot.amLedgerCharge, partsLoss: dry.snapshot.partsLoss }
+      : null;
+    await sc.updateOne({ _id: id }, { $set: {
+      matchStatus: "verified", matchedJobId: jobId,
+      matchMethod: body.jobId && body.jobId !== rec.matchedJobId ? "manual" : (rec.matchMethod ?? "manual"),
+      refundAmount: amount, refundDate: date,
+      computedShare, computeError: dry.ok ? null : dry.error,
+      updated_at: new Date().toISOString(),
+    } });
+    return NextResponse.json({ ok: true, matchStatus: "verified" });
+  }
+  if (action === "unverify") {
+    await sc.updateOne({ _id: id }, { $set: { matchStatus: rec.matchedJobId ? "matched" : "new", updated_at: new Date().toISOString() } });
+    return NextResponse.json({ ok: true });
+  }
+
   if (action !== "confirm") {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
+  // Post — uses the verified values (or explicit overrides).
   const jobId = String(body.jobId ?? rec.matchedJobId ?? "").trim();
-  if (!jobId) return NextResponse.json({ error: "Select a job to confirm against" }, { status: 400 });
-  const amount = Number(body.amount);
+  if (!jobId) return NextResponse.json({ error: "Select a job to post against" }, { status: 400 });
+  const amount = Number(body.amount ?? rec.refundAmount);
   if (!Number.isFinite(amount) || amount <= 0) {
     return NextResponse.json({ error: "Enter the refunded amount (greater than 0)" }, { status: 400 });
   }
-  const date = body.date ? String(body.date) : new Date().toISOString().slice(0, 10);
+  const date = body.date ? String(body.date) : (rec.refundDate ?? new Date().toISOString().slice(0, 10));
   if (rec.matchStatus === "posted") {
     return NextResponse.json({ error: "This refund was already posted" }, { status: 409 });
   }

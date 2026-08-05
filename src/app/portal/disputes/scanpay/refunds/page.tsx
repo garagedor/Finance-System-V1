@@ -10,7 +10,7 @@ import ScanpayRefundRowActions from "./ScanpayRefundRowActions";
 
 export const dynamic = "force-dynamic";
 
-type Tab = "queue" | "posted" | "ignored";
+type Tab = "queue" | "verified" | "posted" | "ignored";
 
 interface Filters {
   q: string; from: string; to: string; min: string; max: string;
@@ -29,6 +29,7 @@ async function load(tab: Tab, f: Filters) {
   const filter =
     tab === "posted" ? { matchStatus: "posted" as const }
     : tab === "ignored" ? { matchStatus: "ignored" as const }
+    : tab === "verified" ? { matchStatus: "verified" as const }
     : { matchStatus: { $in: ["new", "matched"] as const } };
   const allRows = await c.find(filter).sort({ paymentDate: -1 }).limit(500).toArray();
 
@@ -76,7 +77,7 @@ async function load(tab: Tab, f: Filters) {
 
 export default async function ScanpayRefundInboxPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
-  const tab: Tab = sp.tab === "posted" || sp.tab === "ignored" ? sp.tab : "queue";
+  const tab: Tab = sp.tab === "posted" || sp.tab === "ignored" || sp.tab === "verified" ? sp.tab : "queue";
   const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? "" : v ?? "");
   const f: Filters = {
     q: str(sp.q), from: str(sp.from), to: str(sp.to), min: str(sp.min), max: str(sp.max),
@@ -101,10 +102,10 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
       </section>
 
       <div className="portal-tabs" style={{ display: "flex", gap: 8, margin: "12px 0" }}>
-        {(["queue", "posted", "ignored"] as Tab[]).map((t) => (
+        {(["queue", "verified", "posted", "ignored"] as Tab[]).map((t) => (
           <Link key={t} href={`/portal/disputes/scanpay/refunds?tab=${t}`}
             className={`portal-btn ${tab === t ? "portal-btn-primary" : ""}`} style={{ textTransform: "capitalize" }}>
-            {t}{t === "queue" ? ` (${d.queueCount})` : ""}
+            {t}{t === "queue" ? ` (${d.queueCount})` : t === "verified" ? ` (${d.cmap.verified ?? 0})` : ""}
           </Link>
         ))}
         <Link href="/portal/disputes/scanpay" className="portal-btn" style={{ marginLeft: "auto" }}>ScanPay disputes →</Link>
@@ -137,7 +138,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
         </div>
       </FilterBar>
 
-      <CardShell title={tab === "queue" ? "Needs review" : tab === "posted" ? "Posted to ledger" : "Ignored"} subtitle={`${d.rows.length} of ${d.total} entries`}>
+      <CardShell title={tab === "queue" ? "Needs review" : tab === "verified" ? "Verified — ready to post" : tab === "posted" ? "Posted to ledger" : "Ignored"} subtitle={`${d.rows.length} of ${d.total} entries`}>
         {d.rows.length === 0 ? (
           <Empty message={tab === "queue" ? "Nothing to review. Hit Sync to pull refunded payments from ScanPay." : "Nothing here."} />
         ) : (

@@ -68,7 +68,7 @@ export default function ScanpayRefundRowActions({
     const a = parseFloat(amount);
     if (!jobId) { setErr("Pick a job"); return; }
     if (!Number.isFinite(a) || a <= 0) { setErr("Enter the refunded amount"); return; }
-    await simple({ action: "confirm", jobId, amount: a, date });
+    await simple({ action: "verify", jobId, amount: a, date });
   }
 
   const chargedToggle = (
@@ -94,10 +94,25 @@ export default function ScanpayRefundRowActions({
   if (matchStatus === "ignored") {
     return <button className="portal-btn" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy} onClick={() => simple({ action: "reopen" })}>Restore</button>;
   }
+  // Verified — job + amount confirmed + on the report; next step is Post.
+  if (matchStatus === "verified") {
+    return (
+      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+        {err && <span className="small" style={{ color: "#f87171" }}>{err}</span>}
+        <span className="muted small" style={{ color: "#34d399" }}>✔ verified</span>
+        <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
+          onClick={() => simple({ action: "confirm" })}>Post → ledger</button>
+        <button className="portal-btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setOpen(true)}>Edit</button>
+        <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
+          onClick={() => simple({ action: "unverify" })}>Unverify</button>
+        {chargedToggle}
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
-      <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setOpen(true)}>Confirm & post</button>
+      <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setOpen(true)}>Verify</button>
       <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy} onClick={() => simple({ action: "ignore" })}>Ignore</button>
       {chargedToggle}
 
@@ -107,7 +122,7 @@ export default function ScanpayRefundRowActions({
           <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 20, width: "min(640px, 96vw)", textAlign: "left" }}
             onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 15, color: "#f1f5f9" }}>Post refund → Area Manager ledger</h3>
+              <h3 style={{ margin: 0, fontSize: 15, color: "#f1f5f9" }}>Verify refund — match job + amount</h3>
               <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => setOpen(false)}>✕</button>
             </div>
 
@@ -160,7 +175,7 @@ export default function ScanpayRefundRowActions({
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button className="portal-btn portal-btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
               <button className="portal-btn portal-btn-primary" onClick={post} disabled={busy || !jobId}>
-                {busy ? "Posting…" : "Post refund → AM ledger"}
+                {busy ? "Saving…" : "Verify refund"}
               </button>
             </div>
           </div>

@@ -311,7 +311,9 @@ async function refundBreakdowns(range: DateWindow): Promise<{
 }> {
   const c = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
   const all = await c.find({}).toArray();
+  // Only verified + posted refunds count on the report (verify gates it).
   const inRange = all.filter((r) => {
+    if (r.matchStatus !== "verified" && r.matchStatus !== "posted") return false;
     const d = (r.refundDate ?? r.paymentDate)?.slice(0, 10) ?? "";
     return d && d >= range.from && d <= range.to;
   });
