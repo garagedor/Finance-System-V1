@@ -29,6 +29,9 @@ export type JobRow = {
     tipsCheck?: number;
     clientName?: string;
     clientPhoneNumber?: string;
+    /** ScanPay invoice number (e.g. "IN-1783117427"), entered when the job is
+     *  created. The exact join key that maps a ScanPay dispute to this job. */
+    invoiceNumber?: string;
     approvals?: string[];
     notes?: string;
     needTracking?: boolean;

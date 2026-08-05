@@ -137,6 +137,7 @@ const renderApprovalsCell = (args: {
 const jobColumns = (data: ReturnType<typeof useJobData>): ColumnConfig<JobRow>[] => [
   { key: 'approvals', label: 'Approvals', type: 'chip', minWidth: 220, renderCell: renderApprovalsCell },
   { key: 'clientName', label: 'Client Name', type: 'text' },
+  { key: 'invoiceNumber', label: 'Invoice #', type: 'text', minWidth: 120 },
   { key: 'tech', label: 'Tech', type: 'select', options: data.lookups.techs.map((t) => t._id ?? ''), minWidth: 80 },
   { key: 'status', label: 'Status', type: 'select', options: data.lookups.statuses.map((s) => s._id ?? '') },
   { key: 'date', label: 'Date', type: 'date' },
