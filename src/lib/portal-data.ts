@@ -17,6 +17,8 @@ import type {
   BankAccountSyncedRecord,
   BankTransactionSyncedRecord,
 } from "@/types/finance-plaid";
+import type { ScanpayDisputeRecord } from "@/types/scanpay";
+import { enrichJobs } from "@/lib/scanpay/enrich";
 
 interface DateWindow {
   from: string;
@@ -240,6 +242,54 @@ async function computeRefundImpact(range: DateWindow): Promise<{ loss: number; r
   }
   rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
   return { loss: round2(loss), rows };
+}
+
+// Dispute breakdowns for the owner: group the ScanPay disputes (filed in range)
+// by provider / technician / area manager — count, total disputed, won, lost,
+// and the engine-computed SHARE (that party's charge on the LOST disputes).
+// Provider / tech / AM come from each dispute's matched CRM job (enrichment);
+// the share comes from the dry-run snapshot stored at sync time (computedShare).
+export interface DisputeGroup { name: string; count: number; disputed: number; won: number; lost: number; share: number }
+
+async function disputeBreakdowns(range: DateWindow): Promise<{
+  count: number; total: number; won: number; lost: number;
+  byProvider: DisputeGroup[]; byTechnician: DisputeGroup[]; byAreaManager: DisputeGroup[];
+}> {
+  const c = coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute);
+  const all = await c.find({}).toArray();
+  const inRange = all.filter((r) => {
+    const d = r.disputedAt ? r.disputedAt.slice(0, 10) : "";
+    return d && d >= range.from && d <= range.to;
+  });
+  const enrich = await enrichJobs(inRange.map((r) => r.matchedJobId));
+
+  const prov = new Map<string, DisputeGroup>();
+  const tech = new Map<string, DisputeGroup>();
+  const am = new Map<string, DisputeGroup>();
+  let total = 0, won = 0, lost = 0;
+  const bump = (m: Map<string, DisputeGroup>, key: string, amt: number, outcome: string, share: number) => {
+    const g = m.get(key) ?? { name: key, count: 0, disputed: 0, won: 0, lost: 0, share: 0 };
+    g.count++; g.disputed += amt;
+    if (outcome === "lost") { g.lost += amt; g.share += share; }
+    else if (outcome === "won") g.won += amt;
+    m.set(key, g);
+  };
+  for (const r of inRange) {
+    const en = r.matchedJobId ? enrich.get(r.matchedJobId) : undefined;
+    const amt = r.amount || 0;
+    const cs = r.computedShare;
+    total += amt;
+    if (r.outcome === "lost") lost += amt;
+    else if (r.outcome === "won") won += amt;
+    bump(prov, en?.provider || "Unmatched", amt, r.outcome, cs?.providerCharge ?? 0);
+    bump(tech, en?.tech || "Unmatched", amt, r.outcome, cs?.technicianPortion ?? 0);
+    bump(am, en?.areaManager || (en?.areaManagerMissing ? "⚠ unassigned" : "Unmatched"), amt, r.outcome, cs?.amLedgerCharge ?? 0);
+  }
+  const fin = (m: Map<string, DisputeGroup>) =>
+    [...m.values()]
+      .map((g) => ({ ...g, disputed: round2(g.disputed), won: round2(g.won), lost: round2(g.lost), share: round2(g.share) }))
+      .sort((a, b) => b.disputed - a.disputed);
+  return { count: inRange.length, total: round2(total), won: round2(won), lost: round2(lost), byProvider: fin(prov), byTechnician: fin(tech), byAreaManager: fin(am) };
 }
 
 async function sumRefunds(range: DateWindow): Promise<number> {
@@ -542,6 +592,14 @@ export interface DashboardData {
   expenseByCategory: Array<{ category: string; total: number; count: number }>;
   topAreas: Array<{ area: string; total: number; count: number }>;
   byDay: Array<{ day: string; total: number; count: number }>;
+  // Dispute breakdowns (from the ScanPay dispute inbox, filtered by disputed date)
+  disputeCount: number;
+  disputeTotalAmount: number;
+  disputeWonAmount: number;
+  disputeLostAmount: number;
+  disputesByProvider: DisputeGroup[];
+  disputesByTechnician: DisputeGroup[];
+  disputesByAreaManager: DisputeGroup[];
   // Lists
   recentExpenses: ExpenseRecord[];
   recentIncome: ManualIncomeRecord[];
@@ -687,6 +745,7 @@ export async function fetchDashboardData(range: DateWindow): Promise<DashboardDa
   // page) and shown as a separate adjustment for the filtered period. Disputes
   // can net positive (won recoveries); refunds are always a loss.
   const refundImpact = await computeRefundImpact(range);
+  const disputeAgg = await disputeBreakdowns(range);
   const netAfterDisputes = round2(netProfit + disputes.impact - refundImpact.loss);
 
   const incomeBySource: Array<{ source: string; total: number }> = [
@@ -718,6 +777,13 @@ export async function fetchDashboardData(range: DateWindow): Promise<DashboardDa
     expenseByCategory: expCategorySplit,
     topAreas: crmAgg.byArea.slice(0, 8),
     byDay: crmAgg.byDay,
+    disputeCount: disputeAgg.count,
+    disputeTotalAmount: disputeAgg.total,
+    disputeWonAmount: disputeAgg.won,
+    disputeLostAmount: disputeAgg.lost,
+    disputesByProvider: disputeAgg.byProvider,
+    disputesByTechnician: disputeAgg.byTechnician,
+    disputesByAreaManager: disputeAgg.byAreaManager,
     recentExpenses,
     recentIncome,
     pendingPayouts,

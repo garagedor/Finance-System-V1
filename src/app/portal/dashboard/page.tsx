@@ -252,6 +252,57 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </section>
       )}
 
+      {/* ─── Disputes by provider / technician / area manager (from ScanPay) ─── */}
+      {d.disputeCount > 0 && (
+        <>
+          <section className="portal-grid-4">
+            <Kpi label="Disputes (this period)" value={d.disputeCount.toLocaleString()} sub="raised in range" />
+            <Kpi label="Total disputed" value={fmt$(d.disputeTotalAmount)} sub="gross chargeback amount" tone="down" />
+            <Kpi label="Disputes won" value={fmt$(d.disputeWonAmount)} sub="recovered" tone="up" />
+            <Kpi label="Disputes lost" value={fmt$(d.disputeLostAmount)} sub="ruled against us" tone="down" />
+          </section>
+
+          {([
+            { title: "Disputes by Provider", head: "Provider", shareLabel: "Provider charge", rows: d.disputesByProvider },
+            { title: "Disputes by Technician", head: "Technician", shareLabel: "Tech charge", rows: d.disputesByTechnician },
+            { title: "Disputes by Area Manager", head: "Area Manager", shareLabel: "AM ledger", rows: d.disputesByAreaManager },
+          ]).map((tbl) => (
+            <section key={tbl.title} className="portal-card" style={{ padding: 0 }}>
+              <div className="portal-card-head">
+                <div className="portal-card-head-title">{tbl.title}</div>
+                <Link href="/portal/disputes/scanpay" className="portal-card-head-sub" style={{ color: "#818cf8" }}>ScanPay inbox →</Link>
+              </div>
+              <div style={{ overflowX: "auto" }}>
+                <table className="portal-table">
+                  <thead>
+                    <tr>
+                      <th>{tbl.head}</th>
+                      <th className="right">Disputes</th>
+                      <th className="right">Disputed</th>
+                      <th className="right">Won</th>
+                      <th className="right">Lost</th>
+                      <th className="right">{tbl.shareLabel} (lost)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tbl.rows.map((g) => (
+                      <tr key={g.name}>
+                        <td style={{ fontWeight: 500 }}>{g.name}</td>
+                        <td className="right">{g.count.toLocaleString()}</td>
+                        <td className="right money">{fmt$(g.disputed)}</td>
+                        <td className="right money money-pos">{g.won > 0 ? fmt$(g.won) : "—"}</td>
+                        <td className="right money money-neg">{g.lost > 0 ? fmt$(g.lost) : "—"}</td>
+                        <td className="right money money-neg" style={{ fontWeight: 600 }}>{g.share > 0 ? fmt$(g.share) : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          ))}
+        </>
+      )}
+
       {/* ─── Bank activity (Plaid) ─── */}
       {d.bankAccounts.length > 0 && (
         <>

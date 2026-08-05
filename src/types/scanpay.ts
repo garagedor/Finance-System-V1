@@ -83,9 +83,23 @@ export interface ScanpayDisputeRecord {
   postedRecordId: string | null;   // finance_dispute _id
   ledgerEntryId: string | null;
 
+  // Engine-computed loss allocation (dry-run at sync time, for the matched job).
+  // null when unmatched or the engine can't resolve it (see computeError).
+  computedShare?: ScanpayComputedShare | null;
+  computeError?: string | null;
+
   raw: ScanpayDisputeRaw;
   synced_at: string;
   updated_at: string;
+}
+
+export interface ScanpayComputedShare {
+  providerCharge: number;
+  technicianPortion: number;
+  areaManagerOwnPortion: number;
+  companyCharge: number;
+  amLedgerCharge: number;
+  partsLoss: number;
 }
 
 // ── Refunds ─────────────────────────────────────────────────────────────────

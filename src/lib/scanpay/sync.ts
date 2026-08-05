@@ -2,7 +2,26 @@ import "server-only";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { fetchScanpayDisputes, parseAmount, parseScanpayDate, normalizeOutcome } from "./client";
 import { matchDispute } from "./match";
-import type { ScanpayDisputeRaw, ScanpayDisputeRecord } from "@/types/scanpay";
+import { postDisputeCharge } from "@/lib/dispute-service";
+import type { ScanpayDisputeRaw, ScanpayDisputeRecord, ScanpayComputedShare } from "@/types/scanpay";
+
+// Dry-run the shared engine for a matched dispute → its loss allocation.
+async function computeShare(jobId: string, amount: number, actor: string): Promise<{ share: ScanpayComputedShare | null; error: string | null }> {
+  const r = await postDisputeCharge({ type: "dispute", jobId, amount, actor, dryRun: true });
+  if (!r.ok) return { share: null, error: r.error };
+  const s = r.snapshot;
+  return {
+    share: {
+      providerCharge: s.providerCharge,
+      technicianPortion: s.technicianPortion,
+      areaManagerOwnPortion: s.areaManagerOwnPortion,
+      companyCharge: s.companyCharge,
+      amLedgerCharge: s.amLedgerCharge,
+      partsLoss: s.partsLoss,
+    },
+    error: null,
+  };
+}
 
 // Pull all ScanPay disputes, upsert them into the inbox, and auto-match each to
 // a CRM job. Human decisions (posted / ignored / manual match) are preserved —
@@ -69,12 +88,23 @@ export async function syncScanpayDisputes(): Promise<ScanpaySyncSummary> {
     else if (best?.method === "fallback") summary.matchedByFallback++;
     else summary.unmatched++;
 
+    // Engine-computed loss allocation for the matched job (dry-run).
+    let computedShare: ScanpayComputedShare | null = null;
+    let computeError: string | null = null;
+    if (best?.jobId) {
+      const cs = await computeShare(best.jobId, core.amount, "scanpay-sync");
+      computedShare = cs.share;
+      computeError = cs.error;
+    }
+
     const matchFields = {
       matchStatus: (best ? "matched" : "new") as ScanpayDisputeRecord["matchStatus"],
       matchedJobId: best?.jobId ?? null,
       matchMethod: best?.method ?? null,
       matchScore: best?.score ?? null,
       candidates,
+      computedShare,
+      computeError,
     };
 
     if (!existing) {
