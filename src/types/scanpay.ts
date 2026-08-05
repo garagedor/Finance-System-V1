@@ -107,6 +107,10 @@ export interface ScanpayComputedShare {
   companyCharge: number;
   amLedgerCharge: number;
   partsLoss: number;
+  // Captured from the actual CRM job at verify/sync time.
+  jobCollected?: number;   // job total collected (job amount + gross tip)
+  jobAmount?: number;      // job amount, excl. tip
+  grossTip?: number;       // gross tip
 }
 
 // ── Refunds ─────────────────────────────────────────────────────────────────

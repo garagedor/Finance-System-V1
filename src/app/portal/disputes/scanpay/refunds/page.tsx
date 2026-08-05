@@ -175,7 +175,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
                       {en?.areaManager ? en.areaManager : en?.areaManagerMissing ? <span style={{ color: "#f59e0b" }}>⚠ unassigned</span> : "—"}
                     </td>
                     <td className="right money">{fmt$(r.originalAmount)}</td>
-                    <td className="right money">{en ? fmt$(en.collected) : "—"}</td>
+                    <td className="right money">{r.computedShare?.jobCollected != null ? fmt$(r.computedShare.jobCollected) : en ? fmt$(en.collected) : "—"}</td>
                     <td>
                       {tab === "posted" ? (
                         <span className="muted small">posted · {r.matchMethod}</span>

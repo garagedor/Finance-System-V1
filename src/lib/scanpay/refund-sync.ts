@@ -3,21 +3,15 @@ import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-d
 import { fetchScanpayRefunds, parseAmount, parseScanpayDate } from "./client";
 import { matchRefund } from "./match";
 import { postDisputeCharge } from "@/lib/dispute-service";
+import { shareFromSnapshot } from "./share";
 import type { ScanpayRefundRaw, ScanpayRefundRecord, ScanpayComputedShare } from "@/types/scanpay";
 
-// Dry-run the engine (type "refund") for a matched refund → its loss allocation.
+// Dry-run the engine (type "refund") for a matched refund → its loss allocation
+// (+ the actual job's collected/amount/tip).
 async function computeRefundShare(jobId: string, amount: number): Promise<{ share: ScanpayComputedShare | null; error: string | null }> {
   const r = await postDisputeCharge({ type: "refund", jobId, amount, actor: "scanpay-sync", dryRun: true });
   if (!r.ok) return { share: null, error: r.error };
-  const s = r.snapshot;
-  return {
-    share: {
-      providerCharge: s.providerCharge, technicianPortion: s.technicianPortion,
-      areaManagerOwnPortion: s.areaManagerOwnPortion, companyCharge: s.companyCharge,
-      amLedgerCharge: s.amLedgerCharge, partsLoss: s.partsLoss,
-    },
-    error: null,
-  };
+  return { share: shareFromSnapshot(r.snapshot), error: null };
 }
 
 // Pull refunded ScanPay payments, upsert into the refund inbox, auto-match to a

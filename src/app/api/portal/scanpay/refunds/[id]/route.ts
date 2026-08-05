@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { readPortalSession } from "@/lib/portal-auth";
 import { postDisputeCharge } from "@/lib/dispute-service";
+import { shareFromSnapshot } from "@/lib/scanpay/share";
 import type { ScanpayRefundRecord } from "@/types/scanpay";
 
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
@@ -54,11 +55,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     }
     const date = body.date ? String(body.date) : (rec.refundDate ?? new Date().toISOString().slice(0, 10));
     const dry = await postDisputeCharge({ type: "refund", jobId, amount, actor: session.name, dryRun: true });
-    const computedShare = dry.ok
-      ? { providerCharge: dry.snapshot.providerCharge, technicianPortion: dry.snapshot.technicianPortion,
-          areaManagerOwnPortion: dry.snapshot.areaManagerOwnPortion, companyCharge: dry.snapshot.companyCharge,
-          amLedgerCharge: dry.snapshot.amLedgerCharge, partsLoss: dry.snapshot.partsLoss }
-      : null;
+    const computedShare = dry.ok ? shareFromSnapshot(dry.snapshot) : null;
     await sc.updateOne({ _id: id }, { $set: {
       matchStatus: "verified", matchedJobId: jobId,
       matchMethod: body.jobId && body.jobId !== rec.matchedJobId ? "manual" : (rec.matchMethod ?? "manual"),
@@ -111,14 +108,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
       postedRecordId: result.recordId,
       ledgerEntryId: result.ledgerEntryId,
       // Refine the allocation to the actual refunded amount.
-      computedShare: {
-        providerCharge: result.snapshot.providerCharge,
-        technicianPortion: result.snapshot.technicianPortion,
-        areaManagerOwnPortion: result.snapshot.areaManagerOwnPortion,
-        companyCharge: result.snapshot.companyCharge,
-        amLedgerCharge: result.snapshot.amLedgerCharge,
-        partsLoss: result.snapshot.partsLoss,
-      },
+      computedShare: shareFromSnapshot(result.snapshot),
       computeError: null,
       updated_at: new Date().toISOString(),
     },

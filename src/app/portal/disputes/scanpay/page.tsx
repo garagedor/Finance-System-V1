@@ -212,7 +212,7 @@ export default async function ScanpayInboxPage({ searchParams }: { searchParams:
                       <div className="muted small">{r.statusRaw}</div>
                     </td>
                     <td className="right money money-neg">−{fmt$(r.amount)}</td>
-                    <td className="right money">{en ? fmt$(en.collected) : "—"}</td>
+                    <td className="right money">{r.computedShare?.jobCollected != null ? fmt$(r.computedShare.jobCollected) : en ? fmt$(en.collected) : "—"}</td>
                     <td>
                       {tab === "posted" ? (
                         <span className="muted small">posted · {r.matchMethod}</span>

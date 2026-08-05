@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { readPortalSession } from "@/lib/portal-auth";
 import { postDisputeCharge } from "@/lib/dispute-service";
+import { shareFromSnapshot } from "@/lib/scanpay/share";
 import type { ScanpayDisputeRecord } from "@/types/scanpay";
 import type { DisputeRecord } from "@/types/finance";
 import type { UpdateFilter } from "mongodb";
@@ -59,11 +60,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const jobId = String(body.jobId ?? rec.matchedJobId ?? "").trim();
     if (!jobId) return NextResponse.json({ error: "Select a job to verify against" }, { status: 400 });
     const dry = await postDisputeCharge({ type: "dispute", jobId, amount: rec.amount, actor: session.name, dryRun: true });
-    const computedShare = dry.ok
-      ? { providerCharge: dry.snapshot.providerCharge, technicianPortion: dry.snapshot.technicianPortion,
-          areaManagerOwnPortion: dry.snapshot.areaManagerOwnPortion, companyCharge: dry.snapshot.companyCharge,
-          amLedgerCharge: dry.snapshot.amLedgerCharge, partsLoss: dry.snapshot.partsLoss }
-      : null;
+    const computedShare = dry.ok ? shareFromSnapshot(dry.snapshot) : null;
     await sc.updateOne({ _id: id }, { $set: {
       matchStatus: "verified",
       matchedJobId: jobId,

@@ -56,7 +56,7 @@ async function computeShare(jobId, refundAmount){
   const opRec=Math.min(rem,op), partsLoss=Math.min(Math.max(0,rem-op),partsCost);
   const tr=technicianPercent/100,pr=providerPercent/100,ar=amPool/100,cr=Math.max(0,100-providerPercent-amPool)/100;
   const technicianPortion=tipRec+opRec*tr+partsLoss, amOwn=opRec*(ar-tr);
-  return {share:{providerCharge:round2(opRec*pr),technicianPortion:round2(technicianPortion),areaManagerOwnPortion:round2(amOwn),companyCharge:round2(opRec*cr),amLedgerCharge:round2(technicianPortion+amOwn),partsLoss:round2(partsLoss)},error:null};
+  return {share:{providerCharge:round2(opRec*pr),technicianPortion:round2(technicianPortion),areaManagerOwnPortion:round2(amOwn),companyCharge:round2(opRec*cr),amLedgerCharge:round2(technicianPortion+amOwn),partsLoss:round2(partsLoss),jobCollected:round2(jobAmount+grossTip),jobAmount:round2(jobAmount),grossTip:round2(grossTip)},error:null};
 }
 
 const now=new Date().toISOString();
