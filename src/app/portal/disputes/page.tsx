@@ -3,8 +3,8 @@ import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-d
 import type { DisputeRecord, RefundRecord } from "@/types/finance";
 import { fmt$, fmtDate, lastNDays } from "../format";
 import { PageHeader, StatPill, FilterBar, FilterField, CardShell, Empty, StatusPill } from "../_components/page-helpers";
-import EntryFormModal, { type FieldDef } from "../_components/EntryFormModal";
 import RowActions from "../_components/RowActions";
+import DisputeChargeModal from "../_components/DisputeChargeModal";
 
 export const dynamic = "force-dynamic";
 
@@ -14,50 +14,6 @@ interface SP {
   to?: string;
   status?: string;
 }
-
-const SHARED_FIELDS: FieldDef[] = [
-  { name: "date", label: "Date", kind: "date", required: true, width: "half",
-    defaultValue: new Date().toISOString().slice(0, 10) },
-  { name: "customer_name", label: "Customer", kind: "text", width: "half" },
-  { name: "address", label: "Address", kind: "text" },
-  { name: "job_id", label: "Related CRM Job ID", kind: "text", width: "half" },
-  { name: "tech_name", label: "Technician", kind: "text", width: "half" },
-  { name: "area", label: "Area / Location", kind: "text", width: "half" },
-  { name: "provider_name", label: "Provider", kind: "text", width: "half" },
-];
-
-const DISPUTE_FIELDS: FieldDef[] = [
-  ...SHARED_FIELDS,
-  { name: "amount_disputed", label: "Amount disputed", kind: "money", required: true, width: "half" },
-  { name: "amount_recovered", label: "Amount recovered", kind: "money", width: "half",
-    defaultValue: 0, help: "Update over time as money is recovered." },
-  {
-    name: "status", label: "Status", kind: "select", required: true,
-    options: [
-      { value: "open", label: "Open" },
-      { value: "won", label: "Won" },
-      { value: "lost", label: "Lost" },
-      { value: "partial", label: "Partial" },
-    ],
-    defaultValue: "open",
-  },
-  { name: "notes", label: "Notes", kind: "textarea" },
-];
-
-const REFUND_FIELDS: FieldDef[] = [
-  ...SHARED_FIELDS,
-  { name: "amount", label: "Refund amount", kind: "money", required: true, width: "half" },
-  { name: "reason", label: "Reason", kind: "text", required: true, width: "half" },
-  {
-    name: "status", label: "Status", kind: "select", required: true,
-    options: [
-      { value: "unpaid", label: "Unpaid (pending)" },
-      { value: "paid", label: "Paid (refund issued)" },
-    ],
-    defaultValue: "unpaid",
-  },
-  { name: "notes", label: "Notes", kind: "textarea" },
-];
 
 async function load(sp: SP) {
   await ensureFinanceIndexes();
@@ -99,22 +55,11 @@ export default async function DisputesPage({
       <PageHeader
         kicker="Tracking"
         title="Disputes & Refunds"
-        subtitle="Manual entry — replaces the Excel tracking workflow. Later: connect to Stripe/Bank."
+        subtitle="Pick a job + amount — the engine computes the split and posts the charge to the Area Manager's ledger."
         actions={
           <>
-            <EntryFormModal
-              endpoint="/api/portal/refunds"
-              title="Refund"
-              fields={REFUND_FIELDS}
-              triggerLabel="+ Refund"
-            />
-            <EntryFormModal
-              endpoint="/api/portal/disputes"
-              title="Dispute"
-              fields={DISPUTE_FIELDS}
-              triggerLabel="+ Dispute"
-              primary
-            />
+            <DisputeChargeModal type="refund" triggerLabel="+ Refund" />
+            <DisputeChargeModal type="dispute" triggerLabel="+ Dispute" primary />
           </>
         }
       />
@@ -163,7 +108,7 @@ export default async function DisputesPage({
           {d.disputes.length === 0 ? (
             <Empty
               message="No disputes recorded."
-              action={<EntryFormModal endpoint="/api/portal/disputes" title="Dispute" fields={DISPUTE_FIELDS} triggerLabel="+ Add first dispute" />}
+              action={<DisputeChargeModal type="dispute" triggerLabel="+ Add first dispute" />}
             />
           ) : (
             <table className="portal-table">
@@ -215,7 +160,7 @@ export default async function DisputesPage({
           {d.refunds.length === 0 ? (
             <Empty
               message="No refunds recorded."
-              action={<EntryFormModal endpoint="/api/portal/refunds" title="Refund" fields={REFUND_FIELDS} triggerLabel="+ Add first refund" />}
+              action={<DisputeChargeModal type="refund" triggerLabel="+ Add first refund" />}
             />
           ) : (
             <table className="portal-table">
