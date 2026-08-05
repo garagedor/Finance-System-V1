@@ -103,11 +103,20 @@ export default async function EmployeesPage() {
                       <StatusPill status={p.active ? "paid" : "draft"} />
                     </td>
                     <td className="right">
-                      <RowActions
-                        endpoint="/api/portal/positions"
-                        id={p._id}
-                        canToggleStatus={false}
-                      />
+                      <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
+                        <EntryFormModal
+                          endpoint="/api/portal/positions"
+                          title="Edit position"
+                          fields={POSITION_FIELDS}
+                          initial={p as unknown as Record<string, unknown> & { _id?: string }}
+                          triggerLabel="Edit"
+                        />
+                        <RowActions
+                          endpoint="/api/portal/positions"
+                          id={p._id}
+                          canToggleStatus={false}
+                        />
+                      </div>
                     </td>
                   </tr>
                 );
