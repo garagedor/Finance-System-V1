@@ -71,8 +71,9 @@ async function loadJob(db: Db, jobId: string): Promise<JobRow | null> {
   return db.collection<JobRow>("Job").findOne({ $or: or } as never);
 }
 
-/** Find the Area Manager's ledger, creating it if missing. */
-async function findOrCreateAmLedger(amName: string, location: string, actor: string, dryRun: boolean) {
+/** Find the Area Manager's ledger, creating it if missing. Exported so other
+ *  finance services (e.g. equipment ordering) post to the SAME AM ledger. */
+export async function findOrCreateAmLedger(amName: string, location: string, actor: string, dryRun: boolean) {
   const lc = coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger);
   const existing = await lc.findOne({ role: "area_manager", holder_name: amName });
   if (existing) return existing;

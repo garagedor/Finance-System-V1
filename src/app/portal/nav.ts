@@ -25,6 +25,8 @@ import {
   FiLock,
   FiCpu,
   FiCheckSquare,
+  FiShoppingCart,
+  FiGrid,
 } from "react-icons/fi";
 import type { ComponentType } from "react";
 import type { Permission } from "@/types/rbac";
@@ -180,6 +182,24 @@ export const FINANCE_NAV: FinanceModule[] = [
     icon: FiPackage,
     group: "tracking",
     requires: "finance:equipment:view",
+  },
+  {
+    href: "/portal/equipment/orders",
+    label: "Equipment Orders",
+    section: "Tracking",
+    title: "Equipment Orders",
+    icon: FiShoppingCart,
+    group: "tracking",
+    requires: "finance:equipment_orders:view",
+  },
+  {
+    href: "/portal/equipment/products",
+    label: "Product Catalog",
+    section: "Tracking",
+    title: "Product Catalog",
+    icon: FiGrid,
+    group: "tracking",
+    requires: "finance:equipment_products:view",
   },
   {
     href: "/portal/documents",

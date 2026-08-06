@@ -104,6 +104,13 @@ export interface LedgerEntryRecord {
   dispute_id?: string | null;
   charge_snapshot?: Record<string, unknown> | null;
 
+  // Equipment order → AM ledger link. equipment_order_id is the canonical
+  // EquipmentOrder._id and the dedup key (one ledger entry per order, enforced
+  // by a partial-unique index). equipment_return_id links a credit reversal to
+  // its EquipmentReturn (Phase B). See lib/equipment/ledger.
+  equipment_order_id?: string | null;
+  equipment_return_id?: string | null;
+
   source: "manual" | "crm" | "imported";
   created_at: string;
   created_by?: string;

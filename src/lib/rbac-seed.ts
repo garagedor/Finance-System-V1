@@ -20,6 +20,25 @@ import { getDb } from "./finance-db";
 
 let _seeded = false;
 
+// Equipment-ordering permission bundles (shared by the seed templates AND the
+// backfill, so a DB installed before this feature shipped gets them too).
+const EQUIPMENT_FULL: Permission[] = [
+  "finance:equipment_products:view", "finance:equipment_products:create", "finance:equipment_products:edit",
+  "finance:equipment_cost:view", "finance:equipment_cost:edit",
+  "finance:equipment_price:view",
+  "finance:equipment_orders:view", "finance:equipment_orders:create", "finance:equipment_orders:approve",
+  "finance:equipment_orders:deliver", "finance:equipment_orders:post_ledger",
+  "finance:equipment_returns:create", "finance:equipment_returns:approve",
+  "finance:equipment_profitability:view",
+];
+// Read-only-ish set for Office: see catalog/orders/price, but no cost, no
+// approve/post-to-ledger (those move money).
+const EQUIPMENT_VIEW: Permission[] = [
+  "finance:equipment_products:view",
+  "finance:equipment_price:view",
+  "finance:equipment_orders:view",
+];
+
 interface SeedTemplate {
   key: SystemRoleKey;
   name: string;
@@ -63,6 +82,7 @@ function seedTemplates(): SeedTemplate[] {
         "finance:debts:view",
         "finance:disputes:view",
         "finance:equipment:view",
+        ...EQUIPMENT_VIEW,
         "finance:documents:view",
         "finance:banking:view",
         "finance:settings:view",
@@ -91,6 +111,7 @@ function seedTemplates(): SeedTemplate[] {
         "finance:debts:view", "finance:debts:edit",
         "finance:disputes:view", "finance:disputes:edit",
         "finance:equipment:view", "finance:equipment:edit",
+        ...EQUIPMENT_FULL,
         "finance:documents:view", "finance:documents:create", "finance:documents:edit", "finance:documents:delete",
         "finance:banking:view", "finance:banking:connect", "finance:banking:disconnect", "finance:banking:sync", "finance:banking:reconcile",
         "finance:settings:view",
@@ -233,6 +254,32 @@ export async function backfillTasksPermissions(db: Db): Promise<void> {
   }
 }
 
+/** Grant the equipment-ordering permissions to existing system roles (the
+ *  seeder never overwrites an existing role, so a DB installed before this
+ *  feature shipped won't have them). Additive + idempotent. Admin gets the
+ *  full set; Bookkeeper full; Office the read-only view set. */
+export async function backfillEquipmentPermissions(db: Db): Promise<void> {
+  const rolesColl = db.collection<RoleRecord>(FINANCE_COLLECTIONS.role);
+  const grants: Record<string, Permission[]> = {
+    [SYSTEM_ROLE_KEYS.admin]: EQUIPMENT_FULL,
+    [SYSTEM_ROLE_KEYS.bookkeeper]: EQUIPMENT_FULL,
+    [SYSTEM_ROLE_KEYS.office]: EQUIPMENT_VIEW,
+  };
+  for (const [key, perms] of Object.entries(grants)) {
+    const role = await rolesColl.findOne({ key });
+    if (!role) continue;
+    const missing = perms.filter((p) => !role.permissions.includes(p));
+    if (missing.length === 0) continue;
+    await rolesColl.updateOne(
+      { _id: role._id },
+      {
+        $addToSet: { permissions: { $each: missing } },
+        $set: { updated_at: new Date().toISOString(), updated_by: "system-seed" },
+      }
+    );
+  }
+}
+
 /** One-shot init: ensures indexes, seeds roles, migrates users. Safe to call
  *  many times — internal flag short-circuits subsequent calls in the same
  *  Node process. */
@@ -242,6 +289,7 @@ export async function ensureRbacReady(): Promise<void> {
   const db = await getDb();
   await seedSystemRoles(db);
   await backfillTasksPermissions(db);
+  await backfillEquipmentPermissions(db);
   await migrateUsersToRoles(db);
   _seeded = true;
 }

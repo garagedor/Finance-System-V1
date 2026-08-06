@@ -20,6 +20,8 @@ export type PermissionAction =
   | "disconnect"
   | "sync"
   | "reconcile"
+  | "deliver"
+  | "post_ledger"
   | "reset_password";
 
 /** A permission identifier of the form `module:section:action`. */
@@ -146,6 +148,26 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDef> = [
   p("finance", "equipment", "view", "View equipment finance"),
   p("finance", "equipment", "edit", "Edit equipment finance"),
 
+  // Equipment ordering — product catalog
+  p("finance", "equipment_products", "view", "View product catalog"),
+  p("finance", "equipment_products", "create", "Create products"),
+  p("finance", "equipment_products", "edit", "Edit products"),
+  // Company cost is confidential — gated separately from the rest of a product.
+  p("finance", "equipment_cost", "view", "View company cost", "See internal company cost on products/orders"),
+  p("finance", "equipment_cost", "edit", "Edit company cost"),
+  p("finance", "equipment_price", "view", "View area-manager price"),
+  // Equipment ordering — orders
+  p("finance", "equipment_orders", "view", "View equipment orders"),
+  p("finance", "equipment_orders", "create", "Create equipment orders"),
+  p("finance", "equipment_orders", "approve", "Approve equipment orders"),
+  p("finance", "equipment_orders", "deliver", "Mark orders delivered / ready"),
+  p("finance", "equipment_orders", "post_ledger", "Post orders to the ledger", "Charge the AM selling total to the Area Manager's ledger"),
+  // Equipment ordering — returns / credits (Phase B)
+  p("finance", "equipment_returns", "create", "Create equipment returns"),
+  p("finance", "equipment_returns", "approve", "Approve equipment credits"),
+  // Reporting
+  p("finance", "equipment_profitability", "view", "View equipment profitability"),
+
   p("finance", "documents", "view", "View reports & documents"),
   p("finance", "documents", "create", "Create documents"),
   p("finance", "documents", "edit", "Edit documents"),
@@ -215,6 +237,7 @@ export type AuditKind =
   | "recon_match"
   | "report"
   | "task"
+  | "equipment"
   | "auth";
 
 /** Audit row written on every mutation that touches money or access. */

@@ -105,6 +105,11 @@ export const FINANCE_COLLECTIONS = {
   task:             "finance_task",                // Kanban tasks (management team)
   // ─── Expense groups (trips / projects / ad-hoc spend) ───
   expenseGroup:     "finance_expense_group",       // labeled buckets over bank txns
+  // ─── Equipment ordering (catalog → order → ledger) ───
+  equipmentProduct: "finance_equipment_product",   // product catalog (cost + AM price)
+  equipmentOrder:   "finance_equipment_order",     // AM equipment orders (price snapshots)
+  equipmentReturn:  "finance_equipment_return",    // returns/credits against an order (Phase B)
+  counter:          "finance_counter",             // sequential number counters (order #, etc.)
   // ─── ScanPay disputes integration ───
   scanpayDispute:   "finance_scanpay_dispute",     // raw ScanPay disputes inbox (new → matched → posted/ignored)
   scanpayRefund:    "finance_scanpay_refund",      // raw ScanPay refunds inbox (amount/date entered by human)
@@ -178,6 +183,19 @@ export async function ensureFinanceIndexes(): Promise<void> {
     db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ recon_status: 1, date: -1 }),
     db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ group_id: 1 }, { sparse: true }),
     db.collection(FINANCE_COLLECTIONS.expenseGroup).createIndex({ status: 1, created_at: -1 }),
+    // Equipment ordering
+    db.collection(FINANCE_COLLECTIONS.equipmentProduct).createIndex({ sku: 1 }),
+    db.collection(FINANCE_COLLECTIONS.equipmentProduct).createIndex({ active: 1, category: 1 }),
+    db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ orderNumber: 1 }, { unique: true }),
+    db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ status: 1, orderDate: -1 }),
+    db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ areaManagerName: 1, orderDate: -1 }),
+    db.collection(FINANCE_COLLECTIONS.equipmentReturn).createIndex({ orderId: 1 }),
+    // Hard duplicate-protection: at most one ledger entry per equipment order
+    // (partial index → only applies to entries that carry the field).
+    db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex(
+      { equipment_order_id: 1 },
+      { unique: true, partialFilterExpression: { equipment_order_id: { $type: "string" } } },
+    ),
     db.collection(FINANCE_COLLECTIONS.bankSyncLog).createIndex({ item_id: 1, started_at: -1 }),
     db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ bank_txn_id: 1 }),
     db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ matched_kind: 1, matched_id: 1 }),
