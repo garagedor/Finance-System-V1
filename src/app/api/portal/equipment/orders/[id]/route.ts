@@ -33,19 +33,36 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
   return NextResponse.json({ row: stripOrderCost(order, canSeeCost), canSeeCost });
 }
 
-export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
-  const { id } = await ctx.params;
-  const body = (await req.json().catch(() => ({}))) as { action?: string };
-  const capKey = ACTION_TO_CAP[String(body.action)];
-  if (!capKey) return NextResponse.json({ error: "Unknown action" }, { status: 400 });
-
-  const cap = EQUIPMENT_CAPABILITIES[capKey];
-  const session = await requirePermission(cap.permission);
-  if (session instanceof NextResponse) return session;
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await ctx.params;
+    const cap = EQUIPMENT_CAPABILITIES["equipment.order.update"];
+    const session = await requirePermission(cap.permission);
+    if (session instanceof NextResponse) return session;
+    const body = (await req.json()) as Record<string, unknown>;
+    const canViewCost = hasPermission(session, "finance:equipment_cost:view");
+    const row = await cap.run(session.name, { ...body, orderId: id, canViewCost });
+    return NextResponse.json({ ok: true, row });
+  } catch (e) {
+    console.error("[equipment order PUT] failed:", e);
+    return NextResponse.json({ error: e instanceof Error ? e.message : "Update failed" }, { status: 400 });
+  }
+}
+
+export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await ctx.params;
+    const body = (await req.json().catch(() => ({}))) as { action?: string };
+    const capKey = ACTION_TO_CAP[String(body.action)];
+    if (!capKey) return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+
+    const cap = EQUIPMENT_CAPABILITIES[capKey];
+    const session = await requirePermission(cap.permission);
+    if (session instanceof NextResponse) return session;
     const result = await cap.run(session.name, { orderId: id });
     return NextResponse.json({ ok: true, ...(result as object) });
   } catch (e) {
+    console.error("[equipment order POST] failed:", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Action failed" }, { status: 400 });
   }
 }

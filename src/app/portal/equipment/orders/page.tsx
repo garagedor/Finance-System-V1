@@ -5,6 +5,7 @@ import type { EquipmentOrder } from "@/types/equipment";
 import { fmt$, fmtDate } from "../../format";
 import { PageHeader, CardShell, Empty, StatPill } from "../../_components/page-helpers";
 import { EquipmentStatusPill } from "../_components/EquipmentStatusPill";
+import EquipmentTabs from "../_components/EquipmentTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -44,6 +45,7 @@ export default async function EquipmentOrdersPage() {
           </div>
         }
       />
+      <EquipmentTabs active="orders" />
 
       <section className="portal-grid-4">
         <StatPill label="Approved (awaiting charge)" value={openApproved} />

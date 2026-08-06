@@ -6,13 +6,14 @@ import { fmt$ } from "../../format";
 import { PageHeader, CardShell, Empty, BackLink } from "../../_components/page-helpers";
 import EntryFormModal, { type FieldDef } from "../../_components/EntryFormModal";
 import RowActions from "../../_components/RowActions";
+import EquipmentTabs from "../_components/EquipmentTabs";
 
 export const dynamic = "force-dynamic";
 
 function productFields(canEditCost: boolean): FieldDef[] {
   const fields: FieldDef[] = [
     { name: "name", label: "Product name", kind: "text", required: true },
-    { name: "sku", label: "SKU / code", kind: "text", required: true, width: "half" },
+    { name: "sku", label: "SKU / code", kind: "text", width: "half", help: "Optional" },
     { name: "category", label: "Category", kind: "text", width: "half" },
     { name: "sellingUnit", label: "Selling unit", kind: "select", width: "half",
       options: SELLING_UNITS.map((u) => ({ value: u, label: u })), defaultValue: "unit" },
@@ -65,6 +66,7 @@ export default async function EquipmentProductsPage() {
           <EntryFormModal endpoint="/api/portal/equipment/products" title="product" fields={fields} triggerLabel="+ New product" primary />
         ) : null}
       />
+      <EquipmentTabs active="products" />
 
       <CardShell title="Products" subtitle={`${rows.length} product${rows.length === 1 ? "" : "s"}`}>
         {rows.length === 0 ? (

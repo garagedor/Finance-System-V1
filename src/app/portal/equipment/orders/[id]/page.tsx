@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
 import { readSession, hasPermission } from "@/lib/rbac";
-import type { EquipmentOrder } from "@/types/equipment";
+import type { EquipmentOrder, EquipmentReturn } from "@/types/equipment";
 import { fmt$, fmtDate, fmtDateTime } from "../../../format";
 import { PageHeader, CardShell, Empty, BackLink } from "../../../_components/page-helpers";
-import { EquipmentStatusPill } from "../../_components/EquipmentStatusPill";
+import { EquipmentStatusPill, ReturnStatusPill } from "../../_components/EquipmentStatusPill";
 import OrderActions from "../../_components/OrderActions";
 
 export const dynamic = "force-dynamic";
@@ -39,13 +39,25 @@ export default async function EquipmentOrderDetailPage({ params }: { params: Pro
   };
   const t = order.totals;
 
+  const returns = await coll<EquipmentReturn>(FINANCE_COLLECTIONS.equipmentReturn)
+    .find({ orderId: order._id }).sort({ created_at: -1 }).toArray();
+  const canReturn = hasPermission(session, "finance:equipment_returns:create")
+    && ["Delivered", "ChargedToLedger", "PartiallyReturned"].includes(order.status);
+  const canEdit = hasPermission(session, "finance:equipment_orders:create")
+    && ["Draft", "PendingApproval"].includes(order.status);
+
   return (
     <div className="portal-page">
       <PageHeader
         kicker="Equipment"
         title={`Order ${order.orderNumber}`}
         subtitle={<BackLink href="/portal/equipment/orders" label="Back to orders" />}
-        actions={<EquipmentStatusPill status={order.status} />}
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {canEdit && <Link href={`/portal/equipment/orders/${order._id}/edit`} className="portal-btn">Edit order</Link>}
+            <EquipmentStatusPill status={order.status} />
+          </div>
+        }
       />
 
       {/* Summary */}
@@ -128,6 +140,33 @@ export default async function EquipmentOrderDetailPage({ params }: { params: Pro
           lineCount={t.lineCount}
           perms={perms}
         />
+      )}
+
+      {/* Returns / credits */}
+      {(returns.length > 0 || canReturn) && (
+        <CardShell
+          title="Returns & credits"
+          subtitle={returns.length ? `${returns.length} return${returns.length === 1 ? "" : "s"}` : undefined}
+          actions={canReturn ? <Link href={`/portal/equipment/orders/${order._id}/return`} className="portal-btn portal-btn-primary">+ Create return</Link> : undefined}
+        >
+          {returns.length === 0 ? (
+            <Empty message="No returns for this order yet." />
+          ) : (
+            <table className="portal-table">
+              <thead><tr><th>Return #</th><th className="right">Units</th><th className="right">Credit</th><th>Status</th></tr></thead>
+              <tbody>
+                {returns.map((r) => (
+                  <tr key={r._id}>
+                    <td className="mono small"><Link href={`/portal/equipment/returns/${r._id}`} style={{ color: "#818cf8", textDecoration: "none" }}>{r.returnNumber}</Link></td>
+                    <td className="right small">{r.items.reduce((s, it) => s + it.qtyReturned, 0)}</td>
+                    <td className="right money">{fmt$(r.creditAmount)}</td>
+                    <td><ReturnStatusPill status={r.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </CardShell>
       )}
     </div>
   );

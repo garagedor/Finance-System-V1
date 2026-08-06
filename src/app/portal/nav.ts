@@ -25,8 +25,6 @@ import {
   FiLock,
   FiCpu,
   FiCheckSquare,
-  FiShoppingCart,
-  FiGrid,
 } from "react-icons/fi";
 import type { ComponentType } from "react";
 import type { Permission } from "@/types/rbac";
@@ -176,30 +174,19 @@ export const FINANCE_NAV: FinanceModule[] = [
   },
   {
     href: "/portal/equipment",
-    label: "Equipment Finance",
+    label: "Equipment",
     section: "Tracking",
-    title: "Equipment Finance",
+    title: "Equipment",
     icon: FiPackage,
     group: "tracking",
-    requires: "finance:equipment:view",
-  },
-  {
-    href: "/portal/equipment/orders",
-    label: "Equipment Orders",
-    section: "Tracking",
-    title: "Equipment Orders",
-    icon: FiShoppingCart,
-    group: "tracking",
-    requires: "finance:equipment_orders:view",
-  },
-  {
-    href: "/portal/equipment/products",
-    label: "Product Catalog",
-    section: "Tracking",
-    title: "Product Catalog",
-    icon: FiGrid,
-    group: "tracking",
-    requires: "finance:equipment_products:view",
+    // One portal entry; the in-page tabs switch between orders / catalog /
+    // returns / reports / finance ledger. Shown if the user has ANY equipment access.
+    requires: [
+      "finance:equipment:view",
+      "finance:equipment_orders:view",
+      "finance:equipment_products:view",
+      "finance:equipment_profitability:view",
+    ],
   },
   {
     href: "/portal/documents",

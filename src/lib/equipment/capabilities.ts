@@ -6,11 +6,16 @@ import type {
   EquipmentProduct,
   EquipmentOrder,
   EquipmentOrderStatus,
+  EquipmentReturn,
   SellingUnit,
 } from "@/types/equipment";
 import { buildOrderItems, nextOrderNumber, type OrderLineInput } from "./orders";
-import { computeOrderTotals } from "./totals";
+import { computeOrderTotals, round2 } from "./totals";
 import { postEquipmentOrderToLedger } from "./ledger";
+import {
+  buildReturnItems, nextReturnNumber, postEquipmentReturnCredit,
+  type ReturnLineInput,
+} from "./returns";
 import { fmt$ } from "@/app/portal/format";
 
 // ── Capability registry (spec §12) ──────────────────────────────────────────
@@ -25,6 +30,7 @@ export type EquipmentCapabilityKey =
   | "equipment.product.create"
   | "equipment.product.update"
   | "equipment.order.create"
+  | "equipment.order.update"
   | "equipment.order.approve"
   | "equipment.order.mark_delivered"
   | "equipment.order.post_to_ledger"
@@ -47,6 +53,13 @@ async function loadOrder(id: string): Promise<EquipmentOrder> {
   const o = await coll<EquipmentOrder>(FINANCE_COLLECTIONS.equipmentOrder).findOne({ _id: id });
   if (!o) throw new Error(`Equipment order not found: ${id}`);
   return o;
+}
+
+async function loadReturn(id: string): Promise<EquipmentReturn> {
+  await ensureFinanceIndexes();
+  const r = await coll<EquipmentReturn>(FINANCE_COLLECTIONS.equipmentReturn).findOne({ _id: id });
+  if (!r) throw new Error(`Equipment return not found: ${id}`);
+  return r;
 }
 
 // ── Product handlers ────────────────────────────────────────────────────────
@@ -92,6 +105,7 @@ interface OrderCreateInput {
   expectedDeliveryAt?: string | null;
   notes?: string | null;
   lines?: OrderLineInput[];
+  canViewCost?: boolean;         // injected by the route from the session's permission
 }
 
 export const EQUIPMENT_CAPABILITIES: Record<EquipmentCapabilityKey, EquipmentCapability> = {
@@ -102,11 +116,10 @@ export const EQUIPMENT_CAPABILITIES: Record<EquipmentCapabilityKey, EquipmentCap
       await ensureFinanceIndexes();
       const patch = normalizeProduct(args as ProductInput);
       if (!patch.name) throw new Error("Product name is required.");
-      if (!patch.sku) throw new Error("SKU is required.");
       const doc: EquipmentProduct = {
         _id: newId("prod"),
         name: patch.name,
-        sku: patch.sku,
+        sku: patch.sku ?? "",
         category: patch.category ?? "",
         description: patch.description ?? null,
         sellingUnit: (patch.sellingUnit as SellingUnit) ?? "unit",
@@ -159,7 +172,7 @@ export const EQUIPMENT_CAPABILITIES: Record<EquipmentCapabilityKey, EquipmentCap
       const input = args as OrderCreateInput;
       const amName = String(input.areaManagerName ?? "").trim();
       if (!amName) throw new Error("Select an Area Manager for the order.");
-      const items = await buildOrderItems(input.lines ?? []);
+      const items = await buildOrderItems(input.lines ?? [], { canViewCost: !!input.canViewCost });
       const totals = computeOrderTotals(items);
       const orderDate = input.orderDate || DAY();
       const year = Number(orderDate.slice(0, 4)) || new Date().getFullYear();
@@ -190,6 +203,45 @@ export const EQUIPMENT_CAPABILITIES: Record<EquipmentCapabilityKey, EquipmentCap
         summary: `Created order ${doc.orderNumber} for ${amName} — ${totals.itemCount} units, AM charge ${fmt$(totals.amChargeTotal)}`,
       });
       return doc;
+    },
+  },
+
+  "equipment.order.update": {
+    permission: "finance:equipment_orders:create",
+    summary: "Edit a draft equipment order",
+    run: async (actor, args) => {
+      await ensureFinanceIndexes();
+      const input = args as OrderCreateInput & { orderId?: string };
+      if (!input.orderId) throw new Error("Order id is required.");
+      const order = await loadOrder(input.orderId);
+      if (!["Draft", "PendingApproval"].includes(order.status)) {
+        throw new Error(`Only a Draft order can be edited (currently ${order.status}).`);
+      }
+      const amName = String(input.areaManagerName ?? order.areaManagerName ?? "").trim();
+      if (!amName) throw new Error("Select an Area Manager for the order.");
+      const items = await buildOrderItems(input.lines ?? [], { canViewCost: !!input.canViewCost });
+      const totals = computeOrderTotals(items);
+      const set = {
+        areaManagerId: input.areaManagerId ?? order.areaManagerId ?? null,
+        areaManagerName: amName,
+        area: input.area ?? null,
+        orderDate: input.orderDate || order.orderDate,
+        deliveryMethod: input.deliveryMethod ?? null,
+        expectedDeliveryAt: input.expectedDeliveryAt ?? null,
+        notes: input.notes ?? null,
+        items,
+        totals,
+        updated_at: NOW(),
+        updated_by: actor,
+      };
+      await coll<EquipmentOrder>(FINANCE_COLLECTIONS.equipmentOrder).updateOne({ _id: order._id }, { $set: set });
+      await audit({
+        kind: "equipment", action: "equipment.order.update", target_id: order._id,
+        before: { areaManagerName: order.areaManagerName, totals: order.totals },
+        after: { areaManagerName: amName, totals }, changed_by: actor,
+        summary: `Edited order ${order.orderNumber} — ${totals.itemCount} units, AM charge ${fmt$(totals.amChargeTotal)}`,
+      });
+      return { ...order, ...set };
     },
   },
 
@@ -284,20 +336,97 @@ export const EQUIPMENT_CAPABILITIES: Record<EquipmentCapabilityKey, EquipmentCap
     },
   },
 
-  // ── Returns / credits — Phase B (declared now; handlers land next). ──
+  // ── Returns / credits ──
   "equipment.return.create": {
     permission: "finance:equipment_returns:create",
-    summary: "Create an equipment return (Phase B)",
-    run: async () => { throw new Error("Equipment returns ship in Phase B."); },
+    summary: "Create an equipment return",
+    run: async (actor, args) => {
+      await ensureFinanceIndexes();
+      const input = args as {
+        orderId?: string; lines?: ReturnLineInput[]; condition?: string | null;
+        reason?: string | null; notes?: string | null;
+        creditApproved?: boolean; creditAmount?: number;
+      };
+      if (!input.orderId) throw new Error("An order is required to create a return.");
+      const order = await loadOrder(input.orderId);
+      if (!["Delivered", "ChargedToLedger", "PartiallyReturned"].includes(order.status)) {
+        throw new Error(`Returns are only allowed on delivered/charged orders (order is ${order.status}).`);
+      }
+      const items = await buildReturnItems(order, input.lines ?? []);
+      const suggested = round2(items.reduce((s, it) => s + it.creditLineTotal, 0));
+      const creditApproved = !!input.creditApproved;
+      const creditAmount = input.creditAmount != null ? round2(Number(input.creditAmount)) : suggested;
+      const year = Number((order.orderDate || "").slice(0, 4)) || new Date().getFullYear();
+      const doc: EquipmentReturn = {
+        _id: newId("eret"),
+        returnNumber: await nextReturnNumber(year),
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        areaManagerName: order.areaManagerName,
+        items,
+        condition: input.condition ?? null,
+        reason: input.reason ?? null,
+        notes: input.notes ?? null,
+        creditApproved,
+        creditAmount: creditApproved ? creditAmount : 0,
+        originalLedgerEntryId: order.ledgerEntryId ?? null,
+        creditLedgerEntryId: null,
+        creditPostedAt: null,
+        creditPostedBy: null,
+        status: creditApproved ? "Approved" : "Draft",
+        created_at: NOW(),
+        created_by: actor,
+      };
+      await coll<EquipmentReturn>(FINANCE_COLLECTIONS.equipmentReturn).insertOne(doc);
+      await audit({
+        kind: "equipment", action: "equipment.return.create", target_id: doc._id,
+        before: null, after: doc, changed_by: actor,
+        summary: `Created return ${doc.returnNumber} for order ${order.orderNumber} — ${items.reduce((s, it) => s + it.qtyReturned, 0)} units, suggested credit ${fmt$(suggested)}`,
+      });
+      return doc;
+    },
   },
   "equipment.return.approve": {
     permission: "finance:equipment_returns:approve",
-    summary: "Approve an equipment credit (Phase B)",
-    run: async () => { throw new Error("Equipment credits ship in Phase B."); },
+    summary: "Approve an equipment credit",
+    run: async (actor, args) => {
+      const { returnId, creditAmount } = args as { returnId: string; creditAmount?: number };
+      const ret = await loadReturn(returnId);
+      if (ret.status === "Credited") throw new Error("This return's credit was already posted.");
+      const suggested = round2(ret.items.reduce((s, it) => s + it.creditLineTotal, 0));
+      const amount = creditAmount != null ? round2(Number(creditAmount)) : (ret.creditAmount || suggested);
+      const now = NOW();
+      await coll<EquipmentReturn>(FINANCE_COLLECTIONS.equipmentReturn).updateOne(
+        { _id: returnId },
+        { $set: { creditApproved: true, creditAmount: amount, status: "Approved", updated_at: now } },
+      );
+      await audit({
+        kind: "equipment", action: "equipment.return.approve", target_id: returnId,
+        before: { creditApproved: ret.creditApproved, creditAmount: ret.creditAmount, status: ret.status },
+        after: { creditApproved: true, creditAmount: amount, status: "Approved" }, changed_by: actor,
+        summary: `Approved credit ${fmt$(amount)} for return ${ret.returnNumber}`,
+      });
+      return { ok: true, creditAmount: amount, status: "Approved" };
+    },
   },
   "equipment.return.post_credit": {
     permission: "finance:equipment_returns:approve",
-    summary: "Post an equipment credit to the ledger (Phase B)",
-    run: async () => { throw new Error("Equipment credits ship in Phase B."); },
+    summary: "Post an equipment credit to the ledger",
+    run: async (actor, args) => {
+      const { returnId } = args as { returnId: string };
+      const ret = await loadReturn(returnId);
+      const order = await loadOrder(ret.orderId);
+      const res = await postEquipmentReturnCredit({ ret, order, actor });
+      if (!res.ok) throw new Error(res.error ?? "Failed to post credit.");
+      if (!res.reused) {
+        await audit({
+          kind: "equipment", action: "equipment.return.post_credit", target_id: returnId,
+          before: { status: ret.status, creditLedgerEntryId: null },
+          after: { status: "Credited", creditLedgerEntryId: res.ledgerEntryId }, changed_by: actor,
+          summary: `Posted credit for return ${ret.returnNumber} — ${fmt$(res.amount ?? 0)} off ${order.areaManagerName}'s ledger`,
+        });
+      }
+      return res;
+    },
   },
 };

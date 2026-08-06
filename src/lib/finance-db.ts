@@ -196,6 +196,11 @@ export async function ensureFinanceIndexes(): Promise<void> {
       { equipment_order_id: 1 },
       { unique: true, partialFilterExpression: { equipment_order_id: { $type: "string" } } },
     ),
+    // One credit ledger entry per equipment return (race-safe dedup).
+    db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex(
+      { equipment_return_id: 1 },
+      { unique: true, partialFilterExpression: { equipment_return_id: { $type: "string" } } },
+    ),
     db.collection(FINANCE_COLLECTIONS.bankSyncLog).createIndex({ item_id: 1, started_at: -1 }),
     db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ bank_txn_id: 1 }),
     db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ matched_kind: 1, matched_id: 1 }),

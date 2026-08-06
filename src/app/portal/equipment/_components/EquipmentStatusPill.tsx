@@ -27,3 +27,14 @@ const LABEL: Record<EquipmentOrderStatus, string> = {
 export function EquipmentStatusPill({ status }: { status: EquipmentOrderStatus }) {
   return <span className={`pill ${CLASS[status] ?? "pill-draft"}`}>{LABEL[status] ?? status}</span>;
 }
+
+const RETURN_CLASS: Record<string, string> = {
+  Draft: "pill-draft",
+  Approved: "pill-pending",
+  Credited: "pill-paid",
+  Cancelled: "pill-unpaid",
+};
+
+export function ReturnStatusPill({ status }: { status: string }) {
+  return <span className={`pill ${RETURN_CLASS[status] ?? "pill-draft"}`}>{status}</span>;
+}

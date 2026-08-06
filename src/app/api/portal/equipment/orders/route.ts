@@ -44,7 +44,8 @@ export async function POST(req: NextRequest) {
   if (session instanceof NextResponse) return session;
   try {
     const body = (await req.json()) as Record<string, unknown>;
-    const row = await cap.run(session.name, body);
+    const canViewCost = hasPermission(session, "finance:equipment_cost:view");
+    const row = await cap.run(session.name, { ...body, canViewCost });
     return NextResponse.json({ row }, { status: 201 });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Create failed" }, { status: 400 });
