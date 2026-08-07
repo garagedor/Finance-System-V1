@@ -130,6 +130,12 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
     return <LoginPage onLogin={login} />;
   }
 
+  // Bare routes render with NO app chrome (no sidebar, topbar, or AI orb) — used
+  // for printable documents like the payout statement so they export cleanly.
+  if (pathname?.startsWith('/payout-statement')) {
+    return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
+  }
+
   const roleLabel =
     user.type === 'admin' ? 'Admin' :
     user.type === 'office' ? 'Office' :
