@@ -199,7 +199,7 @@ export default function NewPayoutForm({
 
               {/* Ledger link */}
               <div style={{ marginBottom: 14 }}>
-                <label className="portal-label">Ledger (posts a payment here when marked paid)</label>
+                <label className="portal-label">Ledger (target for the manual &quot;Post to ledger&quot; action)</label>
                 <select className="portal-select" value={ledgerId} onChange={(e) => setLedgerId(e.target.value)}>
                   <option value="">— none (don&apos;t post to a ledger) —</option>
                   {ledgers.map((l) => (

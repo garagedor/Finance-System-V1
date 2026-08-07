@@ -74,18 +74,33 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     const existing = await loadPayout(id);
     if (!existing) return NextResponse.json({ error: "Payout not found" }, { status: 404 });
     const body = (await req.json().catch(() => ({}))) as { action?: string; date?: string };
+    const now = new Date().toISOString();
+    const stamp = { updated_at: now, updated_by: session.name };
 
-    if (body.action !== "mark_paid" && body.action !== "mark_unpaid") {
-      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    let patch: Partial<PayoutRecord>;
+    switch (body.action) {
+      case "mark_paid":
+        // Marking paid NEVER posts to the ledger — that's a separate choice.
+        patch = { status: "paid", paid_at: body.date || now.slice(0, 10), paid_by: session.name, ...stamp };
+        break;
+      case "mark_unpaid":
+        patch = { status: "unpaid", paid_at: null, ...stamp };
+        break;
+      case "post_ledger":
+        if (!existing.ledger_id) return NextResponse.json({ error: "Choose a ledger on this payout first." }, { status: 400 });
+        if (existing.status !== "paid") return NextResponse.json({ error: "Mark the payout paid before posting it to the ledger." }, { status: 400 });
+        patch = { post_to_ledger: true, ...stamp };
+        break;
+      case "unpost_ledger":
+        patch = { post_to_ledger: false, ...stamp };
+        break;
+      default:
+        return NextResponse.json({ error: "Unknown action" }, { status: 400 });
     }
-    const paid = body.action === "mark_paid";
-    const patch = paid
-      ? { status: "paid" as const, paid_at: body.date || new Date().toISOString().slice(0, 10), paid_by: session.name, updated_at: new Date().toISOString(), updated_by: session.name }
-      : { status: "unpaid" as const, paid_at: null, updated_at: new Date().toISOString(), updated_by: session.name };
     await coll<PayoutRecord>(FINANCE_COLLECTIONS.payout).updateOne({ _id: id }, { $set: patch });
     const updated = { ...existing, ...patch } as PayoutRecord;
     const ledgerEntryId = await syncPayoutLedger(updated, session.name);
-    return NextResponse.json({ ok: true, status: patch.status, ledgerEntryId });
+    return NextResponse.json({ ok: true, status: updated.status, ledgerEntryId });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Action failed" }, { status: 400 });
   }

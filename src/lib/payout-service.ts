@@ -20,7 +20,9 @@ export async function syncPayoutLedger(payout: PayoutRecord, actor: string): Pro
   const pc = coll<PayoutRecord>(FINANCE_COLLECTIONS.payout);
 
   const net = Number(payout.net) || 0;
-  const shouldPost = payout.status === "paid" && !!payout.ledger_id && net > 0;
+  // Post ONLY when the user explicitly opted in (post_to_ledger) — never just
+  // because a ledger was chosen and the payout is paid.
+  const shouldPost = payout.status === "paid" && !!payout.ledger_id && !!payout.post_to_ledger && net > 0;
   // Only manage the entry WE auto-posted (source "crm"), never a manual
   // "Record payment" a user matched to this payout (source "manual").
   const existing = await ec.findOne({ payout_id: payout._id, source: "crm" });

@@ -199,10 +199,11 @@ export interface PayoutRecord {
   paid_at?: string | null;
   paid_by?: string;
   notes?: string | null;
-  // Ledger integration: the chosen ledger this payout belongs to, and the
-  // payment entry auto-posted to it when the payout is marked paid. See
-  // lib/payout-service.syncPayoutLedger.
+  // Ledger integration: the chosen ledger this payout belongs to. A payment
+  // entry is posted to it ONLY when `post_to_ledger` is explicitly turned on
+  // (never automatically). See lib/payout-service.syncPayoutLedger.
   ledger_id?: string | null;
+  post_to_ledger?: boolean;
   ledger_entry_id?: string | null;
   created_at: string;
   created_by?: string;
