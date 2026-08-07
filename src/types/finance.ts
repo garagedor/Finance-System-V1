@@ -186,8 +186,8 @@ export interface PayoutRecord {
   _id: string;
   recipient_id: string;           // person id (CRM tech _id, manual, etc.)
   recipient_name: string;
-  recipient_role?: string;
-  profile_id?: string;            // optional reference to the profile used
+  recipient_role?: string | null;
+  profile_id?: string | null;     // optional reference to the profile used
   period_start: string;           // YYYY-MM-DD
   period_end: string;
   line_items: PayoutLineItem[];
@@ -195,12 +195,19 @@ export interface PayoutRecord {
   deductions: number;
   net: number;
   status: FinanceStatus;
-  payment_method?: PaymentMethod;
-  paid_at?: string;
+  payment_method?: PaymentMethod | null;
+  paid_at?: string | null;
   paid_by?: string;
-  notes?: string;
+  notes?: string | null;
+  // Ledger integration: the chosen ledger this payout belongs to, and the
+  // payment entry auto-posted to it when the payout is marked paid. See
+  // lib/payout-service.syncPayoutLedger.
+  ledger_id?: string | null;
+  ledger_entry_id?: string | null;
   created_at: string;
   created_by?: string;
+  updated_at?: string;
+  updated_by?: string;
 }
 
 // ─── Follow-up commission (manual layer on top of a CRM job) ──────────────

@@ -26,6 +26,8 @@ export interface LedgerRecord {
 }
 
 // `report` is reserved for CRM-auto entries (Phase 2). The rest are manual.
+// The trailing `(string & {})` keeps autocomplete for the known types while
+// allowing a manually-typed custom type/category on a hand-written entry.
 export type LedgerEntryType =
   | "opening_balance"
   | "report"
@@ -37,7 +39,16 @@ export type LedgerEntryType =
   | "office_charge"
   | "payment"
   | "deduction"
-  | "adjustment";
+  | "adjustment"
+  | "debt"
+  | "loan"
+  | "advance"
+  | "bonus"
+  | "commission"
+  | "fee"
+  | "reimbursement"
+  | "credit"
+  | (string & {});
 
 // Snapshot of a CRM Balance Report captured as a ledger entry (type "report").
 // Mirrors the report's headline numbers (CLOSED jobs only) so the ledger entry
@@ -114,6 +125,9 @@ export interface LedgerEntryRecord {
   source: "manual" | "crm" | "imported";
   created_at: string;
   created_by?: string;
+  // Set when a MANUAL entry is edited in place (system entries stay append-only).
+  updated_at?: string;
+  updated_by?: string;
 }
 
 // Per-technician dispute/refund rate. The default rate is the CRM
@@ -142,6 +156,14 @@ export const MANUAL_LEDGER_ENTRY_TYPES: LedgerEntryType[] = [
   "dispute",
   "refund",
   "equipment",
+  "debt",
+  "loan",
+  "advance",
+  "bonus",
+  "commission",
+  "fee",
+  "reimbursement",
+  "credit",
   "misc",
   "settlement",
   "office_charge",

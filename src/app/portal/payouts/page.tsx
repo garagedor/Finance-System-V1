@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
 import type { FollowUpCommission, PayoutProfile, PayoutRecord } from "@/types/finance";
+import type { LedgerRecord } from "@/types/finance-ledger";
 import { fmt$, fmtDate } from "../format";
 import { PageHeader, StatPill, FilterBar, FilterField, CardShell, Empty, StatusPill } from "../_components/page-helpers";
 import RowActions from "../_components/RowActions";
-import NewPayoutForm from "./NewPayoutForm";
+import NewPayoutForm, { type PayoutLedgerOption } from "./NewPayoutForm";
+import PayoutActions from "./PayoutActions";
 import NewFollowUpForm from "./NewFollowUpForm";
 
 export const dynamic = "force-dynamic";
@@ -21,10 +23,11 @@ async function load(sp: SP) {
   if (sp.status === "paid" || sp.status === "unpaid") filter.status = sp.status;
   if (sp.recipient) filter.recipient_name = { $regex: sp.recipient, $options: "i" };
 
-  const [payouts, followups, profiles] = await Promise.all([
+  const [payouts, followups, profiles, ledgers] = await Promise.all([
     coll<PayoutRecord>(FINANCE_COLLECTIONS.payout).find(filter).sort({ period_end: -1 }).limit(200).toArray(),
     coll<FollowUpCommission>(FINANCE_COLLECTIONS.followUpComm).find({}).sort({ created_at: -1 }).limit(200).toArray(),
     coll<PayoutProfile>(FINANCE_COLLECTIONS.payoutProfile).find({ active: true }).toArray(),
+    coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger).find({ status: { $ne: "archived" } }).sort({ holder_name: 1 }).toArray(),
   ]);
 
   const totalNet = payouts.reduce((s, p) => s + p.net, 0);
@@ -33,7 +36,7 @@ async function load(sp: SP) {
   const unattachedFollowups = followups.filter((f) => !f.paid_via_payout_id);
   const unattachedTotal = unattachedFollowups.reduce((s, f) => s + f.computed_amount, 0);
 
-  return { payouts, followups, profiles, totalNet, unpaidNet, followupTotal, unattachedFollowups, unattachedTotal };
+  return { payouts, followups, profiles, ledgers, totalNet, unpaidNet, followupTotal, unattachedFollowups, unattachedTotal };
 }
 
 export default async function PayoutsPage({
@@ -44,6 +47,8 @@ export default async function PayoutsPage({
   const sp = await searchParams;
   const d = await load(sp);
   const tab = sp.tab ?? "payouts";
+  const ledgerOpts: PayoutLedgerOption[] = d.ledgers.map((l) => ({ _id: l._id, holder_name: l.holder_name, role: l.role, location: l.location }));
+  const ledgerName = new Map(d.ledgers.map((l) => [l._id, l.holder_name]));
 
   return (
     <div className="portal-page">
@@ -54,7 +59,7 @@ export default async function PayoutsPage({
         actions={
           <>
             <NewFollowUpForm />
-            <NewPayoutForm profiles={d.profiles} />
+            <NewPayoutForm profiles={d.profiles} ledgers={ledgerOpts} />
           </>
         }
       />
@@ -103,7 +108,7 @@ export default async function PayoutsPage({
             {d.payouts.length === 0 ? (
               <Empty
                 message="No payouts yet."
-                action={<NewPayoutForm profiles={d.profiles} />}
+                action={<NewPayoutForm profiles={d.profiles} ledgers={ledgerOpts} />}
               />
             ) : (
               <table className="portal-table">
@@ -112,7 +117,7 @@ export default async function PayoutsPage({
                     <th>Recipient</th>
                     <th>Role</th>
                     <th>Period</th>
-                    <th>Lines</th>
+                    <th>Ledger</th>
                     <th>Status</th>
                     <th className="right">Gross</th>
                     <th className="right">Deductions</th>
@@ -123,12 +128,19 @@ export default async function PayoutsPage({
                 <tbody>
                   {d.payouts.map((p) => (
                     <tr key={p._id}>
-                      <td><strong>{p.recipient_name}</strong></td>
+                      <td>
+                        <Link href={`/portal/payouts/${p._id}`} style={{ color: "#818cf8", textDecoration: "none", fontWeight: 600 }}>
+                          {p.recipient_name}
+                        </Link>
+                      </td>
                       <td className="muted small">{p.recipient_role ?? "—"}</td>
                       <td className="muted small mono">
                         {fmtDate(p.period_start)} – {fmtDate(p.period_end)}
                       </td>
-                      <td className="muted small">{p.line_items.length}</td>
+                      <td className="muted small">
+                        {p.ledger_id ? (ledgerName.get(p.ledger_id) ?? "—") : "—"}
+                        {p.ledger_entry_id && <span className="pill pill-paid" style={{ marginLeft: 6, fontSize: 10 }}>posted</span>}
+                      </td>
                       <td><StatusPill status={p.status} /></td>
                       <td className="right money">{fmt$(p.gross)}</td>
                       <td className="right money money-neg">−{fmt$(p.deductions)}</td>
@@ -136,11 +148,7 @@ export default async function PayoutsPage({
                         {fmt$(p.net)}
                       </td>
                       <td className="right">
-                        <RowActions
-                          endpoint="/api/portal/payouts"
-                          id={p._id}
-                          currentStatus={p.status}
-                        />
+                        <PayoutActions payout={p} profiles={d.profiles} ledgers={ledgerOpts} />
                       </td>
                     </tr>
                   ))}

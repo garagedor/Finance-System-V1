@@ -46,6 +46,7 @@ const crud = makeCrud<PayoutRecord>({
       payment_method: body.payment_method ?? null,
       paid_at: body.paid_at ?? null,
       notes: body.notes ?? null,
+      ledger_id: body.ledger_id ? String(body.ledger_id) : null,
     };
   },
 });

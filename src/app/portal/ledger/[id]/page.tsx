@@ -19,6 +19,14 @@ const ROLE_LABEL: Record<string, string> = {
 
 const TYPE_OPTIONS = [
   { value: "opening_balance", label: "Opening balance" },
+  { value: "debt", label: "Debt" },
+  { value: "loan", label: "Loan" },
+  { value: "advance", label: "Advance" },
+  { value: "bonus", label: "Bonus" },
+  { value: "commission", label: "Commission" },
+  { value: "fee", label: "Fee" },
+  { value: "reimbursement", label: "Reimbursement" },
+  { value: "credit", label: "Credit" },
   { value: "dispute", label: "Dispute" },
   { value: "refund", label: "Refund" },
   { value: "equipment", label: "Equipment" },
@@ -79,8 +87,9 @@ export default async function LedgerDetailPage({
   const entryFields: FieldDef[] = [
     { name: "date", label: "Date", kind: "date", width: "half", required: true,
       defaultValue: new Date().toISOString().slice(0, 10) },
-    { name: "type", label: "Type", kind: "select", width: "half", required: true,
-      options: TYPE_OPTIONS, defaultValue: "misc" },
+    { name: "type", label: "Type", kind: "combo", width: "half", required: true,
+      options: TYPE_OPTIONS, defaultValue: "misc",
+      help: "Pick one or type your own" },
     { name: "amount", label: "Amount (signed)", kind: "money", required: true,
       placeholder: "e.g. -1500",
       help: "Negative = company owes them · Positive = they owe the company" },
@@ -210,9 +219,20 @@ export default async function LedgerDetailPage({
                   </td>
                   <td className="right"><BalanceText n={running} muted /></td>
                   <td className="right">
-                    {!isReversal && !isReversed && (
-                      <ReverseEntryButton ledgerId={ledger._id} entryId={e._id} />
-                    )}
+                    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                      {e.source === "manual" && !isReversal && !isReversed && (
+                        <EntryFormModal
+                          endpoint={`/api/portal/ledger/${ledger._id}/entries`}
+                          title="Ledger entry"
+                          fields={entryFields}
+                          initial={e as unknown as Record<string, unknown>}
+                          triggerLabel="Edit"
+                        />
+                      )}
+                      {!isReversal && !isReversed && (
+                        <ReverseEntryButton ledgerId={ledger._id} entryId={e._id} />
+                      )}
+                    </div>
                   </td>
                 </tr>
                 );
@@ -224,8 +244,9 @@ export default async function LedgerDetailPage({
 
       <p className="muted small" style={{ marginTop: 4 }}>
         <span className="money-neg">Red / negative</span> = company owes them ·{" "}
-        <span className="money-pos">Green / positive</span> = they owe the company. Entries are
-        append-only — correct a mistake by adding a reversing entry.
+        <span className="money-pos">Green / positive</span> = they owe the company. Manually-added
+        entries can be edited; system entries (CRM reports, disputes, equipment, payments) are
+        append-only — correct those with a reversing entry.
       </p>
     </div>
   );

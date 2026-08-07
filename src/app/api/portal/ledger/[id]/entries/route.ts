@@ -5,7 +5,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, newId } from "@/lib/finance-db";
 import { readPortalSession } from "@/lib/portal-auth";
 import {
-  MANUAL_LEDGER_ENTRY_TYPES,
   type LedgerEntryRecord,
   type LedgerEntryType,
   type LedgerRecord,
@@ -27,9 +26,10 @@ export async function POST(
 
     const body = (await req.json()) as Record<string, unknown>;
 
-    const type = MANUAL_LEDGER_ENTRY_TYPES.includes(body.type as LedgerEntryType)
-      ? (body.type as LedgerEntryType)
-      : "adjustment";
+    // Accept a known type OR a custom hand-typed one (trimmed, capped). Never
+    // allow the reserved CRM-auto "report" type on a manual entry.
+    const rawType = typeof body.type === "string" ? body.type.trim().slice(0, 40) : "";
+    const type: LedgerEntryType = !rawType || rawType === "report" ? "adjustment" : rawType;
 
     const gross = body.gross_amount != null ? Number(body.gross_amount) : null;
     const pct = body.pct_applied != null ? Number(body.pct_applied) : null; // fraction 0–1
@@ -74,6 +74,64 @@ export async function POST(
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Failed to add entry" },
+      { status: 400 },
+    );
+  }
+}
+
+// Edit an existing MANUAL entry (date / type / amount / description). System &
+// linked entries (source "crm"/"imported", CRM reports, reversals, or an entry
+// that has already been reversed) are append-only and rejected — correct those
+// with a reversing entry instead, so the source records never desync.
+export async function PUT(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await readPortalSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const { id } = await params;
+    await ensureFinanceIndexes();
+    const body = (await req.json()) as Record<string, unknown> & { _id?: string };
+    const entryId = body._id;
+    if (!entryId) return NextResponse.json({ error: "_id required" }, { status: 400 });
+
+    const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
+    const entry = await ec.findOne({ _id: entryId, ledger_id: id });
+    if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+
+    if (entry.source !== "manual") {
+      return NextResponse.json({ error: "Only manually-added entries can be edited. Reverse system entries instead." }, { status: 400 });
+    }
+    if (entry.reverses_id) {
+      return NextResponse.json({ error: "A reversal entry can't be edited." }, { status: 400 });
+    }
+    const reversedBy = await ec.findOne({ reverses_id: entryId });
+    if (reversedBy) {
+      return NextResponse.json({ error: "This entry was reversed and can't be edited." }, { status: 400 });
+    }
+
+    const rawType = typeof body.type === "string" ? body.type.trim().slice(0, 40) : "";
+    const type: LedgerEntryType = !rawType || rawType === "report" ? "adjustment" : rawType;
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount)) {
+      return NextResponse.json({ error: "Amount must be a number" }, { status: 400 });
+    }
+
+    const patch = {
+      type,
+      amount,
+      date: String(body.date ?? entry.date),
+      description: body.description ? String(body.description) : null,
+      updated_at: new Date().toISOString(),
+      updated_by: session.name,
+    };
+    await ec.updateOne({ _id: entryId }, { $set: patch });
+    return NextResponse.json({ ok: true, row: { ...entry, ...patch } });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Failed to edit entry" },
       { status: 400 },
     );
   }
