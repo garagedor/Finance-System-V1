@@ -7,10 +7,6 @@
     {
       "path": "/api/scanpay/cron-sync",
       "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/cron/job-mirror-resync",
-      "schedule": "0 * * * *"
     }
   ]
 }

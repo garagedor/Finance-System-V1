@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { scanpayConfigured } from "@/lib/scanpay/client";
 import { syncNewScanpayDisputes } from "@/lib/scanpay/sync";
 import { syncNewScanpayRefunds } from "@/lib/scanpay/refund-sync";
+import { resyncJobMirrors } from "@/lib/job-mirror";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -17,16 +18,26 @@ export async function GET(req: NextRequest) {
   if (secret && req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // Always heal the Job report/stats mirror fields (independent of ScanPay) so
+  // externally-written jobs re-appear on the report / count correctly in stats.
+  let mirrors: unknown = null;
+  try {
+    mirrors = await resyncJobMirrors();
+  } catch (e) {
+    mirrors = { error: e instanceof Error ? e.message : "mirror resync failed" };
+  }
+
   if (!scanpayConfigured()) {
-    return NextResponse.json({ ok: false, error: "ScanPay is not configured (SCANPAY_API_KEY missing in this environment)" }, { status: 200 });
+    return NextResponse.json({ ok: true, mirrors, scanpay: "not configured" }, { status: 200 });
   }
   try {
     const [disputes, refunds] = await Promise.all([
       syncNewScanpayDisputes(),
       syncNewScanpayRefunds(),
     ]);
-    return NextResponse.json({ ok: true, at: new Date().toISOString(), disputes, refunds });
+    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, disputes, refunds });
   } catch (e) {
-    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "sync failed" }, { status: 200 });
+    return NextResponse.json({ ok: false, mirrors, error: e instanceof Error ? e.message : "sync failed" }, { status: 200 });
   }
 }
