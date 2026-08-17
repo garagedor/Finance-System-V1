@@ -18,14 +18,24 @@ export async function GET(req: NextRequest) {
 
   const q = req.nextUrl.searchParams.get("q")?.trim();
   const db = await getDb();
-  const filter: Record<string, unknown> = {};
+
+  // Only surface REAL jobs (has an address or any collected money) — skip the
+  // ~5.5k empty auto-created placeholder rows that otherwise flood the picker.
+  const clauses: Record<string, unknown>[] = [
+    { $or: [
+      { address: { $type: "string", $ne: "" } },
+      { totalAmount: { $gt: 0 } },
+      { totalPaidCard: { $gt: 0 } }, { totalPaidCompanyCheck: { $gt: 0 } },
+      { totalPaidFinance: { $gt: 0 } }, { totalPaidCompanyCash: { $gt: 0 } },
+      { techPaidCash: { $gt: 0 } }, { lmCash: { $gt: 0 } }, { lmCheck: { $gt: 0 } },
+    ] },
+  ];
   if (q) {
-    filter.$or = [
-      { address: { $regex: q, $options: "i" } },
-      { clientName: { $regex: q, $options: "i" } },
-      { tech: { $regex: q, $options: "i" } },
-    ];
+    const rx = { $regex: q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+    clauses.push({ $or: [{ address: rx }, { clientName: rx }, { tech: rx }] });
   }
+  const filter: Record<string, unknown> = { $and: clauses };
+
   const rows = await db.collection<JobRow>("Job")
     .find(filter)
     .sort({ jobDateNormalized: -1, _id: -1 })
@@ -35,7 +45,12 @@ export async function GET(req: NextRequest) {
   const jobs = rows.map((j) => {
     const grossTip = num(j.tipsCard) + num(j.tipsFinance) + num(j.tipsCompanyCash) + num(j.tipsCheck);
     const parts = num(j.techParts) + num(j.companyParts) + num(j.lmParts);
-    const jobAmount = num(j.totalAmount);
+    // Job amount = totalAmount, else the payment buckets (matches enrichJobs so
+    // the picker shows the real "collected" for bucket-paid jobs, not $0).
+    const ta = num(j.totalAmount);
+    const jobAmount = ta > 0 ? ta
+      : num(j.totalPaidCard) + num(j.totalPaidCompanyCheck) + num(j.totalPaidFinance)
+        + num(j.totalPaidCompanyCash) + num(j.techPaidCash) + num(j.lmCash) + num(j.lmCheck);
     return {
       _id: String((j as { _id?: unknown })._id ?? ""),
       date: j.date ?? null,
