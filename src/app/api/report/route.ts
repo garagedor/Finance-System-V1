@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient, ObjectId } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import type { Dispute, JobRow, Provider, Technician, Refund } from '../../../types/job';
+import { ensureJobMirrorsFresh } from '@/lib/job-mirror';
 import {
   calcJobProfit,
   calcOldBalance,
@@ -218,6 +219,9 @@ const buildJobPipeline = (
 
 export async function GET(req: NextRequest) {
   try {
+    // Heal-on-read: guarantees jobDateNormalized/statusCanonical are fresh before
+    // the report queries them, so externally-written jobs can never be dropped.
+    await ensureJobMirrorsFresh().catch(() => {});
     const { searchParams } = new URL(req.url);
     const type = (searchParams.get('type') as ReportType) || 'penalty';
     const startDate = toDate(searchParams.get('startDate'));

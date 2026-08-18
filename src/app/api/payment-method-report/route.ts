@@ -4,6 +4,7 @@ import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../types/job';
 import { toNumber } from '../utils/calculations';
 import { canonicalStatus } from '@/lib/status-canonical';
+import { ensureJobMirrorsFresh } from '@/lib/job-mirror';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -44,6 +45,7 @@ type GroupRow = {
 
 export async function GET(req: NextRequest) {
   try {
+    await ensureJobMirrorsFresh().catch(() => {});
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');

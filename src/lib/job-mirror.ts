@@ -62,3 +62,33 @@ export async function resyncJobMirrors(): Promise<JobMirrorResult> {
   await flush();
   return { scanned, dateFixed, statusFixed, opsApplied };
 }
+
+// Heal-on-read: called by the report/stats routes so the mirror fields are
+// fresh before every query — the definitive fix for the recurring drift, with
+// NO dependence on a cron. Debounced + atomically claimed via a meta doc so at
+// most one resync runs per `maxAgeMs` window no matter how many requests hit at
+// once, and it never runs on back-to-back loads. Best-effort: callers ignore
+// errors so a heal hiccup can never break the report.
+export async function ensureJobMirrorsFresh(maxAgeMs = 5 * 60_000): Promise<boolean> {
+  const db = await getDb();
+  const meta = db.collection<{ _id: string; last_heal?: string }>("finance_meta");
+  const nowIso = new Date().toISOString();
+  const cutoffIso = new Date(Date.now() - maxAgeMs).toISOString();
+
+  // Try to claim a stale existing marker atomically.
+  const claim = await meta.updateOne(
+    { _id: "job_mirror_heal", last_heal: { $lt: cutoffIso } },
+    { $set: { last_heal: nowIso } },
+  );
+  if (claim.modifiedCount > 0) { await resyncJobMirrors(); return true; }
+
+  // No stale marker matched — either it's fresh (skip) or it doesn't exist yet.
+  const seed = await meta.updateOne(
+    { _id: "job_mirror_heal" },
+    { $setOnInsert: { last_heal: nowIso } },
+    { upsert: true },
+  );
+  if (seed.upsertedCount > 0) { await resyncJobMirrors(); return true; }
+
+  return false; // recently healed by another request → skip
+}

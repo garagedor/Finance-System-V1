@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../types/job';
+import { ensureJobMirrorsFresh } from '@/lib/job-mirror';
 
 const DB_NAME = 'ag';
 const COLLECTION_NAME = 'Job';
@@ -18,6 +19,7 @@ async function getClient(): Promise<MongoClient> {
 
 export async function GET(req: NextRequest) {
   try {
+    await ensureJobMirrorsFresh().catch(() => {});
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get('startDate');
     const endDate = searchParams.get('endDate');
