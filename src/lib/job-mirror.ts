@@ -13,7 +13,10 @@ import { canonicalStatus } from "@/lib/status-canonical";
 interface JobMirrorDoc {
   _id: unknown;
   date?: string;
-  jobDateNormalized?: Date | null;
+  // At runtime the external writer sometimes stores this as an ISO STRING, not a
+  // BSON Date — which the report's Date-range $match silently skips. We detect
+  // and rewrite those to a real Date (see resyncJobMirrors).
+  jobDateNormalized?: Date | string | null;
   status?: string;
   statusCanonical?: string;
 }
@@ -27,8 +30,11 @@ export function normalizeJobDate(raw: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-const isoDay = (d: Date | null | undefined): string | null =>
-  d ? new Date(d).toISOString().slice(0, 10) : null;
+const isoDay = (d: Date | string | null | undefined): string | null => {
+  if (!d) return null;
+  const dd = new Date(d);
+  return Number.isNaN(dd.getTime()) ? null : dd.toISOString().slice(0, 10);
+};
 
 export interface JobMirrorResult {
   scanned: number;
@@ -53,7 +59,11 @@ export async function resyncJobMirrors(): Promise<JobMirrorResult> {
     scanned++;
     const set: Partial<JobMirrorDoc> = {};
     const wantDate = normalizeJobDate(j.date);
-    if (wantDate && isoDay(j.jobDateNormalized ?? null) !== isoDay(wantDate)) { set.jobDateNormalized = wantDate; dateFixed++; }
+    const curDate = j.jobDateNormalized ?? null;
+    // Heal if the value is the wrong DATE *or* the wrong TYPE (a string instead
+    // of a BSON Date — the latter is invisible to the report's date-range query).
+    const wrongType = curDate != null && !(curDate instanceof Date);
+    if (wantDate && (wrongType || isoDay(curDate) !== isoDay(wantDate))) { set.jobDateNormalized = wantDate; dateFixed++; }
     const wantStatus = canonicalStatus(j.status);
     if (wantStatus && (j.statusCanonical ?? "") !== wantStatus) { set.statusCanonical = wantStatus; statusFixed++; }
     if (Object.keys(set).length) ops.push({ updateOne: { filter: { _id: j._id }, update: { $set: set } } } as AnyBulkWriteOperation<JobMirrorDoc>);
