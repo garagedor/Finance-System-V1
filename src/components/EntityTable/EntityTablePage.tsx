@@ -819,6 +819,7 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
                     onSave={handleModalSave}
                     onClose={handleCloseModal}
                     title={title}
+                    orderKey={columnsKey}
                 />
             )}
 

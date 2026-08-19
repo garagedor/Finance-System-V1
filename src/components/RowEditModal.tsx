@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { FiX, FiSave, FiLoader, FiTrash2 } from 'react-icons/fi';
 import type { ColumnConfig } from '@/app/utils/jobUtils';
 
@@ -12,6 +12,9 @@ interface RowEditModalProps<T> {
   onDelete?: () => void;
   onClose: () => void;
   title?: string;
+  /** When set, the user's custom field order for this form is saved under
+   *  `${orderKey}:formOrder` in localStorage (per-device). */
+  orderKey?: string;
 }
 
 export function RowEditModal<T extends Record<string, any>>({
@@ -22,6 +25,7 @@ export function RowEditModal<T extends Record<string, any>>({
   onDelete,
   onClose,
   title = 'Edit Row',
+  orderKey,
 }: RowEditModalProps<T>) {
   const [formData, setFormData] = useState<T>({ ...row });
   const [saving, setSaving] = useState(false);
@@ -71,6 +75,52 @@ export function RowEditModal<T extends Record<string, any>>({
   const editableColumns = columns.filter(
     (col) => col.type !== 'chip' && (col.type !== 'password' || isNew) && col.editable !== false && !(col.key === '_id' && !isNew)
   );
+
+  // ── Custom field order (drag-to-reorder, saved per device) ────────────────
+  const editableKeys = useMemo(() => editableColumns.map((c) => String(c.key)), [editableColumns]);
+  const editableSig = editableKeys.join('|');
+  const formOrderKey = orderKey ? `${orderKey}:formOrder` : null;
+  const [reordering, setReordering] = useState(false);
+  const [fieldOrder, setFieldOrder] = useState<string[]>(() => {
+    let saved: string[] = [];
+    if (typeof window !== 'undefined' && formOrderKey) {
+      try { saved = JSON.parse(localStorage.getItem(formOrderKey) || '[]'); } catch { /* ignore */ }
+    }
+    const valid = saved.filter((k) => editableKeys.includes(k));
+    return [...valid, ...editableKeys.filter((k) => !valid.includes(k))];
+  });
+  // Keep the order reconciled when the column set changes (added/removed fields).
+  useEffect(() => {
+    setFieldOrder((prev) => {
+      const valid = prev.filter((k) => editableKeys.includes(k));
+      const merged = [...valid, ...editableKeys.filter((k) => !valid.includes(k))];
+      return merged.length === prev.length && merged.every((k, i) => k === prev[i]) ? prev : merged;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editableSig]);
+  // Persist.
+  useEffect(() => {
+    if (formOrderKey && typeof window !== 'undefined') {
+      try { localStorage.setItem(formOrderKey, JSON.stringify(fieldOrder)); } catch { /* ignore */ }
+    }
+  }, [formOrderKey, fieldOrder]);
+
+  const orderedColumns = useMemo(() => {
+    const byKey = new Map(editableColumns.map((c) => [String(c.key), c]));
+    return fieldOrder.map((k) => byKey.get(k)).filter(Boolean) as ColumnConfig<T>[];
+  }, [fieldOrder, editableColumns]);
+
+  const dragIndex = useRef<number | null>(null);
+  const moveField = (from: number | null, to: number) => {
+    if (from == null || from === to) return;
+    setFieldOrder((prev) => {
+      const next = [...prev];
+      const [m] = next.splice(from, 1);
+      next.splice(to, 0, m);
+      return next;
+    });
+  };
+  const resetOrder = () => setFieldOrder(editableKeys);
 
   const renderField = (col: ColumnConfig<T>) => {
     const value = formData[col.key];
@@ -162,26 +212,59 @@ export function RowEditModal<T extends Record<string, any>>({
       <div className="modal-container">
         <div className="modal-header">
           <h2 className="modal-title">{isNew ? 'Add New Row' : title}</h2>
-          <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
-            <FiX />
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            {editableColumns.length > 1 && (
+              <button className="modal-reorder-btn" onClick={() => setReordering((v) => !v)} title="Reorder the fields in this form">
+                {reordering ? '✓ Done' : '⇅ Reorder fields'}
+              </button>
+            )}
+            <button className="modal-close-btn" onClick={onClose} aria-label="Close modal">
+              <FiX />
+            </button>
+          </div>
         </div>
 
         <div className="modal-body">
-          <div className="modal-form-grid">
-            {editableColumns.map((col) => (
-              <div
-                key={String(col.key)}
-                className={`modal-field ${col.type === 'boolean' ? 'modal-field-boolean' : ''} ${col.highlight ? 'modal-field-highlight' : ''}`}
-              >
-                <label className="modal-label" htmlFor={`field-${String(col.key)}`}>
-                  {col.label}
-                </label>
-                {renderField(col)}
-                {col.hint && <span className="modal-hint">{col.hint}</span>}
+          {reordering ? (
+            <div className="reorder-panel">
+              <p className="reorder-note">Drag fields to change the order they appear in this form. Saved on this device.</p>
+              <ul className="reorder-list">
+                {orderedColumns.map((col, i) => (
+                  <li
+                    key={String(col.key)}
+                    className="reorder-item"
+                    draggable
+                    onDragStart={() => { dragIndex.current = i; }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => { moveField(dragIndex.current, i); dragIndex.current = null; }}
+                    onDragEnd={() => { dragIndex.current = null; }}
+                  >
+                    <span className="reorder-grip">⠿</span>
+                    <span className="reorder-name">{col.label}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="reorder-actions">
+                <button className="modal-btn modal-btn-cancel" onClick={resetOrder}>Reset to default</button>
+                <button className="modal-btn modal-btn-save" onClick={() => setReordering(false)}>Done</button>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <div className="modal-form-grid">
+              {orderedColumns.map((col) => (
+                <div
+                  key={String(col.key)}
+                  className={`modal-field ${col.type === 'boolean' ? 'modal-field-boolean' : ''} ${col.highlight ? 'modal-field-highlight' : ''}`}
+                >
+                  <label className="modal-label" htmlFor={`field-${String(col.key)}`}>
+                    {col.label}
+                  </label>
+                  {renderField(col)}
+                  {col.hint && <span className="modal-hint">{col.hint}</span>}
+                </div>
+              ))}
+            </div>
+          )}
           {validationError && (
             <div className="modal-validation-error">
               {validationError}
@@ -342,6 +425,71 @@ export function RowEditModal<T extends Record<string, any>>({
           font-size: 11px;
           color: #a5b4fc;
           line-height: 1.4;
+        }
+
+        .modal-reorder-btn {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 6px 11px;
+          font-size: 12px;
+          font-weight: 600;
+          color: #a5b4fc;
+          cursor: pointer;
+          transition: all 0.2s;
+          white-space: nowrap;
+        }
+        .modal-reorder-btn:hover {
+          border-color: rgba(99, 102, 241, 0.45);
+          color: #c7d2fe;
+        }
+
+        .reorder-note {
+          font-size: 12px;
+          color: #94a3b8;
+          margin: 0 0 14px;
+        }
+        .reorder-list {
+          list-style: none;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .reorder-item {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 12px;
+          background: #1a2236;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 9px;
+          cursor: grab;
+          user-select: none;
+          transition: border-color 0.15s, background 0.15s;
+        }
+        .reorder-item:hover {
+          border-color: rgba(99, 102, 241, 0.4);
+          background: #1e2740;
+        }
+        .reorder-item:active {
+          cursor: grabbing;
+        }
+        .reorder-grip {
+          color: #64748b;
+          font-size: 15px;
+          line-height: 1;
+        }
+        .reorder-name {
+          font-size: 13px;
+          color: #f1f5f9;
+        }
+        .reorder-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 8px;
+          margin-top: 16px;
         }
 
         .modal-validation-error {
