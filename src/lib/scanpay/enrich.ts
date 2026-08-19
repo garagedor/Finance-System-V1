@@ -19,6 +19,9 @@ export interface JobEnrichment {
   areaManagerMissing: boolean;      // true when matched but location has no AM
   collected: number;                // totalAmount + all tips
   jobStatus: string | null;         // the matched CRM job's status (Closed / Deposit / …)
+  address: string | null;           // matched job's address (customer info for refunds)
+  clientName: string | null;        // matched job's customer name
+  clientPhone: string | null;       // matched job's customer phone
 }
 
 export async function enrichJobs(jobIds: (string | null | undefined)[]): Promise<Map<string, JobEnrichment>> {
@@ -34,7 +37,7 @@ export async function enrichJobs(jobIds: (string | null | undefined)[]): Promise
 
   const jobs = await db.collection("Job")
     .find({ $or: or })
-    .project({ provider: 1, tech: 1, location: 1, status: 1, totalAmount: 1, tipsCard: 1, tipsFinance: 1, tipsCompanyCash: 1, tipsCheck: 1,
+    .project({ provider: 1, tech: 1, location: 1, status: 1, address: 1, clientName: 1, clientPhoneNumber: 1, totalAmount: 1, tipsCard: 1, tipsFinance: 1, tipsCompanyCash: 1, tipsCheck: 1,
       totalPaidCard: 1, totalPaidCompanyCheck: 1, totalPaidFinance: 1, totalPaidCompanyCash: 1, techPaidCash: 1, lmCash: 1, lmCheck: 1 })
     .toArray();
 
@@ -65,6 +68,9 @@ export async function enrichJobs(jobIds: (string | null | undefined)[]): Promise
       areaManagerMissing: !!j.location && !areaManager,
       collected: jobAmount + tips,
       jobStatus: j.status ?? null,
+      address: j.address ?? null,
+      clientName: j.clientName ?? null,
+      clientPhone: j.clientPhoneNumber ?? null,
     });
   }
   return map;

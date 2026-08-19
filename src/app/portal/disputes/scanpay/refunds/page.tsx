@@ -55,7 +55,7 @@ async function load(tab: Tab, f: Filters) {
   const rows = allRows.filter((r) => {
     const e = en(r);
     if (ql) {
-      const hay = [r.invoiceNumber, r.paymentId, r.paymentMethod, rTech(e), r.candidates?.[0]?.address]
+      const hay = [r.invoiceNumber, r.paymentId, r.paymentMethod, rTech(e), e?.clientName, e?.address, r.candidates?.[0]?.address]
         .filter(Boolean).join(" ").toLowerCase();
       if (!hay.includes(ql)) return false;
     }
@@ -113,7 +113,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
 
       <FilterBar>
         <FilterField label="Search">
-          <input className="portal-input" type="search" name="q" defaultValue={f.q} placeholder="invoice / payment id / address / tech" />
+          <input className="portal-input" type="search" name="q" defaultValue={f.q} placeholder="invoice / customer / address / tech" />
         </FilterField>
         <FilterField label="Technician">
           <MultiSelect name="tech" selected={f.tech} options={d.options.techs} />
@@ -147,7 +147,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
             <thead>
               <tr>
                 <th>Payment date</th>
-                <th>Invoice</th>
+                <th>Invoice / Customer</th>
                 <th>Tech</th>
                 <th>Provider</th>
                 <th>Area Manager</th>
@@ -162,12 +162,17 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
               {d.rows.map((r) => {
                 const best = r.candidates?.[0];
                 const en = r.matchedJobId ? d.enrich.get(r.matchedJobId) : undefined;
+                const isFull = r.refundAmount != null && r.refundAmount >= r.originalAmount - 0.005;
+                const pct = r.refundAmount != null && r.originalAmount > 0 ? Math.round((r.refundAmount / r.originalAmount) * 100) : null;
                 return (
                   <tr key={r._id}>
                     <td className="small mono">{fmtDate(r.paymentDate ?? "")}</td>
                     <td>
                       <div className="mono small">{r.invoiceNumber || "—"}</div>
-                      <div className="muted small">{r.paymentMethod} · {r.paymentId}</div>
+                      <div className="muted small">
+                        {en?.clientName || "—"} · {en?.address ? en.address.slice(0, 28) : (r.matchedJobId ? "no address" : "match a job")}
+                      </div>
+                      <div className="muted small" style={{ opacity: 0.6 }}>{r.paymentMethod} · {r.paymentId}</div>
                     </td>
                     <td className="small">{en?.tech ?? "—"}</td>
                     <td className="small">{en?.provider ?? "—"}</td>
@@ -195,7 +200,18 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
                         <span className="muted small">no invoice match — pick a job</span>
                       )}
                     </td>
-                    <td className="right money money-neg">{r.refundAmount != null ? `−${fmt$(r.refundAmount)}` : "—"}</td>
+                    <td className="right">
+                      {r.refundAmount != null ? (
+                        <>
+                          <div className="money money-neg">−{fmt$(r.refundAmount)}</div>
+                          <div className="small" style={{ fontWeight: 600, color: isFull ? "#34d399" : "#f59e0b" }}>
+                            {isFull ? "Full refund" : `Partial · ${pct}%`}
+                          </div>
+                        </>
+                      ) : (
+                        <div className="muted small">not entered<div style={{ opacity: 0.7 }}>assume full {fmt$(r.originalAmount)}</div></div>
+                      )}
+                    </td>
                     <td className="right">
                       <ScanpayRefundRowActions
                         id={r._id}

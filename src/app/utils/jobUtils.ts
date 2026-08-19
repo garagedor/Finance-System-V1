@@ -10,6 +10,12 @@ export type ColumnConfig<T = JobRow> = {
   editable?: boolean;
   minWidth?: number;
   maxWidth?: number;
+  /** Form-only: input placeholder text shown in the edit/add modal. */
+  placeholder?: string;
+  /** Form-only: a small helper note shown under the field in the edit/add modal. */
+  hint?: string;
+  /** Form-only: visually emphasize this field in the edit/add modal. */
+  highlight?: boolean;
   // Optional custom cell renderer. When present, EntityTable uses this instead
   // of its default render-by-type logic. `defaultActions` is the JSX for the
   // entity's edit/delete buttons (already wired with their handlers); pass it

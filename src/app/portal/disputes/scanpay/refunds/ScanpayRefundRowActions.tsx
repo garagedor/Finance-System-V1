@@ -111,8 +111,13 @@ export default function ScanpayRefundRowActions({
   }
 
   return (
-    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
-      <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setOpen(true)}>Verify</button>
+    <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
+      {suggestedJobId && (
+        <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} title={jobLabel ?? undefined}
+          onClick={() => { setPicking(false); setOpen(true); }}>Verify</button>
+      )}
+      <button className="portal-btn" style={{ padding: "4px 10px", fontSize: 11 }}
+        onClick={() => { setPicking(true); setOpen(true); }}>Pick job</button>
       <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy} onClick={() => simple({ action: "ignore" })}>Ignore</button>
       {chargedToggle}
 

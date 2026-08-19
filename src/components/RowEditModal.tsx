@@ -77,6 +77,7 @@ export function RowEditModal<T extends Record<string, any>>({
     const commonProps = {
       className: 'modal-input',
       id: `field-${String(col.key)}`,
+      placeholder: col.placeholder,
     };
 
     switch (col.type) {
@@ -171,12 +172,13 @@ export function RowEditModal<T extends Record<string, any>>({
             {editableColumns.map((col) => (
               <div
                 key={String(col.key)}
-                className={`modal-field ${col.type === 'boolean' ? 'modal-field-boolean' : ''}`}
+                className={`modal-field ${col.type === 'boolean' ? 'modal-field-boolean' : ''} ${col.highlight ? 'modal-field-highlight' : ''}`}
               >
                 <label className="modal-label" htmlFor={`field-${String(col.key)}`}>
                   {col.label}
                 </label>
                 {renderField(col)}
+                {col.hint && <span className="modal-hint">{col.hint}</span>}
               </div>
             ))}
           </div>
@@ -323,6 +325,23 @@ export function RowEditModal<T extends Record<string, any>>({
           flex-direction: row;
           align-items: center;
           justify-content: space-between;
+        }
+
+        .modal-field-highlight {
+          border: 1px solid rgba(99, 102, 241, 0.4);
+          background: rgba(99, 102, 241, 0.07);
+          border-radius: 12px;
+          padding: 12px 14px;
+        }
+
+        .modal-field-highlight .modal-label {
+          color: #a5b4fc;
+        }
+
+        .modal-hint {
+          font-size: 11px;
+          color: #a5b4fc;
+          line-height: 1.4;
         }
 
         .modal-validation-error {
