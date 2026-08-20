@@ -136,3 +136,35 @@ export async function PUT(
     );
   }
 }
+
+// Permanently delete a single ledger line (hard delete). Removes the row from
+// the ledger; the balance (SUM of remaining entries) adjusts. Deleting an entry
+// that is LINKED to a source record (payout / equipment order / dispute / income
+// / expense) only removes it here — the source record is not updated, and some
+// sources may re-post their entry on their next sync (the UI warns about this).
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const session = await readPortalSession();
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    const { id } = await params;
+    await ensureFinanceIndexes();
+    const entryId = req.nextUrl.searchParams.get("entryId");
+    if (!entryId) return NextResponse.json({ error: "entryId required" }, { status: 400 });
+
+    const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
+    const entry = await ec.findOne({ _id: entryId, ledger_id: id });
+    if (!entry) return NextResponse.json({ error: "Entry not found" }, { status: 404 });
+
+    const r = await ec.deleteOne({ _id: entryId });
+    return NextResponse.json({ ok: true, deleted: r.deletedCount });
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Failed to delete entry" },
+      { status: 400 },
+    );
+  }
+}

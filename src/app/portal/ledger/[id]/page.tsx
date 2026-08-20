@@ -8,7 +8,21 @@ import AddCrmReportModal from "./AddCrmReportModal";
 import AddDisputeRefundModal from "./AddDisputeRefundModal";
 import RecordPaymentModal from "./RecordPaymentModal";
 import ReverseEntryButton from "./ReverseEntryButton";
+import DeleteEntryButton from "./DeleteEntryButton";
 import DeleteLedgerButton from "./DeleteLedgerButton";
+
+// What source a linked/system entry came from — used to warn before deleting it.
+function linkedLabelFor(e: LedgerEntryRecord): string | null {
+  if (e.type === "report" || e.report_meta) return "a CRM balance report";
+  if (e.payout_id) return "a payout";
+  if (e.equipment_order_id) return "an equipment order";
+  if (e.equipment_return_id) return "an equipment return/credit";
+  if (e.dispute_id) return "a dispute/refund";
+  if (e.income_id) return "an income record";
+  if (e.expense_id) return "an expense record";
+  if (e.bank_txn_id) return "a matched bank transaction";
+  return null;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -232,6 +246,7 @@ export default async function LedgerDetailPage({
                       {!isReversal && !isReversed && (
                         <ReverseEntryButton ledgerId={ledger._id} entryId={e._id} />
                       )}
+                      <DeleteEntryButton ledgerId={ledger._id} entryId={e._id} linkedLabel={linkedLabelFor(e)} />
                     </div>
                   </td>
                 </tr>
@@ -246,7 +261,8 @@ export default async function LedgerDetailPage({
         <span className="money-neg">Red / negative</span> = company owes them ·{" "}
         <span className="money-pos">Green / positive</span> = they owe the company. Manually-added
         entries can be edited; system entries (CRM reports, disputes, equipment, payments) are
-        append-only — correct those with a reversing entry.
+        append-only — reverse those instead. Any line can be <strong>permanently deleted</strong>
+        (can&apos;t be undone; deleting a linked line doesn&apos;t update its source record).
       </p>
     </div>
   );
