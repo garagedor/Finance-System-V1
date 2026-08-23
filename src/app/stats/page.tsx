@@ -18,6 +18,7 @@ const DonutCard = dynamic(() => import('./DonutCard'), {
   loading: () => <div className="panel chart-card" />,
 });
 import EmptyState from '@/components/EmptyState';
+import StatsCompare from './StatsCompare';
 
 type StatRow = { key: string; count: number; totalAmount: number; totalPaid: number; closedCount?: number };
 type StatusRow = { key: string; count: number };
@@ -102,6 +103,7 @@ export default function StatsPage() {
   const lookupsFetchedRef = useRef(false);
 
   const [filtersDirty, setFiltersDirty] = useState(false);
+  const [compareMode, setCompareMode] = useState(false);
   const [lookups, setLookups] = useState<{ techs: Technician[]; locations: Location[]; providers: Provider[] }>({
     techs: [],
     locations: [],
@@ -359,13 +361,28 @@ export default function StatsPage() {
       <div className="layout">
 
         {/* ── Page Header ── */}
-        <div className="stats-header animate-fade-up">
+        <div className="stats-header animate-fade-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <p className="stats-kicker">Analytics</p>
             <h1 className="stats-title">Statistics</h1>
           </div>
+          <button
+            onClick={() => setCompareMode((v) => !v)}
+            style={{
+              background: compareMode ? '#4f46e5' : 'rgba(255,255,255,0.05)',
+              color: compareMode ? '#fff' : '#a5b4fc',
+              border: `1px solid ${compareMode ? 'transparent' : 'rgba(99,102,241,0.4)'}`,
+              borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            {compareMode ? '← Back to overview' : '⇄ Compare'}
+          </button>
         </div>
 
+        {compareMode ? (
+          <StatsCompare lookups={lookups} />
+        ) : (
+        <>
         <FiltersPanel
           direction="horizontal"
           loading={loading}
@@ -458,6 +475,8 @@ export default function StatsPage() {
             <DonutCard title="Jobs by Provider"   total={providerTotal} data={providerPieData} PieTooltip={PieTooltip} />
           </div>
         </div>
+        </>
+        )}
       </div>
     </main>
   );
