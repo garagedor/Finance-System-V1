@@ -17,18 +17,19 @@ export const calcPaidSum = (job: Partial<JobRow>) => {
     toNumber(job.lmCheck);
 };
 
-// Payment-fee rule (locked 2026-06-04): only COMPANY CHECK carries a 10%
-// check fee. lmCheck is treated as full-value: the LM physically holds the
-// paper check, the company never pays a processor to cash it, so no fee is
-// taken. (Previous code charged lmCheck 10% — that was wrong.)
+// Payment-fee rule (updated 2026-09-06 by owner): LM CHECK carries the same
+// 10% fee as COMPANY CHECK. Card 5%, Finance 10%, Company Check 10%, LM Check
+// 10%. (Supersedes the 2026-06-04 lock that treated lmCheck as fee-free — the
+// owner asked for lmCheck to be handled exactly like company check.)
 export const calcPaymentFee = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.05 +
   toNumber(job.totalPaidFinance) * 0.1 +
-  toNumber(job.totalPaidCompanyCheck) * 0.1;
+  toNumber(job.totalPaidCompanyCheck) * 0.1 +
+  toNumber(job.lmCheck) * 0.1;
 
-// Same rule as calcPaymentFee but with the companyCheck fee excluded — used
-// by legacy provider-tab columns that report "fees w/o check". lmCheck is
-// likewise full-value (no fee).
+// Same rule as calcPaymentFee but with BOTH check fees excluded — used by
+// legacy provider-tab columns that report "fees w/o check". Company Check and
+// LM Check (both 10% checks) are omitted here on purpose, identically.
 export const calcPaymentFeeNoCheck = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.05 +
   toNumber(job.totalPaidFinance) * 0.1;
@@ -40,7 +41,7 @@ export const calcTotalAfterFee = (job: Partial<JobRow>) =>
   toNumber(job.techPaidCash) +
   toNumber(job.totalPaidCompanyCash) +
   toNumber(job.lmCash) +
-  toNumber(job.lmCheck);
+  toNumber(job.lmCheck) * 0.9;
 
 export const calcParts = (job: Partial<JobRow>) =>
   toNumber(job.techParts) + toNumber(job.companyParts) + toNumber(job.lmParts);
@@ -543,9 +544,8 @@ export const calcJobBalances = (
 // Recognition (in the original revenue/cost helpers above):
 //   - lmCash and lmCheck ARE recognized job revenue. They flow into
 //     calcPaidSum and calcTotalAfterFee like any other payment method.
-//     lmCheck has a 0% fee (locked 2026-06-04): only COMPANY CHECK carries
-//     the 10% check fee. lmCheck is a paper check held by the LM, the
-//     company never pays a processor to cash it.
+//     lmCheck carries a 10% fee, same as COMPANY CHECK (owner rule
+//     2026-09-06, supersedes the 2026-06-04 fee-free lock).
 //   - lmParts IS a job-profit cost. calcParts includes it alongside
 //     techParts and companyParts. The parts were consumed on the job, so
 //     their cost is real to the company's profit pool regardless of who
@@ -566,9 +566,8 @@ export const calcJobBalances = (
 export const calcLmRevenue = (job: Partial<JobRow>) =>
   toNumber(job.lmCash) + toNumber(job.lmCheck);
 
-// lmCheck has a 0% fee (rule locked 2026-06-04). Kept as a named helper for
-// any caller that wants to be explicit about the LM-check fee being zero.
-export const calcLmCheckFee = (_job: Partial<JobRow>) => 0;
+// lmCheck carries a 10% fee, same as company check (owner rule 2026-09-06).
+export const calcLmCheckFee = (job: Partial<JobRow>) => toNumber(job.lmCheck) * 0.1;
 
 export const calcLmOwesCompany = (job: Partial<JobRow>) =>
   toNumber(job.lmCash) + toNumber(job.lmCheck);

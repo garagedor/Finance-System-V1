@@ -5,6 +5,7 @@ import type { JobRow } from '../../../types/job';
 import { toNumber } from '../utils/calculations';
 import { canonicalStatus } from '@/lib/status-canonical';
 import { ensureJobMirrorsFresh } from '@/lib/job-mirror';
+import { SRC_STATUS_EXPR } from '@/lib/report-source-match';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -69,7 +70,10 @@ export async function GET(req: NextRequest) {
     if (techs.length) filter.tech = { $in: techs };
     if (locations.length) filter.location = { $in: locations };
     if (providers.length) filter.provider = { $in: providers };
-    if (statuses.length) filter.statusCanonical = { $in: statuses };
+    // Status filter derived from the SOURCE field (Job.status), not the stale
+    // statusCanonical mirror, so an externally-written job with the right status
+    // is never excluded. (date range already matches the raw `date` string.)
+    if (statuses.length) filter.$expr = { $in: [SRC_STATUS_EXPR, statuses] };
     // Method filter: OR semantics — at least one selected method has a non-zero amount.
     // Uses $expr + $convert so that string-stored numeric values (e.g. "100")
     // are coerced before comparison; bare {$gt: 0} would silently exclude them

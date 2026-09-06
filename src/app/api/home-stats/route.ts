@@ -4,6 +4,7 @@ import { getMongoClient } from "@/lib/mongo";
 import { ServerTiming } from "@/lib/server-timing";
 import { JobRow } from '../../../types/job';
 import { ensureJobMirrorsFresh } from '@/lib/job-mirror';
+import { SRC_FIELDS_STAGE } from '@/lib/report-source-match';
 
 const DB_NAME = 'ag';
 const COLLECTION_NAME = 'Job';
@@ -30,13 +31,13 @@ export async function GET(req: NextRequest) {
 
         const matchStage: any = {};
         if (startDate || endDate) {
-            // Index-backed range on the normalized date. Identical result set to
-            // the previous $dateFromString match (jobDateNormalized === that parse;
-            // missing/blank dates are excluded from a bounded range either way),
-            // but now uses the jobDateNormalized index instead of a full scan.
-            matchStage.jobDateNormalized = {};
-            if (startDate) matchStage.jobDateNormalized.$gte = new Date(startDate);
-            if (endDate) matchStage.jobDateNormalized.$lte = new Date(endDate);
+            // Range on the SOURCE-derived date (_srcDate, materialized by
+            // SRC_FIELDS_STAGE below) rather than the stale jobDateNormalized
+            // mirror, so externally-written jobs are never dropped. Same result
+            // set as before on fresh data; missing/blank dates excluded either way.
+            matchStage._srcDate = {};
+            if (startDate) matchStage._srcDate.$gte = new Date(startDate);
+            if (endDate) matchStage._srcDate.$lte = new Date(endDate);
         }
 
         // Helper for safe number conversion in aggregation
@@ -45,6 +46,10 @@ export async function GET(req: NextRequest) {
         });
 
         const pipeline: any[] = [
+            // Materialize _srcDate/_srcStatus from Job.date/Job.status first, so
+            // the date match and every statusCanonical check below read the source
+            // truth, not the drift-prone mirror fields.
+            SRC_FIELDS_STAGE,
             { $match: matchStage },
             // Lookups
             {
@@ -102,14 +107,15 @@ export async function GET(req: NextRequest) {
                             toNumber('$lmCheck'),
                         ],
                     },
-                    // Payment fee — card 5% + finance 10% + companyCheck 10%.
-                    // lmCheck = 0% (rule locked 2026-06-04: only company
-                    // check carries the 10%; the LM holds the paper check).
+                    // Payment fee — card 5% + finance 10% + companyCheck 10%
+                    // + lmCheck 10% (owner rule 2026-09-06: LM check carries
+                    // the same 10% fee as company check).
                     valPaymentFee: {
                         $add: [
                             { $multiply: [toNumber('$totalPaidCard'), 0.05] },
                             { $multiply: [toNumber('$totalPaidFinance'), 0.1] },
-                            { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.1] }
+                            { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.1] },
+                            { $multiply: [toNumber('$lmCheck'), 0.1] }
                         ]
                     },
                     valParts: { $add: [toNumber('$techParts'), toNumber('$companyParts'), toNumber('$lmParts')] },
@@ -168,11 +174,11 @@ export async function GET(req: NextRequest) {
                                 // by ALL assigned jobs (X-close still in count).
                                 sumProfitExclXClose: {
                                     $sum: {
-                                        $cond: [{ $ne: ['$statusCanonical', 'X close'] }, '$valTotalProfit', 0]
+                                        $cond: [{ $ne: ['$_srcStatus', 'X close'] }, '$valTotalProfit', 0]
                                     }
                                 },
                                 closedCount: {
-                                    $sum: { $cond: [{ $eq: ['$statusCanonical', 'Closed'] }, 1, 0] }
+                                    $sum: { $cond: [{ $eq: ['$_srcStatus', 'Closed'] }, 1, 0] }
                                 }
                             },
                         },
@@ -196,11 +202,11 @@ export async function GET(req: NextRequest) {
                                 // by ALL assigned jobs (X-close still in count).
                                 sumProfitExclXClose: {
                                     $sum: {
-                                        $cond: [{ $ne: ['$statusCanonical', 'X close'] }, '$valTotalProfit', 0]
+                                        $cond: [{ $ne: ['$_srcStatus', 'X close'] }, '$valTotalProfit', 0]
                                     }
                                 },
                                 closedCount: {
-                                    $sum: { $cond: [{ $eq: ['$statusCanonical', 'Closed'] }, 1, 0] }
+                                    $sum: { $cond: [{ $eq: ['$_srcStatus', 'Closed'] }, 1, 0] }
                                 }
                             },
                         },
@@ -214,7 +220,7 @@ export async function GET(req: NextRequest) {
                         }
                     ],
                     companyPenaltyLoss: [
-                        { $match: { statusCanonical: 'X close', location: { $nin: [null, ''] } } },
+                        { $match: { _srcStatus: 'X close', location: { $nin: [null, ''] } } },
                         {
                             $addFields: {
                                 penaltyBase: '$valTotalProfit'
@@ -230,7 +236,7 @@ export async function GET(req: NextRequest) {
                         { $sort: { _id: 1 } }
                     ],
                     companyNetProfit: [
-                        { $match: { statusCanonical: 'Closed', location: { $nin: [null, ''] } } },
+                        { $match: { _srcStatus: 'Closed', location: { $nin: [null, ''] } } },
                         {
                             $addFields: {
                                 netProfitCalc: {
@@ -257,7 +263,7 @@ export async function GET(req: NextRequest) {
                     ],
                     totalCompanyParts: [
                         // Closed-only — parts on open / X-close jobs don't roll into this KPI.
-                        { $match: { statusCanonical: 'Closed', location: { $nin: [null, ''] } } },
+                        { $match: { _srcStatus: 'Closed', location: { $nin: [null, ''] } } },
                         {
                             $group: {
                                 _id: '$location',
@@ -270,7 +276,7 @@ export async function GET(req: NextRequest) {
                     // Card-fee margin: tech is charged 5%, processor takes 3%,
                     // so the company keeps 2% of every closed-job card payment.
                     cardFeeProfit: [
-                        { $match: { statusCanonical: 'Closed' } },
+                        { $match: { _srcStatus: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
@@ -287,7 +293,7 @@ export async function GET(req: NextRequest) {
                     // Finance fee margin: tech is charged 10%, processor takes
                     // 7.5%, so the company keeps 2.5% of every closed-job finance payment.
                     financeFeeProfit: [
-                        { $match: { statusCanonical: 'Closed' } },
+                        { $match: { _srcStatus: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
@@ -303,7 +309,7 @@ export async function GET(req: NextRequest) {
                     // Company check fee margin: tech is charged 10%, bank/handling
                     // takes 5%, so the company keeps 5% of every closed-job check payment.
                     checkFeeProfit: [
-                        { $match: { statusCanonical: 'Closed' } },
+                        { $match: { _srcStatus: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
@@ -317,7 +323,7 @@ export async function GET(req: NextRequest) {
                         }
                     ],
                     totalSales: [
-                        { $match: { statusCanonical: 'Closed' } },
+                        { $match: { _srcStatus: 'Closed' } },
                         {
                             $group: {
                                 _id: null,
@@ -330,7 +336,7 @@ export async function GET(req: NextRequest) {
                     //   totalSales − all payment fees − all parts
                     // Closed-only. Equivalent to sum(valTotalAmount − valPaymentFee − valParts).
                     totalProfit: [
-                        { $match: { statusCanonical: 'Closed' } },
+                        { $match: { _srcStatus: 'Closed' } },
                         {
                             $group: {
                                 _id: null,

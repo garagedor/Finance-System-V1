@@ -3,6 +3,7 @@ import { MongoClient, ObjectId } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import type { Dispute, JobRow, Provider, Technician, Refund } from '../../../types/job';
 import { ensureJobMirrorsFresh } from '@/lib/job-mirror';
+import { SRC_FIELDS_STAGE } from '@/lib/report-source-match';
 import {
   calcJobProfit,
   calcOldBalance,
@@ -189,31 +190,40 @@ const buildJobPipeline = (
   page: number,
   pageSize: number
 ) => {
-  // Index-backed date range + sort on jobDateNormalized (== the old
-  // $dateFromString value; missing/blank dates excluded from a bounded range
-  // and sorted as null either way). Row output uses job.date, not this field,
-  // so the result set, order, page rows, and totals are unchanged — but the
-  // $match/$sort now use the index instead of a per-doc parse + full scan.
-  const pipeline: any[] = [];
+  // Date + status match are derived from the SOURCE fields (Job.date/Job.status)
+  // at query time via SRC_FIELDS_STAGE, NOT from the stored mirror fields
+  // (jobDateNormalized/statusCanonical) which the external writer leaves stale —
+  // so an externally-written job can never silently drop off the report. On fresh
+  // data the derived values equal the mirrors, so counts/rows/order are identical;
+  // this only stops the recurring drop. Row output still uses job.date.
+  const statusFilter = match.statusCanonical; // string | { $in: [...] } | undefined
+  delete match.statusCanonical;
 
+  // Plain, indexable filters (tech/location/provider) run first, before we
+  // materialize the derived fields.
+  const preMatch = { ...match };
+
+  const derivedMatch: Record<string, any> = {};
+  if (statusFilter !== undefined) derivedMatch._srcStatus = statusFilter;
   if (startDate || endDate) {
-    match.jobDateNormalized = {};
-    if (startDate) match.jobDateNormalized.$gte = startDate;
-    if (endDate) match.jobDateNormalized.$lte = endDate;
+    derivedMatch._srcDate = {};
+    if (startDate) derivedMatch._srcDate.$gte = startDate;
+    if (endDate) derivedMatch._srcDate.$lte = endDate;
   }
 
-  if (Object.keys(match).length) {
-    pipeline.push({ $match: match });
-  }
+  const stages: any[] = [];
+  if (Object.keys(preMatch).length) stages.push({ $match: preMatch });
+  stages.push(SRC_FIELDS_STAGE);
+  if (Object.keys(derivedMatch).length) stages.push({ $match: derivedMatch });
 
   return {
     dataPipeline: [
-      ...pipeline,
-      { $sort: { jobDateNormalized: -1, _id: -1 } },
+      ...stages,
+      { $sort: { _srcDate: -1, _id: -1 } },
       { $skip: (page - 1) * pageSize },
       { $limit: pageSize },
     ],
-    countPipeline: [...pipeline, { $count: 'count' }],
+    countPipeline: [...stages, { $count: 'count' }],
   };
 };
 

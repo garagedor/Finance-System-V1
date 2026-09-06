@@ -3,6 +3,7 @@ import { MongoClient } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../types/job';
 import { ensureJobMirrorsFresh } from '@/lib/job-mirror';
+import { SRC_STATUS_EXPR } from '@/lib/report-source-match';
 
 const DB_NAME = 'ag';
 const COLLECTION_NAME = 'Job';
@@ -53,6 +54,10 @@ export async function GET(req: NextRequest) {
           dateParsed: {
             $dateFromString: { dateString: '$date', onError: null, onNull: null },
           },
+          // Canonical status derived from the SOURCE field, so a stale/missing
+          // statusCanonical mirror (external writer) can't drop or misclassify a
+          // job. Identical to statusCanonical when the mirror is fresh.
+          _srcStatus: SRC_STATUS_EXPR,
         },
       },
     ];
@@ -62,10 +67,9 @@ export async function GET(req: NextRequest) {
       const range: any = {};
       if (startDate) range.$gte = new Date(startDate);
       if (endDate) range.$lte = new Date(endDate);
-      // Range on the indexed jobDateNormalized (== dateParsed value). Kept
-      // dateParsed above for the day grouping; the optimizer pushes this $match
-      // ahead of the $addFields so it uses the index instead of a full scan.
-      matchStage.jobDateNormalized = { ...(range.$gte ? { $gte: range.$gte } : {}), ...(range.$lte ? { $lte: range.$lte } : {}) };
+      // Match on the SOURCE-derived dateParsed (not the stale jobDateNormalized
+      // mirror) so externally-written jobs are never dropped from the range.
+      matchStage.dateParsed = { ...(range.$gte ? { $gte: range.$gte } : {}), ...(range.$lte ? { $lte: range.$lte } : {}) };
     }
     const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -117,22 +121,23 @@ export async function GET(req: NextRequest) {
         },
         // Used by avg-ticket calculation below — mirrors the report page's
         // provider-tab columns: Total Payment − Total Fees − Total Parts.
-        // Excludes companyCheck fee (legacy provider-tab convention).
-        // lmCheck has 0% fee per rule locked 2026-06-04. calcParts includes lmParts.
+        // Excludes BOTH check fees (company check + LM check) — legacy
+        // provider-tab "fees w/o check" convention. calcParts includes lmParts.
         valFeeNoCheck: {
           $add: [
             { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
             { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
           ],
         },
-        // All-kinds fee burden — card 5% + finance 10% + company check 10%.
-        // lmCheck has 0% fee (the LM holds the paper check, no processor).
+        // All-kinds fee burden — card 5% + finance 10% + company check 10%
+        // + LM check 10% (owner rule 2026-09-06: lmCheck fee = company check).
         // Used for the "Jobs Profit" KPI.
         valFeeAllKinds: {
           $add: [
             { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
             { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
             { $multiply: [toNumberAgg('$totalPaidCompanyCheck'), 0.1] },
+            { $multiply: [toNumberAgg('$lmCheck'), 0.1] },
           ],
         },
         valParts: {
@@ -155,14 +160,14 @@ export async function GET(req: NextRequest) {
               totalAmount: { $sum: '$valTotalAmount' },
               totalPaid: { $sum: toNumberAgg('$totalPaid') },
               closedCount: {
-                $sum: { $cond: [{ $eq: ['$statusCanonical', 'Closed'] }, 1, 0] },
+                $sum: { $cond: [{ $eq: ['$_srcStatus', 'Closed'] }, 1, 0] },
               },
               // Profit per job = totalPaid − feeNoCheck − parts
               // (matches the report page provider-tab column subtraction)
               profitClosedOrXClose: {
                 $sum: {
                   $cond: [
-                    { $or: [{ $eq: ['$statusCanonical', 'Closed'] }, { $eq: ['$statusCanonical', 'X close'] }] },
+                    { $or: [{ $eq: ['$_srcStatus', 'Closed'] }, { $eq: ['$_srcStatus', 'X close'] }] },
                     { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
                     0,
                   ],
@@ -171,7 +176,7 @@ export async function GET(req: NextRequest) {
               profitClosedOnly: {
                 $sum: {
                   $cond: [
-                    { $eq: ['$statusCanonical', 'Closed'] },
+                    { $eq: ['$_srcStatus', 'Closed'] },
                     { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
                     0,
                   ],
@@ -181,7 +186,7 @@ export async function GET(req: NextRequest) {
               jobsProfit: {
                 $sum: {
                   $cond: [
-                    { $eq: ['$statusCanonical', 'Closed'] },
+                    { $eq: ['$_srcStatus', 'Closed'] },
                     { $subtract: [{ $subtract: ['$valTotalAmount', '$valFeeAllKinds'] }, '$valParts'] },
                     0,
                   ],
@@ -226,10 +231,10 @@ export async function GET(req: NextRequest) {
           { $sort: { count: -1, _id: 1 } },
         ],
         byStatus: [
-          { $match: { statusCanonical: { $exists: true, $nin: [null, ''] } } },
+          { $match: { _srcStatus: { $nin: [null, ''] } } },
           {
             $group: {
-              _id: '$statusCanonical',
+              _id: '$_srcStatus',
               count: { $sum: 1 },
             },
           },
@@ -277,7 +282,7 @@ export async function GET(req: NextRequest) {
         // numerator, just not divided.
         totalProfit: profitClosedOrXClose,
         // Jobs Profit (Closed only) = totalSales − all payment fees − all parts.
-        // Fees include card 5% + finance 10% + companyCheck 10%. lmCheck = 0%.
+        // Fees include card 5% + finance 10% + companyCheck 10% + lmCheck 10%.
         jobsProfit,
         // Avg ticket = (Total Payment − Total Fees − Total Parts) / jobs
         // sourced from the same payment/fees/parts breakdown shown on the
