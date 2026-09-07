@@ -50,6 +50,14 @@ export function canonicalStatus(raw: unknown): string {
   if (typeof raw !== "string") return "";
   const trimmed = raw.trim();
   if (!trimmed) return "";
+  // Case/spacing-tolerant folding of the CLOSED family ONLY, so a future writer
+  // that emits "closed", "X-Close", "xclose", "X_close" etc. still lands on the
+  // exact report bucket ("Closed" / "X close") instead of silently dropping out
+  // of the provider report and stats. No-op on current data (every job is
+  // already exactly "Closed" / "X close"); never merges any other status.
+  const key = trimmed.toLowerCase().replace(/[\s\-_]/g, "");
+  if (key === "closed") return "Closed";
+  if (key === "xclose") return "X close";
   return STATUS_ALIASES[trimmed] ?? trimmed;
 }
 

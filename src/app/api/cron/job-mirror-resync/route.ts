@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resyncJobMirrors } from "@/lib/job-mirror";
+import { detectReportDrift, alertReportDrift } from "@/lib/report-drift";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -17,6 +18,16 @@ export async function GET(req: NextRequest) {
     const token = req.nextUrl.searchParams.get("token");
     if (auth !== `Bearer ${secret}` && token !== secret) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+  }
+  // ?drift=1 → just report drift (no alert). ?drift=alert → force an alert now.
+  const driftMode = req.nextUrl.searchParams.get("drift");
+  if (driftMode) {
+    try {
+      const result = driftMode === "alert" ? await alertReportDrift({ force: true }) : await detectReportDrift();
+      return NextResponse.json({ ok: true, drift: result });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "drift check failed" }, { status: 500 });
     }
   }
   try {

@@ -9,6 +9,7 @@ import { scanpayConfigured } from "@/lib/scanpay/client";
 import { syncNewScanpayDisputes } from "@/lib/scanpay/sync";
 import { syncNewScanpayRefunds } from "@/lib/scanpay/refund-sync";
 import { resyncJobMirrors } from "@/lib/job-mirror";
+import { alertReportDrift } from "@/lib/report-drift";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -27,16 +28,25 @@ export async function GET(req: NextRequest) {
     mirrors = { error: e instanceof Error ? e.message : "mirror resync failed" };
   }
 
+  // Report-drift monitor: alert the owner if any closed job would silently drop
+  // off the provider report / stats (new status spelling or date format).
+  let drift: unknown = null;
+  try {
+    drift = await alertReportDrift();
+  } catch (e) {
+    drift = { error: e instanceof Error ? e.message : "drift check failed" };
+  }
+
   if (!scanpayConfigured()) {
-    return NextResponse.json({ ok: true, mirrors, scanpay: "not configured" }, { status: 200 });
+    return NextResponse.json({ ok: true, mirrors, drift, scanpay: "not configured" }, { status: 200 });
   }
   try {
     const [disputes, refunds] = await Promise.all([
       syncNewScanpayDisputes(),
       syncNewScanpayRefunds(),
     ]);
-    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, disputes, refunds });
+    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, drift, disputes, refunds });
   } catch (e) {
-    return NextResponse.json({ ok: false, mirrors, error: e instanceof Error ? e.message : "sync failed" }, { status: 200 });
+    return NextResponse.json({ ok: false, mirrors, drift, error: e instanceof Error ? e.message : "sync failed" }, { status: 200 });
   }
 }

@@ -44,11 +44,51 @@ export const SRC_DATE_EXPR = {
   },
 } as const;
 
-/** Aggregation expr: Job.status → canonical status (trim + the documented alias). */
+/**
+ * Aggregation expr: Job.status → canonical status. Reproduces canonicalStatus()
+ * EXACTLY: trim, then case/spacing-tolerant folding of the CLOSED family
+ * ("closed"/"X-Close"/"xclose"/… → "Closed"/"X close"), then the documented
+ * "Customer Cenceled" alias. The closed-family fold means a future writer that
+ * changes the spelling/casing of a closed status can't silently drop those jobs
+ * off the report. No-op on current data; never merges any other status.
+ */
 export const SRC_STATUS_EXPR = {
   $let: {
-    vars: { t: { $trim: { input: { $ifNull: ["$status", ""] } } } },
-    in: { $cond: [{ $eq: ["$$t", "Customer Cenceled"] }, "Customer Canceled", "$$t"] },
+    vars: {
+      t: { $trim: { input: { $ifNull: ["$status", ""] } } },
+    },
+    in: {
+      $let: {
+        vars: {
+          // lower(strip spaces/dashes/underscores) — the fold key
+          key: {
+            $toLower: {
+              $replaceAll: {
+                input: {
+                  $replaceAll: {
+                    input: { $replaceAll: { input: "$$t", find: " ", replacement: "" } },
+                    find: "-",
+                    replacement: "",
+                  },
+                },
+                find: "_",
+                replacement: "",
+              },
+            },
+          },
+        },
+        in: {
+          $switch: {
+            branches: [
+              { case: { $eq: ["$$key", "closed"] }, then: "Closed" },
+              { case: { $eq: ["$$key", "xclose"] }, then: "X close" },
+              { case: { $eq: ["$$t", "Customer Cenceled"] }, then: "Customer Canceled" },
+            ],
+            default: "$$t",
+          },
+        },
+      },
+    },
   },
 } as const;
 
