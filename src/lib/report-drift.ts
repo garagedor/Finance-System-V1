@@ -148,3 +148,27 @@ export async function alertReportDrift(opts?: { force?: boolean }): Promise<Drif
   }
   return { checked: true, drift: res.total, alerted: false, reason: "no alert channel configured (set TELEGRAM_* or DRIFT_ALERT_EMAIL)" };
 }
+
+/**
+ * One-time test ping to confirm the alert channel is wired up, regardless of
+ * whether there is any real drift. Sends via Telegram (preferred) or email.
+ */
+export async function sendReportDriftTestPing(): Promise<DriftAlertResult> {
+  const text =
+    "✅ LBS report-drift monitor — test ping.\n\nIf you can read this, your Telegram alerts are set up correctly. " +
+    "You'll only hear from this bot again if a job ever risks dropping off the provider report or stats. No action needed.";
+  if (telegramConfigured()) {
+    const r = await sendTelegram(text);
+    return r.ok
+      ? { checked: true, drift: 0, alerted: true, channel: "telegram" }
+      : { checked: true, drift: 0, alerted: false, channel: "telegram", reason: r.reason };
+  }
+  const to = process.env.DRIFT_ALERT_EMAIL;
+  if (to && isEmailConfigured()) {
+    const r = await sendEmail({ to, subject: "✅ LBS report-drift monitor — test ping", text });
+    return r.ok
+      ? { checked: true, drift: 0, alerted: true, channel: "email" }
+      : { checked: true, drift: 0, alerted: false, channel: "email", reason: r.reason };
+  }
+  return { checked: true, drift: 0, alerted: false, reason: "no alert channel configured (set TELEGRAM_* or DRIFT_ALERT_EMAIL)" };
+}

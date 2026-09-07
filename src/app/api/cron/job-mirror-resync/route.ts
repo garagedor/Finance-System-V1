@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { resyncJobMirrors } from "@/lib/job-mirror";
-import { detectReportDrift, alertReportDrift } from "@/lib/report-drift";
+import { detectReportDrift, alertReportDrift, sendReportDriftTestPing } from "@/lib/report-drift";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -20,11 +20,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
-  // ?drift=1 → just report drift (no alert). ?drift=alert → force an alert now.
+  // ?drift=1 → report drift only (no alert). ?drift=alert → force an alert if
+  // there is real drift. ?drift=testping → send a test message to confirm the
+  // Telegram/email channel is wired up (fires even when there is no drift).
   const driftMode = req.nextUrl.searchParams.get("drift");
   if (driftMode) {
     try {
-      const result = driftMode === "alert" ? await alertReportDrift({ force: true }) : await detectReportDrift();
+      const result =
+        driftMode === "testping"
+          ? await sendReportDriftTestPing()
+          : driftMode === "alert"
+            ? await alertReportDrift({ force: true })
+            : await detectReportDrift();
       return NextResponse.json({ ok: true, drift: result });
     } catch (e) {
       return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "drift check failed" }, { status: 500 });
