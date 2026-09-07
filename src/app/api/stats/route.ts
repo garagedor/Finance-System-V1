@@ -3,7 +3,7 @@ import { MongoClient } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../types/job';
 import { ensureJobMirrorsFresh } from '@/lib/job-mirror';
-import { SRC_STATUS_EXPR } from '@/lib/report-source-match';
+import { SRC_STATUS_EXPR, SRC_DATE_EXPR } from '@/lib/report-source-match';
 
 const DB_NAME = 'ag';
 const COLLECTION_NAME = 'Job';
@@ -51,9 +51,10 @@ export async function GET(req: NextRequest) {
     const pipeline: any[] = [
       {
         $addFields: {
-          dateParsed: {
-            $dateFromString: { dateString: '$date', onError: null, onNull: null },
-          },
+          // Same multi-format robust derivation the report uses (SRC_DATE_EXPR),
+          // so stats and the provider report can never disagree on which jobs
+          // fall in a date range — and neither drops off-format dates.
+          dateParsed: SRC_DATE_EXPR,
           // Canonical status derived from the SOURCE field, so a stale/missing
           // statusCanonical mirror (external writer) can't drop or misclassify a
           // job. Identical to statusCanonical when the mirror is fresh.

@@ -18,13 +18,29 @@ import "server-only";
 //   _srcStatus === canonicalStatus(status)  (trim + the one documented alias)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Aggregation expr: Job.date → a Date at UTC midnight, or null (blank/unparseable). */
+/**
+ * Aggregation expr: Job.date → a Date at UTC midnight, or null (blank/garbage).
+ *
+ * Multi-format robust (do NOT narrow this back to a single format): the external
+ * writer has historically drifted the `date` format (ISO ↔ M/D/YYYY — see the
+ * 13,174-row date normalization). A single-format parse silently nulls anything
+ * off-format, which drops those jobs from every date-range report/stat — the
+ * recurring "missing jobs" bug. This tries, in order:
+ *   1. ISO first-10 "%Y-%m-%d"  — "2026-09-07" and "2026-09-07T..Z"
+ *   2. US "%m/%d/%Y"            — "9/8/2026" / "09/08/2026"
+ * Verified against the whole collection: byte-identical to the old ISO-only expr
+ * on all current data (no report/stat number moves), and it rescues any future
+ * M/D/YYYY row instead of dropping it. Only truly blank/garbage → null.
+ */
 export const SRC_DATE_EXPR = {
-  $dateFromString: {
-    dateString: { $substrCP: [{ $trim: { input: { $ifNull: ["$date", ""] } } }, 0, 10] },
-    format: "%Y-%m-%d",
-    onError: null,
-    onNull: null,
+  $let: {
+    vars: { d: { $trim: { input: { $ifNull: ["$date", ""] } } } },
+    in: {
+      $ifNull: [
+        { $dateFromString: { dateString: { $substrCP: ["$$d", 0, 10] }, format: "%Y-%m-%d", onError: null, onNull: null } },
+        { $dateFromString: { dateString: "$$d", format: "%m/%d/%Y", onError: null, onNull: null } },
+      ],
+    },
   },
 } as const;
 
