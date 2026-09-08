@@ -107,15 +107,15 @@ export async function GET(req: NextRequest) {
                             toNumber('$lmCheck'),
                         ],
                     },
-                    // Payment fee — card 5% + finance 10% + companyCheck 10%
-                    // + lmCheck 10% (owner rule 2026-09-06: LM check carries
-                    // the same 10% fee as company check).
+                    // Payment fee — card 5% + finance 10% + companyCheck 10%.
+                    // LM check is fee-free at the company level (owner rule
+                    // 2026-09-08: the 10% is a private AM↔tech deduction shown
+                    // only on the tech report, never a company fee).
                     valPaymentFee: {
                         $add: [
                             { $multiply: [toNumber('$totalPaidCard'), 0.05] },
                             { $multiply: [toNumber('$totalPaidFinance'), 0.1] },
-                            { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.1] },
-                            { $multiply: [toNumber('$lmCheck'), 0.1] }
+                            { $multiply: [toNumber('$totalPaidCompanyCheck'), 0.1] }
                         ]
                     },
                     valParts: { $add: [toNumber('$techParts'), toNumber('$companyParts'), toNumber('$lmParts')] },

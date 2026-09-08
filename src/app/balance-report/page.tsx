@@ -30,6 +30,8 @@ type BalanceRow = {
   lmCash: number;
   lmCheck: number;
   paymentFee: number;
+  /** LM Check AM↔tech deduction (10% of LM check). Tech report only; 0 in location mode. */
+  lmCheckFee: number;
   totalProfit: number;
   shareAmount: number;
   techPaidCash: number;
@@ -78,7 +80,7 @@ type PieDatum = { name: string; value: number; percent: number; color: string };
 // so any visible total cell still reflects the full underlying data.
 type ColKey =
   | 'date' | 'address' | 'paymethod' | 'approvals'
-  | 'job-total' | 'tech-parts' | 'company-parts' | 'payment-fee' | 'total-profit'
+  | 'job-total' | 'tech-parts' | 'company-parts' | 'payment-fee' | 'lm-check-fee' | 'total-profit'
   | 'lm-parts' | 'lm-cash' | 'lm-check'
   | 'tech-payout' | 'cash'
   | 'tip-gross' | 'tip-fee' | 'tip-net'
@@ -94,6 +96,7 @@ type ClosedTotalsShape = {
   lmCash: number;
   lmCheck: number;
   paymentFee: number;
+  lmCheckFee: number;
   totalProfit: number;
   shareAmount: number;
   techPaidCash: number;
@@ -151,6 +154,9 @@ const COLUMN_GROUPS: ColGroup[] = [
       { key: 'company-parts', label: 'Company Parts', renderBody: (j) => <td key="company-parts">{formatCurrency(j.companyParts)}</td>, renderTotal: (t) => <td key="company-parts">{formatCurrency(t.companyParts)}</td> },
       { key: 'lm-parts',      label: 'LM Parts',      renderBody: (j) => <td key="lm-parts">{formatCurrency(j.lmParts)}</td>,          renderTotal: (t) => <td key="lm-parts">{formatCurrency(t.lmParts)}</td> },
       { key: 'payment-fee',   label: 'Payment Fee',   renderBody: (j) => <td key="payment-fee">{formatCurrency(j.paymentFee)}</td>,    renderTotal: (t) => <td key="payment-fee">{formatCurrency(t.paymentFee)}</td> },
+      // Tech report only (hidden in location mode via isColAllowed). 10% of the
+      // LM check the AM deducts from the tech's payout and keeps.
+      { key: 'lm-check-fee',  label: 'LM Check Fee',  renderBody: (j) => <td key="lm-check-fee" title="10% of the LM check — deducted from what the AM owes the tech">{formatCurrency(j.lmCheckFee)}</td>, renderTotal: (t) => <td key="lm-check-fee">{formatCurrency(t.lmCheckFee)}</td> },
       { key: 'total-profit',  label: 'Total Profit',  renderBody: (j) => <td key="total-profit">{formatCurrency(j.totalProfit)}</td>,  renderTotal: (t) => <td key="total-profit">{formatCurrency(t.totalProfit)}</td> },
     ],
   },
@@ -224,7 +230,7 @@ const ALL_COL_KEYS: ColKey[] = COLUMN_GROUPS.flatMap((g) => g.cols.map((c) => c.
 
 const PRESET_VISIBLE: Record<Exclude<PresetId, 'custom'>, ColKey[]> = {
   admin: ALL_COL_KEYS,
-  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'tech-payout', 'cash', 'tip-gross', 'tip-fee', 'tip-net', 'balance', 'balance-with-tips'],
+  tech:  ['date', 'address', 'paymethod', 'job-total', 'tech-parts', 'lm-parts', 'lm-check-fee', 'tech-payout', 'cash', 'tip-gross', 'tip-fee', 'tip-net', 'balance', 'balance-with-tips'],
   lm:    ['date', 'address', 'job-total', 'lm-parts', 'lm-cash', 'lm-check', 'tip-gross', 'tip-net', 'balance'],
 };
 
@@ -367,7 +373,9 @@ export default function BalanceReportPage() {
   // affect any LM settlement, payout, or company-liability calculation
   // (clarified 2026-06-08). It's surfaced so the AM can see the full
   // picture of total tech earnings + job economics for the period.
-  const isColAllowed = (_key: ColKey) => true;
+  // The LM Check Fee (AM↔tech deduction) is a tech-report-only concept — it
+  // must never appear on the Location report (owner rule 2026-09-08).
+  const isColAllowed = (key: ColKey) => key === 'lm-check-fee' ? mode === 'tech' : true;
   const visibleByGroup = useMemo(
     () => COLUMN_GROUPS.map((g) => ({ ...g, visibleCount: g.cols.filter((c) => columnsVisibility[c.key] && isColAllowed(c.key)).length })),
     [columnsVisibility, mode]
@@ -564,6 +572,7 @@ export default function BalanceReportPage() {
           acc.lmCash += r.lmCash || 0;
           acc.lmCheck += r.lmCheck || 0;
           acc.paymentFee += r.paymentFee || 0;
+          acc.lmCheckFee += r.lmCheckFee || 0;
           acc.totalProfit += r.totalProfit || 0;
           acc.shareAmount += r.shareAmount || 0;
           acc.techPaidCash += r.techPaidCash || 0;
@@ -584,6 +593,7 @@ export default function BalanceReportPage() {
           lmCash: 0,
           lmCheck: 0,
           paymentFee: 0,
+          lmCheckFee: 0,
           totalProfit: 0,
           shareAmount: 0,
           techPaidCash: 0,

@@ -130,15 +130,15 @@ export async function GET(req: NextRequest) {
             { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
           ],
         },
-        // All-kinds fee burden — card 5% + finance 10% + company check 10%
-        // + LM check 10% (owner rule 2026-09-06: lmCheck fee = company check).
-        // Used for the "Jobs Profit" KPI.
+        // All-kinds fee burden — card 5% + finance 10% + company check 10%.
+        // LM check is fee-free at the company level (owner rule 2026-09-08: the
+        // 10% is a private AM↔tech deduction on the tech report only, never a
+        // company fee). Used for the "Jobs Profit" KPI.
         valFeeAllKinds: {
           $add: [
             { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
             { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
             { $multiply: [toNumberAgg('$totalPaidCompanyCheck'), 0.1] },
-            { $multiply: [toNumberAgg('$lmCheck'), 0.1] },
           ],
         },
         valParts: {
@@ -283,7 +283,8 @@ export async function GET(req: NextRequest) {
         // numerator, just not divided.
         totalProfit: profitClosedOrXClose,
         // Jobs Profit (Closed only) = totalSales − all payment fees − all parts.
-        // Fees include card 5% + finance 10% + companyCheck 10% + lmCheck 10%.
+        // Fees include card 5% + finance 10% + companyCheck 10% (LM check is
+        // fee-free at company level — its 10% is a tech-report AM↔tech item).
         jobsProfit,
         // Avg ticket = (Total Payment − Total Fees − Total Parts) / jobs
         // sourced from the same payment/fees/parts breakdown shown on the

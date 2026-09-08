@@ -475,12 +475,13 @@ async function aggregateCrmJobs(range: DateWindow): Promise<{
           ],
         },
         // Per-job payment-fee burden (paid out of the till), per CRM home-stats.
+        // LM check is fee-free at the company level (owner rule 2026-09-08: the
+        // 10% is a private AM↔tech deduction on the tech report only).
         _paymentFee: {
           $add: [
             { $multiply: [toNum("totalPaidCard"), 0.05] },
             { $multiply: [toNum("totalPaidFinance"), 0.10] },
             { $multiply: [toNum("totalPaidCompanyCheck"), 0.10] },
-            { $multiply: [toNum("lmCheck"), 0.10] },
           ],
         },
         _lmPct: { $convert: { input: "$locationData.managerProfitPercent", to: "double", onError: 0, onNull: 0 } },

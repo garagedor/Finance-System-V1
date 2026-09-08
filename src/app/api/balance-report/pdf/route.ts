@@ -85,7 +85,7 @@ const buildRowsAndTotals = (
     const totals: PdfTotals = {
         rowCount: 0,
         paidSum: 0, techParts: 0, companyParts: 0, lmParts: 0,
-        lmCash: 0, lmCheck: 0, paymentFee: 0, totalProfit: 0,
+        lmCash: 0, lmCheck: 0, paymentFee: 0, lmCheckFee: 0, totalProfit: 0,
         shareAmount: 0, techPaidCash: 0,
         tipsGross: 0, tipsFee: 0, tipsTotal: 0,
         balance: 0, balanceWithTips: 0,
@@ -141,6 +141,9 @@ const buildRowsAndTotals = (
             lmCash: toNumber(job.lmCash || 0),
             lmCheck: toNumber(job.lmCheck || 0),
             paymentFee: toNumber(calc.paymentFee),
+            // Tech report only — zeroed in location mode so it never shows on
+            // the location PDF (owner rule 2026-09-08).
+            lmCheckFee: mode === 'tech' ? toNumber(calc.lmCheckFee) : 0,
             totalProfit: toNumber(calc.totalProfit),
             shareAmount: toNumber(shareAmount),
             techPaidCash: toNumber(job.techPaidCash || 0),
@@ -161,6 +164,7 @@ const buildRowsAndTotals = (
         totals.lmCash += row.lmCash;
         totals.lmCheck += row.lmCheck;
         totals.paymentFee += row.paymentFee;
+        totals.lmCheckFee += row.lmCheckFee;
         totals.totalProfit += row.totalProfit;
         totals.shareAmount += row.shareAmount;
         totals.techPaidCash += row.techPaidCash;

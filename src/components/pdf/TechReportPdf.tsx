@@ -31,6 +31,9 @@ const COLS = [
     { key: 'companyParts', label: 'Co. Parts',   flex: 6, align: 'right' as const, kind: 'currency' as const },
     { key: 'lmParts',      label: 'LM Parts',    flex: 5, align: 'right' as const, kind: 'currency' as const },
     { key: 'paymentFee',   label: 'Pay Fee',     flex: 5, align: 'right' as const, kind: 'currency' as const },
+    // LM Check fee (owner 2026-09-08): 10% of the LM check the AM deducts from
+    // the tech's payout. Tech report only — absent from the location PDF.
+    { key: 'lmCheckFee',   label: 'LM Ck Fee',   flex: 5, align: 'right' as const, kind: 'currency' as const },
     { key: 'totalProfit',  label: 'Profit',      flex: 6, align: 'right' as const, kind: 'currency' as const },
     { key: 'shareAmount',  label: 'Payout',      flex: 6, align: 'right' as const, kind: 'currency' as const },
     { key: 'techPaidCash', label: 'Cash',        flex: 5, align: 'right' as const, kind: 'currency' as const },

@@ -17,19 +17,26 @@ export const calcPaidSum = (job: Partial<JobRow>) => {
     toNumber(job.lmCheck);
 };
 
-// Payment-fee rule (updated 2026-09-06 by owner): LM CHECK carries the same
-// 10% fee as COMPANY CHECK. Card 5%, Finance 10%, Company Check 10%, LM Check
-// 10%. (Supersedes the 2026-06-04 lock that treated lmCheck as fee-free — the
-// owner asked for lmCheck to be handled exactly like company check.)
+// Payment-fee rule (updated 2026-09-08 by owner): LM CHECK is FEE-FREE at the
+// company / location level — the LM holds a paper check, no processor is
+// involved, so the company recognizes the full face value. Card 5%, Finance
+// 10%, Company Check 10%, LM Check 0%.
+//
+// The 10% "LM Check fee" is NOT a company cost. It is a private settlement
+// between the Area Manager and the technician: the AM deducts 10% of the LM
+// check from what they owe the tech and keeps it. That deduction is applied
+// ONLY in the tech report (see calcLmCheckFee + calcJobBalances.techBalance)
+// and must never touch company profit, provider, location, or the dashboards.
+// (Supersedes the 2026-09-06 rule that briefly treated lmCheck like company
+// check; restores the company-level 0% treatment from 2026-06-04.)
 export const calcPaymentFee = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.05 +
   toNumber(job.totalPaidFinance) * 0.1 +
-  toNumber(job.totalPaidCompanyCheck) * 0.1 +
-  toNumber(job.lmCheck) * 0.1;
+  toNumber(job.totalPaidCompanyCheck) * 0.1;
 
-// Same rule as calcPaymentFee but with BOTH check fees excluded — used by
-// legacy provider-tab columns that report "fees w/o check". Company Check and
-// LM Check (both 10% checks) are omitted here on purpose, identically.
+// Same rule as calcPaymentFee but with the Company Check fee excluded too —
+// used by legacy provider-tab columns that report "fees w/o check". (LM Check
+// is already fee-free at the company level, so nothing to exclude for it.)
 export const calcPaymentFeeNoCheck = (job: Partial<JobRow>) =>
   toNumber(job.totalPaidCard) * 0.05 +
   toNumber(job.totalPaidFinance) * 0.1;
@@ -41,7 +48,7 @@ export const calcTotalAfterFee = (job: Partial<JobRow>) =>
   toNumber(job.techPaidCash) +
   toNumber(job.totalPaidCompanyCash) +
   toNumber(job.lmCash) +
-  toNumber(job.lmCheck) * 0.9;
+  toNumber(job.lmCheck);   // LM Check: full face value — no company-level fee.
 
 export const calcParts = (job: Partial<JobRow>) =>
   toNumber(job.techParts) + toNumber(job.companyParts) + toNumber(job.lmParts);
@@ -409,8 +416,14 @@ export const calcFinalBalance = (shareAmount: number, techParts: number, techPai
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type JobBalanceComputation = {
-  /** Sum of processor / handling fees on all paid-via-rail methods. */
+  /** Sum of processor / handling fees on all paid-via-rail methods.
+   *  Company-level ONLY — LM Check is fee-free here (its 10% is a tech-only
+   *  AM↔tech deduction surfaced as `lmCheckFee`, never a company fee). */
   paymentFee: number;
+  /** 10% of the LM check — deducted from what the AM owes the technician.
+   *  Applied to techBalance ONLY; NOT part of paymentFee, totalProfit,
+   *  locationShare, or any company/provider figure. Tech report only. */
+  lmCheckFee: number;
   /** tech_parts + company_parts + lm_parts. */
   parts: number;
   /** Gross job total (sum of every payment method received from the customer). */
@@ -446,6 +459,10 @@ export const calcJobBalances = (
 ): JobBalanceComputation => {
   // Step 1
   const paymentFee = calcPaymentFee(job);
+  // LM Check AM↔tech deduction — 10% of the LM check, subtracted from the
+  // tech's balance only (see Step 5a). Not a company fee, so it does NOT enter
+  // paymentFee / totalProfit / locationShare.
+  const lmCheckFee = calcLmCheckFee(job);
   // Step 2
   const jobTotal = calcPaidSum(job);
   const parts = calcParts(job);
@@ -469,10 +486,16 @@ export const calcJobBalances = (
   // Step 5a — tech_balance (no tips). tech_share already reflects the
   //   lm_parts deduction (removed from total_profit upstream), so we DO NOT
   //   subtract lm_parts again here.
+  //   lm_check_fee (owner rule 2026-09-08): the AM deducts 10% of the LM check
+  //   from what they owe the tech and keeps it. It reduces the tech's claim
+  //   here (tech is owed 10% less) and appears ONLY on the tech report. It is
+  //   deliberately absent from location_balance (Step 6a) and from every
+  //   company-level figure.
   const techBalance =
     techShare +
     techParts -     // tech-fronted parts: company reimburses the tech (+)
-    techCash;       // cash the tech kept: reduces what company still owes (−)
+    techCash -      // cash the tech kept: reduces what company still owes (−)
+    lmCheckFee;     // AM keeps 10% of the LM check out of the tech's payout (−)
 
   // Step 5b — tech_balance + tips.
   //   Rule (clarified 2026-06-08, revised): tips are money owed to the
@@ -523,6 +546,7 @@ export const calcJobBalances = (
   // amounts (always non-negative in the natural reading), not net debts.
   return {
     paymentFee,
+    lmCheckFee,
     parts,
     jobTotal,
     totalProfit,
@@ -543,9 +567,10 @@ export const calcJobBalances = (
 //
 // Recognition (in the original revenue/cost helpers above):
 //   - lmCash and lmCheck ARE recognized job revenue. They flow into
-//     calcPaidSum and calcTotalAfterFee like any other payment method.
-//     lmCheck carries a 10% fee, same as COMPANY CHECK (owner rule
-//     2026-09-06, supersedes the 2026-06-04 fee-free lock).
+//     calcPaidSum and calcTotalAfterFee at FULL face value — lmCheck is
+//     fee-free at the company level (owner rule 2026-09-08, restores the
+//     2026-06-04 treatment). The 10% "LM check fee" is a private AM↔tech
+//     deduction on the tech report only (calcLmCheckFee), never a company fee.
 //   - lmParts IS a job-profit cost. calcParts includes it alongside
 //     techParts and companyParts. The parts were consumed on the job, so
 //     their cost is real to the company's profit pool regardless of who
@@ -566,7 +591,11 @@ export const calcJobBalances = (
 export const calcLmRevenue = (job: Partial<JobRow>) =>
   toNumber(job.lmCash) + toNumber(job.lmCheck);
 
-// lmCheck carries a 10% fee, same as company check (owner rule 2026-09-06).
+// LM Check AM↔tech deduction (owner rule 2026-09-08): 10% of the LM check is
+// deducted from what the AM owes the technician — the AM keeps it. Applied
+// ONLY on the tech report (calcJobBalances.techBalance). This is NOT a
+// company/location payment fee: it never enters calcPaymentFee, totalProfit,
+// locationShare, the provider report, stats, or home-stats.
 export const calcLmCheckFee = (job: Partial<JobRow>) => toNumber(job.lmCheck) * 0.1;
 
 export const calcLmOwesCompany = (job: Partial<JobRow>) =>

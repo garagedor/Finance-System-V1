@@ -182,6 +182,7 @@ export async function computeBalanceReport(opts: {
         // Pipeline outputs
         jobTotal: toNumber(calc.jobTotal),
         paymentFee: toNumber(calc.paymentFee),
+        lmCheckFee: toNumber(calc.lmCheckFee),
         parts: toNumber(calc.parts),
         totalProfit: toNumber(calc.totalProfit),
         tipsGross: toNumber(calc.tipsGross),
@@ -219,6 +220,9 @@ export async function computeBalanceReport(opts: {
         tipsCheck: toNumber(job.tipsCheck || 0),
         paidSum: toNumber(paidSum),
         paymentFee: toNumber(fee),
+        // LM Check AM↔tech deduction — tech report only. Zeroed for location
+        // mode so it never surfaces on the location report (owner 2026-09-08).
+        lmCheckFee: mode === 'tech' ? toNumber(calc.lmCheckFee) : 0,
         totalProfit: toNumber(totalProfit),
         shareAmount: toNumber(shareAmount),
         tipsGross: toNumber(calc.tipsGross),

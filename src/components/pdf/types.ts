@@ -17,6 +17,8 @@ export type PdfRow = {
     lmCash: number;
     lmCheck: number;
     paymentFee: number;
+    /** LM Check AM↔tech deduction (10% of LM check). Tech report only; 0 in location mode. */
+    lmCheckFee: number;
     totalProfit: number;
     shareAmount: number;
     techPaidCash: number;
@@ -39,6 +41,7 @@ export type PdfTotals = {
     lmCash: number;
     lmCheck: number;
     paymentFee: number;
+    lmCheckFee: number;
     totalProfit: number;
     shareAmount: number;
     techPaidCash: number;
