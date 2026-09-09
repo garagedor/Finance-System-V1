@@ -30,6 +30,14 @@ const BOOLEAN_FIELDS = ["needTracking"] as const;
 const str = (v: unknown): string | undefined =>
   v === undefined || v === null ? undefined : String(v).trim();
 
+/** Parse the dashboard job `version` out of a meta.refs bag, if present.
+ *  Used to reject a stale (out-of-order) correction — see ingestAiJob. */
+const readVersion = (refs: unknown): number | null => {
+  const v = refs && typeof refs === "object" ? (refs as Record<string, unknown>).version : undefined;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
 /**
  * Coerce an arbitrary incoming job payload into the canonical Job shape. Numbers
  * are made numeric, booleans boolean, strings trimmed, plus the report/stats
@@ -181,6 +189,14 @@ export async function ingestAiJob(envelope: IngestEnvelope): Promise<IngestResul
   // Stable key → idempotent upsert keyed on aiMeta.ingestId.
   const existing = await coll.findOne({ "aiMeta.ingestId": ingestId } as any);
   if (existing) {
+    // Out-of-order guard: corrections arrive as separate sends and could retry
+    // out of order. A write whose version is OLDER than what we already stored
+    // must not clobber the newer live fields — treat it as an idempotent no-op.
+    const storedVersion = readVersion(existing.aiMeta?.refs);
+    const incomingVersion = readVersion(meta.refs);
+    if (incomingVersion != null && storedVersion != null && incomingVersion < storedVersion) {
+      return { ok: true, status: "updated", id: String(existing._id), ingestId, ingestIdKind, validation, duplicateProtection: true };
+    }
     // Never overwrite a human-corrected row's live fields on re-ingest; always
     // refresh provenance. aiOriginal stays frozen either way.
     const setFields: Record<string, unknown> = existing.aiLastEditedAt

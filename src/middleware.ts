@@ -27,11 +27,14 @@ export async function middleware(request: NextRequest) {
 
     // Exempt auth-related routes + the ScanPay webhook (external caller; it
     // authenticates with its own shared secret, not the portal session JWT).
-    // NOTE: only '/api/ai-jobs/ingest' is exempt (the bot authenticates with the
-    // AI_INGEST_TOKEN, not the session cookie). The other /api/ai-jobs/* routes
-    // (CRUD, compare, link) stay JWT-protected — '/api/ai-jobs' does NOT match
-    // the '/api/ai-jobs/ingest' prefix, so they remain gated.
-    const exemptRoutes = ['/api/login', '/api/logout', '/api/scanpay/webhook', '/api/scanpay/cron-sync', '/api/cron/job-mirror-resync', '/api/ai-jobs/ingest'];
+    // NOTE: the Tables AI write doors — '/api/ai-jobs/ingest' (manual/test) and
+    // '/api/ai-jobs/jobs' (the closing-dashboard SHADOW outbox: POST /jobs +
+    // PUT /jobs/{id}) — are exempt because they authenticate with the
+    // AI_INGEST_TOKEN, not the session cookie. Each self-checks that Bearer token
+    // and fails CLOSED (503) if it is unset. The other /api/ai-jobs/* routes
+    // (CRUD at '/api/ai-jobs', compare, link) stay JWT-protected — none of them
+    // match the '/api/ai-jobs/ingest' or '/api/ai-jobs/jobs' prefixes.
+    const exemptRoutes = ['/api/login', '/api/logout', '/api/scanpay/webhook', '/api/scanpay/cron-sync', '/api/cron/job-mirror-resync', '/api/ai-jobs/ingest', '/api/ai-jobs/jobs'];
     if (exemptRoutes.some(route => request.nextUrl.pathname.startsWith(route))) {
         return NextResponse.next();
     }
