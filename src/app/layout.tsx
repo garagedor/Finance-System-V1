@@ -21,6 +21,7 @@ export default function RootLayout({
   const navLinks = [
     { href: "/", label: "Home" },
     { href: "/tables", label: "Tables" },
+    { href: "/tables-ai", label: "Tables Ai" },
     { href: "/stats", label: "Stats" },
     { href: "/balance-report", label: "Balance Report" },
     { href: "/report", label: "Report" },
