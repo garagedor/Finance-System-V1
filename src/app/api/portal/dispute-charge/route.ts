@@ -20,6 +20,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Enter a dispute/refund amount greater than 0" }, { status: 400 });
   }
 
+  const ledgerId = body.ledgerId ? String(body.ledgerId) : undefined;
+  const partyRaw = body.party ? String(body.party) : "";
+  const party = (["technician", "area_manager", "provider"] as const).find((p) => p === partyRaw);
+  // Posting to a specific ledger requires choosing whose slice to charge.
+  if (ledgerId && !party) {
+    return NextResponse.json({ error: "Choose which party's slice to charge (technician / area manager / provider)" }, { status: 400 });
+  }
+
   const result = await postDisputeCharge({
     type,
     jobId,
@@ -30,7 +38,9 @@ export async function POST(req: NextRequest) {
     customer_name: body.customer_name ? String(body.customer_name) : undefined,
     address: body.address ? String(body.address) : undefined,
     recordId: body.recordId ? String(body.recordId) : undefined,
-    ledgerId: body.ledgerId ? String(body.ledgerId) : undefined,
+    ledgerId,
+    party,
+    techId: body.techId ? String(body.techId) : undefined,
     actor: session.name,
     dryRun: !!body.dryRun,
   });

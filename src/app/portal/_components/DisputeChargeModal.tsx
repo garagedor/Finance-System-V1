@@ -59,8 +59,20 @@ export default function DisputeChargeModal({
   const [previewErr, setPreviewErr] = useState<string | null>(null);
   const [posting, setPosting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // Party whose slice is charged to THIS ledger (only when adding from a ledger).
+  const [party, setParty] = useState<"" | "technician" | "area_manager" | "provider">("");
+  // The technician whose % drives the technician slice (defaults to the job's tech).
+  const [techForCharge, setTechForCharge] = useState("");
+  // The exact amount that will post (the selected party's slice), from the dry-run.
+  const [postedAmount, setPostedAmount] = useState<number | null>(null);
 
   const label = type === "dispute" ? "Dispute" : "Refund";
+
+  // Default the charged technician to the job's own tech when a job is chosen.
+  useEffect(() => { if (job) setTechForCharge(job.tech ?? ""); }, [job]);
+  const techChoices = job
+    ? Array.from(new Set([job.tech ?? "", ...opts.techs].filter(Boolean)))
+    : opts.techs;
 
   const search = useCallback(async () => {
     setLoadingJobs(true);
@@ -113,26 +125,39 @@ export default function DisputeChargeModal({
 
   // Live dry-run preview whenever job + amount are valid.
   useEffect(() => {
-    if (!open || !job) { setPreview(null); setPreviewErr(null); return; }
+    const clear = () => { setPreview(null); setPreviewErr(null); setPostedAmount(null); };
+    if (!open || !job) { clear(); return; }
     const a = parseFloat(amount);
-    if (!Number.isFinite(a) || a <= 0) { setPreview(null); setPreviewErr(null); return; }
+    if (!Number.isFinite(a) || a <= 0) { clear(); return; }
+    // Posting to a specific ledger needs a party to know which slice to preview.
+    if (ledgerId && !party) { clear(); return; }
     const t = setTimeout(async () => {
       try {
         const r = await fetch("/api/portal/dispute-charge", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type, jobId: job._id, amount: a, ledgerId, dryRun: true }),
+          body: JSON.stringify({
+            type, jobId: job._id, amount: a, ledgerId,
+            party: party || undefined,
+            techId: party === "technician" ? (techForCharge || undefined) : undefined,
+            dryRun: true,
+          }),
         });
         const j = await r.json();
-        if (!r.ok) { setPreview(null); setPreviewErr(j.error || "Could not compute"); }
-        else { setPreview({ ...j.snapshot, areaManagerName: j.areaManagerName }); setPreviewErr(null); }
-      } catch { setPreview(null); setPreviewErr("Could not compute"); }
+        if (!r.ok) { setPreview(null); setPreviewErr(j.error || "Could not compute"); setPostedAmount(null); }
+        else {
+          setPreview({ ...j.snapshot, areaManagerName: j.areaManagerName });
+          setPostedAmount(typeof j.postedAmount === "number" ? j.postedAmount : null);
+          setPreviewErr(null);
+        }
+      } catch { setPreview(null); setPreviewErr("Could not compute"); setPostedAmount(null); }
     }, 300);
     return () => clearTimeout(t);
-  }, [open, job, amount, type, ledgerId]);
+  }, [open, job, amount, type, ledgerId, party, techForCharge]);
 
   function reset() {
     setJob(null); setQ(""); setJobs([]); setAmount(""); setNotes(""); setDate(today());
     setFProvider(""); setFLocation(""); setFTech(""); setFAM("");
+    setParty(""); setTechForCharge(""); setPostedAmount(null);
     setPreview(null); setPreviewErr(null); setErr(null);
   }
   function close() { setOpen(false); reset(); }
@@ -141,11 +166,16 @@ export default function DisputeChargeModal({
     if (!job) return;
     const a = parseFloat(amount);
     if (!Number.isFinite(a) || a <= 0) { setErr("Enter an amount greater than 0"); return; }
+    if (ledgerId && !party) { setErr("Choose which party's slice to charge (technician / area manager / provider)"); return; }
     setPosting(true); setErr(null);
     try {
       const r = await fetch("/api/portal/dispute-charge", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, jobId: job._id, amount: a, date, notes: notes.trim() || null, ledgerId }),
+        body: JSON.stringify({
+          type, jobId: job._id, amount: a, date, notes: notes.trim() || null, ledgerId,
+          party: party || undefined,
+          techId: party === "technician" ? (techForCharge || undefined) : undefined,
+        }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
@@ -228,6 +258,29 @@ export default function DisputeChargeModal({
                   <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setJob(null)}>Change job</button>
                 </div>
 
+                {ledgerId && (
+                  <div style={{ gridColumn: "span 2" }}>
+                    <label className="portal-label">Charge which party&apos;s slice? <span style={{ color: "#f87171" }}>*</span></label>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      {(([["technician", "Technician"], ["area_manager", "Area Manager"], ["provider", "Provider"]]) as const).map(([v, l]) => (
+                        <button key={v} type="button"
+                          className={`portal-btn ${party === v ? "portal-btn-primary" : "portal-btn-ghost"}`}
+                          style={{ padding: "6px 12px", fontSize: 13 }}
+                          onClick={() => setParty(v)}>{l}</button>
+                      ))}
+                    </div>
+                    {party === "technician" && (
+                      <div style={{ marginTop: 8 }}>
+                        <label className="portal-label" style={{ fontSize: 11 }}>Technician — their % sets the slice</label>
+                        <select className="portal-input" value={techForCharge} onChange={(e) => setTechForCharge(e.target.value)} style={{ padding: "6px 8px", maxWidth: 320 }}>
+                          {techChoices.length === 0 && <option value="">{job.tech ?? "Select technician"}</option>}
+                          {techChoices.map((t) => <option key={t} value={t}>{t}{t === job.tech ? " (job tech)" : ""}</option>)}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div>
                   <label className="portal-label">{label} amount <span style={{ color: "#f87171" }}>*</span></label>
                   <input type="number" step="0.01" min="0" className="portal-input" autoFocus value={amount}
@@ -249,8 +302,8 @@ export default function DisputeChargeModal({
                   ) : preview ? (
                     <div style={{ border: "1px solid rgba(129,140,248,0.3)", background: "rgba(129,140,248,0.06)", borderRadius: 10, padding: 12 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                        <span className="small muted">Posts to {ledgerId ? (ledgerName ?? "this") : preview.areaManagerName}&apos;s ledger · <span style={{ textTransform: "capitalize" }}>{preview.disputeClassification}</span> {label.toLowerCase()}</span>
-                        <span style={{ fontSize: 20, fontWeight: 800, color: "#c7d2fe" }}>{money(preview.amLedgerCharge)}</span>
+                        <span className="small muted">Posts to {ledgerId ? (ledgerName ?? "this") : preview.areaManagerName}&apos;s ledger{party ? ` · ${party === "area_manager" ? "area manager" : party} slice` : ""} · <span style={{ textTransform: "capitalize" }}>{preview.disputeClassification}</span> {label.toLowerCase()}</span>
+                        <span style={{ fontSize: 20, fontWeight: 800, color: "#c7d2fe" }}>{money(postedAmount ?? preview.amLedgerCharge)}</span>
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, fontSize: 12 }}>
                         <Fig label="Technician portion" v={preview.technicianPortion} />
@@ -262,7 +315,7 @@ export default function DisputeChargeModal({
                       </div>
                     </div>
                   ) : (
-                    <div className="muted small">Enter an amount to preview the charge…</div>
+                    <div className="muted small">{ledgerId && !party ? "Choose a party above to preview the slice…" : "Enter an amount to preview the charge…"}</div>
                   )}
                 </div>
 
@@ -270,7 +323,7 @@ export default function DisputeChargeModal({
 
                 <div style={{ gridColumn: "span 2", display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <button className="portal-btn portal-btn-ghost" onClick={close}>Cancel</button>
-                  <button className="portal-btn portal-btn-primary" onClick={post} disabled={posting || !preview}>
+                  <button className="portal-btn portal-btn-primary" onClick={post} disabled={posting || !preview || (!!ledgerId && !party)}>
                     {posting ? "Posting…" : `Post ${label.toLowerCase()} → ${ledgerId ? "ledger" : "AM ledger"}`}
                   </button>
                 </div>

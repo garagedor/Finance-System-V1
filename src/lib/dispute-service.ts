@@ -49,6 +49,16 @@ export type PostDisputeChargeInput = {
    *  the duplicate-ledger bug (owner rule 2026-09-11). The Disputes module omits
    *  it and keeps the find-or-create-by-AM behavior. */
   ledgerId?: string;
+  /** Which party's slice of the dispute to post to the ledger (owner rule
+   *  2026-09-11). Required with ledgerId. Amounts follow the dispute-shares
+   *  formula: technician → technicianPortion, area_manager → areaManagerOwnPortion,
+   *  provider → providerCharge. Without a party (Disputes module) the full AM
+   *  ledger charge (technician + AM own) is posted, as before. */
+  party?: "technician" | "area_manager" | "provider";
+  /** The specific technician whose effective % drives the technician slice
+   *  (techs can have different %). Used only when party === "technician";
+   *  defaults to the job's tech. */
+  techId?: string;
   actor: string;
   /** When true, resolve + compute but write nothing (validation). */
   dryRun?: boolean;
@@ -65,6 +75,12 @@ export type PostDisputeChargeResult =
       areaManagerPercent: number;
       technicianEffectivePercent: number;
       snapshot: ReturnType<typeof computeDisputeCharge>;
+      /** The amount actually posted to the ledger — the selected party's slice
+       *  when a party is given, else the full AM ledger charge. */
+      postedAmount: number;
+      party?: "technician" | "area_manager" | "provider";
+      /** Technician whose % was used for the technician slice (party=technician). */
+      chargedTechName?: string;
       created: boolean;      // true if a new record was created
       reused: boolean;       // true if an existing ledger entry was updated (dedup)
       dryRun: boolean;
@@ -110,7 +126,11 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
   const loc = await db.collection<Location>("Location").findOne({ _id: location } as never);
   if (!loc) return { ok: false, error: `No Location record exists for "${location}".` };
   const amName = (loc.areaManagerName ?? "").trim();
-  if (!amName) {
+  // The AM name is only required for the Disputes-module flow, which find-or-
+  // creates the job's AM ledger from it. When posting a chosen party's slice to
+  // a specific ledger, the name is display-only, so a missing assignment must
+  // not block charging a technician/provider slice.
+  if (!amName && !input.ledgerId) {
     return {
       ok: false,
       error: `No Area Manager is assigned to location "${location}". Assign one on the Area Managers page before charging this dispute/refund.`,
@@ -121,7 +141,13 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     return { ok: false, error: `Location "${location}" has no managerProfitPercent set.` };
   }
 
-  const technicianPercent = await getEffectivePct(job.tech ?? "");
+  // Technician % for the split. When charging the TECHNICIAN slice to a ledger,
+  // the CHOSEN technician's effective % drives it (techs can differ); otherwise
+  // the job's own technician %.
+  const chargedTech = (input.party === "technician" && input.techId?.trim())
+    ? input.techId.trim()
+    : (job.tech ?? "");
+  const technicianPercent = await getEffectivePct(chargedTech);
   const providerDoc = job.provider
     ? await db.collection("Provider").findOne({ _id: job.provider } as never)
     : null;
@@ -153,6 +179,20 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     ledger = await findOrCreateAmLedger(amName, location, input.actor, dryRun);
   }
 
+  // Which slice posts to the ledger. With a chosen party (ledger flow) it is
+  // exactly that party's share from the dispute-shares formula; without one
+  // (Disputes module) it stays the full AM ledger charge (technician + AM own).
+  const postedAmount =
+    input.party === "technician" ? snapshot.technicianPortion
+    : input.party === "area_manager" ? snapshot.areaManagerOwnPortion
+    : input.party === "provider" ? snapshot.providerCharge
+    : snapshot.amLedgerCharge;
+  const partyLabel =
+    input.party === "technician" ? `tech ${chargedTech || job.tech || ""}`.trim()
+    : input.party === "area_manager" ? `AM ${amName}`.trim()
+    : input.party === "provider" ? `provider ${job.provider ?? ""}`.trim()
+    : `AM ${amName}`.trim();
+
   // ── Dedup: one ledger entry per canonical record. Reuse it on re-run. ──
   const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
   const existingEntry = await ec.findOne({ dispute_id: recordId });
@@ -164,10 +204,10 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     ledger_id: ledger._id,
     type: input.type,
     date,
-    amount: snapshot.amLedgerCharge, // positive = AM owes the company
-    description: `${input.type === "dispute" ? "Dispute" : "Refund"} — ${input.customer_name ?? job.address ?? input.jobId} (${amName})`,
+    amount: postedAmount, // positive = the charged party owes the company
+    description: `${input.type === "dispute" ? "Dispute" : "Refund"} — ${input.customer_name ?? job.address ?? input.jobId} (${partyLabel})`,
     job_ref: input.jobId,
-    technician_id: job.tech ?? null,
+    technician_id: input.party === "technician" ? (chargedTech || job.tech || null) : (job.tech ?? null),
     dispute_id: recordId,
     gross_amount: snapshot.disputeOrRefundAmount,
     charge_snapshot: snapshot as unknown as Record<string, unknown>,
@@ -242,6 +282,9 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     areaManagerPercent,
     technicianEffectivePercent: technicianPercent,
     snapshot,
+    postedAmount,
+    party: input.party,
+    chargedTechName: input.party === "technician" ? (chargedTech || job.tech || undefined) : undefined,
     created,
     reused: !!existingEntry,
     dryRun,
