@@ -44,6 +44,11 @@ export type PostDisputeChargeInput = {
   address?: string;
   /** Existing canonical record _id — provide to UPDATE instead of create. */
   recordId?: string;
+  /** When set (dispute added from a specific ledger page), post the charge to
+   *  THIS exact ledger instead of deriving/creating the job's AM ledger. Fixes
+   *  the duplicate-ledger bug (owner rule 2026-09-11). The Disputes module omits
+   *  it and keeps the find-or-create-by-AM behavior. */
+  ledgerId?: string;
   actor: string;
   /** When true, resolve + compute but write nothing (validation). */
   dryRun?: boolean;
@@ -134,7 +139,19 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     sourceRecordId: recordId,
   });
 
-  const ledger = await findOrCreateAmLedger(amName, location, input.actor, dryRun);
+  // Target ledger. When the dispute is added from a specific ledger page we post
+  // to THAT ledger (never derive/create another — owner rule 2026-09-11). Only
+  // the Disputes module (no ledgerId) falls back to the job's AM ledger. Charge
+  // amounts are still computed from the job's AM/tech/provider %, which is
+  // correct regardless of which ledger the entry attaches to.
+  let ledger: LedgerRecord;
+  if (input.ledgerId) {
+    const found = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger).findOne({ _id: input.ledgerId });
+    if (!found) return { ok: false, error: `Ledger not found: ${input.ledgerId}` };
+    ledger = found;
+  } else {
+    ledger = await findOrCreateAmLedger(amName, location, input.actor, dryRun);
+  }
 
   // ── Dedup: one ledger entry per canonical record. Reuse it on re-run. ──
   const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);

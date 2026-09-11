@@ -130,6 +130,7 @@ export default async function LedgerDetailPage({
             />
             <AddDisputeRefundModal
               ledgerId={ledger._id}
+              ledgerName={ledger.holder_name}
               defaultTech={ledger.role === "technician" ? ledger.holder_name : ""}
             />
             <RecordPaymentModal

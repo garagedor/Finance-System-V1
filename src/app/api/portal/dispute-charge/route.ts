@@ -30,6 +30,7 @@ export async function POST(req: NextRequest) {
     customer_name: body.customer_name ? String(body.customer_name) : undefined,
     address: body.address ? String(body.address) : undefined,
     recordId: body.recordId ? String(body.recordId) : undefined,
+    ledgerId: body.ledgerId ? String(body.ledgerId) : undefined,
     actor: session.name,
     dryRun: !!body.dryRun,
   });

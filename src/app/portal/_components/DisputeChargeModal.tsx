@@ -27,14 +27,28 @@ export default function DisputeChargeModal({
   type,
   triggerLabel,
   primary,
+  ledgerId,
+  ledgerName,
 }: {
   type: "dispute" | "refund";
   triggerLabel?: string;
   primary?: boolean;
+  /** When set, the charge posts to THIS ledger (no duplicate AM ledger). */
+  ledgerId?: string;
+  /** Display-only name of that ledger, for the "posts to …" label. */
+  ledgerName?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
+  // Structured job filters (combine with the text box).
+  const [fProvider, setFProvider] = useState("");
+  const [fLocation, setFLocation] = useState("");
+  const [fTech, setFTech] = useState("");
+  const [fAM, setFAM] = useState("");
+  const [opts, setOpts] = useState<{ providers: string[]; locations: string[]; techs: string[]; ams: string[] }>(
+    { providers: [], locations: [], techs: [], ams: [] },
+  );
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
@@ -51,17 +65,51 @@ export default function DisputeChargeModal({
   const search = useCallback(async () => {
     setLoadingJobs(true);
     try {
-      const r = await fetch(`/api/portal/dispute-charge/jobs?q=${encodeURIComponent(q.trim())}`);
+      const p = new URLSearchParams();
+      if (q.trim()) p.set("q", q.trim());
+      if (fProvider) p.set("provider", fProvider);
+      if (fLocation) p.set("location", fLocation);
+      if (fTech) p.set("tech", fTech);
+      if (fAM) p.set("areaManager", fAM);
+      const r = await fetch(`/api/portal/dispute-charge/jobs?${p.toString()}`);
       const j = await r.json();
       setJobs(Array.isArray(j.jobs) ? j.jobs : []);
     } catch { setJobs([]); } finally { setLoadingJobs(false); }
-  }, [q]);
+  }, [q, fProvider, fLocation, fTech, fAM]);
 
   useEffect(() => {
     if (!open || job) return;
     const t = setTimeout(search, 250);
     return () => clearTimeout(t);
-  }, [open, q, job, search]);
+  }, [open, job, search]);
+
+  // Load filter option lists once when the modal opens.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const rows = (j: unknown): string[] =>
+      Array.isArray((j as { rows?: unknown[] })?.rows)
+        ? ((j as { rows: Array<{ _id?: unknown }> }).rows.map((d) => String(d?._id ?? "")).filter(Boolean))
+        : [];
+    (async () => {
+      try {
+        const [p, l, t, a] = await Promise.all([
+          fetch("/api/providers?pageSize=2000").then((r) => r.json()).catch(() => ({})),
+          fetch("/api/locations?pageSize=2000").then((r) => r.json()).catch(() => ({})),
+          fetch("/api/techs?pageSize=2000").then((r) => r.json()).catch(() => ({})),
+          fetch("/api/portal/locations/area-manager").then((r) => r.json()).catch(() => ({})),
+        ]);
+        if (cancelled) return;
+        setOpts({
+          providers: rows(p),
+          locations: rows(l),
+          techs: rows(t),
+          ams: Array.isArray((a as { amOptions?: string[] })?.amOptions) ? (a as { amOptions: string[] }).amOptions : [],
+        });
+      } catch { /* leave options empty; text search still works */ }
+    })();
+    return () => { cancelled = true; };
+  }, [open]);
 
   // Live dry-run preview whenever job + amount are valid.
   useEffect(() => {
@@ -72,7 +120,7 @@ export default function DisputeChargeModal({
       try {
         const r = await fetch("/api/portal/dispute-charge", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type, jobId: job._id, amount: a, dryRun: true }),
+          body: JSON.stringify({ type, jobId: job._id, amount: a, ledgerId, dryRun: true }),
         });
         const j = await r.json();
         if (!r.ok) { setPreview(null); setPreviewErr(j.error || "Could not compute"); }
@@ -80,10 +128,11 @@ export default function DisputeChargeModal({
       } catch { setPreview(null); setPreviewErr("Could not compute"); }
     }, 300);
     return () => clearTimeout(t);
-  }, [open, job, amount, type]);
+  }, [open, job, amount, type, ledgerId]);
 
   function reset() {
     setJob(null); setQ(""); setJobs([]); setAmount(""); setNotes(""); setDate(today());
+    setFProvider(""); setFLocation(""); setFTech(""); setFAM("");
     setPreview(null); setPreviewErr(null); setErr(null);
   }
   function close() { setOpen(false); reset(); }
@@ -96,7 +145,7 @@ export default function DisputeChargeModal({
     try {
       const r = await fetch("/api/portal/dispute-charge", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, jobId: job._id, amount: a, date, notes: notes.trim() || null }),
+        body: JSON.stringify({ type, jobId: job._id, amount: a, date, notes: notes.trim() || null, ledgerId }),
       });
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
@@ -122,7 +171,7 @@ export default function DisputeChargeModal({
           <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 22, width: "min(720px, 96vw)" }}
             onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>New {label} — charge to Area Manager</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>New {label} — charge to {ledgerId ? `${ledgerName ?? "this"}’s ledger` : "Area Manager"}</h2>
               <button onClick={close} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
 
@@ -132,9 +181,24 @@ export default function DisputeChargeModal({
                 <label className="portal-label">Find the job (address, customer, or tech)</label>
                 <input className="portal-input" autoFocus value={q} onChange={(e) => setQ(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") search(); }} placeholder="e.g. 123 Main St / Smith / Idan" />
+                {/* Filter the job list by provider / location / area manager / technician. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 8 }}>
+                  <FilterSelect label="Provider" value={fProvider} onChange={setFProvider} options={opts.providers} />
+                  <FilterSelect label="Location" value={fLocation} onChange={setFLocation} options={opts.locations} />
+                  <FilterSelect label="Area manager" value={fAM} onChange={setFAM} options={opts.ams} />
+                  <FilterSelect label="Technician" value={fTech} onChange={setFTech} options={opts.techs} />
+                </div>
+                {(fProvider || fLocation || fAM || fTech) && (
+                  <div style={{ marginTop: 6 }}>
+                    <button type="button" className="portal-btn portal-btn-ghost" style={{ padding: "2px 8px", fontSize: 11 }}
+                      onClick={() => { setFProvider(""); setFLocation(""); setFAM(""); setFTech(""); }}>
+                      Clear filters
+                    </button>
+                  </div>
+                )}
                 <div style={{ maxHeight: 340, overflowY: "auto", marginTop: 10, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
                   {jobs.length === 0 ? (
-                    <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : "Type to search jobs."}</div>
+                    <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : (q || fProvider || fLocation || fAM || fTech) ? "No jobs match your search / filters." : "Type or pick a filter to find jobs."}</div>
                   ) : (
                     <table className="portal-table" style={{ margin: 0 }}>
                       <thead><tr><th>Date</th><th>Address</th><th>Tech</th><th>Location</th><th className="right">Collected</th></tr></thead>
@@ -185,7 +249,7 @@ export default function DisputeChargeModal({
                   ) : preview ? (
                     <div style={{ border: "1px solid rgba(129,140,248,0.3)", background: "rgba(129,140,248,0.06)", borderRadius: 10, padding: 12 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                        <span className="small muted">Posts to {preview.areaManagerName}&apos;s ledger · <span style={{ textTransform: "capitalize" }}>{preview.disputeClassification}</span> {label.toLowerCase()}</span>
+                        <span className="small muted">Posts to {ledgerId ? (ledgerName ?? "this") : preview.areaManagerName}&apos;s ledger · <span style={{ textTransform: "capitalize" }}>{preview.disputeClassification}</span> {label.toLowerCase()}</span>
                         <span style={{ fontSize: 20, fontWeight: 800, color: "#c7d2fe" }}>{money(preview.amLedgerCharge)}</span>
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, fontSize: 12 }}>
@@ -207,7 +271,7 @@ export default function DisputeChargeModal({
                 <div style={{ gridColumn: "span 2", display: "flex", gap: 8, justifyContent: "flex-end" }}>
                   <button className="portal-btn portal-btn-ghost" onClick={close}>Cancel</button>
                   <button className="portal-btn portal-btn-primary" onClick={post} disabled={posting || !preview}>
-                    {posting ? "Posting…" : `Post ${label.toLowerCase()} → AM ledger`}
+                    {posting ? "Posting…" : `Post ${label.toLowerCase()} → ${ledgerId ? "ledger" : "AM ledger"}`}
                   </button>
                 </div>
               </div>
@@ -216,6 +280,20 @@ export default function DisputeChargeModal({
         </div>
       )}
     </>
+  );
+}
+
+function FilterSelect({
+  label, value, onChange, options,
+}: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
+  return (
+    <div>
+      <label className="portal-label" style={{ fontSize: 11 }}>{label}</label>
+      <select className="portal-input" value={value} onChange={(e) => onChange(e.target.value)} style={{ padding: "6px 8px" }}>
+        <option value="">All</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
   );
 }
 
