@@ -13,6 +13,14 @@ type Job = {
   tech: string | null; location: string | null; provider: string | null;
   jobAmount: number; grossTip: number; parts: number; collected: number;
 };
+// A collected ScanPay dispute (already carries its amount + matched job).
+type Dispute = {
+  id: string; disputeId: string; amount: number; invoiceNumber: string;
+  customerName: string; serviceAddress: string; reason: string; disputedAt: string;
+  matchedJobId: string; matchStatus: string;
+  provider: string; location: string; tech: string;
+  charged: boolean; chargedAt: string | null;
+};
 type Snap = {
   amLedgerCharge: number; technicianPortion: number; areaManagerOwnPortion: number;
   providerCharge: number; companyCharge: number; partsLoss: number;
@@ -50,6 +58,8 @@ export default function DisputeChargeModal({
     { providers: [], locations: [], techs: [], ams: [] },
   );
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [scanpayDisputeId, setScanpayDisputeId] = useState<string | null>(null);
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [amount, setAmount] = useState("");
@@ -83,11 +93,19 @@ export default function DisputeChargeModal({
       if (fLocation) p.set("location", fLocation);
       if (fTech) p.set("tech", fTech);
       if (fAM) p.set("areaManager", fAM);
-      const r = await fetch(`/api/portal/dispute-charge/jobs?${p.toString()}`);
-      const j = await r.json();
-      setJobs(Array.isArray(j.jobs) ? j.jobs : []);
-    } catch { setJobs([]); } finally { setLoadingJobs(false); }
-  }, [q, fProvider, fLocation, fTech, fAM]);
+      if (ledgerId) {
+        // Ledger flow → pick from the collected ScanPay disputes (amount known).
+        const r = await fetch(`/api/portal/dispute-charge/disputes?${p.toString()}`);
+        const j = await r.json();
+        setDisputes(Array.isArray(j.disputes) ? j.disputes : []);
+      } else {
+        // Disputes module → pick a job and enter an amount (unchanged).
+        const r = await fetch(`/api/portal/dispute-charge/jobs?${p.toString()}`);
+        const j = await r.json();
+        setJobs(Array.isArray(j.jobs) ? j.jobs : []);
+      }
+    } catch { setJobs([]); setDisputes([]); } finally { setLoadingJobs(false); }
+  }, [q, fProvider, fLocation, fTech, fAM, ledgerId]);
 
   useEffect(() => {
     if (!open || job) return;
@@ -154,8 +172,28 @@ export default function DisputeChargeModal({
     return () => clearTimeout(t);
   }, [open, job, amount, type, ledgerId, party, techForCharge]);
 
+  // Picking a collected dispute drives everything: amount comes from the dispute,
+  // and the matched job (a synthetic Job carrying the joined provider/location/
+  // tech) feeds the same step-2 machinery. The real numbers are recomputed
+  // server-side from the matched job during the dry-run.
+  function pickDispute(d: Dispute) {
+    setScanpayDisputeId(d.id);
+    setAmount(String(d.amount));
+    setJob({
+      _id: d.matchedJobId,
+      date: d.disputedAt || null,
+      address: d.serviceAddress || null,
+      clientName: d.customerName || null,
+      tech: d.tech || null,
+      location: d.location || null,
+      provider: d.provider || null,
+      jobAmount: 0, grossTip: 0, parts: 0, collected: 0,
+    });
+  }
+
   function reset() {
-    setJob(null); setQ(""); setJobs([]); setAmount(""); setNotes(""); setDate(today());
+    setJob(null); setQ(""); setJobs([]); setDisputes([]); setScanpayDisputeId(null);
+    setAmount(""); setNotes(""); setDate(today());
     setFProvider(""); setFLocation(""); setFTech(""); setFAM("");
     setParty(""); setTechForCharge(""); setPostedAmount(null);
     setPreview(null); setPreviewErr(null); setErr(null);
@@ -175,6 +213,7 @@ export default function DisputeChargeModal({
           type, jobId: job._id, amount: a, date, notes: notes.trim() || null, ledgerId,
           party: party || undefined,
           techId: party === "technician" ? (techForCharge || undefined) : undefined,
+          scanpayDisputeId: scanpayDisputeId || undefined,
         }),
       });
       const j = await r.json();
@@ -205,12 +244,12 @@ export default function DisputeChargeModal({
               <button onClick={close} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
 
-            {/* Step 1 — pick the job */}
+            {/* Step 1 — pick the collected dispute (ledger flow) or the job (Disputes module) */}
             {!job ? (
               <div>
-                <label className="portal-label">Find the job (address, customer, or tech)</label>
+                <label className="portal-label">{ledgerId ? "Find the dispute (invoice, customer, address, tech, reason)" : "Find the job (address, customer, or tech)"}</label>
                 <input className="portal-input" autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") search(); }} placeholder="e.g. 123 Main St / Smith / Idan" />
+                  onKeyDown={(e) => { if (e.key === "Enter") search(); }} placeholder={ledgerId ? "e.g. IN-1783… / Smith / Idan / Fraudulent" : "e.g. 123 Main St / Smith / Idan"} />
                 {/* Filter the job list by provider / location / area manager / technician. */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 8 }}>
                   <FilterSelect label="Provider" value={fProvider} onChange={setFProvider} options={opts.providers} />
@@ -227,23 +266,46 @@ export default function DisputeChargeModal({
                   </div>
                 )}
                 <div style={{ maxHeight: 340, overflowY: "auto", marginTop: 10, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
-                  {jobs.length === 0 ? (
-                    <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : (q || fProvider || fLocation || fAM || fTech) ? "No jobs match your search / filters." : "Type or pick a filter to find jobs."}</div>
+                  {ledgerId ? (
+                    disputes.length === 0 ? (
+                      <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : "No collected disputes match — adjust the filters (only job-matched disputes are chargeable)."}</div>
+                    ) : (
+                      <table className="portal-table" style={{ margin: 0 }}>
+                        <thead><tr><th>Filed</th><th>Customer / invoice</th><th>Tech</th><th>Location</th><th className="right">Amount</th></tr></thead>
+                        <tbody>
+                          {disputes.map((d) => (
+                            <tr key={d.id} style={{ cursor: "pointer" }} onClick={() => pickDispute(d)}>
+                              <td className="small mono">{d.disputedAt ? d.disputedAt.slice(0, 10) : "—"}</td>
+                              <td>{d.customerName || d.serviceAddress || "—"}
+                                <div className="muted small">{d.invoiceNumber}{d.reason ? ` · ${d.reason}` : ""}{d.charged ? " · ✓ charged" : ""}</div>
+                              </td>
+                              <td className="small">{d.tech || "—"}</td>
+                              <td className="small muted">{d.location || "—"}</td>
+                              <td className="right money">{money(d.amount)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )
                   ) : (
-                    <table className="portal-table" style={{ margin: 0 }}>
-                      <thead><tr><th>Date</th><th>Address</th><th>Tech</th><th>Location</th><th className="right">Collected</th></tr></thead>
-                      <tbody>
-                        {jobs.map((j) => (
-                          <tr key={j._id} style={{ cursor: "pointer" }} onClick={() => setJob(j)}>
-                            <td className="small mono">{j.date ?? "—"}</td>
-                            <td>{j.address ?? "—"}<div className="muted small">{j.clientName ?? ""}</div></td>
-                            <td className="small">{j.tech ?? "—"}</td>
-                            <td className="small muted">{j.location ?? "—"}</td>
-                            <td className="right money">{money(j.collected)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                    jobs.length === 0 ? (
+                      <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : (q || fProvider || fLocation || fAM || fTech) ? "No jobs match your search / filters." : "Type or pick a filter to find jobs."}</div>
+                    ) : (
+                      <table className="portal-table" style={{ margin: 0 }}>
+                        <thead><tr><th>Date</th><th>Address</th><th>Tech</th><th>Location</th><th className="right">Collected</th></tr></thead>
+                        <tbody>
+                          {jobs.map((j) => (
+                            <tr key={j._id} style={{ cursor: "pointer" }} onClick={() => setJob(j)}>
+                              <td className="small mono">{j.date ?? "—"}</td>
+                              <td>{j.address ?? "—"}<div className="muted small">{j.clientName ?? ""}</div></td>
+                              <td className="small">{j.tech ?? "—"}</td>
+                              <td className="small muted">{j.location ?? "—"}</td>
+                              <td className="right money">{money(j.collected)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )
                   )}
                 </div>
               </div>
@@ -252,10 +314,14 @@ export default function DisputeChargeModal({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div style={{ gridColumn: "span 2", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <strong>{job.address ?? job._id}</strong> <span className="muted small">· {job.tech ?? "—"} · {job.location ?? "—"}</span>
-                    <div className="muted small">Collected {money(job.collected)} · tip {money(job.grossTip)} · parts {money(job.parts)}</div>
+                    <strong>{job.clientName ?? job.address ?? job._id}</strong> <span className="muted small">· {job.tech ?? "—"} · {job.location ?? "—"}</span>
+                    <div className="muted small">
+                      {ledgerId
+                        ? `Dispute amount ${money(parseFloat(amount) || 0)} · from collected disputes`
+                        : `Collected ${money(job.collected)} · tip ${money(job.grossTip)} · parts ${money(job.parts)}`}
+                    </div>
                   </div>
-                  <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setJob(null)}>Change job</button>
+                  <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => { setJob(null); setScanpayDisputeId(null); }}>{ledgerId ? "Change dispute" : "Change job"}</button>
                 </div>
 
                 {ledgerId && (
@@ -281,11 +347,13 @@ export default function DisputeChargeModal({
                   </div>
                 )}
 
-                <div>
-                  <label className="portal-label">{label} amount <span style={{ color: "#f87171" }}>*</span></label>
-                  <input type="number" step="0.01" min="0" className="portal-input" autoFocus value={amount}
-                    onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
-                </div>
+                {!ledgerId && (
+                  <div>
+                    <label className="portal-label">{label} amount <span style={{ color: "#f87171" }}>*</span></label>
+                    <input type="number" step="0.01" min="0" className="portal-input" autoFocus value={amount}
+                      onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
+                  </div>
+                )}
                 <div>
                   <label className="portal-label">Date</label>
                   <input type="date" className="portal-input" value={date} onChange={(e) => setDate(e.target.value)} />

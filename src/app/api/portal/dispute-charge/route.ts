@@ -6,6 +6,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readPortalSession } from "@/lib/portal-auth";
 import { postDisputeCharge } from "@/lib/dispute-service";
+import { coll, FINANCE_COLLECTIONS } from "@/lib/finance-db";
+import type { ScanpayDisputeRecord } from "@/types/scanpay";
 
 export async function POST(req: NextRequest) {
   const session = await readPortalSession();
@@ -46,5 +48,19 @@ export async function POST(req: NextRequest) {
   });
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+
+  // If this charge came from a collected ScanPay dispute, flag it as charged so
+  // the picker can badge it (re-charge is still allowed). Best-effort — the
+  // ledger entry is already posted; a flag failure must not fail the request.
+  const scanpayDisputeId = body.scanpayDisputeId ? String(body.scanpayDisputeId) : "";
+  if (!result.dryRun && scanpayDisputeId) {
+    try {
+      await coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute).updateOne(
+        { _id: scanpayDisputeId } as never,
+        { $set: { chargedAt: new Date().toISOString().slice(0, 10), chargedBy: session.name, updated_at: new Date().toISOString() } },
+      );
+    } catch { /* flag is advisory; ledger entry stands */ }
+  }
+
   return NextResponse.json(result);
 }
