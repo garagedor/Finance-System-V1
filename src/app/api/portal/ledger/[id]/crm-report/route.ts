@@ -20,6 +20,13 @@ interface ReportRow {
   status?: string;
   balance?: number;
   balanceWithTips?: number;
+  // Per-job money breakdown surfaced in the ledger report detail.
+  paidSum?: number;
+  paymentFee?: number;
+  totalProfit?: number;
+  tipsTotal?: number;
+  shareAmount?: number;
+  breakdown?: { parts?: number };
 }
 
 interface TechReport {
@@ -156,6 +163,12 @@ export async function POST(
         tech: String(j.tech ?? ""),
         balance: round2(Number(j.balance) || 0),
         balance_with_tips: round2(Number(j.balanceWithTips) || 0),
+        job_total: round2(Number(j.paidSum) || 0),
+        payment_fee: round2(Number(j.paymentFee) || 0),
+        parts: round2(Number(j.breakdown?.parts) || 0),
+        total_profit: round2(Number(j.totalProfit) || 0),
+        tips_total: round2(Number(j.tipsTotal) || 0),
+        payout: round2(Number(j.shareAmount) || 0),
       })),
     };
 

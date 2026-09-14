@@ -5,6 +5,7 @@ import { fmt$, fmtDate } from "../../format";
 import { PageHeader, StatPill, CardShell, Empty, BackLink } from "../../_components/page-helpers";
 import EntryFormModal, { type FieldDef } from "../../_components/EntryFormModal";
 import AddCrmReportModal from "./AddCrmReportModal";
+import ReportBreakdown from "./ReportBreakdown";
 import AddDisputeRefundModal from "./AddDisputeRefundModal";
 import RecordPaymentModal from "./RecordPaymentModal";
 import ReverseEntryButton from "./ReverseEntryButton";
@@ -214,6 +215,7 @@ export default async function LedgerDetailPage({
                         {fmt$(e.report_meta.balance_with_tips, { showSign: true })}
                       </div>
                     )}
+                    {e.report_meta && <ReportBreakdown meta={e.report_meta} />}
                     {(e.type === "dispute" || e.type === "refund") &&
                       e.gross_amount != null && e.pct_applied != null && (
                         <div className="muted small">

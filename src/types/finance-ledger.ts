@@ -78,6 +78,14 @@ export interface LedgerReportMeta {
     tech: string;
     balance: number;
     balance_with_tips: number;
+    // Enriched per-job money breakdown (added 2026-09-15). Optional — report
+    // entries pulled before then only carry the two balances above.
+    job_total?: number;
+    payment_fee?: number;
+    parts?: number;
+    total_profit?: number;
+    tips_total?: number;
+    payout?: number;   // the mode's share (tech payout / location 40% payout)
   }>;
 }
 
