@@ -70,7 +70,7 @@ export default function DisputeChargeModal({
   const [posting, setPosting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // Party whose slice is charged to THIS ledger (only when adding from a ledger).
-  const [party, setParty] = useState<"" | "technician" | "area_manager" | "provider">("");
+  const [party, setParty] = useState<"" | "technician" | "area_manager" | "provider" | "combined">("");
   // The technician whose % drives the technician slice (defaults to the job's tech).
   const [techForCharge, setTechForCharge] = useState("");
   // The exact amount that will post (the selected party's slice), from the dry-run.
@@ -328,7 +328,7 @@ export default function DisputeChargeModal({
                   <div style={{ gridColumn: "span 2" }}>
                     <label className="portal-label">Charge which party&apos;s slice? <span style={{ color: "#f87171" }}>*</span></label>
                     <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                      {(([["technician", "Technician"], ["area_manager", "Area Manager"], ["provider", "Provider"]]) as const).map(([v, l]) => (
+                      {(([["technician", "Technician"], ["area_manager", "Area Manager"], ["provider", "Provider"], ["combined", "AM + Technician"]]) as const).map(([v, l]) => (
                         <button key={v} type="button"
                           className={`portal-btn ${party === v ? "portal-btn-primary" : "portal-btn-ghost"}`}
                           style={{ padding: "6px 12px", fontSize: 13 }}
@@ -370,7 +370,7 @@ export default function DisputeChargeModal({
                   ) : preview ? (
                     <div style={{ border: "1px solid rgba(129,140,248,0.3)", background: "rgba(129,140,248,0.06)", borderRadius: 10, padding: 12 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-                        <span className="small muted">Posts to {ledgerId ? (ledgerName ?? "this") : preview.areaManagerName}&apos;s ledger{party ? ` · ${party === "area_manager" ? "area manager" : party} slice` : ""} · <span style={{ textTransform: "capitalize" }}>{preview.disputeClassification}</span> {label.toLowerCase()}</span>
+                        <span className="small muted">Posts to {ledgerId ? (ledgerName ?? "this") : preview.areaManagerName}&apos;s ledger{party ? ` · ${party === "area_manager" ? "area manager" : party === "combined" ? "AM + tech (combined)" : party} slice` : ""} · <span style={{ textTransform: "capitalize" }}>{preview.disputeClassification}</span> {label.toLowerCase()}</span>
                         <span style={{ fontSize: 20, fontWeight: 800, color: "#c7d2fe" }}>{money(postedAmount ?? preview.amLedgerCharge)}</span>
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, fontSize: 12 }}>

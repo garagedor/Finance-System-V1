@@ -52,9 +52,11 @@ export type PostDisputeChargeInput = {
   /** Which party's slice of the dispute to post to the ledger (owner rule
    *  2026-09-11). Required with ledgerId. Amounts follow the dispute-shares
    *  formula: technician → technicianPortion, area_manager → areaManagerOwnPortion,
-   *  provider → providerCharge. Without a party (Disputes module) the full AM
-   *  ledger charge (technician + AM own) is posted, as before. */
-  party?: "technician" | "area_manager" | "provider";
+   *  provider → providerCharge, combined → technicianPortion + areaManagerOwnPortion
+   *  (the full AM ledger charge; the tech/AM split is surfaced so the AM can
+   *  recover the tech's part on their own). Without a party (Disputes module) the
+   *  combined amount is posted, as before. */
+  party?: "technician" | "area_manager" | "provider" | "combined";
   /** The specific technician whose effective % drives the technician slice
    *  (techs can have different %). Used only when party === "technician";
    *  defaults to the job's tech. */
@@ -78,7 +80,10 @@ export type PostDisputeChargeResult =
       /** The amount actually posted to the ledger — the selected party's slice
        *  when a party is given, else the full AM ledger charge. */
       postedAmount: number;
-      party?: "technician" | "area_manager" | "provider";
+      party?: "technician" | "area_manager" | "provider" | "combined";
+      /** For combined: how the posted amount splits (so the AM sees each part). */
+      technicianPortion?: number;
+      areaManagerOwnPortion?: number;
       /** Technician whose % was used for the technician slice (party=technician). */
       chargedTechName?: string;
       created: boolean;      // true if a new record was created
@@ -186,11 +191,12 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     input.party === "technician" ? snapshot.technicianPortion
     : input.party === "area_manager" ? snapshot.areaManagerOwnPortion
     : input.party === "provider" ? snapshot.providerCharge
-    : snapshot.amLedgerCharge;
+    : snapshot.amLedgerCharge; // combined / no-party → tech + AM own
   const partyLabel =
     input.party === "technician" ? `tech ${chargedTech || job.tech || ""}`.trim()
     : input.party === "area_manager" ? `AM ${amName}`.trim()
     : input.party === "provider" ? `provider ${job.provider ?? ""}`.trim()
+    : input.party === "combined" ? `AM ${amName} + tech ${job.tech ?? ""}`.trim()
     : `AM ${amName}`.trim();
 
   // ── Dedup: one ledger entry per canonical record. Reuse it on re-run. ──
@@ -210,7 +216,9 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     technician_id: input.party === "technician" ? (chargedTech || job.tech || null) : (job.tech ?? null),
     dispute_id: recordId,
     gross_amount: snapshot.disputeOrRefundAmount,
-    charge_snapshot: snapshot as unknown as Record<string, unknown>,
+    // Record which party was charged + the posted amount alongside the full
+    // snapshot, so the ledger can show the tech/AM split for a combined charge.
+    charge_snapshot: { ...(snapshot as unknown as Record<string, unknown>), posted_party: input.party ?? null, posted_amount: postedAmount },
     source: "crm" as const,
     updated_at: now,
   };
@@ -284,6 +292,8 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     snapshot,
     postedAmount,
     party: input.party,
+    technicianPortion: snapshot.technicianPortion,
+    areaManagerOwnPortion: snapshot.areaManagerOwnPortion,
     chargedTechName: input.party === "technician" ? (chargedTech || job.tech || undefined) : undefined,
     created,
     reused: !!existingEntry,

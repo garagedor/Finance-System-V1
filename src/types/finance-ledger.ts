@@ -33,6 +33,7 @@ export type LedgerEntryType =
   | "report"
   | "dispute"
   | "refund"
+  | "penalty"
   | "equipment"
   | "misc"
   | "settlement"

@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readPortalSession } from "@/lib/portal-auth";
 import { postDisputeCharge } from "@/lib/dispute-service";
+import { postPenaltyCharge } from "@/lib/penalty-service";
 import { coll, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import type { ScanpayDisputeRecord } from "@/types/scanpay";
 
@@ -14,6 +15,26 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // Penalty (X-close job): computed loss, the AM's 50% posted to the ledger.
+  // Different formula from dispute/refund, so handle it before the amount check.
+  if (body.type === "penalty") {
+    const pJobId = String(body.jobId ?? "").trim();
+    const pLedgerId = body.ledgerId ? String(body.ledgerId) : "";
+    if (!pJobId) return NextResponse.json({ error: "Select a penalty job first" }, { status: 400 });
+    if (!pLedgerId) return NextResponse.json({ error: "A ledger is required" }, { status: 400 });
+    const pRes = await postPenaltyCharge({
+      jobId: pJobId,
+      ledgerId: pLedgerId,
+      date: body.date ? String(body.date) : undefined,
+      notes: body.notes ? String(body.notes) : undefined,
+      actor: session.name,
+      dryRun: !!body.dryRun,
+    });
+    if (!pRes.ok) return NextResponse.json({ error: pRes.error }, { status: 400 });
+    return NextResponse.json(pRes);
+  }
+
   const type = body.type === "refund" ? "refund" : "dispute";
   const jobId = String(body.jobId ?? "").trim();
   const amount = Number(body.amount);
@@ -24,7 +45,7 @@ export async function POST(req: NextRequest) {
 
   const ledgerId = body.ledgerId ? String(body.ledgerId) : undefined;
   const partyRaw = body.party ? String(body.party) : "";
-  const party = (["technician", "area_manager", "provider"] as const).find((p) => p === partyRaw);
+  const party = (["technician", "area_manager", "provider", "combined"] as const).find((p) => p === partyRaw);
   // Posting to a specific ledger requires choosing whose slice to charge.
   if (ledgerId && !party) {
     return NextResponse.json({ error: "Choose which party's slice to charge (technician / area manager / provider)" }, { status: 400 });

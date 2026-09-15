@@ -14,6 +14,7 @@
 // ledgerName is display-only, for the "posts to …" label. defaultTech is unused.
 
 import DisputeChargeModal from "../../_components/DisputeChargeModal";
+import PenaltyChargeModal from "./PenaltyChargeModal";
 
 export default function AddDisputeRefundModal(
   { ledgerId, ledgerName }: { ledgerId?: string; defaultTech?: string; ledgerName?: string },
@@ -22,6 +23,7 @@ export default function AddDisputeRefundModal(
     <span style={{ display: "inline-flex", gap: 6 }}>
       <DisputeChargeModal type="dispute" triggerLabel="+ Dispute" ledgerId={ledgerId} ledgerName={ledgerName} />
       <DisputeChargeModal type="refund" triggerLabel="+ Refund" ledgerId={ledgerId} ledgerName={ledgerName} />
+      <PenaltyChargeModal ledgerId={ledgerId} ledgerName={ledgerName} />
     </span>
   );
 }

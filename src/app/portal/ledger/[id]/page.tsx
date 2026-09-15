@@ -56,6 +56,7 @@ const TYPE_LABEL: Record<string, string> = Object.fromEntries(
   TYPE_OPTIONS.map((o) => [o.value, o.label]),
 );
 TYPE_LABEL.report = "CRM Balance Report";
+TYPE_LABEL.penalty = "Penalty";
 
 async function load(id: string) {
   await ensureFinanceIndexes();
@@ -225,6 +226,18 @@ export default async function LedgerDetailPage({
                           )}%
                         </div>
                       )}
+                    {(e.type === "dispute" || e.type === "refund") &&
+                      e.charge_snapshot?.posted_party === "combined" && (
+                        <div className="muted small">
+                          Technician {fmt$(Number(e.charge_snapshot.technicianPortion) || 0)} · Area manager {fmt$(Number(e.charge_snapshot.areaManagerOwnPortion) || 0)}
+                        </div>
+                      )}
+                    {e.type === "penalty" && e.charge_snapshot && (
+                      <div className="muted small">
+                        {e.technician_id ? `${e.technician_id} · ` : ""}
+                        Total loss {fmt$(Number(e.charge_snapshot.total_loss) || 0)} · AM 50% {fmt$(Number(e.charge_snapshot.am_loss) || 0)} · company 50% {fmt$(Number(e.charge_snapshot.company_loss) || 0)}
+                      </div>
+                    )}
                   </td>
                   <td className="muted small">
                     {e.source === "crm" ? "CRM" : e.source === "imported" ? "Imported" : "Manual"}
