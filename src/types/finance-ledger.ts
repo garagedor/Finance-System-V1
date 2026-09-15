@@ -87,6 +87,21 @@ export interface LedgerReportMeta {
     tips_total?: number;
     payout?: number;   // the mode's share (tech payout / location 40% payout)
   }>;
+  // Weekly (Mon–Sun) per-technician summary (added 2026-09-15). Each tech line
+  // carries BOTH its Tech-report balance and its Location-report balance for the
+  // week; the UI links to the balance-report PDF per tech/mode/week.
+  weeks?: Array<{
+    week_start: string;   // Monday, YYYY-MM-DD
+    week_end: string;     // Sunday, YYYY-MM-DD
+    techs: Array<{
+      name: string;
+      tech_balance: number;
+      tech_balance_with_tips: number;
+      location_balance: number;
+      location_balance_with_tips: number;
+      job_count: number;
+    }>;
+  }>;
 }
 
 export interface LedgerEntryRecord {

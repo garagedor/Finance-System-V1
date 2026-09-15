@@ -1,9 +1,9 @@
 "use client";
 
-// Expandable breakdown for a CRM-report ledger entry. Renders the stored
-// report_meta snapshot: each technician (for a location report) with their
-// closed jobs and per-job money detail — so a location report can be read
-// technician-by-technician instead of as one combined number.
+// Expandable breakdown for a CRM-report ledger entry. Organizes closed jobs into
+// Monday–Sunday weeks; each row is one technician showing BOTH their Tech-report
+// balance and their Location-report balance for that week, with buttons to open
+// the CRM balance-report PDF (tech / location) for that tech + week.
 
 import { useState } from "react";
 import type { LedgerReportMeta } from "@/types/finance-ledger";
@@ -15,54 +15,26 @@ const money = (n: number | undefined, sign = false) => {
   return v < 0 ? `-${s}` : sign && v > 0 ? `+${s}` : s;
 };
 
-type JobRow = NonNullable<LedgerReportMeta["jobs"]>[number];
-
-function JobTable({ jobs }: { jobs: JobRow[] }) {
-  return (
-    <div style={{ overflowX: "auto" }}>
-      <table className="portal-table" style={{ margin: 0, fontSize: 12 }}>
-        <thead>
-          <tr>
-            <th>Date</th><th>Address</th>
-            <th className="right">Job total</th><th className="right">Fee</th>
-            <th className="right">Parts</th><th className="right">Profit</th>
-            <th className="right">Payout</th><th className="right">Balance</th><th className="right">+Tips</th>
-          </tr>
-        </thead>
-        <tbody>
-          {jobs.map((j) => (
-            <tr key={j.id || `${j.date}-${j.address}`}>
-              <td className="small mono">{j.date || "—"}</td>
-              <td className="small">{j.address || "—"}</td>
-              <td className="right">{money(j.job_total)}</td>
-              <td className="right">{money(j.payment_fee)}</td>
-              <td className="right">{money(j.parts)}</td>
-              <td className="right">{money(j.total_profit)}</td>
-              <td className="right">{money(j.payout)}</td>
-              <td className="right">{money(j.balance, true)}</td>
-              <td className="right">{money(j.balance_with_tips, true)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+function pdfUrl(mode: "tech" | "location", tech: string, start: string, end: string) {
+  const p = new URLSearchParams({ mode, tech, startDate: start, endDate: end });
+  return `/api/balance-report/pdf?${p.toString()}`;
 }
+
+const pdfBtn: React.CSSProperties = { padding: "2px 8px", fontSize: 11, marginRight: 4 };
 
 export default function ReportBreakdown({ meta }: { meta: LedgerReportMeta }) {
   const [open, setOpen] = useState(false);
-  const jobs = meta.jobs ?? [];
-  const techs = meta.techs ?? [];
+  const weeks = meta.weeks ?? [];
+  const withTips = meta.include_tips;
 
-  // Group jobs by technician (the "see each, not all together" split).
-  const jobsByTech = new Map<string, JobRow[]>();
-  for (const j of jobs) {
-    const k = j.tech || "—";
-    const arr = jobsByTech.get(k);
-    if (arr) arr.push(j); else jobsByTech.set(k, [j]);
+  // Older report entries (pulled before the weekly breakdown) have no weeks[].
+  if (weeks.length === 0) {
+    return (
+      <div className="muted small" style={{ marginTop: 4, fontStyle: "italic" }}>
+        Re-pull this report to see the weekly technician breakdown.
+      </div>
+    );
   }
-
-  if (jobs.length === 0 && techs.length === 0) return null;
 
   return (
     <div style={{ marginTop: 6 }}>
@@ -72,30 +44,46 @@ export default function ReportBreakdown({ meta }: { meta: LedgerReportMeta }) {
         className="portal-btn portal-btn-ghost"
         style={{ padding: "2px 8px", fontSize: 11 }}
       >
-        {open ? "▾ Hide breakdown" : `▸ Breakdown (${techs.length ? `${techs.length} techs · ` : ""}${jobs.length} jobs)`}
+        {open ? "▾ Hide breakdown" : `▸ Weekly breakdown (${weeks.length} week${weeks.length > 1 ? "s" : ""})`}
       </button>
 
       {open && (
         <div style={{ marginTop: 8, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10, background: "rgba(255,255,255,0.02)" }}>
-          {techs.length > 0 ? (
-            // Location report → one section per technician.
-            techs.map((t) => (
-              <div key={t.name} style={{ marginBottom: 14 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
-                  <strong style={{ fontSize: 13 }}>{t.name}</strong>
-                  <span className="muted small">
-                    {t.job_count} job(s) · Balance {money(t.balance, true)} · +Tips {money(t.balance_with_tips, true)}
-                  </span>
-                </div>
-                {(jobsByTech.get(t.name)?.length)
-                  ? <JobTable jobs={jobsByTech.get(t.name)!} />
-                  : <div className="muted small" style={{ padding: "2px 0" }}>No closed jobs.</div>}
+          {weeks.map((w) => (
+            <div key={w.week_start} style={{ marginBottom: 14 }}>
+              <div className="muted small" style={{ fontWeight: 600, marginBottom: 4 }}>
+                Week {w.week_start} → {w.week_end}
               </div>
-            ))
-          ) : (
-            // Tech report → a single job table.
-            <JobTable jobs={jobs} />
-          )}
+              <div style={{ overflowX: "auto" }}>
+                <table className="portal-table" style={{ margin: 0, fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      <th>Technician</th>
+                      <th className="right">Tech report</th>
+                      <th className="right">Location report</th>
+                      <th className="right">Jobs</th>
+                      <th>Preview</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {w.techs.map((t) => (
+                      <tr key={t.name}>
+                        <td>{t.name}</td>
+                        <td className="right">{money(withTips ? t.tech_balance_with_tips : t.tech_balance, true)}</td>
+                        <td className="right">{money(withTips ? t.location_balance_with_tips : t.location_balance, true)}</td>
+                        <td className="right">{t.job_count}</td>
+                        <td>
+                          <a href={pdfUrl("tech", t.name, w.week_start, w.week_end)} target="_blank" rel="noopener noreferrer" className="portal-btn portal-btn-ghost" style={pdfBtn}>Tech PDF</a>
+                          <a href={pdfUrl("location", t.name, w.week_start, w.week_end)} target="_blank" rel="noopener noreferrer" className="portal-btn portal-btn-ghost" style={pdfBtn}>Loc PDF</a>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+          {withTips && <div className="muted small" style={{ marginTop: 2 }}>Amounts include tips.</div>}
         </div>
       )}
     </div>

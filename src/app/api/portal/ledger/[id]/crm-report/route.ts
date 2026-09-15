@@ -13,58 +13,54 @@ import { computeBalanceReport } from "@/app/api/balance-report/route";
 import type { LedgerEntryRecord, LedgerRecord, LedgerReportMeta } from "@/types/finance-ledger";
 
 interface ReportRow {
-  id?: string;
   date?: string;
-  address?: string;
-  tech?: string;
   status?: string;
-  balance?: number;
-  balanceWithTips?: number;
-  // Per-job money breakdown surfaced in the ledger report detail.
-  paidSum?: number;
-  paymentFee?: number;
-  totalProfit?: number;
-  tipsTotal?: number;
-  shareAmount?: number;
-  breakdown?: { parts?: number };
+  // Every job row carries BOTH balances in its breakdown, so one pass yields the
+  // tech AND location amounts regardless of the mode we query.
+  breakdown?: {
+    techBalance?: number;
+    techBalanceWithTips?: number;
+    locationBalance?: number;
+    locationBalanceWithTips?: number;
+  };
 }
 
-interface TechReport {
-  closed: ReportRow[];
-  balance: number;
-  balanceWithTips: number;
-  profit: number;
+interface TechClosed {
+  date: string;
+  techBalance: number;
+  techBalanceWithTips: number;
+  locationBalance: number;
+  locationBalanceWithTips: number;
 }
 
 function round2(n: number): number {
   return Math.round((Number(n) || 0) * 100) / 100;
 }
 
-/** Compute one technician's Balance Report IN-PROCESS and sum its CLOSED-job
- *  headline. Previously this self-fetched /api/balance-report over HTTP once per
- *  technician (an N+1 that re-entered middleware/auth and reloaded reference data
- *  each time). Calling computeBalanceReport directly yields identical numbers with
- *  no HTTP round-trip. Auth is already enforced by this route's own session gate. */
-async function fetchTechReport(
-  tech: string,
-  mode: "tech" | "location",
-  start: string,
-  end: string,
-): Promise<TechReport> {
-  const snap = await computeBalanceReport({
-    startDateStr: start,
-    endDateStr: end,
-    techFilter: tech,
-    mode,
-  });
+/** Monday-start (Mon–Sun) week bounds, in UTC, for a YYYY-MM-DD date. */
+function weekBounds(dateStr: string): { start: string; end: string } {
+  const day = dateStr.slice(0, 10);
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return { start: day, end: day };
+  const sinceMon = (d.getUTCDay() + 6) % 7; // Sun(0)→6, Mon(1)→0 …
+  const mon = new Date(d); mon.setUTCDate(d.getUTCDate() - sinceMon);
+  const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
+  return { start: mon.toISOString().slice(0, 10), end: sun.toISOString().slice(0, 10) };
+}
+
+/** One technician's CLOSED job rows (both balances) + report profit, computed
+ *  in-process (no HTTP round-trip; auth enforced by this route's session gate). */
+async function fetchTechRows(tech: string, start: string, end: string): Promise<{ closed: TechClosed[]; profit: number }> {
+  const snap = await computeBalanceReport({ startDateStr: start, endDateStr: end, techFilter: tech, mode: "location" });
   const rows = Array.isArray(snap.rows) ? (snap.rows as ReportRow[]) : [];
-  const closed = rows.filter((j) => (j.status ?? "") === "Closed");
-  return {
-    closed,
-    balance: closed.reduce((s, j) => s + (Number(j.balance) || 0), 0),
-    balanceWithTips: closed.reduce((s, j) => s + (Number(j.balanceWithTips) || 0), 0),
-    profit: Number(snap.totals?.profit) || 0,
-  };
+  const closed = rows.filter((j) => (j.status ?? "") === "Closed").map((j) => ({
+    date: String(j.date ?? "").slice(0, 10),
+    techBalance: Number(j.breakdown?.techBalance) || 0,
+    techBalanceWithTips: Number(j.breakdown?.techBalanceWithTips) || 0,
+    locationBalance: Number(j.breakdown?.locationBalance) || 0,
+    locationBalanceWithTips: Number(j.breakdown?.locationBalanceWithTips) || 0,
+  }));
+  return { closed, profit: Number(snap.totals?.profit) || 0 };
 }
 
 export async function POST(
@@ -91,58 +87,73 @@ export async function POST(
     if (!subject) return NextResponse.json({ error: "Subject (tech / location) is required" }, { status: 400 });
     if (!start || !end) return NextResponse.json({ error: "Date range is required" }, { status: 400 });
 
-    let balance = 0;
-    let balanceWithTips = 0;
-    let profit = 0;
-    let closedRows: ReportRow[] = [];
-    let techBreakdown: NonNullable<LedgerReportMeta["techs"]> | null = null;
-
+    // Which technicians the report covers: one tech, or every tech in the location.
+    let techNames: string[];
     if (mode === "tech") {
-      const rep = await fetchTechReport(subject, "tech", start, end);
-      balance = rep.balance;
-      balanceWithTips = rep.balanceWithTips;
-      profit = rep.profit;
-      closedRows = rep.closed;
+      techNames = [subject];
     } else {
-      // TRUE location roll-up: every technician whose CRM location matches.
       const db = await getDb();
       const allTechs = await db.collection("Technician").find({}).toArray();
-      const techNames = allTechs
+      techNames = allTechs
         .filter((t) => String((t as { location?: unknown }).location ?? "").trim().toLowerCase() === subject.toLowerCase())
         .map((t) => String((t as { _id?: unknown; name?: unknown })._id ?? (t as { name?: unknown }).name ?? ""))
         .filter(Boolean);
-
       if (techNames.length === 0) {
-        return NextResponse.json(
-          { error: `No technicians found in location "${subject}".` },
-          { status: 404 },
-        );
+        return NextResponse.json({ error: `No technicians found in location "${subject}".` }, { status: 404 });
       }
-
-      const reports = await Promise.all(
-        techNames.map((name) =>
-          fetchTechReport(name, "location", start, end)
-            .then((rep) => ({ name, rep }))
-            .catch(() => ({ name, rep: null as TechReport | null })),
-        ),
-      );
-
-      techBreakdown = [];
-      for (const { name, rep } of reports) {
-        if (!rep) continue;
-        balance += rep.balance;
-        balanceWithTips += rep.balanceWithTips;
-        profit += rep.profit;
-        closedRows = closedRows.concat(rep.closed);
-        techBreakdown.push({
-          name,
-          balance: round2(rep.balance),
-          balance_with_tips: round2(rep.balanceWithTips),
-          job_count: rep.closed.length,
-        });
-      }
-      techBreakdown.sort((a, b) => a.balance - b.balance);
     }
+
+    // Bucket closed jobs into Mon–Sun weeks → per technician → summed tech AND
+    // location balances (both come from each job's breakdown).
+    type Agg = { tech_balance: number; tech_balance_with_tips: number; location_balance: number; location_balance_with_tips: number; job_count: number };
+    const weekEnds = new Map<string, string>();
+    const weekMap = new Map<string, Map<string, Agg>>();
+    let profit = 0, jobCount = 0;
+    let hTech = 0, hTechTips = 0, hLoc = 0, hLocTips = 0;
+
+    const reps = await Promise.all(
+      techNames.map((name) => fetchTechRows(name, start, end).then((r) => ({ name, r })).catch(() => ({ name, r: null as { closed: TechClosed[]; profit: number } | null }))),
+    );
+    for (const { name, r } of reps) {
+      if (!r) continue;
+      profit += r.profit;
+      for (const row of r.closed) {
+        const { start: ws, end: we } = weekBounds(row.date);
+        weekEnds.set(ws, we);
+        let wk = weekMap.get(ws); if (!wk) { wk = new Map(); weekMap.set(ws, wk); }
+        let agg = wk.get(name);
+        if (!agg) { agg = { tech_balance: 0, tech_balance_with_tips: 0, location_balance: 0, location_balance_with_tips: 0, job_count: 0 }; wk.set(name, agg); }
+        agg.tech_balance += row.techBalance;
+        agg.tech_balance_with_tips += row.techBalanceWithTips;
+        agg.location_balance += row.locationBalance;
+        agg.location_balance_with_tips += row.locationBalanceWithTips;
+        agg.job_count += 1;
+        jobCount += 1;
+        hTech += row.techBalance; hTechTips += row.techBalanceWithTips;
+        hLoc += row.locationBalance; hLocTips += row.locationBalanceWithTips;
+      }
+    }
+
+    const weeks = [...weekMap.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+      .map(([ws, tm]) => ({
+        week_start: ws,
+        week_end: weekEnds.get(ws) ?? ws,
+        techs: [...tm.entries()]
+          .map(([name, a]) => ({
+            name,
+            tech_balance: round2(a.tech_balance),
+            tech_balance_with_tips: round2(a.tech_balance_with_tips),
+            location_balance: round2(a.location_balance),
+            location_balance_with_tips: round2(a.location_balance_with_tips),
+            job_count: a.job_count,
+          }))
+          .sort((x, y) => x.name.localeCompare(y.name)),
+      }));
+
+    // Headline uses the ledger's own mode (location ledger → location balance).
+    const balance = mode === "location" ? hLoc : hTech;
+    const balanceWithTips = mode === "location" ? hLocTips : hTechTips;
 
     const meta: LedgerReportMeta = {
       mode,
@@ -152,24 +163,10 @@ export async function POST(
       balance: round2(balance),
       balance_with_tips: round2(balanceWithTips),
       include_tips: includeTips,
-      job_count: closedRows.length,
+      job_count: jobCount,
       profit: round2(profit),
-      tech_count: techBreakdown ? techBreakdown.length : null,
-      techs: techBreakdown ?? undefined,
-      jobs: closedRows.map((j) => ({
-        id: String(j.id ?? ""),
-        date: String(j.date ?? "").slice(0, 10),
-        address: String(j.address ?? ""),
-        tech: String(j.tech ?? ""),
-        balance: round2(Number(j.balance) || 0),
-        balance_with_tips: round2(Number(j.balanceWithTips) || 0),
-        job_total: round2(Number(j.paidSum) || 0),
-        payment_fee: round2(Number(j.paymentFee) || 0),
-        parts: round2(Number(j.breakdown?.parts) || 0),
-        total_profit: round2(Number(j.totalProfit) || 0),
-        tips_total: round2(Number(j.tipsTotal) || 0),
-        payout: round2(Number(j.shareAmount) || 0),
-      })),
+      tech_count: mode === "location" ? techNames.length : null,
+      weeks,
     };
 
     const amount = round2(includeTips ? balanceWithTips : balance);
