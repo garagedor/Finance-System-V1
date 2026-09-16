@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }).slice(0, 100);
+  }).slice(0, 400);
 
   return NextResponse.json({ disputes: rows });
 }

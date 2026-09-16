@@ -17,22 +17,64 @@ export async function POST(req: NextRequest) {
   const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
 
   // Penalty (X-close job): computed loss, the AM's 50% posted to the ledger.
-  // Different formula from dispute/refund, so handle it before the amount check.
+  // Different formula from dispute/refund; supports BULK (jobIds[]) so a filtered
+  // set of penalties can be charged at once. Handled before the amount check.
   if (body.type === "penalty") {
-    const pJobId = String(body.jobId ?? "").trim();
     const pLedgerId = body.ledgerId ? String(body.ledgerId) : "";
-    if (!pJobId) return NextResponse.json({ error: "Select a penalty job first" }, { status: 400 });
     if (!pLedgerId) return NextResponse.json({ error: "A ledger is required" }, { status: 400 });
-    const pRes = await postPenaltyCharge({
-      jobId: pJobId,
-      ledgerId: pLedgerId,
-      date: body.date ? String(body.date) : undefined,
-      notes: body.notes ? String(body.notes) : undefined,
-      actor: session.name,
-      dryRun: !!body.dryRun,
-    });
-    if (!pRes.ok) return NextResponse.json({ error: pRes.error }, { status: 400 });
-    return NextResponse.json(pRes);
+    const jobIds = Array.isArray(body.jobIds)
+      ? body.jobIds.map((x) => String(x).trim()).filter(Boolean)
+      : (body.jobId ? [String(body.jobId).trim()] : []);
+    if (jobIds.length === 0) return NextResponse.json({ error: "Select at least one penalty" }, { status: 400 });
+    const date = body.date ? String(body.date) : undefined;
+    const notes = body.notes ? String(body.notes) : undefined;
+    const dryRun = !!body.dryRun;
+    const results = [];
+    for (const jid of jobIds) {
+      results.push(await postPenaltyCharge({ jobId: jid, ledgerId: pLedgerId, date, notes, actor: session.name, dryRun }));
+    }
+    const okAll = results.every((r) => r.ok);
+    const posted = results.reduce((sum, r) => (r.ok ? sum + r.postedAmount : sum), 0);
+    return NextResponse.json({ ok: okAll, count: results.length, posted, results }, { status: okAll ? 200 : 207 });
+  }
+
+  // BULK dispute/refund (ledger flow): a set of collected disputes ticked in the
+  // picker, all charged to ONE ledger with ONE chosen party. Each dispute carries
+  // its own amount + matched job; the technician slice uses each job's OWN tech %
+  // (no single override across techs). Handled before the single-job path.
+  if (Array.isArray(body.disputes)) {
+    const bType = body.type === "refund" ? "refund" : "dispute";
+    const bLedgerId = body.ledgerId ? String(body.ledgerId) : "";
+    if (!bLedgerId) return NextResponse.json({ error: "A ledger is required" }, { status: 400 });
+    const bPartyRaw = body.party ? String(body.party) : "";
+    const bParty = (["technician", "area_manager", "provider", "combined"] as const).find((p) => p === bPartyRaw);
+    if (!bParty) return NextResponse.json({ error: "Choose which party's slice to charge (technician / area manager / provider)" }, { status: 400 });
+    const items = (body.disputes as Array<Record<string, unknown>>)
+      .map((d) => ({ jobId: String(d.jobId ?? "").trim(), amount: Number(d.amount), scanpayDisputeId: d.scanpayDisputeId ? String(d.scanpayDisputeId) : "" }))
+      .filter((d) => d.jobId && Number.isFinite(d.amount) && d.amount > 0);
+    if (items.length === 0) return NextResponse.json({ error: "Select at least one dispute" }, { status: 400 });
+    const bDate = body.date ? String(body.date) : undefined;
+    const bNotes = body.notes ? String(body.notes) : undefined;
+    const bDryRun = !!body.dryRun;
+    const results = [];
+    for (const it of items) {
+      const r = await postDisputeCharge({
+        type: bType, jobId: it.jobId, amount: it.amount, date: bDate, notes: bNotes,
+        ledgerId: bLedgerId, party: bParty, actor: session.name, dryRun: bDryRun,
+      });
+      results.push(r);
+      if (r.ok && !bDryRun && it.scanpayDisputeId) {
+        try {
+          await coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute).updateOne(
+            { _id: it.scanpayDisputeId } as never,
+            { $set: { chargedAt: new Date().toISOString().slice(0, 10), chargedBy: session.name, updated_at: new Date().toISOString() } },
+          );
+        } catch { /* advisory flag */ }
+      }
+    }
+    const okAll = results.every((r) => r.ok);
+    const posted = results.reduce((sum, r) => (r.ok && typeof r.postedAmount === "number" ? sum + r.postedAmount : sum), 0);
+    return NextResponse.json({ ok: okAll, count: results.length, posted, results }, { status: okAll ? 200 : 207 });
   }
 
   const type = body.type === "refund" ? "refund" : "dispute";

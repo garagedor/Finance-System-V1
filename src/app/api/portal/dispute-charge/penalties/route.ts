@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
   }
 
   const [jobs, providerDocs] = await Promise.all([
-    db.collection<JobRow>("Job").find({ $and: clauses } as never).sort({ jobDateNormalized: -1, _id: -1 }).limit(300).toArray(),
+    db.collection<JobRow>("Job").find({ $and: clauses } as never).sort({ jobDateNormalized: -1, _id: -1 }).limit(600).toArray(),
     db.collection("Provider").find({}).toArray(),
   ]);
   const provPct = new Map<string, number>();
@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
       if (!hay.includes(q)) return false;
     }
     return true;
-  }).slice(0, 100);
+  }).slice(0, 500);
 
   return NextResponse.json({ penalties: rows });
 }
