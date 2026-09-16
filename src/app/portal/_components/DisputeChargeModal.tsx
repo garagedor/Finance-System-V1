@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import FilterMultiSelect from "./FilterMultiSelect";
 
 type Job = {
   _id: string; date: string | null; address: string | null; clientName: string | null;
@@ -49,11 +50,13 @@ export default function DisputeChargeModal({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  // Structured job filters (combine with the text box).
-  const [fProvider, setFProvider] = useState("");
-  const [fLocation, setFLocation] = useState("");
-  const [fTech, setFTech] = useState("");
-  const [fAM, setFAM] = useState("");
+  // Structured filters (multi-value) + a date range (combine with the text box).
+  const [fProvider, setFProvider] = useState<string[]>([]);
+  const [fLocation, setFLocation] = useState<string[]>([]);
+  const [fTech, setFTech] = useState<string[]>([]);
+  const [fAM, setFAM] = useState<string[]>([]);
+  const [fStart, setFStart] = useState("");
+  const [fEnd, setFEnd] = useState("");
   const [opts, setOpts] = useState<{ providers: string[]; locations: string[]; techs: string[]; ams: string[] }>(
     { providers: [], locations: [], techs: [], ams: [] },
   );
@@ -89,10 +92,12 @@ export default function DisputeChargeModal({
     try {
       const p = new URLSearchParams();
       if (q.trim()) p.set("q", q.trim());
-      if (fProvider) p.set("provider", fProvider);
-      if (fLocation) p.set("location", fLocation);
-      if (fTech) p.set("tech", fTech);
-      if (fAM) p.set("areaManager", fAM);
+      if (fProvider.length) p.set("provider", fProvider.join(","));
+      if (fLocation.length) p.set("location", fLocation.join(","));
+      if (fTech.length) p.set("tech", fTech.join(","));
+      if (fAM.length) p.set("areaManager", fAM.join(","));
+      if (fStart) p.set("startDate", fStart);
+      if (fEnd) p.set("endDate", fEnd);
       if (ledgerId) {
         // Ledger flow → pick from the collected ScanPay disputes (amount known).
         const r = await fetch(`/api/portal/dispute-charge/disputes?${p.toString()}`);
@@ -105,7 +110,7 @@ export default function DisputeChargeModal({
         setJobs(Array.isArray(j.jobs) ? j.jobs : []);
       }
     } catch { setJobs([]); setDisputes([]); } finally { setLoadingJobs(false); }
-  }, [q, fProvider, fLocation, fTech, fAM, ledgerId]);
+  }, [q, fProvider, fLocation, fTech, fAM, fStart, fEnd, ledgerId]);
 
   useEffect(() => {
     if (!open || job) return;
@@ -194,7 +199,7 @@ export default function DisputeChargeModal({
   function reset() {
     setJob(null); setQ(""); setJobs([]); setDisputes([]); setScanpayDisputeId(null);
     setAmount(""); setNotes(""); setDate(today());
-    setFProvider(""); setFLocation(""); setFTech(""); setFAM("");
+    setFProvider([]); setFLocation([]); setFTech([]); setFAM([]); setFStart(""); setFEnd("");
     setParty(""); setTechForCharge(""); setPostedAmount(null);
     setPreview(null); setPreviewErr(null); setErr(null);
   }
@@ -252,19 +257,23 @@ export default function DisputeChargeModal({
                   onKeyDown={(e) => { if (e.key === "Enter") search(); }} placeholder={ledgerId ? "e.g. IN-1783… / Smith / Idan / Fraudulent" : "e.g. 123 Main St / Smith / Idan"} />
                 {/* Filter the job list by provider / location / area manager / technician. */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 8 }}>
-                  <FilterSelect label="Provider" value={fProvider} onChange={setFProvider} options={opts.providers} />
-                  <FilterSelect label="Location" value={fLocation} onChange={setFLocation} options={opts.locations} />
-                  <FilterSelect label="Area manager" value={fAM} onChange={setFAM} options={opts.ams} />
-                  <FilterSelect label="Technician" value={fTech} onChange={setFTech} options={opts.techs} />
+                  <FilterMultiSelect label="Provider" values={fProvider} onChange={setFProvider} options={opts.providers} />
+                  <FilterMultiSelect label="Location" values={fLocation} onChange={setFLocation} options={opts.locations} />
+                  <FilterMultiSelect label="Area manager" values={fAM} onChange={setFAM} options={opts.ams} />
+                  <FilterMultiSelect label="Technician" values={fTech} onChange={setFTech} options={opts.techs} />
                 </div>
-                {(fProvider || fLocation || fAM || fTech) && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                  <div><label className="portal-label" style={{ fontSize: 11 }}>From</label><input type="date" className="portal-input" value={fStart} onChange={(e) => setFStart(e.target.value)} style={{ padding: "6px 8px" }} /></div>
+                  <div><label className="portal-label" style={{ fontSize: 11 }}>To</label><input type="date" className="portal-input" value={fEnd} onChange={(e) => setFEnd(e.target.value)} style={{ padding: "6px 8px" }} /></div>
+                </div>
+                {(fProvider.length || fLocation.length || fAM.length || fTech.length || fStart || fEnd) ? (
                   <div style={{ marginTop: 6 }}>
                     <button type="button" className="portal-btn portal-btn-ghost" style={{ padding: "2px 8px", fontSize: 11 }}
-                      onClick={() => { setFProvider(""); setFLocation(""); setFAM(""); setFTech(""); }}>
+                      onClick={() => { setFProvider([]); setFLocation([]); setFAM([]); setFTech([]); setFStart(""); setFEnd(""); }}>
                       Clear filters
                     </button>
                   </div>
-                )}
+                ) : null}
                 <div style={{ maxHeight: 340, overflowY: "auto", marginTop: 10, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
                   {ledgerId ? (
                     disputes.length === 0 ? (
@@ -289,7 +298,7 @@ export default function DisputeChargeModal({
                     )
                   ) : (
                     jobs.length === 0 ? (
-                      <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : (q || fProvider || fLocation || fAM || fTech) ? "No jobs match your search / filters." : "Type or pick a filter to find jobs."}</div>
+                      <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : (q || fProvider.length || fLocation.length || fAM.length || fTech.length || fStart || fEnd) ? "No jobs match your search / filters." : "Type or pick a filter to find jobs."}</div>
                     ) : (
                       <table className="portal-table" style={{ margin: 0 }}>
                         <thead><tr><th>Date</th><th>Address</th><th>Tech</th><th>Location</th><th className="right">Collected</th></tr></thead>
@@ -401,20 +410,6 @@ export default function DisputeChargeModal({
         </div>
       )}
     </>
-  );
-}
-
-function FilterSelect({
-  label, value, onChange, options,
-}: { label: string; value: string; onChange: (v: string) => void; options: string[] }) {
-  return (
-    <div>
-      <label className="portal-label" style={{ fontSize: 11 }}>{label}</label>
-      <select className="portal-input" value={value} onChange={(e) => onChange(e.target.value)} style={{ padding: "6px 8px" }}>
-        <option value="">All</option>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
   );
 }
 

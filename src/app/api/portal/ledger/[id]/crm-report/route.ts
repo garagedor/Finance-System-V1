@@ -79,27 +79,36 @@ export async function POST(
 
     const body = (await req.json()) as Record<string, unknown>;
     const mode = body.mode === "location" ? "location" : "tech";
-    const subject = String(body.subject_name ?? "").trim();
+    // Multi-select: `subjects` (array of techs, or locations) → ONE combined
+    // entry. Falls back to the legacy single `subject_name`.
+    const subjectsRaw = Array.isArray(body.subjects)
+      ? body.subjects
+      : (body.subject_name != null ? [body.subject_name] : []);
+    const subjects = [...new Set(subjectsRaw.map((x) => String(x).trim()).filter(Boolean))];
     const start = String(body.period_start ?? "").trim();
     const end = String(body.period_end ?? "").trim();
     const includeTips = body.include_tips === true || body.include_tips === "true";
 
-    if (!subject) return NextResponse.json({ error: "Subject (tech / location) is required" }, { status: 400 });
+    if (subjects.length === 0) return NextResponse.json({ error: "Select at least one technician / location" }, { status: 400 });
     if (!start || !end) return NextResponse.json({ error: "Date range is required" }, { status: 400 });
 
-    // Which technicians the report covers: one tech, or every tech in the location.
+    // Which technicians the report covers: the selected techs, or every tech in
+    // any of the selected locations.
     let techNames: string[];
     if (mode === "tech") {
-      techNames = [subject];
+      techNames = [...subjects];
     } else {
       const db = await getDb();
       const allTechs = await db.collection("Technician").find({}).toArray();
-      techNames = allTechs
-        .filter((t) => String((t as { location?: unknown }).location ?? "").trim().toLowerCase() === subject.toLowerCase())
-        .map((t) => String((t as { _id?: unknown; name?: unknown })._id ?? (t as { name?: unknown }).name ?? ""))
-        .filter(Boolean);
+      const wanted = new Set(subjects.map((s) => s.toLowerCase()));
+      techNames = [...new Set(
+        allTechs
+          .filter((t) => wanted.has(String((t as { location?: unknown }).location ?? "").trim().toLowerCase()))
+          .map((t) => String((t as { _id?: unknown; name?: unknown })._id ?? (t as { name?: unknown }).name ?? ""))
+          .filter(Boolean),
+      )];
       if (techNames.length === 0) {
-        return NextResponse.json({ error: `No technicians found in location "${subject}".` }, { status: 404 });
+        return NextResponse.json({ error: `No technicians found in the selected location(s): ${subjects.join(", ")}.` }, { status: 404 });
       }
     }
 
@@ -157,7 +166,7 @@ export async function POST(
 
     const meta: LedgerReportMeta = {
       mode,
-      subject_name: subject,
+      subject_name: subjects.join(", "),
       period_start: start,
       period_end: end,
       balance: round2(balance),
@@ -171,9 +180,10 @@ export async function POST(
 
     const amount = round2(includeTips ? balanceWithTips : balance);
     const label = mode === "location" ? "Location" : "Tech";
+    const subjectList = subjects.join(", ");
     const subjectNote = mode === "location" && meta.tech_count != null
-      ? `${subject} (${meta.tech_count} techs)`
-      : subject;
+      ? `${subjectList} (${meta.tech_count} techs)`
+      : subjectList;
     const doc: LedgerEntryRecord = {
       _id: newId("len"),
       ledger_id: id,

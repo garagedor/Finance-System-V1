@@ -24,20 +24,28 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const q = sp.get("q")?.trim().toLowerCase();
-  const provider = sp.get("provider")?.trim();
-  const location = sp.get("location")?.trim();
-  const tech = sp.get("tech")?.trim();
-  const areaManager = sp.get("areaManager")?.trim();
+  // Filters accept multiple comma-separated values.
+  const csv = (k: string) => (sp.get(k) ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  const providers = new Set(csv("provider"));
+  const locations = new Set(csv("location"));
+  const techs = new Set(csv("tech"));
+  const areaManagers = csv("areaManager");
+  const startDate = sp.get("startDate")?.trim();
+  const endDate = sp.get("endDate")?.trim();
 
   const db = await getDb();
   const dc = coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute);
 
-  // Chargeable = matched/verified to a CRM job (needed to compute the slice).
-  const raw = await dc
-    .find({ matchStatus: { $in: ["matched", "verified"] }, matchedJobId: { $type: "string", $ne: "" } } as never)
-    .sort({ disputedAt: -1 })
-    .limit(400)
-    .toArray();
+  // Chargeable = matched/verified to a CRM job (needed to compute the slice),
+  // optionally within a filed-date range (disputedAt is an ISO string).
+  const dq: Record<string, unknown> = { matchStatus: { $in: ["matched", "verified"] }, matchedJobId: { $type: "string", $ne: "" } };
+  if (startDate || endDate) {
+    const range: Record<string, string> = {};
+    if (startDate) range.$gte = startDate;
+    if (endDate) range.$lte = `${endDate}T23:59:59.999Z`;
+    dq.disputedAt = range;
+  }
+  const raw = await dc.find(dq as never).sort({ disputedAt: -1 }).limit(400).toArray();
 
   // Join the matched jobs → provider / location / tech (the fields we filter on).
   // Job._id is a Mongo ObjectId; matchedJobId is stored as its 24-hex STRING, so
@@ -51,11 +59,11 @@ export async function GET(req: NextRequest) {
     : [];
   const jobById = new Map(jobs.map((j) => [s((j as { _id?: unknown })._id), j]));
 
-  // Area-manager filter → the set of that AM's locations.
+  // Area-manager filter → the set of those AMs' locations.
   let amLocations: Set<string> | null = null;
-  if (areaManager) {
+  if (areaManagers.length) {
     const locs = await db.collection<Location>("Location")
-      .find({ areaManagerName: areaManager }, { projection: { _id: 1 } })
+      .find({ areaManagerName: { $in: areaManagers } }, { projection: { _id: 1 } })
       .toArray();
     amLocations = new Set(locs.map((l) => s((l as { _id?: unknown })._id)).filter(Boolean));
   }
@@ -85,9 +93,9 @@ export async function GET(req: NextRequest) {
       chargedAt: s(rec.chargedAt) || null,
     };
   }).filter((row) => {
-    if (provider && row.provider !== provider) return false;
-    if (location && row.location !== location) return false;
-    if (tech && row.tech !== tech) return false;
+    if (providers.size && !providers.has(row.provider)) return false;
+    if (locations.size && !locations.has(row.location)) return false;
+    if (techs.size && !techs.has(row.tech)) return false;
     if (amLocations && !amLocations.has(row.location)) return false;
     if (q) {
       const hay = `${row.invoiceNumber} ${row.customerName} ${row.serviceAddress} ${row.tech} ${row.reason}`.toLowerCase();

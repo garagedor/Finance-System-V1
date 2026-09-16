@@ -17,20 +17,29 @@ export async function GET(req: NextRequest) {
 
   const sp = req.nextUrl.searchParams;
   const q = sp.get("q")?.trim().toLowerCase();
-  const provider = sp.get("provider")?.trim();
-  const location = sp.get("location")?.trim();
-  const tech = sp.get("tech")?.trim();
-  const areaManager = sp.get("areaManager")?.trim();
+  const csv = (k: string) => (sp.get(k) ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+  const providers = csv("provider");
+  const locations = csv("location");
+  const techs = csv("tech");
+  const areaManagers = csv("areaManager");
+  const startDate = sp.get("startDate")?.trim();
+  const endDate = sp.get("endDate")?.trim();
 
   const db = await getDb();
 
   const clauses: Record<string, unknown>[] = [{ statusCanonical: "X close" }];
-  if (provider) clauses.push({ provider });
-  if (location) clauses.push({ location });
-  if (tech) clauses.push({ tech });
-  if (areaManager) {
+  if (providers.length) clauses.push({ provider: { $in: providers } });
+  if (locations.length) clauses.push({ location: { $in: locations } });
+  if (techs.length) clauses.push({ tech: { $in: techs } });
+  if (startDate || endDate) {
+    const range: Record<string, string> = {};
+    if (startDate) range.$gte = startDate;
+    if (endDate) range.$lte = endDate;
+    clauses.push({ date: range });
+  }
+  if (areaManagers.length) {
     const locs = await db.collection<Location>("Location")
-      .find({ areaManagerName: areaManager }, { projection: { _id: 1 } })
+      .find({ areaManagerName: { $in: areaManagers } }, { projection: { _id: 1 } })
       .toArray();
     const names = locs.map((l) => s((l as { _id?: unknown })._id)).filter(Boolean);
     clauses.push({ location: { $in: names.length ? names : [" __none__"] } });

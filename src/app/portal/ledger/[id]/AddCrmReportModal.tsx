@@ -20,7 +20,8 @@ export default function AddCrmReportModal({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [mode, setMode] = useState<"tech" | "location">(defaultMode);
-  const [subject, setSubject] = useState(defaultSubject);
+  const [subjects, setSubjects] = useState<string[]>(defaultSubject ? [defaultSubject] : []);
+  const [subjSearch, setSubjSearch] = useState("");
   const [start, setStart] = useState(firstOfMonth());
   const [end, setEnd] = useState(today());
   const [includeTips, setIncludeTips] = useState(false);
@@ -47,10 +48,17 @@ export default function AddCrmReportModal({
     return [...counts.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => a.name.localeCompare(b.name));
   }, [techs]);
 
-  const locMatch = useMemo(
-    () => locations.find((l) => l.name.toLowerCase() === subject.trim().toLowerCase()),
-    [locations, subject],
-  );
+  // The multi-select option list for the current mode, filtered by the search box.
+  const options = useMemo(() => {
+    const list = mode === "tech"
+      ? techs.map((t) => ({ value: t.name, label: t.location ? `${t.name} · ${t.location}` : t.name }))
+      : locations.map((l) => ({ value: l.name, label: `${l.name} (${l.count} techs)` }));
+    const s = subjSearch.trim().toLowerCase();
+    const filtered = s ? list.filter((o) => o.label.toLowerCase().includes(s)) : list;
+    const seen = new Set<string>();
+    return filtered.filter((o) => o.value && !seen.has(o.value) && seen.add(o.value));
+  }, [mode, techs, locations, subjSearch]);
+  const toggleSubject = (v: string) => setSubjects((prev) => prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -62,7 +70,7 @@ export default function AddCrmReportModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode,
-          subject_name: subject,
+          subjects,
           period_start: start,
           period_end: end,
           include_tips: includeTips,
@@ -113,42 +121,43 @@ export default function AddCrmReportModal({
             </p>
 
             <form onSubmit={onSubmit}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-                <div>
-                  <label className="portal-label">Report type *</label>
-                  <select className="portal-select" value={mode}
-                    onChange={(e) => setMode(e.target.value as "tech" | "location")} required>
-                    <option value="tech">Tech Report</option>
-                    <option value="location">Location Report</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="portal-label">
-                    {mode === "tech" ? "Technician *" : "Location / Area *"}
-                  </label>
-                  <input className="portal-input" required value={subject}
-                    list={mode === "tech" ? "crm-tech-list" : "crm-loc-list"}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder={mode === "tech" ? "e.g. Yuval" : "e.g. Minnesota"} />
-                  <datalist id="crm-tech-list">
-                    {techs.map((t) => (
-                      <option key={t.name} value={t.name}>
-                        {t.name}{t.location ? ` · ${t.location}` : ""}
-                      </option>
+              <div style={{ marginBottom: 12 }}>
+                <label className="portal-label">Report type *</label>
+                <select className="portal-select" value={mode} style={{ maxWidth: 220 }}
+                  onChange={(e) => { setMode(e.target.value as "tech" | "location"); setSubjects([]); setSubjSearch(""); }} required>
+                  <option value="tech">Tech Report</option>
+                  <option value="location">Location Report</option>
+                </select>
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <label className="portal-label">
+                  {mode === "tech" ? "Technicians *" : "Locations / Areas *"}
+                  {subjects.length > 0 && <span className="muted small"> · {subjects.length} selected</span>}
+                </label>
+                <input className="portal-input" value={subjSearch} onChange={(e) => setSubjSearch(e.target.value)}
+                  placeholder={mode === "tech" ? "Search technicians…" : "Search locations…"} style={{ marginBottom: 6 }} />
+                {subjects.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
+                    {subjects.map((s) => (
+                      <button key={s} type="button" onClick={() => toggleSubject(s)}
+                        className="portal-btn portal-btn-ghost" style={{ padding: "2px 8px", fontSize: 11 }}>{s} ✕</button>
                     ))}
-                  </datalist>
-                  <datalist id="crm-loc-list">
-                    {locations.map((l) => (
-                      <option key={l.name} value={l.name}>{l.name} ({l.count} techs)</option>
-                    ))}
-                  </datalist>
-                  {mode === "location" && (
-                    <div className="muted small" style={{ marginTop: 4 }}>
-                      Rolls up every technician in this area
-                      {locMatch ? ` · ${locMatch.count} tech(s) found` : ""}.
-                    </div>
-                  )}
+                  </div>
+                )}
+                <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8 }}>
+                  {options.length === 0 ? (
+                    <div className="muted small" style={{ padding: 10, textAlign: "center" }}>{techs.length === 0 ? "Loading…" : "No matches."}</div>
+                  ) : options.map((o) => (
+                    <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                      <input type="checkbox" checked={subjects.includes(o.value)} onChange={() => toggleSubject(o.value)} style={{ width: 15, height: 15 }} />
+                      {o.label}
+                    </label>
+                  ))}
                 </div>
+                {mode === "location" && subjects.length > 0 && (
+                  <div className="muted small" style={{ marginTop: 4 }}>Rolls up every technician in the selected location(s), combined into one entry.</div>
+                )}
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
@@ -175,7 +184,7 @@ export default function AddCrmReportModal({
 
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button type="button" className="portal-btn portal-btn-ghost" onClick={() => setOpen(false)}>Cancel</button>
-                <button type="submit" className="portal-btn portal-btn-primary" disabled={busy}>
+                <button type="submit" className="portal-btn portal-btn-primary" disabled={busy || subjects.length === 0}>
                   {busy ? "Pulling report…" : "Pull & add entry"}
                 </button>
               </div>

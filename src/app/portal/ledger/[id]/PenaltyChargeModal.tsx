@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import FilterMultiSelect from "../../_components/FilterMultiSelect";
 
 type Penalty = {
   id: string; date: string; address: string; tech: string; location: string; provider: string;
@@ -20,10 +21,12 @@ export default function PenaltyChargeModal({ ledgerId, ledgerName }: { ledgerId?
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
-  const [fProvider, setFProvider] = useState("");
-  const [fLocation, setFLocation] = useState("");
-  const [fTech, setFTech] = useState("");
-  const [fAM, setFAM] = useState("");
+  const [fProvider, setFProvider] = useState<string[]>([]);
+  const [fLocation, setFLocation] = useState<string[]>([]);
+  const [fTech, setFTech] = useState<string[]>([]);
+  const [fAM, setFAM] = useState<string[]>([]);
+  const [fStart, setFStart] = useState("");
+  const [fEnd, setFEnd] = useState("");
   const [opts, setOpts] = useState<{ providers: string[]; locations: string[]; techs: string[]; ams: string[] }>({ providers: [], locations: [], techs: [], ams: [] });
   const [rows, setRows] = useState<Penalty[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,15 +41,17 @@ export default function PenaltyChargeModal({ ledgerId, ledgerName }: { ledgerId?
     try {
       const p = new URLSearchParams();
       if (q.trim()) p.set("q", q.trim());
-      if (fProvider) p.set("provider", fProvider);
-      if (fLocation) p.set("location", fLocation);
-      if (fTech) p.set("tech", fTech);
-      if (fAM) p.set("areaManager", fAM);
+      if (fProvider.length) p.set("provider", fProvider.join(","));
+      if (fLocation.length) p.set("location", fLocation.join(","));
+      if (fTech.length) p.set("tech", fTech.join(","));
+      if (fAM.length) p.set("areaManager", fAM.join(","));
+      if (fStart) p.set("startDate", fStart);
+      if (fEnd) p.set("endDate", fEnd);
       const r = await fetch(`/api/portal/dispute-charge/penalties?${p.toString()}`);
       const j = await r.json();
       setRows(Array.isArray(j.penalties) ? j.penalties : []);
     } catch { setRows([]); } finally { setLoading(false); }
-  }, [q, fProvider, fLocation, fTech, fAM]);
+  }, [q, fProvider, fLocation, fTech, fAM, fStart, fEnd]);
 
   useEffect(() => { if (!open || picked) return; const t = setTimeout(search, 250); return () => clearTimeout(t); }, [open, picked, search]);
 
@@ -73,7 +78,7 @@ export default function PenaltyChargeModal({ ledgerId, ledgerName }: { ledgerId?
 
   function reset() {
     setPicked(null); setQ(""); setRows([]); setNotes(""); setDate(today());
-    setFProvider(""); setFLocation(""); setFTech(""); setFAM(""); setErr(null);
+    setFProvider([]); setFLocation([]); setFTech([]); setFAM([]); setFStart(""); setFEnd(""); setErr(null);
   }
   function close() { setOpen(false); reset(); }
 
@@ -90,16 +95,6 @@ export default function PenaltyChargeModal({ ledgerId, ledgerName }: { ledgerId?
       close(); router.refresh();
     } catch (e) { setErr(e instanceof Error ? e.message : "Failed to post"); } finally { setPosting(false); }
   }
-
-  const sel = (label: string, value: string, onChange: (v: string) => void, options: string[]) => (
-    <div>
-      <label className="portal-label" style={{ fontSize: 11 }}>{label}</label>
-      <select className="portal-input" value={value} onChange={(e) => onChange(e.target.value)} style={{ padding: "6px 8px" }}>
-        <option value="">All</option>
-        {options.map((o) => <option key={o} value={o}>{o}</option>)}
-      </select>
-    </div>
-  );
 
   return (
     <>
@@ -118,10 +113,14 @@ export default function PenaltyChargeModal({ ledgerId, ledgerName }: { ledgerId?
                 <label className="portal-label">Find the penalty (X-close job — address, tech, provider)</label>
                 <input className="portal-input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="e.g. 123 Main St / Idan / SPE" />
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginTop: 8 }}>
-                  {sel("Provider", fProvider, setFProvider, opts.providers)}
-                  {sel("Location", fLocation, setFLocation, opts.locations)}
-                  {sel("Area manager", fAM, setFAM, opts.ams)}
-                  {sel("Technician", fTech, setFTech, opts.techs)}
+                  <FilterMultiSelect label="Provider" values={fProvider} onChange={setFProvider} options={opts.providers} />
+                  <FilterMultiSelect label="Location" values={fLocation} onChange={setFLocation} options={opts.locations} />
+                  <FilterMultiSelect label="Area manager" values={fAM} onChange={setFAM} options={opts.ams} />
+                  <FilterMultiSelect label="Technician" values={fTech} onChange={setFTech} options={opts.techs} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
+                  <div><label className="portal-label" style={{ fontSize: 11 }}>From</label><input type="date" className="portal-input" value={fStart} onChange={(e) => setFStart(e.target.value)} style={{ padding: "6px 8px" }} /></div>
+                  <div><label className="portal-label" style={{ fontSize: 11 }}>To</label><input type="date" className="portal-input" value={fEnd} onChange={(e) => setFEnd(e.target.value)} style={{ padding: "6px 8px" }} /></div>
                 </div>
                 <div style={{ maxHeight: 340, overflowY: "auto", marginTop: 10, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
                   {rows.length === 0 ? (
