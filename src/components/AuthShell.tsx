@@ -131,8 +131,11 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
   }
 
   // Bare routes render with NO app chrome (no sidebar, topbar, or AI orb) — used
-  // for printable documents like the payout statement so they export cleanly.
-  if (pathname?.startsWith('/payout-statement')) {
+  // for printable documents like the payout statement so they export cleanly,
+  // and for the Main Gateway, which is the ecosystem shell rather than a page
+  // inside the CRM shell.
+  const BARE_ROUTES = ['/payout-statement', '/home'];
+  if (BARE_ROUTES.some((r) => pathname?.startsWith(r))) {
     return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
   }
 

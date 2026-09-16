@@ -1,0 +1,199 @@
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LBS Design 360 — ecosystem design tokens
+   ───────────────────────────────────────────────────────────────────────────
+   One token layer for all three portals. Nothing here changes behaviour; it
+   only defines the vocabulary that CRM, Finance and Warehouse all draw from.
+
+   Direction: "operations console" — a machined instrument panel, not a SaaS
+   dashboard. Surfaces step up in depth with hairline borders and a top inset
+   highlight; data is set in a true monospace so columns align; each portal
+   carries its own identity hue while sharing one neutral system.
+
+   IMPORTANT: this file defines tokens only. It is additive — existing
+   globals.css and portal/styles.css are untouched, so nothing regresses while
+   the system is adopted screen by screen.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  --ds-font-display: 'Archivo', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --ds-font-body:    'Archivo', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* A REAL monospace. The current app aliases --font-mono to Outfit, so
+     numeric columns never align. This is the single highest-value type fix. */
+  --ds-font-mono:    'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Type scale — 1.200 minor third, rounded to whole px */
+  --ds-text-2xs: 10px;
+  --ds-text-xs:  11px;
+  --ds-text-sm:  13px;
+  --ds-text-md:  15px;
+  --ds-text-lg:  18px;
+  --ds-text-xl:  22px;
+  --ds-text-2xl: 28px;
+  --ds-text-3xl: 34px;
+  --ds-text-4xl: 44px;
+
+  --ds-leading-tight: 1.15;
+  --ds-leading-snug:  1.35;
+  --ds-leading-body:  1.6;
+
+  --ds-tracking-label: 0.14em;   /* uppercase mono labels */
+  --ds-tracking-tight: -0.02em;  /* large display text */
+
+  --ds-weight-regular: 400;
+  --ds-weight-medium:  500;
+  --ds-weight-semi:    600;
+  --ds-weight-bold:    700;
+
+  /* ── Spacing — 4px base, no magic numbers anywhere else ──────────────── */
+  --ds-space-1:  4px;
+  --ds-space-2:  8px;
+  --ds-space-3:  12px;
+  --ds-space-4:  16px;
+  --ds-space-5:  24px;
+  --ds-space-6:  32px;
+  --ds-space-7:  48px;
+  --ds-space-8:  64px;
+  --ds-space-9:  96px;
+
+  /* ── Radius — engineered, tighter than the current 14px ──────────────── */
+  --ds-radius-xs:   2px;   /* chips, pills, status dots */
+  --ds-radius-sm:   4px;   /* inputs, buttons */
+  --ds-radius-md:   8px;   /* cards */
+  --ds-radius-lg:   12px;  /* panels, modals */
+  --ds-radius-full: 999px;
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --ds-ease:        cubic-bezier(0.32, 0.72, 0, 1);
+  --ds-ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ds-dur-instant: 90ms;
+  --ds-dur-fast:    150ms;
+  --ds-dur-base:    240ms;
+  --ds-dur-slow:    380ms;
+
+  /* ── Portal identities — distinct, but one family ─────────────────────
+     Chosen from the business, not from a palette generator:
+       CRM       signal amber  — field operations, hi-vis, garage doors
+       Finance   ledger teal   — money, reconciliation, control
+       Warehouse steel cyan    — logistics, containers, cold inventory       */
+  --ds-crm:        #F0A62E;
+  --ds-crm-dim:    #8A5F14;
+  --ds-crm-wash:   rgba(240, 166, 46, 0.10);
+
+  --ds-fin:        #2DB39A;
+  --ds-fin-dim:    #16665A;
+  --ds-fin-wash:   rgba(45, 179, 154, 0.10);
+
+  --ds-whs:        #4A9EDB;
+  --ds-whs-dim:    #235A7E;
+  --ds-whs-wash:   rgba(74, 158, 219, 0.10);
+
+  /* ── Semantic — deliberately NOT the portal hues ──────────────────────── */
+  --ds-ok:       #3BAE73;
+  --ds-ok-wash:  rgba(59, 174, 115, 0.12);
+  --ds-warn:     #D99B2B;
+  --ds-warn-wash:rgba(217, 155, 43, 0.12);
+  --ds-crit:     #D9544D;
+  --ds-crit-wash:rgba(217, 84, 77, 0.12);
+  --ds-info:     #5B8DEF;
+  --ds-info-wash:rgba(91, 141, 239, 0.12);
+
+  /* ── DARK (default) — graphite with a blue bias, never pure black ────── */
+  --ds-bg:        #0B0E14;
+  --ds-surface-1: #12161F;
+  --ds-surface-2: #181D28;
+  --ds-surface-3: #1F2632;
+  --ds-sunken:    #080A0F;
+
+  --ds-line:        rgba(255, 255, 255, 0.07);
+  --ds-line-strong: rgba(255, 255, 255, 0.13);
+  /* the machined-panel highlight: a 1px light edge along the top of a surface */
+  --ds-inset-top:   inset 0 1px 0 rgba(255, 255, 255, 0.05);
+
+  --ds-ink:     #E8ECF2;
+  --ds-ink-2:   #98A4B5;
+  --ds-ink-3:   #626E7E;
+  --ds-ink-dim: #454F5C;
+
+  --ds-elev-1: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --ds-elev-2: 0 4px 12px rgba(0, 0, 0, 0.36);
+  --ds-elev-3: 0 16px 40px rgba(0, 0, 0, 0.44);
+
+  --ds-focus: 0 0 0 2px var(--ds-bg), 0 0 0 4px var(--ds-info);
+
+  color-scheme: dark;
+}
+
+/* ── LIGHT — a real second theme, not an inversion ──────────────────────
+   Portal hues are darkened so they stay legible on paper-white surfaces.   */
+:root[data-theme="light"] {
+  --ds-bg:        #F4F6F8;
+  --ds-surface-1: #FFFFFF;
+  --ds-surface-2: #FAFBFC;
+  --ds-surface-3: #F0F3F6;
+  --ds-sunken:    #E8ECF1;
+
+  --ds-line:        rgba(11, 14, 20, 0.10);
+  --ds-line-strong: rgba(11, 14, 20, 0.18);
+  --ds-inset-top:   inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+  --ds-ink:     #101620;
+  --ds-ink-2:   #55606E;
+  --ds-ink-3:   #7C8797;
+  --ds-ink-dim: #A3ADBA;
+
+  --ds-crm:     #9A6208;
+  --ds-crm-dim: #C98A26;
+  --ds-crm-wash:rgba(154, 98, 8, 0.08);
+  --ds-fin:     #11705F;
+  --ds-fin-dim: #2A9B85;
+  --ds-fin-wash:rgba(17, 112, 95, 0.08);
+  --ds-whs:     #1C5F8C;
+  --ds-whs-dim: #3E8FC4;
+  --ds-whs-wash:rgba(28, 95, 140, 0.08);
+
+  --ds-ok:   #1F7A4C;
+  --ds-warn: #8A6011;
+  --ds-crit: #A32E28;
+  --ds-info: #2E5FC0;
+
+  --ds-elev-1: 0 1px 2px rgba(16, 22, 32, 0.06);
+  --ds-elev-2: 0 4px 12px rgba(16, 22, 32, 0.08);
+  --ds-elev-3: 0 16px 40px rgba(16, 22, 32, 0.12);
+
+  color-scheme: light;
+}
+
+/* Respect the OS when the user has expressed no preference. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    --ds-bg:        #F4F6F8;
+    --ds-surface-1: #FFFFFF;
+    --ds-surface-2: #FAFBFC;
+    --ds-surface-3: #F0F3F6;
+    --ds-sunken:    #E8ECF1;
+    --ds-line:        rgba(11, 14, 20, 0.10);
+    --ds-line-strong: rgba(11, 14, 20, 0.18);
+    --ds-inset-top:   inset 0 1px 0 rgba(255, 255, 255, 0.8);
+    --ds-ink:     #101620;
+    --ds-ink-2:   #55606E;
+    --ds-ink-3:   #7C8797;
+    --ds-ink-dim: #A3ADBA;
+    --ds-crm: #9A6208;  --ds-crm-dim: #C98A26;  --ds-crm-wash: rgba(154, 98, 8, 0.08);
+    --ds-fin: #11705F;  --ds-fin-dim: #2A9B85;  --ds-fin-wash: rgba(17, 112, 95, 0.08);
+    --ds-whs: #1C5F8C;  --ds-whs-dim: #3E8FC4;  --ds-whs-wash: rgba(28, 95, 140, 0.08);
+    --ds-ok: #1F7A4C;   --ds-warn: #8A6011;     --ds-crit: #A32E28;  --ds-info: #2E5FC0;
+    --ds-elev-1: 0 1px 2px rgba(16, 22, 32, 0.06);
+    --ds-elev-2: 0 4px 12px rgba(16, 22, 32, 0.08);
+    --ds-elev-3: 0 16px 40px rgba(16, 22, 32, 0.12);
+    color-scheme: light;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ds-dur-instant: 0ms; --ds-dur-fast: 0ms; --ds-dur-base: 0ms; --ds-dur-slow: 0ms;
+  }
+}
