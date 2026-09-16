@@ -1,69 +1,54 @@
 'use client';
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Main Gateway — the ecosystem control center.
+   Main Gateway — Design 360 v2.
 
-   SCOPE NOTE (Design 360): this is a NEW route. It reads the session that
-   already exists and renders links. It performs no mutation, calls no new
-   API, and changes no CRM or Finance behaviour. Removing this folder removes
-   the feature completely.
+   SCOPE NOTE: a NEW route. It reads the session that already exists and
+   renders links. No mutation, no new API, no change to CRM or Finance
+   behaviour. Deleting this folder removes the feature completely.
+
+   Live figures are not wired yet. Rather than invent numbers, every metric
+   slot renders a clearly pending state and the component is shaped to accept
+   real data the moment read endpoints exist.
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  FiBriefcase, FiPieChart, FiPackage, FiArrowRight, FiSun, FiMoon,
-  FiLogOut, FiAlertTriangle,
-} from 'react-icons/fi';
+import { FiSun, FiMoon, FiLogOut, FiBell, FiSearch, FiArrowRight } from 'react-icons/fi';
 import { useAuth } from '@/components/AuthShell';
+import { PORTALS, grantedPortals, type PortalKey } from '@/config/portals';
 import '@/styles/design-system.css';
 import './gateway.css';
 
-type PortalKey = 'crm' | 'fin' | 'whs';
+const GLYPH: Record<PortalKey, React.ReactNode> = {
+  crm: (<><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></>),
+  fin: (<><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></>),
+  whs: (<><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" /><path d="M3.3 7 12 12l8.7-5M12 22V12" /></>),
+};
 
-interface PortalDef {
-  key: PortalKey;
-  index: string;
-  name: string;
-  href: string;
-  desc: string;
-  domains: string[];
-  /** Any one of these grants access. */
-  anyOf: string[];
-  soon?: boolean;
+function Glyph({ k, size = 22 }: { k: PortalKey; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" strokeWidth="2" aria-hidden="true">{GLYPH[k]}</svg>
+  );
 }
 
-const PORTALS: PortalDef[] = [
-  {
-    key: 'crm',
-    index: 'PORTAL 01',
-    name: 'CRM',
-    href: '/',
-    desc: 'Field operations: dispatch, job records, technician performance and the customer history behind them.',
-    domains: ['jobs', 'technicians', 'operations', 'customers'],
-    anyOf: ['crm:'],
-  },
-  {
-    key: 'fin',
-    index: 'PORTAL 02',
-    name: 'Finance Portal',
-    href: '/portal/dashboard',
-    desc: 'Financial control: running ledgers, balances, payouts, disputes and the reports built on them.',
-    domains: ['ledger', 'balances', 'reports', 'control'],
-    anyOf: ['finance:'],
-  },
-  {
-    key: 'whs',
-    index: 'PORTAL 03',
-    name: 'Warehouse Management',
-    href: '/warehouse',
-    desc: 'Miami distribution: purchasing through customs to counted stock on the shelf.',
-    domains: ['inventory', 'purchasing', 'containers', 'receiving'],
-    anyOf: ['warehouse:'],
-    soon: true,
-  },
-];
+/** A metric slot. Renders an honest pending dash until real data is wired. */
+function Kpi({ label, value, unit, note }: { label: string; value?: string; unit?: string; note?: string }) {
+  return (
+    <div className="gw-kpi">
+      <div className="gw-kpi-l">{label}</div>
+      <div className="gw-kpi-v">
+        {value ?? <span style={{ color: 'var(--ds-ink-dim)' }}>—</span>}
+        {unit && value && <span className="unit"> {unit}</span>}
+      </div>
+      <div className="gw-kpi-f">
+        <span className="gw-trend fl">{note ?? 'Awaiting data'}</span>
+      </div>
+    </div>
+  );
+}
 
 function greeting(d: Date): string {
   const h = d.getHours();
@@ -79,18 +64,13 @@ export default function GatewayPage() {
   const [now, setNow] = useState<Date | null>(null);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
-  // Render time only after mount so server and client markup agree.
-  useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 30_000);
-    return () => clearInterval(t);
-  }, []);
+  useEffect(() => { setNow(new Date()); }, []);
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem('lbs-theme');
       if (saved === 'light' || saved === 'dark') setTheme(saved);
-    } catch { /* private mode — keep the default */ }
+    } catch { /* private mode */ }
   }, []);
 
   useEffect(() => {
@@ -98,14 +78,10 @@ export default function GatewayPage() {
     try { localStorage.setItem('lbs-theme', theme); } catch { /* ignore */ }
   }, [theme]);
 
-  const perms = useMemo(() => user?.permissions ?? [], [user]);
-  const isAdmin = user?.type === 'admin';
-
-  const access = useMemo(() => {
-    const can = (p: PortalDef) =>
-      !p.soon && (isAdmin || perms.some((k) => p.anyOf.some((pre) => k.startsWith(pre))));
-    return Object.fromEntries(PORTALS.map((p) => [p.key, can(p)])) as Record<PortalKey, boolean>;
-  }, [perms, isAdmin]);
+  const keys = useMemo(
+    () => grantedPortals(user?.permissions, user?.type),
+    [user],
+  );
 
   // ⌘1 / ⌘2 / ⌘3 — fast portal switching.
   useEffect(() => {
@@ -114,182 +90,159 @@ export default function GatewayPage() {
       const i = ['1', '2', '3'].indexOf(e.key);
       if (i === -1) return;
       const p = PORTALS[i];
-      if (!p || !access[p.key]) return;
+      if (!p || !keys.includes(p.key)) return;
       e.preventDefault();
       router.push(p.href);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [access, router]);
+  }, [keys, router]);
 
   const initials = (user?.name ?? '?')
     .split(/[\s._-]+/).filter(Boolean).slice(0, 2).map((s) => s[0]?.toUpperCase()).join('');
 
-  const roleLabel =
-    user?.type === 'admin' ? 'Administrator'
-    : user?.type === 'location-manager' ? 'Location Manager'
-    : user?.type === 'bookkeeper' ? 'Bookkeeper'
-    : user?.type === 'office' ? 'Office'
-    : 'Team member';
+  const firstName = (user?.name ?? '').split(/[\s._-]+/)[0] || 'there';
+  const cap = firstName.charAt(0).toUpperCase() + firstName.slice(1);
 
   return (
     <div className="gw">
-      <header className="gw-topbar">
-        <div className="gw-topbar-inner">
-          <div className="gw-mark">
-            <div className="gw-mark-glyph" aria-hidden="true">LBS</div>
-            <span className="gw-mark-text">Operations Ecosystem</span>
+      <header className="gw-tb">
+        <div className="gw-brand">
+          <div className="gw-logo" aria-hidden="true">LBS</div>
+          <div>
+            <div className="gw-bname">LBS Garage Door</div>
+            <div className="gw-bsub">Business Ecosystem</div>
           </div>
+        </div>
 
-          <div className="gw-status" role="status" aria-label="System status">
-            <span className="gw-stat"><i className="gw-dot is-live" />All systems normal</span>
-            <span className="gw-stat"><i className="gw-dot" />Database</span>
-            <span className="gw-stat"><i className="gw-dot" />Integrations</span>
-            <span className="gw-stat">
-              {now ? now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-            </span>
-          </div>
+        <button className="gw-search" type="button"
+                onClick={() => router.push('/portal/search')}>
+          <FiSearch size={15} aria-hidden="true" />
+          Search jobs, technicians, invoices…
+          <span className="gw-kbd">⌘K</span>
+        </button>
 
-          <button
-            className="gw-iconbtn"
-            onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-            aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
-            title="Toggle theme"
-          >
-            {theme === 'dark' ? <FiSun size={14} /> : <FiMoon size={14} />}
+        <div className="gw-tbr">
+          <button className="gw-ib" type="button"
+                  onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+                  aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}>
+            {theme === 'dark' ? <FiSun size={16} /> : <FiMoon size={16} />}
           </button>
-
-          <div className="gw-user">
-            <div className="gw-avatar" aria-hidden="true">{initials}</div>
-            <div>
-              <div className="gw-user-name">{user?.name ?? 'Signed out'}</div>
-              <div className="gw-user-role">{roleLabel}</div>
-            </div>
-            <button className="gw-iconbtn" onClick={logout} aria-label="Sign out" title="Sign out">
-              <FiLogOut size={14} />
-            </button>
-          </div>
+          <button className="gw-ib" type="button" aria-label="Notifications">
+            <FiBell size={16} />
+          </button>
+          <div className="gw-av" title={user?.name ?? ''}>{initials}</div>
+          <button className="gw-ib" type="button" onClick={logout} aria-label="Sign out">
+            <FiLogOut size={16} />
+          </button>
         </div>
       </header>
 
-      <div className="gw-inner">
-        <section className="gw-greet">
-          <p className="gw-greet-kicker">
-            {now ? now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }) : ' '}
+      {keys.length === 0 ? (
+        <div className="gw-noaccess">
+          <h2>No portals assigned yet</h2>
+          <p>
+            You're signed in as <strong>{user?.name}</strong>, and your account is active —
+            it just doesn't have access to a portal yet. Ask an administrator to assign one.
           </p>
-          <h1 className="gw-greet-title">
-            {now ? greeting(now) : 'Welcome'}, {user?.name ?? 'there'}.
-          </h1>
-          <p className="gw-greet-sub">
-            Choose a portal to work in. Everything runs on one sign-in, and your access is
-            already applied below.
-          </p>
-        </section>
+        </div>
+      ) : (
+        <div className="gw-pg">
+          <section className="gw-hero">
+            <h1>{now ? greeting(now) : 'Welcome'}, {cap}</h1>
+            <p>Here's where the business stands today.</p>
+          </section>
 
-        <section className="gw-portals" aria-label="Portals">
-          {PORTALS.map((p, i) => {
-            const allowed = access[p.key];
-            const Icon = p.key === 'crm' ? FiBriefcase : p.key === 'fin' ? FiPieChart : FiPackage;
-            const cls = `gw-portal is-${p.key}${p.soon ? ' is-soon' : ''}${!allowed && !p.soon ? ' is-locked' : ''}`;
+          <section className="gw-kpis" aria-label="Business summary">
+            <Kpi label="Revenue today" />
+            <Kpi label="Jobs closed" />
+            <Kpi label="Needs attention" />
+            <Kpi label="Inbound stock" note="Warehouse opens Q4" />
+          </section>
 
-            const inner = (
-              <>
-                <div className="gw-portal-head">
-                  <Icon size={15} style={{ color: 'var(--accent)' }} aria-hidden="true" />
-                  <span className="gw-portal-idx">{p.index}</span>
-                  <span className="gw-portal-state">
-                    {p.soon ? (
-                      <><i className="gw-dot is-idle" />In development</>
-                    ) : allowed ? (
-                      <><i className="gw-dot" />Available</>
-                    ) : (
-                      <><i className="gw-dot is-idle" />No access</>
-                    )}
-                  </span>
-                </div>
+          <section className="gw-ports" aria-label="Portals">
+            {PORTALS.map((p, i) => {
+              const allowed = keys.includes(p.key);
+              const cls = `gw-pc is-${p.key}${!allowed && !p.soon ? ' is-locked' : ''}`;
 
-                <div className="gw-portal-body">
-                  <h2 className="gw-portal-name">{p.name}</h2>
-                  <p className="gw-portal-desc">{p.desc}</p>
-                  <div className="gw-domains">
-                    {p.domains.map((d) => <span className="gw-domain" key={d}>{d}</span>)}
+              const body = (
+                <>
+                  <div className="gw-pc-top">
+                    <div className="gw-pc-ico"><Glyph k={p.key} /></div>
+                    <span className={`gw-pc-tag${allowed ? ' on' : ''}`}>
+                      {allowed ? '● Live' : p.soon ? 'Opening soon' : 'No access'}
+                    </span>
+                    <h2 className="gw-pc-nm">{p.name}</h2>
+                    <p className="gw-pc-ds">{p.blurb}</p>
                   </div>
+
+                  <div className="gw-pc-sig">
+                    {p.signals.map((label, n) => (
+                      <div key={label}>
+                        <div className={`gw-sig-v pending${n === 0 ? ' acc' : ''}`}>—</div>
+                        <div className="gw-sig-l">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="gw-pc-prog">
+                    <div className="gw-prog-t">
+                      <span>{p.soon ? 'Phase 1 build' : 'Awaiting data'}</span>
+                      <span>{p.soon ? 'Design' : '—'}</span>
+                    </div>
+                    <div className="gw-prog"><i style={{ width: p.soon ? '18%' : '0%' }} /></div>
+                  </div>
+
+                  <div className="gw-pc-act">
+                    {allowed ? (
+                      <span className="gw-btn">Open {p.name} <FiArrowRight size={14} /></span>
+                    ) : p.soon ? (
+                      <span className="gw-btn ghost">Opening Q4 2026</span>
+                    ) : (
+                      <span className="gw-btn ghost">Ask an administrator</span>
+                    )}
+                  </div>
+                </>
+              );
+
+              return allowed
+                ? <Link href={p.href} className={cls} key={p.key} title={`Open ${p.name} (⌘${i + 1})`}>{body}</Link>
+                : <div className={cls} key={p.key} aria-disabled="true">{body}</div>;
+            })}
+          </section>
+
+          <section className="gw-low">
+            <div className="gw-pan">
+              <div className="gw-pan-h"><span className="gw-pan-t">Needs attention</span></div>
+              <div className="gw-pan-b">
+                <div className="gw-empty">
+                  <strong>Nothing to show yet</strong>
+                  Open discrepancies, unreconciled transactions and overdue approvals
+                  will appear here once the summary endpoints are connected.
                 </div>
-
-                <div className="gw-portal-foot">
-                  {p.soon ? (
-                    <span className="gw-metric-lbl">Phase 1 · inbound supply chain</span>
-                  ) : (
-                    <span className="gw-metric-lbl">
-                      {allowed ? 'Ready' : 'Ask an administrator for access'}
-                    </span>
-                  )}
-                  {allowed && (
-                    <span className="gw-portal-go">
-                      Open <kbd>⌘{i + 1}</kbd> <FiArrowRight size={12} />
-                    </span>
-                  )}
-                </div>
-              </>
-            );
-
-            return allowed
-              ? <Link href={p.href} className={cls} key={p.key}>{inner}</Link>
-              : <div className={cls} key={p.key} aria-disabled="true">{inner}</div>;
-          })}
-        </section>
-
-        <section className="gw-lower">
-          <div className="gw-panel">
-            <div className="gw-panel-head">
-              <FiAlertTriangle size={13} style={{ color: 'var(--ds-ink-3)' }} aria-hidden="true" />
-              <span className="gw-panel-title">Needs attention</span>
-              <span className="gw-panel-count">—</span>
-            </div>
-            <div className="gw-panel-body">
-              <div className="gw-empty">
-                <span className="gw-empty-glyph" aria-hidden="true">[ ]</span>
-                Attention items are not wired up yet. This panel will surface open
-                discrepancies, unreconciled transactions and overdue approvals.
               </div>
             </div>
-          </div>
 
-          <div className="gw-panel">
-            <div className="gw-panel-head"><span className="gw-panel-title">Quick actions</span></div>
-            <div className="gw-actions">
-              {access.crm && (
-                <Link href="/tables" className="gw-action">
-                  <span className="gw-action-lbl">Jobs table</span>
-                  <span className="gw-action-hint">CRM</span>
-                </Link>
-              )}
-              {access.crm && (
-                <Link href="/balance-report" className="gw-action">
-                  <span className="gw-action-lbl">Balance report</span>
-                  <span className="gw-action-hint">CRM</span>
-                </Link>
-              )}
-              {access.fin && (
-                <Link href="/portal/ledger" className="gw-action">
-                  <span className="gw-action-lbl">Ledgers</span>
-                  <span className="gw-action-hint">Finance</span>
-                </Link>
-              )}
-              {access.fin && (
-                <Link href="/portal/tasks" className="gw-action">
-                  <span className="gw-action-lbl">Task board</span>
-                  <span className="gw-action-hint">Finance</span>
-                </Link>
-              )}
+            <div className="gw-pan">
+              <div className="gw-pan-h"><span className="gw-pan-t">Jump back in</span></div>
+              <div className="gw-qa">
+                {keys.includes('crm') && (
+                  <Link className="gw-qa-i" href="/tables"><span className="gw-chip crm">CRM</span><span className="gw-qa-l">Jobs table</span></Link>
+                )}
+                {keys.includes('crm') && (
+                  <Link className="gw-qa-i" href="/balance-report"><span className="gw-chip crm">CRM</span><span className="gw-qa-l">Balance report</span></Link>
+                )}
+                {keys.includes('fin') && (
+                  <Link className="gw-qa-i" href="/portal/ledger"><span className="gw-chip fin">Finance</span><span className="gw-qa-l">Ledgers</span></Link>
+                )}
+                {keys.includes('fin') && (
+                  <Link className="gw-qa-i" href="/portal/tasks"><span className="gw-chip fin">Finance</span><span className="gw-qa-l">Task board</span></Link>
+                )}
+              </div>
             </div>
-          </div>
-        </section>
-
-        <p className="gw-foot">
-          LBS Operations Ecosystem · one sign-in, three portals · signed in as {user?.name ?? '—'}
-        </p>
-      </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
