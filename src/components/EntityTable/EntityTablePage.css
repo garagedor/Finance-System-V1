@@ -853,3 +853,12 @@ tbody tr:hover .actions {
     from { opacity: 0; transform: translate(-50%, 16px); }
     to   { opacity: 1; transform: translate(-50%, 0); }
 }
+
+/* ── Design 360 S3: optional summary above the table ──────────────────────
+   Additive. Only renders when an entity supplies `renderSummary`. */
+.entity-summary {
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}

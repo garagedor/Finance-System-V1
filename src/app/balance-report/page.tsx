@@ -9,6 +9,7 @@ import MultiSelect from '@/components/MultiSelect';
 import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
+import { SummaryStrip, AlertCard } from '@/components/ui';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { FiBriefcase, FiTrendingUp, FiCheckCircle, FiPercent, FiChevronDown, FiDownload, FiEye, FiX } from 'react-icons/fi';
 import dynamic from 'next/dynamic';
@@ -609,6 +610,13 @@ export default function BalanceReportPage() {
     [closedRows]
   );
 
+  /* Design 360 S3 — exceptions surfaced above the detail. Counts only; it
+     reads `closedRows`, which is already computed, and changes nothing. */
+  const lossMakingJobs = useMemo(
+    () => closedRows.filter((r) => (r.totalProfit ?? 0) < 0).length,
+    [closedRows]
+  );
+
   const statusPieData = useMemo<PieDatum[]>(
     () =>
       statusStats.map((s, idx) => {
@@ -836,6 +844,46 @@ export default function BalanceReportPage() {
             </div>
           </div>
         </header>
+
+        {/* ── Position (Design 360 S3) ──────────────────────────────────────
+            The answer, first. Every figure below is read from `closedTotals`
+            and `closedRows`, which this page already computed — no new query,
+            no new calculation, no change to how any number is derived. What
+            changed is only WHERE the balance appears: it used to sit inside
+            the snapshot list beside the pie chart, below the KPI strip. */}
+        {closedRows.length > 0 && (
+          <section className="bp-position no-print">
+            <SummaryStrip
+              items={[
+                {
+                  label: mode === 'tech' ? 'Balance owed to technician' : 'Balance for this location',
+                  value: formatCurrency(closedTotals.balanceWithTips),
+                  tone: closedTotals.balanceWithTips > 0 ? 'pos'
+                      : closedTotals.balanceWithTips < 0 ? 'neg' : 'muted',
+                  sub: closedTotals.tipsTotal
+                    ? `includes ${formatCurrency(closedTotals.tipsTotal)} net tips`
+                    : 'balance excluding tips',
+                },
+                { label: 'Closed jobs', value: String(closedRows.length) },
+                { label: 'Collected', value: formatCurrency(closedTotals.paidSum) },
+                {
+                  label: 'Job profit',
+                  value: formatCurrency(closedTotals.totalProfit),
+                  tone: closedTotals.totalProfit < 0 ? 'neg' : undefined,
+                },
+              ]}
+            />
+
+            {/* Exceptions, surfaced above the detail rather than found in it. */}
+            {lossMakingJobs > 0 && (
+              <AlertCard
+                tone="warn"
+                title={`${lossMakingJobs} job${lossMakingJobs === 1 ? '' : 's'} closed at a loss`}
+                description="These reduce the balance. They are in the table below, sorted where you left it."
+              />
+            )}
+          </section>
+        )}
 
         {/* ── Horizontal Filters ── */}
         <FiltersPanel

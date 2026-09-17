@@ -38,6 +38,7 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
     useDataHook,
     renderActions,
     topbarAddon,
+    renderSummary,
     hideAddRowButton = false,
     hideActionsColumn = false,
 }: EntityTablePageProps<T, D>) {
@@ -633,6 +634,15 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
                         )}
                     </div>
                 </div>
+
+                {/* ── Summary (Design 360 S3) ──
+                    Optional and additive: when no `renderSummary` is supplied
+                    this renders nothing and the page is byte-for-byte what it
+                    was. It receives the same `data` the table already holds,
+                    so it introduces no fetch, no query and no state. */}
+                {renderSummary && (
+                    <div className="entity-summary">{renderSummary(data)}</div>
+                )}
 
                 {/* ── Table ── */}
                 <section className="panel table-card">

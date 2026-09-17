@@ -1111,3 +1111,6 @@
   .balance-page thead { display: table-header-group; }
   .balance-page tfoot { display: table-footer-group; }
 }
+
+/* ── Design 360 S3: position block above the filters ────────────────────── */
+.bp-position { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }

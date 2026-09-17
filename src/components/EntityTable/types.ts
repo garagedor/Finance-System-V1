@@ -58,6 +58,10 @@ export type EntityTablePageProps<T, D extends GenericTableData<T>> = {
     ) => D;
     renderActions?: (args: RenderActionsArgs<T, D>) => ReactNode;
     topbarAddon?: ReactNode;
+    /** Design 360 S3 — optional summary rendered above the table. Receives the
+     *  data the table already holds, so it triggers no fetch or query. When
+     *  omitted the page renders exactly as before. */
+    renderSummary?: (data: D) => ReactNode;
     hideAddRowButton?: boolean;
     // When true, the right-side actions column (header + cells) is suppressed.
     // Useful when an entity renders its row actions inline within a column
