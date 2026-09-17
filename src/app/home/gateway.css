@@ -94,8 +94,8 @@
   display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px;
   border-radius: var(--ds-radius-full); font-size: var(--ds-text-2xs); font-weight: var(--ds-w-bold);
 }
-.gw-trend.up { background: var(--ds-ok-wash); color: var(--ds-ok); }
-.gw-trend.dn { background: var(--ds-crit-wash); color: var(--ds-crit); }
+.gw-trend.up { background: var(--ds-ok-wash); color: var(--ds-ok-text); }
+.gw-trend.dn { background: var(--ds-crit-wash); color: var(--ds-crit-text); }
 .gw-trend.fl { background: var(--ds-surface-3); color: var(--ds-ink-3); }
 
 /* ── Portal cards ─────────────────────────────────────────────────────── */
@@ -132,7 +132,7 @@ a.gw-pc:focus-visible { outline: none; box-shadow: var(--ds-focus), var(--ds-ele
   padding: 3px 9px; border-radius: var(--ds-radius-full);
   background: var(--ds-surface-1); border: 1px solid var(--ds-line-strong); color: var(--ds-ink-3);
 }
-.gw-pc-tag.on { color: var(--ds-ok); border-color: color-mix(in srgb, var(--ds-ok) 40%, transparent); background: var(--ds-ok-wash); }
+.gw-pc-tag.on { color: var(--ds-ok-text); border-color: color-mix(in srgb, var(--ds-ok) 40%, transparent); background: var(--ds-ok-wash); }
 
 .gw-pc-sig {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--ds-space-2);
@@ -177,9 +177,9 @@ a.gw-pc:hover .gw-btn { filter: brightness(1.08); }
 .gw-row:hover { background: var(--ds-surface-2); }
 .gw-row:focus-visible { outline: none; box-shadow: var(--ds-focus); }
 .gw-rico { width: 34px; height: 34px; border-radius: var(--ds-radius-2); display: grid; place-items: center; flex: none; font-size: 15px; font-weight: var(--ds-w-bold); }
-.gw-rico.c { background: var(--ds-crit-wash); color: var(--ds-crit); }
-.gw-rico.w { background: var(--ds-warn-wash); color: var(--ds-warn); }
-.gw-rico.o { background: var(--ds-ok-wash); color: var(--ds-ok); }
+.gw-rico.c { background: var(--ds-crit-wash); color: var(--ds-crit-text); }
+.gw-rico.w { background: var(--ds-warn-wash); color: var(--ds-warn-text); }
+.gw-rico.o { background: var(--ds-ok-wash); color: var(--ds-ok-text); }
 .gw-rm { flex: 1; min-width: 0; }
 .gw-rt { font-size: var(--ds-text-sm); font-weight: var(--ds-w-semi); margin: 0 0 2px; line-height: 1.35; }
 .gw-rx { font-size: var(--ds-text-xs); color: var(--ds-ink-3); font-weight: var(--ds-w-medium); margin: 0; }
