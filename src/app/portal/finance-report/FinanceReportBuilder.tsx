@@ -127,7 +127,7 @@ export default function FinanceReportBuilder() {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 340px) 1fr", gap: 18, alignItems: "start" }}>
       {/* ── Left: configuration ── */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 12 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 12, maxHeight: "calc(100vh - 24px)", overflowY: "auto", overflowX: "hidden", paddingRight: 4 }}>
         <button className="portal-btn portal-btn-primary" style={{ width: "100%", padding: "10px 12px", fontSize: 14 }} onClick={fullSystemReport}>
           ⚡ Full System Report — everything, YTD
         </button>
@@ -174,13 +174,13 @@ export default function FinanceReportBuilder() {
             {order.map((o, i) => {
               const meta = SECTIONS.find((s) => s.key === o.key)!;
               return (
-                <div key={o.key} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, background: o.enabled ? "rgba(129,140,248,0.06)" : "transparent" }}>
-                  <input type="checkbox" checked={o.enabled} onChange={() => toggle(o.key)} />
+                <div key={o.key} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 8px", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, background: o.enabled ? "rgba(129,140,248,0.06)" : "transparent", textAlign: "left" }}>
+                  <input type="checkbox" checked={o.enabled} onChange={() => toggle(o.key)} style={{ width: 16, height: 16, flexShrink: 0, margin: 0 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9" }}>{meta.label}</div>
                     <div className="muted small" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{meta.hint}</div>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 2, flexShrink: 0 }}>
                     <button type="button" className="portal-btn portal-btn-ghost" style={{ padding: "0 6px", fontSize: 11, lineHeight: "16px" }} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>
                     <button type="button" className="portal-btn portal-btn-ghost" style={{ padding: "0 6px", fontSize: 11, lineHeight: "16px" }} disabled={i === order.length - 1} onClick={() => move(i, 1)}>↓</button>
                   </div>
