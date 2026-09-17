@@ -109,31 +109,36 @@
 
      --ds-ok moved from #35B57F (H 155°) to #3FBF6E (H 142°) so positive money
      cannot be mistaken for Finance-portal teal --ds-fin (H 161°). The gap went
-     from 7° to 19°.                                                          */
+     from 7° to 19°.
+
+     Batch 2.5: --ds-info moved from #5B8DEF (H 220°) to #2DA7D4 (H 196°) for
+     the same reason — the Warehouse identity --ds-whs sits at H 214°, so an
+     "Open" chip read as a Warehouse marker. Perceptual distance from --ds-whs
+     went from dE 8.9 to dE 33.5. --ds-whs itself is untouched.               */
   --ds-ok:   #3FBF6E;
   --ds-warn: #E0A63A;
   --ds-crit: #E2635C;
-  --ds-info: #5B8DEF;
+  --ds-info: #2DA7D4;
 
   --ds-ok-text:   #61CB88;
   --ds-warn-text: #E2AD4A;
   --ds-crit-text: #EEA39F;
-  --ds-info-text: #98B8F5;
+  --ds-info-text: #6CC2E1;
 
   --ds-ok-wash:   rgba(63, 191, 110, 0.14);
   --ds-warn-wash: rgba(224, 166, 58, 0.14);
   --ds-crit-wash: rgba(226, 99, 92, 0.14);
-  --ds-info-wash: rgba(91, 141, 239, 0.14);
+  --ds-info-wash: rgba(45, 167, 212, 0.14);
 
   --ds-ok-soft:   rgba(63, 191, 110, 0.08);
   --ds-warn-soft: rgba(224, 166, 58, 0.08);
   --ds-crit-soft: rgba(226, 99, 92, 0.08);
-  --ds-info-soft: rgba(91, 141, 239, 0.08);
+  --ds-info-soft: rgba(45, 167, 212, 0.08);
 
   --ds-ok-line:   rgba(63, 191, 110, 0.32);
   --ds-warn-line: rgba(224, 166, 58, 0.32);
   --ds-crit-line: rgba(226, 99, 92, 0.32);
-  --ds-info-line: rgba(91, 141, 239, 0.32);
+  --ds-info-line: rgba(45, 167, 212, 0.32);
 
   /* Danger is the only semantic with an interactive hover state. */
   --ds-crit-wash-2: rgba(226, 99, 92, 0.24);
@@ -205,29 +210,29 @@
   --ds-ok:   #15803D;
   --ds-warn: #8A6111;
   --ds-crit: #B03830;
-  --ds-info: #2E5FC0;
+  --ds-info: #0E7297;
 
   /* On white a wash barely lifts the ground, so -text stays at or just below
      the base rather than lightening as it does in dark. */
   --ds-ok-text:   #137638;
   --ds-warn-text: #886011;
   --ds-crit-text: #B03830;
-  --ds-info-text: #2E5FC0;
+  --ds-info-text: #0E688A;
 
   --ds-ok-wash:   rgba(21, 128, 61, 0.10);
   --ds-warn-wash: rgba(138, 97, 17, 0.10);
   --ds-crit-wash: rgba(176, 56, 48, 0.10);
-  --ds-info-wash: rgba(46, 95, 192, 0.10);
+  --ds-info-wash: rgba(14, 114, 151, 0.10);
 
   --ds-ok-soft:   rgba(21, 128, 61, 0.07);
   --ds-warn-soft: rgba(138, 97, 17, 0.07);
   --ds-crit-soft: rgba(176, 56, 48, 0.07);
-  --ds-info-soft: rgba(46, 95, 192, 0.07);
+  --ds-info-soft: rgba(14, 114, 151, 0.07);
 
   --ds-ok-line:   rgba(21, 128, 61, 0.28);
   --ds-warn-line: rgba(138, 97, 17, 0.28);
   --ds-crit-line: rgba(176, 56, 48, 0.28);
-  --ds-info-line: rgba(46, 95, 192, 0.28);
+  --ds-info-line: rgba(14, 114, 151, 0.28);
 
   --ds-crit-wash-2: rgba(176, 56, 48, 0.18);
   --ds-crit-line-2: rgba(176, 56, 48, 0.45);
@@ -255,14 +260,14 @@
     --ds-fin-grad:linear-gradient(135deg,rgba(14,115,85,.14),rgba(14,115,85,.02));
     --ds-whs:#1F5DAE; --ds-whs-2:#17488A; --ds-whs-wash:rgba(31,93,174,.09);
     --ds-whs-grad:linear-gradient(135deg,rgba(31,93,174,.14),rgba(31,93,174,.02));
-    --ds-ok:#15803D; --ds-warn:#8A6111; --ds-crit:#B03830; --ds-info:#2E5FC0;
-    --ds-ok-text:#137638; --ds-warn-text:#886011; --ds-crit-text:#B03830; --ds-info-text:#2E5FC0;
+    --ds-ok:#15803D; --ds-warn:#8A6111; --ds-crit:#B03830; --ds-info:#0E7297;
+    --ds-ok-text:#137638; --ds-warn-text:#886011; --ds-crit-text:#B03830; --ds-info-text:#0E688A;
     --ds-ok-wash:rgba(21,128,61,.10); --ds-warn-wash:rgba(138,97,17,.10);
-    --ds-crit-wash:rgba(176,56,48,.10); --ds-info-wash:rgba(46,95,192,.10);
+    --ds-crit-wash:rgba(176,56,48,.10); --ds-info-wash:rgba(14,114,151,.10);
     --ds-ok-soft:rgba(21,128,61,.07); --ds-warn-soft:rgba(138,97,17,.07);
-    --ds-crit-soft:rgba(176,56,48,.07); --ds-info-soft:rgba(46,95,192,.07);
+    --ds-crit-soft:rgba(176,56,48,.07); --ds-info-soft:rgba(14,114,151,.07);
     --ds-ok-line:rgba(21,128,61,.28); --ds-warn-line:rgba(138,97,17,.28);
-    --ds-crit-line:rgba(176,56,48,.28); --ds-info-line:rgba(46,95,192,.28);
+    --ds-crit-line:rgba(176,56,48,.28); --ds-info-line:rgba(14,114,151,.28);
     --ds-crit-wash-2:rgba(176,56,48,.18); --ds-crit-line-2:rgba(176,56,48,.45);
     --ds-neutral-text:#4C5866; --ds-neutral-wash:rgba(76,88,102,.10); --ds-neutral-line:rgba(76,88,102,.26);
     --ds-elev-1:0 1px 3px rgba(15,18,24,.06); --ds-elev-2:0 6px 20px rgba(15,18,24,.08);
