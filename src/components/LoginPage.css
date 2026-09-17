@@ -26,7 +26,7 @@
   width: 36px; height: 36px; border-radius: var(--ds-radius-2);
   background: linear-gradient(135deg, var(--ds-crm), var(--ds-fin) 55%, var(--ds-whs));
   display: grid; place-items: center;
-  font-weight: var(--ds-w-black); font-size: 13px; color: #fff;
+  font-weight: var(--ds-w-black); font-size: 13px; color: var(--ds-on-brand);
   letter-spacing: -0.02em; flex: none;
 }
 .lg-bname { font-weight: var(--ds-w-bold); font-size: var(--ds-text-md); letter-spacing: -0.015em; line-height: 1.2; }
@@ -110,8 +110,11 @@
 }
 .lg-pico {
   width: 46px; height: 46px; border-radius: var(--ds-radius-2);
-  display: grid; place-items: center; color: #fff; flex: none;
+  display: grid; place-items: center; color: var(--ac-on, var(--ds-on-accent)); flex: none;
 }
+.lg-pico.is-crm { --ac-on: var(--ds-on-crm); }
+.lg-pico.is-fin { --ac-on: var(--ds-on-fin); }
+.lg-pico.is-whs { --ac-on: var(--ds-on-whs); }
 .lg-pn { font-size: var(--ds-text-md); font-weight: var(--ds-w-bold); margin: 0 0 2px; letter-spacing: -0.015em; }
 .lg-pd { font-size: var(--ds-text-sm); color: var(--ds-ink-3); margin: 0; }
 
@@ -156,7 +159,7 @@
 
 .ag-list { display: flex; flex-direction: column; gap: var(--ds-space-2); width: 100%; max-width: 380px; }
 .ag-item {
-  --ac: var(--ds-ink-3);
+  --ac: var(--ds-ink-3); --ac-on: var(--ds-on-accent);
   display: flex; align-items: center; gap: var(--ds-space-3);
   padding: var(--ds-space-3) var(--ds-space-4);
   border-radius: var(--ds-radius-3);
@@ -165,9 +168,9 @@
   opacity: 0;
   animation: ag-item 380ms var(--ds-ease-out) forwards;
 }
-.ag-item.is-crm { --ac: var(--ds-crm); }
-.ag-item.is-fin { --ac: var(--ds-fin); }
-.ag-item.is-whs { --ac: var(--ds-whs); }
+.ag-item.is-crm { --ac: var(--ds-crm); --ac-on: var(--ds-on-crm); }
+.ag-item.is-fin { --ac: var(--ds-fin); --ac-on: var(--ds-on-fin); }
+.ag-item.is-whs { --ac: var(--ds-whs); --ac-on: var(--ds-on-whs); }
 .ag-item.is-granted { border-color: color-mix(in srgb, var(--ac) 42%, transparent); }
 .ag-item.is-denied  { opacity: 0; }
 .ag-item.is-denied .ag-name,
@@ -176,7 +179,7 @@
 
 .ag-ico {
   width: 34px; height: 34px; border-radius: var(--ds-radius-1);
-  display: grid; place-items: center; color: #fff; flex: none;
+  display: grid; place-items: center; color: var(--ac-on); flex: none;
   background: var(--ac);
 }
 .ag-item.is-denied .ag-ico { background: var(--ds-surface-3); color: var(--ds-ink-dim); }

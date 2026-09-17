@@ -249,7 +249,7 @@ a.u-metric:focus-visible { outline: none; box-shadow: var(--ds-focus); }
 .u-btn:hover { border-color: var(--ds-ink-3); }
 .u-btn:focus-visible { outline: none; box-shadow: var(--ds-focus); }
 .u-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.u-btn.primary { background: var(--ac, var(--ds-info)); border-color: var(--ac, var(--ds-info)); color: #fff; }
+.u-btn.primary { background: var(--ac, var(--ds-info)); border-color: var(--ac, var(--ds-info)); color: var(--ac-on, var(--ds-on-accent)); }
 .u-btn.primary:hover { filter: brightness(1.08); }
 .u-btn.ghost { background: transparent; border-color: transparent; color: var(--ds-ink-3); }
 .u-btn.ghost:hover { background: var(--ds-surface-2); color: var(--ds-ink); }

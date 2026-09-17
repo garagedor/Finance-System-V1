@@ -91,6 +91,27 @@
   --ds-whs-wash: rgba(61, 127, 214, 0.12);
   --ds-whs-grad: linear-gradient(135deg, rgba(61, 127, 214, 0.22), rgba(61, 127, 214, 0.04));
 
+  /* ── S4 batch 3 — identity hues gain the same five roles the semantics got
+     in batch 2, so a portal accent can fill a chip or draw a hairline without
+     reaching for a literal. -text is for text sitting ON an identity wash;
+     -wash-2 is the stronger fill a selected segment needs.                   */
+  --ds-crm-text: #EBA456;  --ds-crm-wash-2: rgba(232, 150, 60, 0.22);  --ds-crm-line: rgba(232, 150, 60, 0.32);
+  --ds-fin-text: #25C291;  --ds-fin-wash-2: rgba(31, 163, 122, 0.22);  --ds-fin-line: rgba(31, 163, 122, 0.32);
+  --ds-whs-text: #7EAAE4;  --ds-whs-wash-2: rgba(61, 127, 214, 0.22);  --ds-whs-line: rgba(61, 127, 214, 0.32);
+
+  /* ── Foreground on a SOLID accent fill ────────────────────────────────────
+     White is not a safe default. On this theme's accents it measures 2.37
+     (CRM), 3.19 (Finance) and 4.03 (Warehouse) — all below the 4.5 a 13px
+     bold button label needs. Each accent therefore names its own foreground:
+     a deep ink carrying that accent's own hue, so the button still reads as
+     one object rather than as black type dropped onto colour.                */
+  --ds-on-crm:    #492F12;
+  --ds-on-fin:    #09221A;
+  --ds-on-whs:    #040A12;
+  --ds-on-accent: #323A45;   /* the neutral --ac base, no portal class */
+  --ds-on-brand:  #04070C;   /* the tri-colour logo mark */
+  --ds-on-crit:   #350F0D;   /* solid danger fills — notification badges */
+
   /* ── Semantic — never a portal hue ──────────────────────────────────────
      S4 batch 2. Each hue now carries five roles, because one value cannot
      serve all of them:
@@ -190,10 +211,15 @@
   --ds-ink-3:   #77828F;
   --ds-ink-dim: #A2ACB8;
 
-  --ds-crm:   #B06A12;
+  /* Batch 3, rule 4 exception. #B06A12 sat in a dead zone: white on it
+     measured 4.27 and black on its hover partner #8A5210 measured 3.30, so
+     NO foreground cleared 4.5 on both states. Fixed by the smallest possible
+     correction — lightness only, hue held at 33.4° — which also lifts CRM as
+     TEXT on white from 4.27 to 5.22. The partner is unchanged.               */
+  --ds-crm:   #9C5E10;
   --ds-crm-2: #8A5210;
-  --ds-crm-wash: rgba(176, 106, 18, 0.09);
-  --ds-crm-grad: linear-gradient(135deg, rgba(176, 106, 18, 0.14), rgba(176, 106, 18, 0.02));
+  --ds-crm-wash: rgba(156, 94, 16, 0.09);
+  --ds-crm-grad: linear-gradient(135deg, rgba(156, 94, 16, 0.14), rgba(156, 94, 16, 0.02));
 
   --ds-fin:   #0E7355;
   --ds-fin-2: #0A5A42;
@@ -204,6 +230,20 @@
   --ds-whs-2: #17488A;
   --ds-whs-wash: rgba(31, 93, 174, 0.09);
   --ds-whs-grad: linear-gradient(135deg, rgba(31, 93, 174, 0.14), rgba(31, 93, 174, 0.02));
+
+  --ds-crm-text: #86510F;  --ds-crm-wash-2: rgba(156, 94, 16, 0.16);  --ds-crm-line: rgba(156, 94, 16, 0.28);
+  --ds-fin-text: #0D694E;  --ds-fin-wash-2: rgba(14, 115, 85, 0.16);  --ds-fin-line: rgba(14, 115, 85, 0.28);
+  --ds-whs-text: #1E5BAB;  --ds-whs-wash-2: rgba(31, 93, 174, 0.16);  --ds-whs-line: rgba(31, 93, 174, 0.28);
+
+  /* Here the accents are dark enough that white is genuinely correct — 5.22,
+     5.83 and 6.49 respectively. The token still exists so the rule is the
+     same in both themes and no component hard-codes a foreground.            */
+  --ds-on-crm:    #FFFFFF;
+  --ds-on-fin:    #FFFFFF;
+  --ds-on-whs:    #FFFFFF;
+  --ds-on-accent: #FFFFFF;
+  --ds-on-brand:  #FFFFFF;
+  --ds-on-crit:   #FFFFFF;
 
   /* --ds-ok moved from #137D54 (H 157°) to #15803D (H 142°): the light Finance
      hue #0E7355 sits at H 162°, so the old pair was only 5° apart. */
@@ -254,12 +294,17 @@
     --ds-bg:#F6F8FA; --ds-surface-1:#FFFFFF; --ds-surface-2:#F1F4F7; --ds-surface-3:#E8ECF1;
     --ds-line:rgba(15,18,24,.09); --ds-line-strong:rgba(15,18,24,.16);
     --ds-ink:#0F1218; --ds-ink-2:#4C5866; --ds-ink-3:#77828F; --ds-ink-dim:#A2ACB8;
-    --ds-crm:#B06A12; --ds-crm-2:#8A5210; --ds-crm-wash:rgba(176,106,18,.09);
-    --ds-crm-grad:linear-gradient(135deg,rgba(176,106,18,.14),rgba(176,106,18,.02));
+    --ds-crm:#9C5E10; --ds-crm-2:#8A5210; --ds-crm-wash:rgba(156,94,16,.09);
+    --ds-crm-grad:linear-gradient(135deg,rgba(156,94,16,.14),rgba(156,94,16,.02));
     --ds-fin:#0E7355; --ds-fin-2:#0A5A42; --ds-fin-wash:rgba(14,115,85,.09);
     --ds-fin-grad:linear-gradient(135deg,rgba(14,115,85,.14),rgba(14,115,85,.02));
     --ds-whs:#1F5DAE; --ds-whs-2:#17488A; --ds-whs-wash:rgba(31,93,174,.09);
     --ds-whs-grad:linear-gradient(135deg,rgba(31,93,174,.14),rgba(31,93,174,.02));
+    --ds-crm-text:#86510F; --ds-crm-wash-2:rgba(156,94,16,.16); --ds-crm-line:rgba(156,94,16,.28);
+    --ds-fin-text:#0D694E; --ds-fin-wash-2:rgba(14,115,85,.16); --ds-fin-line:rgba(14,115,85,.28);
+    --ds-whs-text:#1E5BAB; --ds-whs-wash-2:rgba(31,93,174,.16); --ds-whs-line:rgba(31,93,174,.28);
+    --ds-on-crm:#FFFFFF; --ds-on-fin:#FFFFFF; --ds-on-whs:#FFFFFF;
+    --ds-on-accent:#FFFFFF; --ds-on-brand:#FFFFFF; --ds-on-crit:#FFFFFF;
     --ds-ok:#15803D; --ds-warn:#8A6111; --ds-crit:#B03830; --ds-info:#0E7297;
     --ds-ok-text:#137638; --ds-warn-text:#886011; --ds-crit-text:#B03830; --ds-info-text:#0E688A;
     --ds-ok-wash:rgba(21,128,61,.10); --ds-warn-wash:rgba(138,97,17,.10);

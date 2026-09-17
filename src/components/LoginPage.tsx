@@ -274,7 +274,7 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
         <p className="lg-rt">One sign-in. Three portals.</p>
         {PORTALS.map((p) => (
           <div className="lg-pcard" key={p.key}>
-            <div className="lg-pico" style={{ background: `var(--ds-${p.key})` }}>
+            <div className={`lg-pico is-${p.key}`} style={{ background: `var(--ds-${p.key})` }}>
               <PortalGlyph k={p.key} size={22} />
             </div>
             <div>

@@ -19,7 +19,7 @@
   width: 32px; height: 32px; border-radius: var(--ds-radius-2);
   background: linear-gradient(135deg, var(--ds-crm), var(--ds-fin) 55%, var(--ds-whs));
   display: grid; place-items: center; font-weight: var(--ds-w-black);
-  font-size: 13px; color: #fff; letter-spacing: -0.02em;
+  font-size: 13px; color: var(--ds-on-brand); letter-spacing: -0.02em;
 }
 .gw-bname { font-weight: var(--ds-w-bold); font-size: var(--ds-text-md); letter-spacing: -0.015em; line-height: 1.2; }
 .gw-bsub { font-size: var(--ds-text-xs); color: var(--ds-ink-3); font-weight: var(--ds-w-medium); }
@@ -51,7 +51,7 @@
 .gw-ib:focus-visible { outline: none; box-shadow: var(--ds-focus); }
 .gw-badge {
   position: absolute; top: -3px; right: -3px; min-width: 16px; height: 16px;
-  border-radius: var(--ds-radius-full); background: var(--ds-crit); color: #fff;
+  border-radius: var(--ds-radius-full); background: var(--ds-crit); color: var(--ds-on-crit);
   font-size: 10px; font-weight: var(--ds-w-bold); display: grid; place-items: center;
   padding: 0 4px; border: 2px solid var(--ds-surface-1);
 }
@@ -101,7 +101,7 @@
 /* ── Portal cards ─────────────────────────────────────────────────────── */
 .gw-ports { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--ds-space-4); }
 .gw-pc {
-  --ac: var(--ds-ink-2); --acg: none;
+  --ac: var(--ds-ink-2); --ac-on: var(--ds-on-accent); --acg: none;
   display: flex; flex-direction: column;
   background: var(--ds-surface-1); border: 1px solid var(--ds-line);
   border-radius: var(--ds-radius-4); overflow: hidden;
@@ -110,9 +110,9 @@
               box-shadow var(--ds-dur-base) var(--ds-ease),
               border-color var(--ds-dur-base) var(--ds-ease);
 }
-.gw-pc.is-crm { --ac: var(--ds-crm); --acg: var(--ds-crm-grad); }
-.gw-pc.is-fin { --ac: var(--ds-fin); --acg: var(--ds-fin-grad); }
-.gw-pc.is-whs { --ac: var(--ds-whs); --acg: var(--ds-whs-grad); }
+.gw-pc.is-crm { --ac: var(--ds-crm); --ac-on: var(--ds-on-crm); --acg: var(--ds-crm-grad); }
+.gw-pc.is-fin { --ac: var(--ds-fin); --ac-on: var(--ds-on-fin); --acg: var(--ds-fin-grad); }
+.gw-pc.is-whs { --ac: var(--ds-whs); --ac-on: var(--ds-on-whs); --acg: var(--ds-whs-grad); }
 a.gw-pc:hover { transform: translateY(-3px); box-shadow: var(--ds-elev-2); border-color: color-mix(in srgb, var(--ac) 45%, var(--ds-line-strong)); }
 a.gw-pc:focus-visible { outline: none; box-shadow: var(--ds-focus), var(--ds-elev-2); }
 .gw-pc.is-locked { opacity: 0.6; }
@@ -120,7 +120,7 @@ a.gw-pc:focus-visible { outline: none; box-shadow: var(--ds-focus), var(--ds-ele
 .gw-pc-top { background: var(--acg); padding: var(--ds-space-5) var(--ds-space-5) var(--ds-space-4); position: relative; }
 .gw-pc-ico {
   width: 44px; height: 44px; border-radius: var(--ds-radius-2);
-  background: var(--ac); display: grid; place-items: center; color: #fff;
+  background: var(--ac); display: grid; place-items: center; color: var(--ac-on);
   margin-bottom: var(--ds-space-3);
   box-shadow: 0 4px 12px color-mix(in srgb, var(--ac) 35%, transparent);
 }
@@ -157,7 +157,7 @@ a.gw-pc:focus-visible { outline: none; box-shadow: var(--ds-focus), var(--ds-ele
   display: flex; align-items: center; justify-content: center; gap: var(--ds-space-2);
   width: 100%; padding: 11px; border-radius: var(--ds-radius-2);
   font-size: var(--ds-text-sm); font-weight: var(--ds-w-bold);
-  border: 1px solid transparent; background: var(--ac); color: #fff;
+  border: 1px solid transparent; background: var(--ac); color: var(--ac-on);
   transition: filter var(--ds-dur-fast) var(--ds-ease);
 }
 a.gw-pc:hover .gw-btn { filter: brightness(1.08); }
