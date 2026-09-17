@@ -135,29 +135,36 @@
      Batch 2.5: --ds-info moved from #5B8DEF (H 220°) to #2DA7D4 (H 196°) for
      the same reason — the Warehouse identity --ds-whs sits at H 214°, so an
      "Open" chip read as a Warehouse marker. Perceptual distance from --ds-whs
-     went from dE 8.9 to dE 33.5. --ds-whs itself is untouched.               */
+     went from dE 8.9 to dE 33.5. --ds-whs itself is untouched.
+
+     Batch 3.5: the third and last of these. --ds-warn moved from H 39° to
+     H 52° — amber to a true yellow-gold — because the CRM identity sits at
+     H 31-33° and a warning chip beside CRM chrome was only 6-8° away. The
+     move changes hue ONLY: luminance and chroma are held to the decimal, so
+     every warning contrast reading is within 0.06 of what it was. CRM is
+     untouched. Gap 7.6° -> 20.7° dark, 6.2° -> 19.0° light.                  */
   --ds-ok:   #3FBF6E;
-  --ds-warn: #E0A63A;
+  --ds-warn: #C4B133;
   --ds-crit: #E2635C;
   --ds-info: #2DA7D4;
 
   --ds-ok-text:   #61CB88;
-  --ds-warn-text: #E2AD4A;
+  --ds-warn-text: #CAB634;
   --ds-crit-text: #EEA39F;
   --ds-info-text: #6CC2E1;
 
   --ds-ok-wash:   rgba(63, 191, 110, 0.14);
-  --ds-warn-wash: rgba(224, 166, 58, 0.14);
+  --ds-warn-wash: rgba(196, 177, 51, 0.14);
   --ds-crit-wash: rgba(226, 99, 92, 0.14);
   --ds-info-wash: rgba(45, 167, 212, 0.14);
 
   --ds-ok-soft:   rgba(63, 191, 110, 0.08);
-  --ds-warn-soft: rgba(224, 166, 58, 0.08);
+  --ds-warn-soft: rgba(196, 177, 51, 0.08);
   --ds-crit-soft: rgba(226, 99, 92, 0.08);
   --ds-info-soft: rgba(45, 167, 212, 0.08);
 
   --ds-ok-line:   rgba(63, 191, 110, 0.32);
-  --ds-warn-line: rgba(224, 166, 58, 0.32);
+  --ds-warn-line: rgba(196, 177, 51, 0.32);
   --ds-crit-line: rgba(226, 99, 92, 0.32);
   --ds-info-line: rgba(45, 167, 212, 0.32);
 
@@ -248,29 +255,29 @@
   /* --ds-ok moved from #137D54 (H 157°) to #15803D (H 142°): the light Finance
      hue #0E7355 sits at H 162°, so the old pair was only 5° apart. */
   --ds-ok:   #15803D;
-  --ds-warn: #8A6111;
+  --ds-warn: #76690F;
   --ds-crit: #B03830;
   --ds-info: #0E7297;
 
   /* On white a wash barely lifts the ground, so -text stays at or just below
      the base rather than lightening as it does in dark. */
   --ds-ok-text:   #137638;
-  --ds-warn-text: #886011;
+  --ds-warn-text: #75680F;
   --ds-crit-text: #B03830;
   --ds-info-text: #0E688A;
 
   --ds-ok-wash:   rgba(21, 128, 61, 0.10);
-  --ds-warn-wash: rgba(138, 97, 17, 0.10);
+  --ds-warn-wash: rgba(118, 105, 15, 0.10);
   --ds-crit-wash: rgba(176, 56, 48, 0.10);
   --ds-info-wash: rgba(14, 114, 151, 0.10);
 
   --ds-ok-soft:   rgba(21, 128, 61, 0.07);
-  --ds-warn-soft: rgba(138, 97, 17, 0.07);
+  --ds-warn-soft: rgba(118, 105, 15, 0.07);
   --ds-crit-soft: rgba(176, 56, 48, 0.07);
   --ds-info-soft: rgba(14, 114, 151, 0.07);
 
   --ds-ok-line:   rgba(21, 128, 61, 0.28);
-  --ds-warn-line: rgba(138, 97, 17, 0.28);
+  --ds-warn-line: rgba(118, 105, 15, 0.28);
   --ds-crit-line: rgba(176, 56, 48, 0.28);
   --ds-info-line: rgba(14, 114, 151, 0.28);
 
@@ -305,13 +312,13 @@
     --ds-whs-text:#1E5BAB; --ds-whs-wash-2:rgba(31,93,174,.16); --ds-whs-line:rgba(31,93,174,.28);
     --ds-on-crm:#FFFFFF; --ds-on-fin:#FFFFFF; --ds-on-whs:#FFFFFF;
     --ds-on-accent:#FFFFFF; --ds-on-brand:#FFFFFF; --ds-on-crit:#FFFFFF;
-    --ds-ok:#15803D; --ds-warn:#8A6111; --ds-crit:#B03830; --ds-info:#0E7297;
-    --ds-ok-text:#137638; --ds-warn-text:#886011; --ds-crit-text:#B03830; --ds-info-text:#0E688A;
-    --ds-ok-wash:rgba(21,128,61,.10); --ds-warn-wash:rgba(138,97,17,.10);
+    --ds-ok:#15803D; --ds-warn:#76690F; --ds-crit:#B03830; --ds-info:#0E7297;
+    --ds-ok-text:#137638; --ds-warn-text:#75680F; --ds-crit-text:#B03830; --ds-info-text:#0E688A;
+    --ds-ok-wash:rgba(21,128,61,.10); --ds-warn-wash:rgba(118,105,15,.10);
     --ds-crit-wash:rgba(176,56,48,.10); --ds-info-wash:rgba(14,114,151,.10);
-    --ds-ok-soft:rgba(21,128,61,.07); --ds-warn-soft:rgba(138,97,17,.07);
+    --ds-ok-soft:rgba(21,128,61,.07); --ds-warn-soft:rgba(118,105,15,.07);
     --ds-crit-soft:rgba(176,56,48,.07); --ds-info-soft:rgba(14,114,151,.07);
-    --ds-ok-line:rgba(21,128,61,.28); --ds-warn-line:rgba(138,97,17,.28);
+    --ds-ok-line:rgba(21,128,61,.28); --ds-warn-line:rgba(118,105,15,.28);
     --ds-crit-line:rgba(176,56,48,.28); --ds-info-line:rgba(14,114,151,.28);
     --ds-crit-wash-2:rgba(176,56,48,.18); --ds-crit-line-2:rgba(176,56,48,.45);
     --ds-neutral-text:#4C5866; --ds-neutral-wash:rgba(76,88,102,.10); --ds-neutral-line:rgba(76,88,102,.26);

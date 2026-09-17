@@ -160,9 +160,15 @@
 .pill-paid    { background: var(--ds-ok-wash);      color: var(--ds-ok-text);      border-color: var(--ds-ok-line); }
 .pill-unpaid  { background: var(--ds-crit-wash);    color: var(--ds-crit-text);    border-color: var(--ds-crit-line); }
 .pill-pending { background: var(--ds-warn-wash);    color: var(--ds-warn-text);    border-color: var(--ds-warn-line); }
-.pill-draft   { background: var(--ds-neutral-wash); color: var(--ds-neutral-text); border-color: var(--ds-neutral-line); }
+/* Draft and Closed are both neutral, but they are not the same state, so they
+   are not the same chip. The difference is carried by treatment, not hue:
+     DRAFT  — dashed outline, no fill: provisional, still being worked on.
+     CLOSED — solid fill, no edge: settled, filed away, historical.
+   Both keep --ds-neutral-text, because the only dimmer ink available
+   (--ds-ink-3) drops the filled chip to 3.18:1, under AA. */
+.pill-draft   { background: transparent; color: var(--ds-neutral-text); border-color: var(--ds-neutral-line); border-style: dashed; }
 .pill-open    { background: var(--ds-info-wash);    color: var(--ds-info-text);    border-color: var(--ds-info-line); }
-.pill-closed  { background: var(--ds-neutral-wash); color: var(--ds-neutral-text); border-color: var(--ds-neutral-line); }
+.pill-closed  { background: var(--ds-neutral-wash); color: var(--ds-neutral-text); border-color: transparent; }
 
 /* ── Tables ── */
 .portal-table {
