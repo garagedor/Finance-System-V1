@@ -15,14 +15,19 @@
 
 import type { Filter } from "mongodb";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "./finance-db";
-import { fetchDashboardData } from "./portal-data";
+import { fetchDashboardData, type DisputeGroup } from "./portal-data";
 import type { LedgerRecord, LedgerEntryRecord } from "@/types/finance-ledger";
+import type { PayoutRecord, DebtRecord } from "@/types/finance";
+import type { EquipmentOrder } from "@/types/equipment";
 
 const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 // The sections a report can contain, in a stable canonical order. The UI lets
 // the user toggle + reorder them; unknown keys are ignored by the renderers.
-export const SECTION_KEYS = ["pnl", "income", "expenses", "disputes", "byLocation", "ledgers"] as const;
+export const SECTION_KEYS = [
+  "pnl", "income", "expenses", "disputes", "disputesByParty",
+  "byLocation", "payouts", "debts", "equipment", "banking", "ledgers",
+] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
 
 export const SECTION_LABELS: Record<SectionKey, string> = {
@@ -30,7 +35,12 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   income: "Income breakdown",
   expenses: "Expenses breakdown",
   disputes: "Disputes & Refunds impact",
+  disputesByParty: "Disputes by provider / tech / AM",
   byLocation: "Revenue by location",
+  payouts: "Payouts",
+  debts: "Debts & balances",
+  equipment: "Equipment orders",
+  banking: "Cash & banking",
   ledgers: "Ledgers — balances to settle",
 };
 
@@ -96,7 +106,37 @@ export interface FinancialReportData {
     impact: number;
     refundLoss: number;
   };
+  disputesByParty: {
+    byProvider: DisputeGroup[];
+    byTechnician: DisputeGroup[];
+    byAreaManager: DisputeGroup[];
+  };
   byLocation: Array<{ area: string; total: number; count: number }>;
+  payouts: {
+    paid: number;
+    unpaid: number;
+    count: number;
+    rows: Array<{ recipient: string; role: string; net: number; status: string; periodEnd: string }>;
+  };
+  debts: {
+    openTotal: number;
+    count: number;
+    rows: Array<{ from: string; to: string; amount: number; reason: string; dueDate: string | null }>;
+  };
+  equipment: {
+    orderCount: number;
+    amCharge: number;      // Σ amChargeTotal (non-cancelled) — posted to AM ledgers
+    companyCost: number;
+    grossProfit: number;
+    rows: Array<{ order: string; areaManager: string; date: string; status: string; amCharge: number; grossProfit: number }>;
+  };
+  banking: {
+    balanceTotal: number;
+    inflow: number;
+    outflow: number;
+    net: number;
+    accounts: Array<{ label: string; bank: string | null; balance: number; isCredit: boolean }>;
+  };
   ledgers: {
     rows: LedgerBreakdown[];
     totalOwedToCompany: number; // Σ positive current balances
@@ -192,6 +232,35 @@ export async function buildFinancialReport(opts: FinancialReportOptions): Promis
   const totalCompanyOwes = round2(ledgerRows.reduce((s, r) => (r.current < 0 ? s + Math.abs(r.current) : s), 0));
   const netPosition = round2(totalOwedToCompany - totalCompanyOwes);
 
+  // 3) Extra whole-system sections — payouts, debts, equipment orders (all in
+  //    the period; debts are outstanding-as-of-now). Banking + dispute-by-party
+  //    come straight off the dashboard aggregation already fetched above.
+  const payoutColl = coll<PayoutRecord>(FINANCE_COLLECTIONS.payout);
+  const debtColl = coll<DebtRecord>(FINANCE_COLLECTIONS.debt);
+  const eqColl = coll<EquipmentOrder>(FINANCE_COLLECTIONS.equipmentOrder);
+  const [payoutStatusAgg, payoutList, debtList, eqList] = await Promise.all([
+    payoutColl.aggregate<{ _id: string; total: number; count: number }>([
+      { $match: { period_end: { $gte: from, $lte: to } } },
+      { $group: { _id: "$status", total: { $sum: "$net" }, count: { $sum: 1 } } },
+    ]).toArray(),
+    payoutColl.find({ period_end: { $gte: from, $lte: to } }).sort({ net: -1 }).limit(30).toArray(),
+    debtColl.find({ status: "open" }).sort({ amount: -1 }).limit(60).toArray(),
+    eqColl.find({ orderDate: { $gte: from, $lte: to } }).sort({ orderDate: -1 }).limit(60).toArray(),
+  ]);
+
+  const payoutPaid = round2(payoutStatusAgg.filter((r) => r._id === "paid").reduce((s, r) => s + r.total, 0));
+  const payoutUnpaid = round2(payoutStatusAgg.filter((r) => r._id === "unpaid").reduce((s, r) => s + r.total, 0));
+  const payoutCount = payoutStatusAgg.reduce((s, r) => s + r.count, 0);
+
+  const debtOpenTotal = round2(debtList.reduce((s, d) => s + (Number(d.amount) || 0), 0));
+
+  const eqActive = eqList.filter((o) => o.status !== "Cancelled");
+  const eqAmCharge = round2(eqActive.reduce((s, o) => s + (Number(o.totals?.amChargeTotal) || 0), 0));
+  const eqCompanyCost = round2(eqActive.reduce((s, o) => s + (Number(o.totals?.companyCostTotal) || 0), 0));
+  const eqGrossProfit = round2(eqActive.reduce((s, o) => s + (Number(o.totals?.grossProfit) || 0), 0));
+
+  const bankNet = round2(dash.bankInflow + dash.bankOutflow); // outflow is negative
+
   return {
     meta: {
       from,
@@ -234,7 +303,61 @@ export async function buildFinancialReport(opts: FinancialReportOptions): Promis
       impact: round2(dash.disputeImpact),
       refundLoss: round2(dash.refundLoss),
     },
+    disputesByParty: {
+      byProvider: dash.disputesByProvider,
+      byTechnician: dash.disputesByTechnician,
+      byAreaManager: dash.disputesByAreaManager,
+    },
     byLocation: dash.topAreas.map((a) => ({ area: a.area, total: round2(a.total), count: a.count })),
+    payouts: {
+      paid: payoutPaid,
+      unpaid: payoutUnpaid,
+      count: payoutCount,
+      rows: payoutList.map((p) => ({
+        recipient: p.recipient_name || "—",
+        role: p.recipient_role || "",
+        net: round2(p.net),
+        status: p.status,
+        periodEnd: p.period_end,
+      })),
+    },
+    debts: {
+      openTotal: debtOpenTotal,
+      count: debtList.length,
+      rows: debtList.map((d) => ({
+        from: d.from_party_name || "—",
+        to: d.to_party_name || "—",
+        amount: round2(d.amount),
+        reason: d.reason || "",
+        dueDate: d.due_date ?? null,
+      })),
+    },
+    equipment: {
+      orderCount: eqActive.length,
+      amCharge: eqAmCharge,
+      companyCost: eqCompanyCost,
+      grossProfit: eqGrossProfit,
+      rows: eqList.map((o) => ({
+        order: o.orderNumber,
+        areaManager: o.areaManagerName || "—",
+        date: o.orderDate,
+        status: o.status,
+        amCharge: round2(o.totals?.amChargeTotal ?? 0),
+        grossProfit: round2(o.totals?.grossProfit ?? 0),
+      })),
+    },
+    banking: {
+      balanceTotal: round2(dash.bankBalanceTotal),
+      inflow: round2(dash.bankInflow),
+      outflow: round2(dash.bankOutflow),
+      net: bankNet,
+      accounts: dash.bankAccounts.map((a) => ({
+        label: a.label,
+        bank: a.bank_name,
+        balance: round2(a._balance),
+        isCredit: a._is_credit,
+      })),
+    },
     ledgers: { rows: ledgerRows, totalOwedToCompany, totalCompanyOwes, netPosition },
   };
 }

@@ -13,7 +13,7 @@ export default function FinanceReportPage() {
       <PageHeader
         kicker="Money"
         title="Financial Report"
-        subtitle="Build a full financial picture for your accountant — filter the period and scope, choose which sections appear, then export a branded PDF."
+        subtitle="Build a report from every part of the system — pick a period, tick as many sections as you want (or one-click the full system report), then export one branded PDF for your accountant."
       />
       <FinanceReportBuilder />
     </div>

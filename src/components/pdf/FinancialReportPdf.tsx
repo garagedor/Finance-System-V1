@@ -241,12 +241,144 @@ function LedgersSection({ d }: { d: FinancialReportData }) {
   );
 }
 
+function DisputesByPartySection({ d }: { d: FinancialReportData }) {
+  const p = d.disputesByParty;
+  const table = (title: string, rows: FinancialReportData["disputesByParty"]["byProvider"]) => (
+    <View style={{ marginBottom: 8 }}>
+      <Text style={{ fontSize: 8.5, color: palette.slate300, fontFamily: "Helvetica-Bold", marginBottom: 4 }}>{title}</Text>
+      <DataTable
+        cols={[
+          { key: "name", label: "Name", flex: 2.6 },
+          { key: "count", label: "Count", flex: 1, align: "right", kind: "int" },
+          { key: "disputed", label: "Disputed", flex: 1.4, align: "right", kind: "currency" },
+          { key: "share", label: "Charged share", flex: 1.6, align: "right", kind: "currency" },
+        ]}
+        rows={rows.map((g) => ({ name: g.name, count: g.count, disputed: g.disputed, share: g.share }))}
+      />
+    </View>
+  );
+  return (
+    <View>
+      <SectionHeader kicker="Chargebacks" title="Disputes by provider / tech / AM" />
+      {table("By provider", p.byProvider)}
+      {table("By technician", p.byTechnician)}
+      {table("By area manager", p.byAreaManager)}
+    </View>
+  );
+}
+
+function PayoutsSection({ d }: { d: FinancialReportData }) {
+  const p = d.payouts;
+  return (
+    <View>
+      <SectionHeader kicker="Money out" title="Payouts" />
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+        <KpiCard label="Paid" value={fmtCurrency(p.paid)} accent="emerald" />
+        <KpiCard label="Unpaid" value={fmtCurrency(p.unpaid)} accent="amber" />
+        <KpiCard label="Payouts" value={fmtInt(p.count)} accent="indigo" />
+      </View>
+      <DataTable
+        cols={[
+          { key: "recipient", label: "Recipient", flex: 2.6 },
+          { key: "role", label: "Role", flex: 1.6 },
+          { key: "periodEnd", label: "Period end", flex: 1.6 },
+          { key: "status", label: "Status", flex: 1.2 },
+          { key: "net", label: "Net", flex: 1.4, align: "right", kind: "currency" },
+        ]}
+        rows={p.rows.map((r) => ({ recipient: r.recipient, role: r.role || "—", periodEnd: fmtDate(r.periodEnd), status: r.status, net: r.net }))}
+        totals={{ recipient: "Total", net: p.paid + p.unpaid }}
+      />
+    </View>
+  );
+}
+
+function DebtsSection({ d }: { d: FinancialReportData }) {
+  const p = d.debts;
+  return (
+    <View>
+      <SectionHeader kicker="Outstanding" title="Debts & balances (open)" />
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+        <KpiCard label="Open debts" value={fmtCurrency(p.openTotal)} accent="red" />
+        <KpiCard label="Count" value={fmtInt(p.count)} accent="indigo" />
+      </View>
+      <DataTable
+        cols={[
+          { key: "from", label: "Owes", flex: 2 },
+          { key: "to", label: "Owed to", flex: 2 },
+          { key: "reason", label: "Reason", flex: 2.4 },
+          { key: "dueDate", label: "Due", flex: 1.3 },
+          { key: "amount", label: "Amount", flex: 1.4, align: "right", kind: "currency" },
+        ]}
+        rows={p.rows.map((r) => ({ from: r.from, to: r.to, reason: r.reason || "—", dueDate: r.dueDate ? fmtDate(r.dueDate) : "—", amount: r.amount }))}
+        totals={{ from: "Total open", amount: p.openTotal }}
+      />
+    </View>
+  );
+}
+
+function EquipmentSection({ d }: { d: FinancialReportData }) {
+  const p = d.equipment;
+  return (
+    <View>
+      <SectionHeader kicker="Inventory" title="Equipment orders" />
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+        <KpiCard label="AM charged" value={fmtCurrency(p.amCharge)} accent="indigo" />
+        <KpiCard label="Company cost" value={fmtCurrency(p.companyCost)} accent="amber" />
+        <KpiCard label="Gross profit" value={fmtCurrency(p.grossProfit)} accent="emerald" tone={p.grossProfit >= 0 ? "pos" : "neg"} />
+        <KpiCard label="Orders" value={fmtInt(p.orderCount)} accent="cyan" />
+      </View>
+      <DataTable
+        cols={[
+          { key: "order", label: "Order", flex: 1.6 },
+          { key: "areaManager", label: "Area manager", flex: 2.2 },
+          { key: "date", label: "Date", flex: 1.3 },
+          { key: "status", label: "Status", flex: 1.3 },
+          { key: "amCharge", label: "AM charge", flex: 1.4, align: "right", kind: "currency" },
+          { key: "grossProfit", label: "Gross profit", flex: 1.4, align: "right", kind: "currency", tone: true },
+        ]}
+        rows={p.rows.map((r) => ({ order: r.order, areaManager: r.areaManager, date: fmtDate(r.date), status: r.status, amCharge: r.amCharge, grossProfit: r.grossProfit }))}
+        totals={{ order: "Total", amCharge: p.amCharge, grossProfit: p.grossProfit }}
+      />
+    </View>
+  );
+}
+
+function BankingSection({ d }: { d: FinancialReportData }) {
+  const p = d.banking;
+  return (
+    <View>
+      <SectionHeader kicker="Liquidity" title="Cash & banking" />
+      <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+        <KpiCard label="Total balance" value={fmtCurrency(p.balanceTotal)} accent="cyan" tone={p.balanceTotal >= 0 ? "pos" : "neg"} />
+        <KpiCard label="Money in (period)" value={fmtCurrency(p.inflow)} accent="emerald" tone="pos" />
+        <KpiCard label="Money out (period)" value={fmtCurrency(p.outflow)} accent="red" tone="neg" />
+        <KpiCard label="Net flow" value={fmtCurrency(p.net)} accent="indigo" tone={p.net >= 0 ? "pos" : "neg"} />
+      </View>
+      <DataTable
+        cols={[
+          { key: "label", label: "Account", flex: 2.6 },
+          { key: "bank", label: "Bank", flex: 2 },
+          { key: "kind", label: "Type", flex: 1.2 },
+          { key: "balance", label: "Balance", flex: 1.4, align: "right", kind: "currency", tone: true },
+        ]}
+        rows={p.accounts.map((a) => ({ label: a.label, bank: a.bank || "—", kind: a.isCredit ? "Credit" : "Cash", balance: a.balance }))}
+        totals={{ label: "Total", balance: p.balanceTotal }}
+      />
+    </View>
+  );
+}
+
 const RENDERERS: Record<SectionKey, (p: { d: FinancialReportData }) => React.ReactElement> = {
   pnl: PnlSection,
   income: IncomeSection,
   expenses: ExpensesSection,
   disputes: DisputesSection,
+  disputesByParty: DisputesByPartySection,
   byLocation: ByLocationSection,
+  payouts: PayoutsSection,
+  debts: DebtsSection,
+  equipment: EquipmentSection,
+  banking: BankingSection,
   ledgers: LedgersSection,
 };
 

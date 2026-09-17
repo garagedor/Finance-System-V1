@@ -15,7 +15,12 @@ const SECTIONS: { key: SectionKey; label: string; hint: string }[] = [
   { key: "income", label: "Income breakdown", hint: "Revenue by source (jobs + other income)" },
   { key: "expenses", label: "Expenses breakdown", hint: "Spend by category" },
   { key: "disputes", label: "Disputes & Refunds impact", hint: "Company-slice loss/recovery for the period" },
+  { key: "disputesByParty", label: "Disputes by provider / tech / AM", hint: "Chargeback share per party" },
   { key: "byLocation", label: "Revenue by location", hint: "Collected per location" },
+  { key: "payouts", label: "Payouts", hint: "Paid vs unpaid payouts + list" },
+  { key: "debts", label: "Debts & balances", hint: "Open debts owed to / by the company" },
+  { key: "equipment", label: "Equipment orders", hint: "AM-charged orders + gross profit" },
+  { key: "banking", label: "Cash & banking", hint: "Account balances + money in/out" },
   { key: "ledgers", label: "Ledgers — balances to settle", hint: "Per-ledger opening → closing + current balance" },
 ];
 
@@ -89,6 +94,18 @@ export default function FinanceReportBuilder() {
     return next;
   });
   const enabledKeys = order.filter((o) => o.enabled).map((o) => o.key);
+  const allOn = order.every((o) => o.enabled);
+  const setAllSections = (enabled: boolean) => setOrder((o) => o.map((s) => ({ ...s, enabled })));
+
+  // One-click "everything": canonical order, every section on, scope cleared
+  // (all ledgers), period = year-to-date. The preview auto-refreshes.
+  function fullSystemReport() {
+    setOrder(SECTIONS.map((s) => ({ key: s.key, enabled: true })));
+    setRoles([]); setLocs([]); setHolders([]);
+    const n = new Date();
+    setFrom(fmt(new Date(n.getFullYear(), 0, 1)));
+    setTo(fmt(n));
+  }
 
   function preset(kind: "thisMonth" | "lastMonth" | "quarter" | "ytd") {
     const n = new Date();
@@ -111,6 +128,10 @@ export default function FinanceReportBuilder() {
     <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 340px) 1fr", gap: 18, alignItems: "start" }}>
       {/* ── Left: configuration ── */}
       <div style={{ display: "flex", flexDirection: "column", gap: 14, position: "sticky", top: 12 }}>
+        <button className="portal-btn portal-btn-primary" style={{ width: "100%", padding: "10px 12px", fontSize: 14 }} onClick={fullSystemReport}>
+          ⚡ Full System Report — everything, YTD
+        </button>
+
         <div className="portal-card" style={{ padding: 14 }}>
           <div className="portal-card-head-title" style={{ marginBottom: 8 }}>Period</div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -143,7 +164,12 @@ export default function FinanceReportBuilder() {
           <label style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}><span className="portal-label">Prepared for (optional)</span>
             <input className="portal-input" value={preparedFor} onChange={(e) => setPreparedFor(e.target.value)} placeholder="e.g. Jane Smith, CPA" /></label>
 
-          <div className="portal-label" style={{ marginBottom: 6 }}>Sections — toggle & reorder</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+            <span className="portal-label">Sections — toggle & reorder</span>
+            <button type="button" className="portal-btn portal-btn-ghost" style={{ padding: "2px 8px", fontSize: 11 }} onClick={() => setAllSections(!allOn)}>
+              {allOn ? "Clear all" : "Select all"}
+            </button>
+          </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {order.map((o, i) => {
               const meta = SECTIONS.find((s) => s.key === o.key)!;
@@ -298,6 +324,86 @@ function Section({ sk, d }: { sk: SectionKey; d: FinancialReportData }) {
             {d.byLocation.length === 0 && <tr><td colSpan={3} className="muted" style={{ textAlign: "center" }}>No jobs in range.</td></tr>}
           </tbody>
           {d.byLocation.length > 0 && <tfoot><tr><td style={{ fontWeight: 700 }}>Total</td><td className="right" style={{ fontWeight: 700 }}>{count}</td><td className="right money" style={{ fontWeight: 700 }}>{money(total)}</td></tr></tfoot>}
+        </table>
+      </Card>
+    );
+  }
+  if (sk === "disputesByParty") {
+    const p = d.disputesByParty;
+    const tbl = (title: string, rows: FinancialReportData["disputesByParty"]["byProvider"]) => (
+      <div style={{ marginBottom: 12 }}>
+        <div className="portal-label" style={{ marginBottom: 4 }}>{title}</div>
+        <table className="portal-table">
+          <thead><tr><th>Name</th><th className="right">Count</th><th className="right">Disputed</th><th className="right">Charged share</th></tr></thead>
+          <tbody>
+            {rows.map((g) => <tr key={g.name}><td>{g.name}</td><td className="right">{g.count}</td><td className="right money">{money(g.disputed)}</td><td className="right money">{money(g.share)}</td></tr>)}
+            {rows.length === 0 && <tr><td colSpan={4} className="muted" style={{ textAlign: "center" }}>None in range.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    );
+    return <Card title="Disputes by provider / tech / AM">{tbl("By provider", p.byProvider)}{tbl("By technician", p.byTechnician)}{tbl("By area manager", p.byAreaManager)}</Card>;
+  }
+  if (sk === "payouts") {
+    const p = d.payouts;
+    return (
+      <Card title="Payouts">
+        <KpiRow items={[{ label: "Paid", value: p.paid }, { label: "Unpaid", value: p.unpaid }]} />
+        <table className="portal-table" style={{ marginTop: 12 }}>
+          <thead><tr><th>Recipient</th><th>Role</th><th>Period end</th><th>Status</th><th className="right">Net</th></tr></thead>
+          <tbody>
+            {p.rows.map((r, i) => <tr key={i}><td>{r.recipient}</td><td className="small muted">{r.role || "—"}</td><td className="small mono">{r.periodEnd}</td><td className="small">{r.status}</td><td className="right money">{money(r.net)}</td></tr>)}
+            {p.rows.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: "center" }}>No payouts in range.</td></tr>}
+          </tbody>
+          {p.rows.length > 0 && <tfoot><tr><td colSpan={4} style={{ fontWeight: 700 }}>Total</td><td className="right money" style={{ fontWeight: 700 }}>{money(p.paid + p.unpaid)}</td></tr></tfoot>}
+        </table>
+      </Card>
+    );
+  }
+  if (sk === "debts") {
+    const p = d.debts;
+    return (
+      <Card title="Debts & balances (open)">
+        <KpiRow items={[{ label: "Open debts", value: p.openTotal, tone: true }]} />
+        <table className="portal-table" style={{ marginTop: 12 }}>
+          <thead><tr><th>Owes</th><th>Owed to</th><th>Reason</th><th>Due</th><th className="right">Amount</th></tr></thead>
+          <tbody>
+            {p.rows.map((r, i) => <tr key={i}><td>{r.from}</td><td>{r.to}</td><td className="small muted">{r.reason || "—"}</td><td className="small mono">{r.dueDate || "—"}</td><td className="right money">{money(r.amount)}</td></tr>)}
+            {p.rows.length === 0 && <tr><td colSpan={5} className="muted" style={{ textAlign: "center" }}>No open debts.</td></tr>}
+          </tbody>
+          {p.rows.length > 0 && <tfoot><tr><td colSpan={4} style={{ fontWeight: 700 }}>Total open</td><td className="right money" style={{ fontWeight: 700 }}>{money(p.openTotal)}</td></tr></tfoot>}
+        </table>
+      </Card>
+    );
+  }
+  if (sk === "equipment") {
+    const p = d.equipment;
+    return (
+      <Card title="Equipment orders">
+        <KpiRow items={[{ label: "AM charged", value: p.amCharge }, { label: "Company cost", value: p.companyCost }, { label: "Gross profit", value: p.grossProfit, tone: true }]} />
+        <table className="portal-table" style={{ marginTop: 12 }}>
+          <thead><tr><th>Order</th><th>Area manager</th><th>Date</th><th>Status</th><th className="right">AM charge</th><th className="right">Gross profit</th></tr></thead>
+          <tbody>
+            {p.rows.map((r, i) => <tr key={i}><td className="small mono">{r.order}</td><td>{r.areaManager}</td><td className="small mono">{r.date}</td><td className="small">{r.status}</td><td className="right money">{money(r.amCharge)}</td><td className="right money">{money(r.grossProfit)}</td></tr>)}
+            {p.rows.length === 0 && <tr><td colSpan={6} className="muted" style={{ textAlign: "center" }}>No orders in range.</td></tr>}
+          </tbody>
+          {p.rows.length > 0 && <tfoot><tr><td colSpan={4} style={{ fontWeight: 700 }}>Total</td><td className="right money" style={{ fontWeight: 700 }}>{money(p.amCharge)}</td><td className="right money" style={{ fontWeight: 700 }}>{money(p.grossProfit)}</td></tr></tfoot>}
+        </table>
+      </Card>
+    );
+  }
+  if (sk === "banking") {
+    const p = d.banking;
+    return (
+      <Card title="Cash & banking">
+        <KpiRow items={[{ label: "Total balance", value: p.balanceTotal, tone: true }, { label: "Money in", value: p.inflow, tone: true }, { label: "Money out", value: p.outflow, tone: true }, { label: "Net flow", value: p.net, tone: true }]} />
+        <table className="portal-table" style={{ marginTop: 12 }}>
+          <thead><tr><th>Account</th><th>Bank</th><th>Type</th><th className="right">Balance</th></tr></thead>
+          <tbody>
+            {p.accounts.map((a, i) => <tr key={i}><td>{a.label}</td><td className="small muted">{a.bank || "—"}</td><td className="small">{a.isCredit ? "Credit" : "Cash"}</td><td className="right money">{money(a.balance)}</td></tr>)}
+            {p.accounts.length === 0 && <tr><td colSpan={4} className="muted" style={{ textAlign: "center" }}>No accounts synced.</td></tr>}
+          </tbody>
+          {p.accounts.length > 0 && <tfoot><tr><td colSpan={3} style={{ fontWeight: 700 }}>Total</td><td className="right money" style={{ fontWeight: 700 }}>{money(p.balanceTotal)}</td></tr></tfoot>}
         </table>
       </Card>
     );
