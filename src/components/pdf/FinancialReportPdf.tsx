@@ -491,7 +491,7 @@ export function FinancialReportPdf({
   const ordered = sections.filter((k) => RENDERERS[k]);
   return (
     <Document title={title} author="317 Garage Door">
-      <Page size="A4" style={s.page}>
+      <Page size="A4" orientation="landscape" style={s.page}>
         <ReportHeader title={title} from={data.meta.from} to={data.meta.to} preparedFor={preparedFor ?? null} logoSrc={logoSrc} />
         <View style={s.body}>
           {ordered.map((key, i) => {
