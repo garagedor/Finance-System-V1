@@ -28,7 +28,7 @@ export async function GET() {
 
   const res = NextResponse.json({
     ok: pingOk,
-    mongo: mongoHealth(), // { connected, connectedAt, poolMax, db, lastError } — no secrets
+    mongo: mongoHealth(), // { connected, connectedAt, poolMax, db, appName, uriConfigured, lastError } — no secrets
     lastConnectError: getDbConnectError(),
     runtime: {
       node: process.version,
