@@ -40,7 +40,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  color: #818cf8;
+  color: var(--ds-crm-2);
 }
 
 .balance-page .bp-title {
@@ -193,19 +193,19 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  color: #818cf8;
+  color: var(--ds-crm-2);
 }
 
 .balance-page .bp-pill {
   display: inline-flex;
   align-items: center;
   padding: 3px 10px;
-  background: rgba(99, 102, 241, 0.1);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: var(--ds-crm-wash);
+  border: 1px solid var(--ds-crm-line);
   border-radius: 999px;
   font-size: 11px;
   font-weight: 600;
-  color: #a5b4fc;
+  color: var(--ds-crm-text);
 }
 
 /* ── Mid Row: pie + snapshot ── */
@@ -314,9 +314,9 @@
 }
 
 .balance-page .primary {
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
-  color: white;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+  background: var(--ds-crm);
+  color: var(--ds-on-crm);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--ds-crm) 35%, transparent);
 }
 
 .balance-page .muted { color: var(--ds-ink-3); }
@@ -448,16 +448,31 @@
 
 .balance-page .balance-table .bp-group { color: var(--ds-ink-3); }
 .balance-page .balance-table .bp-group-meta    { color: var(--ds-ink-2); }
-.balance-page .balance-table .bp-group-cost    { color: #c4b5fd; background: linear-gradient(180deg, #0d1526, rgba(139,92,246,0.04)) !important; }
-.balance-page .balance-table .bp-group-payout  { color: #22d3ee; background: linear-gradient(180deg, #0d1526, rgba(6,182,212,0.04)) !important; }
-.balance-page .balance-table .bp-group-balance { color: #34d399; background: linear-gradient(180deg, #0d1526, rgba(16,185,129,0.04)) !important; }
+/* The three money groups were told apart by hue — violet, cyan, green — which
+   spent three colours on a distinction that is not a state. They now read as
+   groups through structure instead, leaving colour for identity and meaning:
+     · a raised neutral band sets them apart from the context groups
+     · an INSET rule marks where each group begins, so nothing reflows
+     · ink weight ranks them, and Balance — the bottom line — takes full ink
+       and wider tracking so the eye lands there first
+   The headings already read "Costs & Profit", "Tech Payout" and "Balance", so
+   the hue was never carrying the meaning by itself. */
+.balance-page .balance-table .bp-group-cost,
+.balance-page .balance-table .bp-group-payout,
+.balance-page .balance-table .bp-group-balance {
+  background: var(--ds-surface-2) !important;
+  box-shadow: inset 1px 0 0 0 var(--ds-line-strong);
+}
+.balance-page .balance-table .bp-group-cost    { color: var(--ds-ink-2); }
+.balance-page .balance-table .bp-group-payout  { color: var(--ds-ink-2); }
+.balance-page .balance-table .bp-group-balance { color: var(--ds-ink); letter-spacing: 0.16em; }
 
 .balance-page .balance-table tbody tr {
   transition: background-color 0.15s ease;
 }
 
 .balance-page .balance-table tbody tr:hover td {
-  background: rgba(99, 102, 241, 0.05);
+  background: var(--ds-crm-wash);
 }
 
 .balance-page .balance-table tfoot tr {
@@ -471,7 +486,7 @@
   color: var(--ds-ink);
   font-weight: 700;
   border-top: none;
-  box-shadow: inset 0 2px 0 0 rgba(99, 102, 241, 0.5);
+  box-shadow: inset 0 2px 0 0 color-mix(in srgb, var(--ds-crm) 50%, transparent);
 }
 
 .balance-page .balance-table .totals-row td {
@@ -599,16 +614,16 @@
   background: var(--ds-surface-2);
 }
 .bp-cv-tab--active {
-  background: linear-gradient(180deg, rgba(99, 102, 241, 0.95), rgba(79, 70, 229, 0.95));
-  color: #ffffff;
-  box-shadow: 0 0 0 1px rgba(165, 180, 252, 0.4), 0 6px 18px rgba(99, 102, 241, 0.3);
+  background: var(--ds-crm);
+  color: var(--ds-on-crm);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ds-crm-2) 40%, transparent), 0 6px 18px color-mix(in srgb, var(--ds-crm) 30%, transparent);
 }
 .bp-cv-tab--disabled {
   color: var(--ds-ink-dim);
   cursor: default;
 }
 .bp-cv-tab--disabled.bp-cv-tab--active {
-  color: #ffffff;
+  color: var(--ds-on-crm);
 }
 
 .bp-cv-cards {
@@ -645,7 +660,7 @@
 .bp-cv-show-all {
   font-size: 11px;
   font-weight: 500;
-  color: #a5b4fc;
+  color: var(--ds-crm);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -653,7 +668,7 @@
   transition: color 0.15s ease;
 }
 .bp-cv-show-all:hover {
-  color: #e0e7ff;
+  color: var(--ds-crm-2);
 }
 .bp-cv-card-divider {
   height: 1px;
@@ -686,13 +701,13 @@
   color: var(--ds-ink-2);
 }
 .bp-cv-pill--on {
-  background: rgba(99, 102, 241, 0.14);
-  border-color: rgba(99, 102, 241, 0.45);
-  color: #c7d2fe;
+  background: var(--ds-crm-wash-2);
+  border-color: var(--ds-crm-line);
+  color: var(--ds-crm-text);
 }
 .bp-cv-pill--on:hover {
-  border-color: rgba(165, 180, 252, 0.6);
-  color: #e0e7ff;
+  border-color: var(--ds-crm);
+  color: var(--ds-ink);
 }
 .bp-cv-pill-check {
   font-size: 10px;
@@ -716,7 +731,7 @@
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 .bp-cv-reset:hover {
-  border-color: rgba(165, 180, 252, 0.5);
+  border-color: var(--ds-crm-line);
   color: var(--ds-ink);
 }
 
@@ -729,16 +744,16 @@
   background: var(--ds-surface-2);
 }
 .pmr-tech-row--selected {
-  background: rgba(99, 102, 241, 0.10);
-  box-shadow: inset 3px 0 0 #6366f1;
+  background: var(--ds-crm-wash);
+  box-shadow: inset 3px 0 0 var(--ds-crm);
 }
 .pmr-tech-row--selected:hover {
-  background: rgba(99, 102, 241, 0.14);
+  background: var(--ds-crm-wash-2);
 }
 .pmr-row-arrow {
   display: inline-block;
   margin-right: 6px;
-  color: #a5b4fc;
+  color: var(--ds-crm);
   font-size: 10px;
 }
 .pmr-row-action {
@@ -747,7 +762,7 @@
   text-align: right;
 }
 .pmr-tech-row--selected .pmr-row-action {
-  color: #c7d2fe;
+  color: var(--ds-crm-text);
 }
 
 .pmr-clear-btn {
@@ -761,7 +776,7 @@
   transition: border-color 0.15s ease, color 0.15s ease;
 }
 .pmr-clear-btn:hover {
-  border-color: rgba(165, 180, 252, 0.5);
+  border-color: var(--ds-crm-line);
   color: var(--ds-ink);
 }
 
@@ -872,18 +887,18 @@
   gap: 6px;
   padding: 8px 14px;
   border-radius: 10px;
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  background: rgba(99, 102, 241, 0.10);
-  color: #c7d2fe;
+  border: 1px solid var(--ds-crm-line);
+  background: var(--ds-crm-wash);
+  color: var(--ds-crm-text);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 .bp-pdf-btn:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.18);
-  border-color: rgba(99, 102, 241, 0.55);
-  color: #e0e7ff;
+  background: var(--ds-crm-wash-2);
+  border-color: var(--ds-crm);
+  color: var(--ds-ink);
 }
 .bp-pdf-btn:disabled {
   opacity: 0.4;
