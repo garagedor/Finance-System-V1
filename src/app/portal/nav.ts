@@ -116,6 +116,15 @@ export const FINANCE_NAV: FinanceModule[] = [
     group: "money",
     requires: "finance:reports:view",
   },
+  {
+    href: "/portal/finance-report/custom",
+    label: "Custom Report",
+    section: "Money",
+    title: "Custom Report",
+    icon: FiFileText,
+    group: "money",
+    requires: "finance:reports:view",
+  },
   // People
   {
     href: "/portal/providers",
