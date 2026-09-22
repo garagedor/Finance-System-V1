@@ -13,19 +13,20 @@ export default function AddCrmReportModal({
 }: {
   ledgerId: string;
   defaultSubject: string;
-  defaultMode: "tech" | "location";
+  defaultMode: "tech" | "location" | "provider";
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [mode, setMode] = useState<"tech" | "location">(defaultMode);
+  const [mode, setMode] = useState<"tech" | "location" | "provider">(defaultMode);
   const [subjects, setSubjects] = useState<string[]>(defaultSubject ? [defaultSubject] : []);
   const [subjSearch, setSubjSearch] = useState("");
   const [start, setStart] = useState(firstOfMonth());
   const [end, setEnd] = useState(today());
   const [includeTips, setIncludeTips] = useState(false);
   const [techs, setTechs] = useState<Array<{ name: string; location: string | null }>>([]);
+  const [providers, setProviders] = useState<string[]>([]);
 
   // Pull the technician list (with locations) when the modal opens — used to
   // suggest technicians and to roll up "all techs in a location".
@@ -36,6 +37,14 @@ export default function AddCrmReportModal({
       .then((r) => r.json())
       .then((j) => { if (!cancelled) setTechs(Array.isArray(j.rows) ? j.rows : []); })
       .catch(() => { if (!cancelled) setTechs([]); });
+    fetch("/api/providers?pageSize=2000")
+      .then((r) => r.json())
+      .then((j) => {
+        if (cancelled) return;
+        const rows: Array<{ _id?: unknown }> = Array.isArray(j.rows) ? j.rows : [];
+        setProviders([...new Set(rows.map((r) => String(r._id ?? "")).filter(Boolean))].sort());
+      })
+      .catch(() => { if (!cancelled) setProviders([]); });
     return () => { cancelled = true; };
   }, [open]);
 
@@ -52,12 +61,14 @@ export default function AddCrmReportModal({
   const options = useMemo(() => {
     const list = mode === "tech"
       ? techs.map((t) => ({ value: t.name, label: t.location ? `${t.name} · ${t.location}` : t.name }))
+      : mode === "provider"
+      ? providers.map((p) => ({ value: p, label: p }))
       : locations.map((l) => ({ value: l.name, label: `${l.name} (${l.count} techs)` }));
     const s = subjSearch.trim().toLowerCase();
     const filtered = s ? list.filter((o) => o.label.toLowerCase().includes(s)) : list;
     const seen = new Set<string>();
     return filtered.filter((o) => o.value && !seen.has(o.value) && seen.add(o.value));
-  }, [mode, techs, locations, subjSearch]);
+  }, [mode, techs, locations, providers, subjSearch]);
   const toggleSubject = (v: string) => setSubjects((prev) => prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]);
 
   const onSubmit = async (e: FormEvent) => {
@@ -124,19 +135,20 @@ export default function AddCrmReportModal({
               <div style={{ marginBottom: 12 }}>
                 <label className="portal-label">Report type *</label>
                 <select className="portal-select" value={mode} style={{ maxWidth: 220 }}
-                  onChange={(e) => { setMode(e.target.value as "tech" | "location"); setSubjects([]); setSubjSearch(""); }} required>
+                  onChange={(e) => { setMode(e.target.value as "tech" | "location" | "provider"); setSubjects([]); setSubjSearch(""); }} required>
                   <option value="tech">Tech Report</option>
                   <option value="location">Location Report</option>
+                  <option value="provider">Provider Report</option>
                 </select>
               </div>
 
               <div style={{ marginBottom: 14 }}>
                 <label className="portal-label">
-                  {mode === "tech" ? "Technicians *" : "Locations / Areas *"}
+                  {mode === "tech" ? "Technicians *" : mode === "provider" ? "Providers *" : "Locations / Areas *"}
                   {subjects.length > 0 && <span className="muted small"> · {subjects.length} selected</span>}
                 </label>
                 <input className="portal-input" value={subjSearch} onChange={(e) => setSubjSearch(e.target.value)}
-                  placeholder={mode === "tech" ? "Search technicians…" : "Search locations…"} style={{ marginBottom: 6 }} />
+                  placeholder={mode === "tech" ? "Search technicians…" : mode === "provider" ? "Search providers…" : "Search locations…"} style={{ marginBottom: 6 }} />
                 {subjects.length > 0 && (
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 6 }}>
                     {subjects.map((s) => (
@@ -147,7 +159,7 @@ export default function AddCrmReportModal({
                 )}
                 <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8 }}>
                   {options.length === 0 ? (
-                    <div className="muted small" style={{ padding: 10, textAlign: "center" }}>{techs.length === 0 ? "Loading…" : "No matches."}</div>
+                    <div className="muted small" style={{ padding: 10, textAlign: "center" }}>{(mode === "provider" ? providers.length === 0 : techs.length === 0) ? "Loading…" : "No matches."}</div>
                   ) : options.map((o) => (
                     <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
                       <input type="checkbox" checked={subjects.includes(o.value)} onChange={() => toggleSubject(o.value)} style={{ width: 15, height: 15 }} />
@@ -173,12 +185,19 @@ export default function AddCrmReportModal({
                 </div>
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 13, color: "#94a3b8" }}>
-                <input type="checkbox" checked={includeTips}
-                  onChange={(e) => setIncludeTips(e.target.checked)}
-                  style={{ width: 16, height: 16 }} />
-                Post <strong>Balance + Tips</strong> instead of Balance (folds Net Tip into the entry)
-              </label>
+              {mode !== "provider" && (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 13, color: "#94a3b8" }}>
+                  <input type="checkbox" checked={includeTips}
+                    onChange={(e) => setIncludeTips(e.target.checked)}
+                    style={{ width: 16, height: 16 }} />
+                  Post <strong>Balance + Tips</strong> instead of Balance (folds Net Tip into the entry)
+                </label>
+              )}
+              {mode === "provider" && (
+                <div className="muted small" style={{ marginBottom: 16 }}>
+                  Posts <strong>Σ provider share</strong> (provider % × job profit, Closed + X-close) as the company owing the provider (negative on the ledger).
+                </div>
+              )}
 
               {err && <div className="portal-alert portal-alert-error" style={{ marginBottom: 10 }}>{err}</div>}
 

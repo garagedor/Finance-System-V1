@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readPortalSession } from "@/lib/portal-auth";
 import { postDisputeCharge } from "@/lib/dispute-service";
-import { postPenaltyCharge } from "@/lib/penalty-service";
+import { postPenaltyBatch } from "@/lib/penalty-service";
 import { coll, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import type { ScanpayDisputeRecord } from "@/types/scanpay";
 
@@ -26,16 +26,18 @@ export async function POST(req: NextRequest) {
       ? body.jobIds.map((x) => String(x).trim()).filter(Boolean)
       : (body.jobId ? [String(body.jobId).trim()] : []);
     if (jobIds.length === 0) return NextResponse.json({ error: "Select at least one penalty" }, { status: 400 });
-    const date = body.date ? String(body.date) : undefined;
-    const notes = body.notes ? String(body.notes) : undefined;
-    const dryRun = !!body.dryRun;
-    const results = [];
-    for (const jid of jobIds) {
-      results.push(await postPenaltyCharge({ jobId: jid, ledgerId: pLedgerId, date, notes, actor: session.name, dryRun }));
-    }
-    const okAll = results.every((r) => r.ok);
-    const posted = results.reduce((sum, r) => (r.ok ? sum + r.postedAmount : sum), 0);
-    return NextResponse.json({ ok: okAll, count: results.length, posted, results }, { status: okAll ? 200 : 207 });
+    // ONE consolidated ledger line for the whole selection (sum of each job's AM
+    // 50%); the per-job breakdown lives in charge_snapshot.penalties[].
+    const res = await postPenaltyBatch({
+      jobIds,
+      ledgerId: pLedgerId,
+      date: body.date ? String(body.date) : undefined,
+      notes: body.notes ? String(body.notes) : undefined,
+      actor: session.name,
+      dryRun: !!body.dryRun,
+    });
+    if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
+    return NextResponse.json({ ok: true, count: res.count, posted: res.postedAmount, entryId: res.ledgerEntryId, missing: res.missing });
   }
 
   // BULK dispute/refund (ledger flow): a set of collected disputes ticked in the

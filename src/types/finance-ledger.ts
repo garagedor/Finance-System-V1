@@ -55,10 +55,24 @@ export type LedgerEntryType =
 // Mirrors the report's headline numbers (CLOSED jobs only) so the ledger entry
 // equals what the Balance Report shows.
 export interface LedgerReportMeta {
-  mode: "tech" | "location";
-  subject_name: string;         // tech name / location passed to the report
+  mode: "tech" | "location" | "provider";
+  subject_name: string;         // tech name / location / provider passed to the report
   period_start: string;
   period_end: string;
+
+  // Provider report only (mode "provider"): Σ provider share (positive
+  // magnitude) and the per-job breakdown. The posted entry `amount` is the
+  // NEGATIVE of provider_share (the company owes the provider their cut).
+  provider_share?: number | null;
+  provider_jobs?: Array<{
+    date: string;
+    address: string;
+    provider: string;
+    tech: string;
+    total_payment: number;
+    total_profit: number;
+    provider_share: number;
+  }>;
   balance: number;              // Σ balance over closed jobs (excl tips)
   balance_with_tips: number;    // Σ balanceWithTips over closed jobs
   include_tips: boolean;        // which of the two was posted as `amount`

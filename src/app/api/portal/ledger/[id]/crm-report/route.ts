@@ -10,6 +10,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, getDb, newId } from "@/lib/finance-db";
 import { readPortalSession } from "@/lib/portal-auth";
 import { computeBalanceReport } from "@/app/api/balance-report/route";
+import { calcPaidSum, calcParts, calcJobProfit, calcTotalAfterFee, calcStandardShare, toNumber } from "@/app/api/utils/calculations";
+import { ensureJobMirrorsFresh } from "@/lib/job-mirror";
+import type { JobRow } from "@/types/job";
 import type { LedgerEntryRecord, LedgerRecord, LedgerReportMeta } from "@/types/finance-ledger";
 
 interface ReportRow {
@@ -78,7 +81,7 @@ export async function POST(
     if (!ledger) return NextResponse.json({ error: "Ledger not found" }, { status: 404 });
 
     const body = (await req.json()) as Record<string, unknown>;
-    const mode = body.mode === "location" ? "location" : "tech";
+    const mode = body.mode === "location" ? "location" : body.mode === "provider" ? "provider" : "tech";
     // Multi-select: `subjects` (array of techs, or locations) → ONE combined
     // entry. Falls back to the legacy single `subject_name`.
     const subjectsRaw = Array.isArray(body.subjects)
@@ -89,8 +92,75 @@ export async function POST(
     const end = String(body.period_end ?? "").trim();
     const includeTips = body.include_tips === true || body.include_tips === "true";
 
-    if (subjects.length === 0) return NextResponse.json({ error: "Select at least one technician / location" }, { status: 400 });
+    if (subjects.length === 0) return NextResponse.json({ error: "Select at least one technician / location / provider" }, { status: 400 });
     if (!start || !end) return NextResponse.json({ error: "Date range is required" }, { status: 400 });
+
+    // ── Provider report ────────────────────────────────────────────────────
+    // Σ provider share (provider % × job profit) over Closed + X-close jobs in
+    // range. Posted as NEGATIVE (the company owes the provider their cut). Same
+    // per-job math as /api/report?type=provider (computeBasicFinancials).
+    if (mode === "provider") {
+      const db = await getDb();
+      await ensureJobMirrorsFresh().catch(() => {});
+      const jobs = await db.collection<JobRow>("Job").find({
+        provider: { $in: subjects },
+        statusCanonical: { $in: ["Closed", "X close"] },
+        date: { $gte: start, $lte: end },
+      } as never).toArray();
+
+      const provDocs = await db.collection("Provider").find({ _id: { $in: subjects } } as never).toArray();
+      const provPct = new Map<string, number>();
+      provDocs.forEach((p) => provPct.set(String((p as { _id?: unknown })._id), toNumber((p as { profitPercent?: unknown }).profitPercent)));
+
+      const provider_jobs = jobs.map((j) => {
+        const job = j as JobRow;
+        const providerPercent = provPct.get(String(job.provider)) ?? 0;
+        const totalProfit = calcJobProfit(calcTotalAfterFee(job), calcParts(job));
+        const share = calcStandardShare(totalProfit, providerPercent);
+        return {
+          date: String(job.date ?? "").slice(0, 10),
+          address: String(job.address ?? ""),
+          provider: String(job.provider ?? ""),
+          tech: String(job.tech ?? ""),
+          total_payment: round2(calcPaidSum(job)),
+          total_profit: round2(totalProfit),
+          provider_share: round2(share),
+        };
+      }).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+      const providerShareSum = round2(provider_jobs.reduce((s, r) => s + r.provider_share, 0));
+      const totalProfitSum = round2(provider_jobs.reduce((s, r) => s + r.total_profit, 0));
+      const posted = round2(-providerShareSum); // company owes the provider their cut
+
+      const meta: LedgerReportMeta = {
+        mode: "provider",
+        subject_name: subjects.join(", "),
+        period_start: start,
+        period_end: end,
+        balance: posted,
+        balance_with_tips: posted,
+        include_tips: false,
+        job_count: provider_jobs.length,
+        profit: totalProfitSum,
+        provider_share: providerShareSum,
+        provider_jobs,
+      };
+
+      const doc: LedgerEntryRecord = {
+        _id: newId("len"),
+        ledger_id: id,
+        type: "report",
+        date: end,
+        amount: posted,
+        description: `CRM Provider Report · ${subjects.join(", ")} · ${start} → ${end} · provider share ${providerShareSum.toFixed(2)}`,
+        report_meta: meta,
+        source: "crm",
+        created_at: new Date().toISOString(),
+        created_by: session.name,
+      };
+      await coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry).insertOne(doc);
+      return NextResponse.json({ row: doc }, { status: 201 });
+    }
 
     // Which technicians the report covers: the selected techs, or every tech in
     // any of the selected locations.

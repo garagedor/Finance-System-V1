@@ -6,6 +6,7 @@ import { PageHeader, StatPill, CardShell, Empty, BackLink } from "../../_compone
 import EntryFormModal, { type FieldDef } from "../../_components/EntryFormModal";
 import AddCrmReportModal from "./AddCrmReportModal";
 import ReportBreakdown from "./ReportBreakdown";
+import PenaltyBreakdown, { type PenaltyLine } from "./PenaltyBreakdown";
 import AddDisputeRefundModal from "./AddDisputeRefundModal";
 import RecordPaymentModal from "./RecordPaymentModal";
 import ReverseEntryButton from "./ReverseEntryButton";
@@ -128,7 +129,7 @@ export default async function LedgerDetailPage({
             <AddCrmReportModal
               ledgerId={ledger._id}
               defaultSubject={ledger.holder_name}
-              defaultMode={ledger.role === "technician" ? "tech" : "location"}
+              defaultMode={ledger.role === "technician" ? "tech" : ledger.role.toLowerCase() === "provider" ? "provider" : "location"}
             />
             <AddDisputeRefundModal
               ledgerId={ledger._id}
@@ -206,7 +207,13 @@ export default async function LedgerDetailPage({
                   </td>
                   <td>
                     {e.description ?? "—"}
-                    {e.report_meta && (
+                    {e.report_meta && e.report_meta.mode === "provider" && (
+                      <div className="muted small">
+                        {e.report_meta.job_count} job(s) · Provider share{" "}
+                        {fmt$(e.report_meta.provider_share ?? 0)} · company owes provider
+                      </div>
+                    )}
+                    {e.report_meta && e.report_meta.mode !== "provider" && (
                       <div className="muted small">
                         {e.report_meta.tech_count != null
                           ? `${e.report_meta.tech_count} techs · `
@@ -232,7 +239,14 @@ export default async function LedgerDetailPage({
                           Technician {fmt$(Number(e.charge_snapshot.technicianPortion) || 0)} · Area manager {fmt$(Number(e.charge_snapshot.areaManagerOwnPortion) || 0)}
                         </div>
                       )}
-                    {e.type === "penalty" && e.charge_snapshot && (
+                    {e.type === "penalty" && e.charge_snapshot && Array.isArray(e.charge_snapshot.penalties) ? (
+                      <>
+                        <div className="muted small">
+                          {(e.charge_snapshot.penalties as unknown[]).length} X-close penalt{(e.charge_snapshot.penalties as unknown[]).length > 1 ? "ies" : "y"} · Total loss {fmt$(Number(e.charge_snapshot.total_loss) || 0)} · AM 50% {fmt$(Number(e.charge_snapshot.am_loss) || 0)} · company 50% {fmt$(Number(e.charge_snapshot.company_loss) || 0)}
+                        </div>
+                        <PenaltyBreakdown penalties={e.charge_snapshot.penalties as unknown as PenaltyLine[]} />
+                      </>
+                    ) : e.type === "penalty" && e.charge_snapshot && (
                       <div className="muted small">
                         {e.technician_id ? `${e.technician_id} · ` : ""}
                         Total loss {fmt$(Number(e.charge_snapshot.total_loss) || 0)} · AM 50% {fmt$(Number(e.charge_snapshot.am_loss) || 0)} · company 50% {fmt$(Number(e.charge_snapshot.company_loss) || 0)}

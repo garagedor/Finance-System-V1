@@ -24,6 +24,53 @@ const pdfBtn: React.CSSProperties = { padding: "2px 8px", fontSize: 11, marginRi
 
 export default function ReportBreakdown({ meta }: { meta: LedgerReportMeta }) {
   const [open, setOpen] = useState(false);
+
+  // Provider report: a flat per-job table (date / address / tech / profit / share).
+  if (meta.mode === "provider") {
+    const jobs = meta.provider_jobs ?? [];
+    if (jobs.length === 0) {
+      return <div className="muted small" style={{ marginTop: 4, fontStyle: "italic" }}>No jobs in this provider report.</div>;
+    }
+    return (
+      <div style={{ marginTop: 6 }}>
+        <button type="button" onClick={() => setOpen((o) => !o)} className="portal-btn portal-btn-ghost" style={{ padding: "2px 8px", fontSize: 11 }}>
+          {open ? "▾ Hide breakdown" : `▸ Job breakdown (${jobs.length} job${jobs.length > 1 ? "s" : ""})`}
+        </button>
+        {open && (
+          <div style={{ marginTop: 8, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10, background: "rgba(255,255,255,0.02)", overflowX: "auto" }}>
+            <table className="portal-table" style={{ margin: 0, fontSize: 12 }}>
+              <thead>
+                <tr><th>Date</th><th>Address</th><th>Provider</th><th>Tech</th><th className="right">Payment</th><th className="right">Profit</th><th className="right">Provider share</th></tr>
+              </thead>
+              <tbody>
+                {jobs.map((j, i) => (
+                  <tr key={`${j.date}-${i}`}>
+                    <td className="mono">{j.date || "—"}</td>
+                    <td>{j.address || "—"}</td>
+                    <td className="muted">{j.provider || "—"}</td>
+                    <td>{j.tech || "—"}</td>
+                    <td className="right">{money(j.total_payment)}</td>
+                    <td className="right">{money(j.total_profit)}</td>
+                    <td className="right">{money(j.provider_share)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colSpan={4} style={{ fontWeight: 700 }}>Total</td>
+                  <td className="right" style={{ fontWeight: 700 }}>{money(jobs.reduce((s, j) => s + j.total_payment, 0))}</td>
+                  <td className="right" style={{ fontWeight: 700 }}>{money(jobs.reduce((s, j) => s + j.total_profit, 0))}</td>
+                  <td className="right" style={{ fontWeight: 700 }}>{money(meta.provider_share ?? jobs.reduce((s, j) => s + j.provider_share, 0))}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <div className="muted small" style={{ marginTop: 4 }}>Posted as the company owing the provider (negative on the ledger).</div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const weeks = meta.weeks ?? [];
   const withTips = meta.include_tips;
 

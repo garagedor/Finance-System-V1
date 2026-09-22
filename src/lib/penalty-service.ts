@@ -46,6 +46,134 @@ export type PostPenaltyChargeResult =
       dryRun: boolean;
     };
 
+// One CONSOLIDATED penalty entry for a batch of X-close jobs: computes each
+// job's AM 50% and posts a SINGLE ledger line whose amount is the sum, carrying
+// a per-job breakdown in charge_snapshot.penalties[] (the ledger UI expands it).
+// Like CRM-report entries, no per-job dedup — the user selects & posts a set.
+export type PenaltyBatchLine = {
+  job_ref: string;
+  address: string;
+  tech: string;
+  provider: string;
+  date: string;
+  job_profit: number;
+  total_loss: number;
+  am_loss: number;
+  company_loss: number;
+  provider_percent: number;
+};
+
+export type PostPenaltyBatchInput = {
+  jobIds: string[];
+  ledgerId: string;
+  date?: string;
+  notes?: string;
+  actor: string;
+  dryRun?: boolean;
+};
+
+export type PostPenaltyBatchResult =
+  | { ok: false; error: string }
+  | {
+      ok: true;
+      ledgerId: string;
+      ledgerEntryId: string;
+      count: number;
+      postedAmount: number;       // Σ am_loss — the single line's amount
+      totalLoss: number;
+      companyLoss: number;
+      lines: PenaltyBatchLine[];
+      missing: string[];          // jobIds that couldn't be loaded
+      dryRun: boolean;
+    };
+
+export async function postPenaltyBatch(input: PostPenaltyBatchInput): Promise<PostPenaltyBatchResult> {
+  await ensureFinanceIndexes();
+  const db = await getDb();
+  const dryRun = !!input.dryRun;
+
+  if (!input.ledgerId) return { ok: false, error: "A ledger is required for a penalty." };
+  const ledger = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger).findOne({ _id: input.ledgerId });
+  if (!ledger) return { ok: false, error: `Ledger not found: ${input.ledgerId}` };
+
+  const jobIds = [...new Set(input.jobIds.map((x) => String(x).trim()).filter(Boolean))];
+  if (jobIds.length === 0) return { ok: false, error: "Select at least one penalty." };
+
+  const lines: PenaltyBatchLine[] = [];
+  const missing: string[] = [];
+  for (const jid of jobIds) {
+    const job = await loadJob(db, jid);
+    if (!job) { missing.push(jid); continue; }
+    const providerDoc = job.provider ? await db.collection("Provider").findOne({ _id: job.provider } as never) : null;
+    const providerPercent = toNumber((providerDoc as { profitPercent?: unknown } | null)?.profitPercent);
+    const jobProfit = calcJobProfit(calcPaidSum(job), calcParts(job));
+    const totalLoss = calcStandardShare(jobProfit, providerPercent);
+    const amLoss = totalLoss * 0.5;
+    lines.push({
+      job_ref: jid,
+      address: job.address ?? "",
+      tech: job.tech ?? "",
+      provider: job.provider ?? "",
+      date: String(job.date ?? "").slice(0, 10),
+      job_profit: round2(jobProfit),
+      total_loss: round2(totalLoss),
+      am_loss: round2(amLoss),
+      company_loss: round2(totalLoss - amLoss),
+      provider_percent: providerPercent,
+    });
+  }
+  if (lines.length === 0) return { ok: false, error: "None of the selected penalties could be loaded." };
+
+  const postedAmount = round2(lines.reduce((s, l) => s + l.am_loss, 0));
+  const totalLossSum = round2(lines.reduce((s, l) => s + l.total_loss, 0));
+  const companyLossSum = round2(lines.reduce((s, l) => s + l.company_loss, 0));
+
+  const ledgerEntryId = newId("len");
+  const now = new Date().toISOString();
+  const date = input.date ?? today();
+
+  const snapshot = {
+    kind: "penalty_batch",
+    count: lines.length,
+    total_job_profit: round2(lines.reduce((s, l) => s + l.job_profit, 0)),
+    total_loss: totalLossSum,
+    am_loss: postedAmount,
+    company_loss: companyLossSum,
+    posted_amount: postedAmount,
+    penalties: lines,
+  };
+
+  const entry: LedgerEntryRecord = {
+    _id: ledgerEntryId,
+    ledger_id: input.ledgerId,
+    type: "penalty",
+    date,
+    amount: postedAmount, // positive = the AM owes the company their 50% penalty
+    description: `Penalties (${lines.length} X-close job${lines.length > 1 ? "s" : ""}) · AM 50%` + (input.notes ? ` · ${input.notes}` : ""),
+    gross_amount: totalLossSum,
+    charge_snapshot: snapshot as unknown as Record<string, unknown>,
+    source: "crm",
+    reverses_id: null,
+    created_at: now,
+    created_by: input.actor,
+  };
+
+  if (!dryRun) await coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry).insertOne(entry);
+
+  return {
+    ok: true,
+    ledgerId: input.ledgerId,
+    ledgerEntryId,
+    count: lines.length,
+    postedAmount,
+    totalLoss: totalLossSum,
+    companyLoss: companyLossSum,
+    lines,
+    missing,
+    dryRun,
+  };
+}
+
 export async function postPenaltyCharge(input: PostPenaltyChargeInput): Promise<PostPenaltyChargeResult> {
   await ensureFinanceIndexes();
   const db = await getDb();
