@@ -22,7 +22,9 @@ const NUMBER_FIELDS = new Set<string>([
 const BOOLEAN_FIELDS = new Set<string>(["needTracking"]);
 const TEXT_SEARCH_FIELDS = ["tech", "status", "address", "location", "provider", "clientName", "clientPhoneNumber", "invoiceNumber", "notes"];
 // Provenance fields the UI must never send back as job data on save.
-const RESERVED = new Set<string>(["aiOriginal", "aiMeta", "aiEditLog", "aiLastEditedAt", "aiLastEditedBy", "_firstIngestAt"]);
+// externalJobId / aiVersions / aiMedia are integration identity + provenance —
+// a reviewer edit must never forge or move them (the cleanup fence relies on it).
+const RESERVED = new Set<string>(["aiOriginal", "aiMeta", "aiEditLog", "aiLastEditedAt", "aiLastEditedBy", "_firstIngestAt", "externalJobId", "aiVersions", "aiMedia"]);
 
 const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 

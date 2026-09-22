@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { checkIngestAuth, ingestDashboardPayload } from "@/lib/ai-jobs/dashboard-ingest";
+import {
+  checkIngestAuth,
+  cleanupLbsAppTestJob,
+  ingestDashboardPayload,
+  readLbsAppJob,
+} from "@/lib/ai-jobs/dashboard-ingest";
 
 // UPDATE door for the closing-dashboard SHADOW outbox: the adapter PUTs a
 // corrected job here (app/jobsystem.py update_job → PUT {base}/jobs/{external_id}).
@@ -31,5 +36,29 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ exte
   }
 
   const result = await ingestDashboardPayload(body);
+  return NextResponse.json(result.body, { status: result.status });
+}
+
+// READ-BACK door (the adapter's get_status → GET {base}/jobs/{external_id}):
+// the LBS App's own record — version history, origin, TEST/PRODUCTION marker,
+// money, media identifiers. Same Bearer AI_INGEST_TOKEN; rows not written by
+// the LBS App integration are 404 here. Read-only.
+export async function GET(req: NextRequest, { params }: { params: Promise<{ externalId: string }> }) {
+  const auth = checkIngestAuth(req.headers.get("authorization"));
+  if (!auth.ok) return NextResponse.json(auth.body, { status: auth.status });
+  const { externalId } = await params;
+  const result = await readLbsAppJob(externalId);
+  return NextResponse.json(result.body, { status: result.status });
+}
+
+// TEST-ONLY cleanup door. Refuses (409) unless server-stamped metadata proves
+// LBS App channel + TEST on every version + no human edits — see
+// cleanupDecision() in lib/ai-jobs/lbs-app.ts. Never touches ag.Job, never
+// deletes physical media. Repeat calls return `already_cleaned`.
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ externalId: string }> }) {
+  const auth = checkIngestAuth(req.headers.get("authorization"));
+  if (!auth.ok) return NextResponse.json(auth.body, { status: auth.status });
+  const { externalId } = await params;
+  const result = await cleanupLbsAppTestJob(externalId);
   return NextResponse.json(result.body, { status: result.status });
 }

@@ -1,4 +1,5 @@
 import type { IngestEnvelope, AiEventType } from "./types";
+import { readEnvironment, readMedia, type LbsAppExtras } from "./lbs-app.ts";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Translator: the closing-dashboard's `payload_for()` shape → our IngestEnvelope.
@@ -115,6 +116,7 @@ export function dashboardToEnvelope(payload: Record<string, unknown>): IngestEnv
         verdict: p.verdict ?? null,
         payment_difference: num(money.difference),
         dashboard_idempotency_key: p.idempotency_key ?? null,
+        environment: readEnvironment(p),
       },
     },
   };
@@ -125,4 +127,22 @@ export function dashboardToEnvelope(payload: Record<string, unknown>): IngestEnv
  *  (PUT /jobs/{id}); it is lbs_job_id when present. */
 export function externalIdFor(payload: Record<string, unknown>): string | null {
   return strOrUndef((payload || {}).lbs_job_id) ?? null;
+}
+
+/** The LBS App contract extras for one payload: the explicit TEST/PRODUCTION
+ *  flag, version + operation (the idempotency key with lbs_job_id), and media
+ *  identifiers. `mediaOnly` for the /jobs/{id}/media door. */
+export function dashboardExtras(payload: Record<string, unknown>, mediaOnly = false): LbsAppExtras {
+  const p = payload || {};
+  const event = String(p.event ?? (mediaOnly ? "sync_media" : "create_job"));
+  const flagAbsent = (p.is_test === undefined || p.is_test === null) && (p.environment === undefined || p.environment === null);
+  return {
+    environment: readEnvironment(p),
+    version: num(p.version) || 1,
+    operation: event,
+    idempotencyKey: strOrUndef(p.idempotency_key) ?? null,
+    media: readMedia(p),
+    mediaOnly: mediaOnly || event === "sync_media",
+    inheritEnvironment: (mediaOnly || event === "sync_media") && flagAbsent,
+  };
 }

@@ -6,6 +6,8 @@ import { canonicalStatus } from "@/lib/status-canonical";
 import { normalizeJobDate } from "@/lib/job-mirror";
 import type { JobRow } from "@/types/job";
 import { aiJobsCollection, aiDb } from "./collection";
+import type { LbsAppExtras } from "./lbs-app";
+import { executeLbsAppIngest, type StoreColl } from "./lbs-app-store";
 import type {
   AiJobDoc,
   AiJobMeta,
@@ -207,4 +209,38 @@ export async function ingestAiJob(envelope: IngestEnvelope): Promise<IngestResul
   }
   const res = await coll.insertOne(buildInsert() as any);
   return { ok: true, status: "created", id: String(res.insertedId), ingestId, ingestIdKind, validation, duplicateProtection: true };
+}
+
+/**
+ * The LBS App outbox write (dashboard doors only — the caller stamps the
+ * channel; nothing in the request body can). Same normalize/validate as
+ * ingestAiJob, but idempotent on logical job + version + operation with an
+ * append-only version history and media identifiers (see lbs-app.ts).
+ * Writes ONLY to ag.Job_ai.
+ */
+export async function ingestLbsAppJob(
+  envelope: IngestEnvelope,
+  lbs: LbsAppExtras,
+): Promise<IngestResult | { ok: false; status: number; error: string }> {
+  const meta = envelope.meta ?? {};
+  const ingestId = str(meta.ingestId);
+  if (!ingestId) return { ok: false, status: 400, error: "Missing lbs_job_id" };
+
+  const normalized = lbs.mediaOnly ? {} : normalizeJobPayload(envelope.job ?? {});
+  const validation = lbs.mediaOnly ? [] : validateJob(envelope.job ?? {}, normalized, await loadRefSets());
+  const now = new Date().toISOString();
+  const aiMeta: AiJobMeta = {
+    source: str(meta.source) ?? "bot",
+    eventType: meta.eventType ?? "closing",
+    agentVersion: str(meta.agentVersion) ?? null,
+    ingestId,
+    ingestIdKind: "client",
+    ingestedAt: now,
+    refs: meta.refs ?? {},
+    validation,
+  };
+  const externalJobId = str(meta.externalJobId) ?? ingestId;
+  return executeLbsAppIngest((await aiJobsCollection()) as unknown as StoreColl, {
+    ingestId, normalized, aiMeta, externalJobId, lbs, validation, now,
+  });
 }

@@ -25,6 +25,36 @@ export interface AiJobMeta {
   ingestedAt: string; // ISO
   refs?: Record<string, unknown>; // any identifiers the bot sent — future match keys
   validation?: AiValidationFlag[];
+  /** SERVER-STAMPED by the LBS App outbox doors only (never from the body). */
+  channel?: string;
+  /** From an EXPLICIT payload flag only; sticky UNKNOWN once ambiguous. */
+  environment?: IntegrationEnvironment;
+}
+
+export type IntegrationEnvironment = "TEST" | "PRODUCTION" | "UNKNOWN";
+
+/** One received LBS App write (append-only history on the same logical job). */
+export interface AiVersionEntry {
+  version: number;
+  operation: string;
+  receivedAt: string;
+  environment: IntegrationEnvironment;
+  idempotencyKey: string | null;
+  /** normalized job fields as sent in this version (null for a media-only write) */
+  job: Record<string, unknown> | null;
+  mediaIds: string[];
+}
+
+/** A media IDENTIFIER the LBS App reported — the bytes are never stored here. */
+export interface AiMediaRef {
+  media_id: string;
+  kind: string | null;
+  content_type: string | null;
+  bytes: number | null;
+  sha256: string | null;
+  status: string;
+  firstSeenVersion: number;
+  receivedAt: string;
 }
 
 export interface AiEditEntry {
@@ -47,6 +77,9 @@ export type AiJobDoc = JobRow & {
   aiLastEditedAt?: string | null;
   aiLastEditedBy?: string | null;
   _firstIngestAt?: string;
+  /** LBS App rows only: append-only version history + media identifiers. */
+  aiVersions?: AiVersionEntry[];
+  aiMedia?: AiMediaRef[];
 };
 
 export interface AiJobLinkDoc {
@@ -83,6 +116,8 @@ export interface IngestResult {
   /** true ONLY when a client-supplied stable ingestId was used. A generated id
    *  cannot prevent the same event being ingested twice — see the ingest lib. */
   duplicateProtection: boolean;
+  /** LBS App door: true when this exact version was already received (no-op). */
+  duplicate?: boolean;
 }
 
 // ── Compare / QA ──────────────────────────────────────────────────────────────
