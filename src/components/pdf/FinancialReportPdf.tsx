@@ -29,7 +29,7 @@ function fmtCell(v: Cell, kind?: Kind): string {
   return v == null ? "—" : String(v);
 }
 
-function DataTable({ cols, rows, totals }: { cols: Col[]; rows: Array<Record<string, Cell>>; totals?: Record<string, Cell> }) {
+function DataTable({ cols, rows, totals, stickyHeader = true }: { cols: Col[]; rows: Array<Record<string, Cell>>; totals?: Record<string, Cell>; stickyHeader?: boolean }) {
   if (rows.length === 0) {
     return (
       <View style={s.emptyState}><Text style={s.emptyText}>No rows for the selected filters.</Text></View>
@@ -37,7 +37,7 @@ function DataTable({ cols, rows, totals }: { cols: Col[]; rows: Array<Record<str
   }
   return (
     <View style={s.tableContainer}>
-      <View style={s.tableHeader} fixed>
+      <View style={s.tableHeader} fixed={stickyHeader}>
         {cols.map((c) => (
           <Text key={c.key} style={[s.tableHeaderCell, { flex: c.flex, textAlign: c.align ?? "left" }] as never}>{c.label}</Text>
         ))}
@@ -368,6 +368,56 @@ function BankingSection({ d }: { d: FinancialReportData }) {
   );
 }
 
+function LedgerStatement({ l }: { l: FinancialReportData["ledgerDetail"]["rows"][number] }) {
+  return (
+    <View style={{ marginTop: 12 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <Text style={{ fontSize: 10, fontFamily: "Helvetica-Bold", color: palette.slate100 }}>
+          {l.holderName}
+          <Text style={{ fontSize: 8, color: palette.slate400, fontFamily: "Helvetica" }}>  ·  {roleLabel(l.role)}{l.location ? `  ·  ${l.location}` : ""}</Text>
+        </Text>
+        <Text style={{ fontSize: 8.5, color: palette.slate300 }}>
+          Opening {fmtCurrency(l.opening)}  →  Closing {fmtCurrency(l.closing)}  ·  Current {fmtCurrency(l.current)}
+        </Text>
+      </View>
+      {l.entries.length === 0 ? (
+        <View style={s.emptyState}><Text style={s.emptyText}>No entries in this period.</Text></View>
+      ) : (
+        <DataTable
+          stickyHeader={false}
+          cols={[
+            { key: "date", label: "Date", flex: 1.3 },
+            { key: "type", label: "Type", flex: 1.5 },
+            { key: "description", label: "Description", flex: 3.6 },
+            { key: "amount", label: "Amount", flex: 1.3, align: "right", kind: "currency", tone: true },
+            { key: "running", label: "Running", flex: 1.3, align: "right", kind: "currency", tone: true },
+          ]}
+          rows={l.entries.map((e) => ({ date: fmtDate(e.date), type: e.type, description: e.description || "—", amount: e.amount, running: e.running }))}
+          totals={{ date: "Closing", running: l.closing }}
+        />
+      )}
+      {l.truncated && <Text style={{ fontSize: 7.5, color: palette.slate500, marginTop: 3 }}>Showing the first 300 entries — narrow the period to see the rest.</Text>}
+    </View>
+  );
+}
+
+function LedgerDetailSection({ d }: { d: FinancialReportData }) {
+  const rows = d.ledgerDetail.rows;
+  return (
+    <View>
+      <SectionHeader kicker="Statements" title="Ledger detail — per ledger" />
+      {rows.length === 0 ? (
+        <View style={s.emptyState}><Text style={s.emptyText}>No ledgers in scope. Adjust the ledger-scope filters.</Text></View>
+      ) : rows.map((l) => <LedgerStatement key={l.id} l={l} />)}
+      {d.ledgerDetail.truncatedLedgers && (
+        <Text style={{ fontSize: 7.5, color: palette.slate500, marginTop: 6 }}>
+          Only the first 40 ledgers are detailed — narrow the ledger scope (role / location / holder) to report the rest.
+        </Text>
+      )}
+    </View>
+  );
+}
+
 const RENDERERS: Record<SectionKey, (p: { d: FinancialReportData }) => React.ReactElement> = {
   pnl: PnlSection,
   income: IncomeSection,
@@ -380,6 +430,7 @@ const RENDERERS: Record<SectionKey, (p: { d: FinancialReportData }) => React.Rea
   equipment: EquipmentSection,
   banking: BankingSection,
   ledgers: LedgersSection,
+  ledgerDetail: LedgerDetailSection,
 };
 
 // ── Header band (generic — not tied to tech/location like BrandHeader) ──────

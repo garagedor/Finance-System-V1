@@ -35,6 +35,7 @@ export async function GET(req: NextRequest) {
       locations: csv(sp.get("locations")),
       holders: csv(sp.get("holders")),
       includeArchived: sp.get("includeArchived") === "1",
+      includeLedgerDetail: sp.get("detail") === "1",
     });
     return NextResponse.json(data);
   } catch (err) {

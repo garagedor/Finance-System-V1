@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import FilterMultiSelect from "../_components/FilterMultiSelect";
 import type { FinancialReportData, SectionKey } from "@/lib/financial-report";
 
-const SECTIONS: { key: SectionKey; label: string; hint: string }[] = [
+const SECTIONS: { key: SectionKey; label: string; hint: string; off?: boolean }[] = [
   { key: "pnl", label: "P&L Summary", hint: "Revenue, gross profit, expenses, net profit" },
   { key: "income", label: "Income breakdown", hint: "Revenue by source (jobs + other income)" },
   { key: "expenses", label: "Expenses breakdown", hint: "Spend by category" },
@@ -22,6 +22,7 @@ const SECTIONS: { key: SectionKey; label: string; hint: string }[] = [
   { key: "equipment", label: "Equipment orders", hint: "AM-charged orders + gross profit" },
   { key: "banking", label: "Cash & banking", hint: "Account balances + money in/out" },
   { key: "ledgers", label: "Ledgers — balances to settle", hint: "Per-ledger opening → closing + current balance" },
+  { key: "ledgerDetail", label: "Ledger detail (per ledger)", hint: "Each ledger's entries + running balance — narrow scope to a holder", off: true },
 ];
 
 const money = (n: number) => {
@@ -41,7 +42,7 @@ export default function FinanceReportBuilder() {
   const [holders, setHolders] = useState<string[]>([]);
   const [title, setTitle] = useState("Financial Report");
   const [preparedFor, setPreparedFor] = useState("");
-  const [order, setOrder] = useState(() => SECTIONS.map((s) => ({ key: s.key, enabled: true })));
+  const [order, setOrder] = useState(() => SECTIONS.map((s) => ({ key: s.key, enabled: !s.off })));
 
   const [opts, setOpts] = useState<{ roles: string[]; locations: string[]; holders: string[] }>({ roles: [], locations: [], holders: [] });
   const [data, setData] = useState<FinancialReportData | null>(null);
@@ -68,6 +69,9 @@ export default function FinanceReportBuilder() {
     return () => { cancelled = true; };
   }, []);
 
+  // Only pull the per-ledger detail (heavier) when that section is enabled.
+  const detailOn = order.some((o) => o.key === "ledgerDetail" && o.enabled);
+
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
@@ -75,12 +79,13 @@ export default function FinanceReportBuilder() {
       if (roles.length) p.set("roles", roles.join(","));
       if (locs.length) p.set("locations", locs.join(","));
       if (holders.length) p.set("holders", holders.join(","));
+      if (detailOn) p.set("detail", "1");
       const r = await fetch(`/api/portal/finance-report?${p.toString()}`);
       const j = await r.json();
       if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
       setData(j);
     } catch (e) { setError(e instanceof Error ? e.message : "Failed to load"); } finally { setLoading(false); }
-  }, [from, to, roles, locs, holders]);
+  }, [from, to, roles, locs, holders, detailOn]);
 
   useEffect(() => { const t = setTimeout(load, 400); return () => clearTimeout(t); }, [load]);
 
@@ -100,7 +105,9 @@ export default function FinanceReportBuilder() {
   // One-click "everything": canonical order, every section on, scope cleared
   // (all ledgers), period = year-to-date. The preview auto-refreshes.
   function fullSystemReport() {
-    setOrder(SECTIONS.map((s) => ({ key: s.key, enabled: true })));
+    // Everything on EXCEPT the heavy per-ledger detail (toggle it on after
+    // narrowing the ledger scope to the ledger(s) you want a statement for).
+    setOrder(SECTIONS.map((s) => ({ key: s.key, enabled: s.key !== "ledgerDetail" })));
     setRoles([]); setLocs([]); setHolders([]);
     const n = new Date();
     setFrom(fmt(new Date(n.getFullYear(), 0, 1)));
@@ -405,6 +412,46 @@ function Section({ sk, d }: { sk: SectionKey; d: FinancialReportData }) {
           </tbody>
           {p.accounts.length > 0 && <tfoot><tr><td colSpan={3} style={{ fontWeight: 700 }}>Total</td><td className="right money" style={{ fontWeight: 700 }}>{money(p.balanceTotal)}</td></tr></tfoot>}
         </table>
+      </Card>
+    );
+  }
+  if (sk === "ledgerDetail") {
+    const rows = d.ledgerDetail.rows;
+    return (
+      <Card title="Ledger detail — per ledger">
+        {rows.length === 0 ? (
+          <div className="muted small" style={{ padding: 8 }}>No ledgers in scope — narrow the ledger-scope filters (role / location / holder), or this pulls every ledger.</div>
+        ) : rows.map((l) => (
+          <div key={l.id} style={{ marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ fontWeight: 700 }}>{l.holderName} <span className="muted small">· {roleLabel(l.role)}{l.location ? ` · ${l.location}` : ""}</span></div>
+              <div className="muted small">Opening {money(l.opening)} → Closing {money(l.closing)} · Current <strong style={{ color: l.current > 0 ? "#34d399" : l.current < 0 ? "#f87171" : undefined }}>{money(l.current)}</strong></div>
+            </div>
+            {l.entries.length === 0 ? (
+              <div className="muted small">No entries in this period.</div>
+            ) : (
+              <div style={{ overflowX: "auto" }}>
+                <table className="portal-table" style={{ fontSize: 12 }}>
+                  <thead><tr><th>Date</th><th>Type</th><th>Description</th><th className="right">Amount</th><th className="right">Running</th></tr></thead>
+                  <tbody>
+                    {l.entries.map((e, i) => (
+                      <tr key={i}>
+                        <td className="mono">{e.date}</td>
+                        <td className="small">{e.type}</td>
+                        <td>{e.description || "—"}</td>
+                        <td className="right money">{money(e.amount)}</td>
+                        <td className="right money">{money(e.running)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot><tr><td colSpan={4} style={{ fontWeight: 700 }}>Closing</td><td className="right money" style={{ fontWeight: 700 }}>{money(l.closing)}</td></tr></tfoot>
+                </table>
+              </div>
+            )}
+            {l.truncated && <div className="muted small" style={{ marginTop: 4 }}>Showing first 300 entries — narrow the period to see the rest.</div>}
+          </div>
+        ))}
+        {d.ledgerDetail.truncatedLedgers && <div className="muted small">Only the first 40 ledgers are detailed — narrow the scope for the rest.</div>}
       </Card>
     );
   }

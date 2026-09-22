@@ -72,6 +72,7 @@ export async function GET(req: NextRequest) {
       locations: csv(sp.get("locations")),
       holders: csv(sp.get("holders")),
       includeArchived: sp.get("includeArchived") === "1",
+      includeLedgerDetail: sections.includes("ledgerDetail"),
     });
 
     const logoSrc = await loadLogoDataUrl();

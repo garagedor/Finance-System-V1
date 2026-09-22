@@ -26,7 +26,7 @@ const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 1
 // the user toggle + reorder them; unknown keys are ignored by the renderers.
 export const SECTION_KEYS = [
   "pnl", "income", "expenses", "disputes", "disputesByParty",
-  "byLocation", "payouts", "debts", "equipment", "banking", "ledgers",
+  "byLocation", "payouts", "debts", "equipment", "banking", "ledgers", "ledgerDetail",
 ] as const;
 export type SectionKey = (typeof SECTION_KEYS)[number];
 
@@ -42,6 +42,7 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   equipment: "Equipment orders",
   banking: "Cash & banking",
   ledgers: "Ledgers — balances to settle",
+  ledgerDetail: "Ledger detail (per ledger)",
 };
 
 export interface LedgerBreakdown {
@@ -59,6 +60,28 @@ export interface LedgerBreakdown {
   byType: Array<{ type: string; total: number; count: number }>; // period movement, signed
 }
 
+export interface LedgerDetailEntry {
+  date: string;
+  type: string;
+  description: string;
+  amount: number;
+  running: number;    // running balance starting from the ledger's opening
+}
+
+export interface LedgerDetail {
+  id: string;
+  holderName: string;
+  role: string;
+  location: string;
+  label: string | null;
+  opening: number;
+  movement: number;
+  closing: number;
+  current: number;
+  entries: LedgerDetailEntry[]; // entries within the period, oldest → newest
+  truncated: boolean;           // true if the ledger had more entries than the cap
+}
+
 export interface FinancialReportOptions {
   from: string;
   to: string;
@@ -66,6 +89,8 @@ export interface FinancialReportOptions {
   locations?: string[];
   holders?: string[];
   includeArchived?: boolean;
+  /** When true, also pull each in-scope ledger's per-entry breakdown (heavier). */
+  includeLedgerDetail?: boolean;
 }
 
 export interface FinancialReportData {
@@ -142,6 +167,10 @@ export interface FinancialReportData {
     totalOwedToCompany: number; // Σ positive current balances
     totalCompanyOwes: number;   // Σ |negative current balances|
     netPosition: number;        // Σ current balances (signed)
+  };
+  ledgerDetail: {
+    rows: LedgerDetail[];       // populated only when includeLedgerDetail
+    truncatedLedgers: boolean;  // true if more ledgers were in scope than the cap
   };
 }
 
@@ -231,6 +260,38 @@ export async function buildFinancialReport(opts: FinancialReportOptions): Promis
   const totalOwedToCompany = round2(ledgerRows.reduce((s, r) => (r.current > 0 ? s + r.current : s), 0));
   const totalCompanyOwes = round2(ledgerRows.reduce((s, r) => (r.current < 0 ? s + Math.abs(r.current) : s), 0));
   const netPosition = round2(totalOwedToCompany - totalCompanyOwes);
+
+  // Per-ledger entry breakdown (only when requested — it's heavier). Each ledger
+  // becomes its own statement: period entries with a running balance starting at
+  // the ledger's opening. Capped to keep the report/PDF bounded.
+  const LEDGER_DETAIL_MAX = 40;   // max ledgers rendered with full detail
+  const ENTRY_MAX = 300;          // max entries per ledger
+  const ledgerDetailRows: LedgerDetail[] = [];
+  let truncatedLedgers = false;
+  if (opts.includeLedgerDetail && ledgerRows.length) {
+    truncatedLedgers = ledgerRows.length > LEDGER_DETAIL_MAX;
+    const detailLedgers = ledgerRows.slice(0, LEDGER_DETAIL_MAX);
+    const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
+    const details = await Promise.all(detailLedgers.map(async (lr) => {
+      const raw = await ec.find({ ledger_id: lr.id, date: { $gte: from, $lte: to } })
+        .sort({ date: 1, _id: 1 })
+        .limit(ENTRY_MAX + 1)
+        .toArray();
+      const truncated = raw.length > ENTRY_MAX;
+      const slice = truncated ? raw.slice(0, ENTRY_MAX) : raw;
+      let running = lr.opening;
+      const entries: LedgerDetailEntry[] = slice.map((e) => {
+        running = round2(running + e.amount);
+        return { date: e.date, type: String(e.type), description: e.description ?? "", amount: round2(e.amount), running };
+      });
+      return {
+        id: lr.id, holderName: lr.holderName, role: lr.role, location: lr.location, label: lr.label,
+        opening: lr.opening, movement: lr.movement, closing: lr.closing, current: lr.current,
+        entries, truncated,
+      } as LedgerDetail;
+    }));
+    ledgerDetailRows.push(...details);
+  }
 
   // 3) Extra whole-system sections — payouts, debts, equipment orders (all in
   //    the period; debts are outstanding-as-of-now). Banking + dispute-by-party
@@ -359,5 +420,6 @@ export async function buildFinancialReport(opts: FinancialReportOptions): Promis
       })),
     },
     ledgers: { rows: ledgerRows, totalOwedToCompany, totalCompanyOwes, netPosition },
+    ledgerDetail: { rows: ledgerDetailRows, truncatedLedgers },
   };
 }
