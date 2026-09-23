@@ -104,10 +104,10 @@
 .adm-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .adm-icon-btn-danger {
-  border-color: rgba(239,68,68,0.30);
-  color: #f87171;
+  border-color: var(--ds-crit-line);
+  color: var(--ds-crit-text);
 }
-.adm-icon-btn-danger:hover:not(:disabled) { background: rgba(239,68,68,0.10); }
+.adm-icon-btn-danger:hover:not(:disabled) { background: var(--ds-crit-wash); }
 
 .adm-actions {
   display: inline-flex;
@@ -117,9 +117,9 @@
 .adm-error {
   padding: 10px 14px;
   border-radius: 10px;
-  background: rgba(239,68,68,0.10);
-  border: 1px solid rgba(239,68,68,0.30);
-  color: #f87171;
+  background: var(--ds-crit-soft);
+  border: 1px solid var(--ds-crit-line);
+  color: var(--ds-crit-text);
   font-size: 13px;
   display: flex;
   justify-content: space-between;
@@ -128,7 +128,7 @@
 .adm-error button {
   background: transparent;
   border: none;
-  color: #f87171;
+  color: var(--ds-crit-text);
   cursor: pointer;
 }
 
@@ -201,14 +201,14 @@
   font-weight: 600;
 }
 .adm-badge-ok {
-  background: rgba(16,185,129,0.12);
-  color: #34d399;
-  border: 1px solid rgba(16,185,129,0.30);
+  background: var(--ds-ok-wash);
+  color: var(--ds-ok-text);
+  border: 1px solid var(--ds-ok-line);
 }
 .adm-badge-warn {
-  background: rgba(245,158,11,0.12);
-  color: #fbbf24;
-  border: 1px solid rgba(245,158,11,0.30);
+  background: var(--ds-warn-wash);
+  color: var(--ds-warn-text);
+  border: 1px solid var(--ds-warn-line);
 }
 
 /* Modal */
