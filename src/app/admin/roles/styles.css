@@ -77,7 +77,7 @@
 }
 
 .adm-role-icon {
-    color: #818cf8;
+    color: var(--ds-crm);
     flex-shrink: 0;
 }
 
@@ -88,8 +88,8 @@
 }
 
 .adm-role-key {
-    background: rgba(99, 102, 241, 0.1);
-    color: #a5b4fc;
+    background: var(--ds-neutral-wash);
+    color: var(--ds-neutral-text);
     padding: 2px 6px;
     border-radius: 4px;
     font-family: 'SFMono-Regular', Monaco, 'Cascadia Code', 'Courier New', monospace;
@@ -140,7 +140,7 @@
 .adm-btn--danger:hover { background: rgba(248, 113, 113, 0.08); }
 
 .adm-back {
-    color: #818cf8;
+    color: var(--ds-crm-2);
     text-decoration: none;
     display: inline-flex;
     align-items: center;
@@ -188,7 +188,8 @@
 }
 .adm-field input:focus {
     outline: none;
-    border-color: #818cf8;
+    border-color: var(--ds-info);
+    box-shadow: var(--ds-focus);
 }
 
 /* ── Permission matrix ─────────────────────────────────────────────── */
