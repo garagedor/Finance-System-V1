@@ -7,7 +7,7 @@
 .adm-tabs {
     display: flex;
     gap: 4px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--ds-line);
     padding-bottom: 0;
 }
 
@@ -34,7 +34,7 @@
 .adm-tab--active {
     background: var(--ds-surface-2);
     color: var(--ds-ink);
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: var(--ds-line-strong);
     border-bottom-color: var(--ds-surface-2);
     margin-bottom: -1px;
 }
@@ -55,13 +55,13 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: 12px 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--ds-line-strong);
     background: var(--ds-surface-2);
 }
 
 .adm-roles-table tbody td {
     padding: 14px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid var(--ds-line);
     font-size: 13px;
     vertical-align: middle;
 }
@@ -180,7 +180,7 @@
 }
 .adm-field input {
     background: var(--ds-surface-2);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--ds-line-strong);
     border-radius: 8px;
     padding: 10px 12px;
     color: var(--ds-ink);
@@ -201,7 +201,7 @@
 
 .adm-perm-module {
     background: var(--ds-surface-1);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--ds-line-strong);
     border-radius: 14px;
     padding: 16px 18px;
 }
@@ -212,7 +212,7 @@
     gap: 10px;
     margin-bottom: 14px;
     padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    border-bottom: 1px solid var(--ds-line);
 }
 .adm-perm-module-head h2 {
     margin: 0;
@@ -280,7 +280,7 @@
     gap: 8px;
     padding: 8px 10px;
     border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--ds-line);
     background: var(--ds-surface-2);
     cursor: pointer;
     transition: background 0.12s, border-color 0.12s;
@@ -307,7 +307,7 @@
 
 .adm-perm-key {
     font-size: 10px;
-    color: var(--ds-ink-3);
+    color: var(--ds-ink-2);
     font-family: 'SFMono-Regular', Monaco, 'Cascadia Code', 'Courier New', monospace;
 }
 .adm-perm-row--on .adm-perm-key { color: var(--ds-ink-2); }
