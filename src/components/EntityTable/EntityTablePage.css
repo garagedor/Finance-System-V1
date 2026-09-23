@@ -131,7 +131,7 @@
 }
 
 .search-input::placeholder {
-    color: var(--ds-ink-dim);
+    color: var(--ds-ink-3);
 }
 
 .search-input:focus {
@@ -573,7 +573,7 @@ th.sortable:hover { color: var(--ds-ink-2); }
 th.sortable .sort-indicator {
     margin-left: 5px;
     font-size: 11px;
-    color: var(--ds-ink-dim);
+    color: var(--ds-ink-3);
     display: inline-block;
     width: 13px;
     opacity: 0;
@@ -687,7 +687,7 @@ tbody tr:hover .actions {
     padding: 6px 10px;
 }
 
-.input::placeholder { color: var(--ds-ink-dim); }
+.input::placeholder { color: var(--ds-ink-3); }
 
 .input:focus {
     border-color: #6366f1;
