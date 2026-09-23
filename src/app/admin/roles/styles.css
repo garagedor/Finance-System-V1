@@ -19,7 +19,7 @@
     border-radius: 8px 8px 0 0;
     font-size: 13px;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--ds-ink-2);
     text-decoration: none;
     border: 1px solid transparent;
     border-bottom: none;
@@ -27,15 +27,15 @@
 }
 
 .adm-tab:hover {
-    background: rgba(255, 255, 255, 0.04);
-    color: #cbd5e1;
+    background: var(--ds-surface-1);
+    color: var(--ds-ink);
 }
 
 .adm-tab--active {
-    background: #1a2236;
-    color: #f1f5f9;
+    background: var(--ds-surface-2);
+    color: var(--ds-ink);
     border-color: rgba(255, 255, 255, 0.1);
-    border-bottom-color: #1a2236;
+    border-bottom-color: var(--ds-surface-2);
     margin-bottom: -1px;
 }
 
@@ -44,19 +44,19 @@
 .adm-roles-table {
     width: 100%;
     border-collapse: collapse;
-    color: #e2e8f0;
+    color: var(--ds-ink);
 }
 
 .adm-roles-table thead th {
     text-align: left;
     font-size: 11px;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--ds-ink-2);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: 12px 14px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--ds-surface-2);
 }
 
 .adm-roles-table tbody td {
@@ -67,7 +67,7 @@
 }
 
 .adm-roles-table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--ds-surface-2);
 }
 
 .adm-role-name {
@@ -83,7 +83,7 @@
 
 .adm-role-desc {
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--ds-ink-2);
     margin-top: 2px;
 }
 
@@ -97,8 +97,8 @@
 }
 
 .adm-perm-count {
-    background: rgba(255, 255, 255, 0.06);
-    color: #cbd5e1;
+    background: var(--ds-surface-3);
+    color: var(--ds-ink);
     padding: 3px 10px;
     border-radius: 999px;
     font-weight: 600;
@@ -174,16 +174,16 @@
 .adm-field > span {
     font-size: 11px;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--ds-ink-2);
     text-transform: uppercase;
     letter-spacing: 0.08em;
 }
 .adm-field input {
-    background: #0f172a;
+    background: var(--ds-surface-2);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     padding: 10px 12px;
-    color: #f1f5f9;
+    color: var(--ds-ink);
     font-size: 14px;
 }
 .adm-field input:focus {
@@ -200,7 +200,7 @@
 }
 
 .adm-perm-module {
-    background: #111827;
+    background: var(--ds-surface-1);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 14px;
     padding: 16px 18px;
@@ -218,7 +218,7 @@
     margin: 0;
     font-size: 16px;
     font-weight: 700;
-    color: #f1f5f9;
+    color: var(--ds-ink);
     flex: 1;
 }
 
@@ -237,7 +237,7 @@
     margin: 0;
     font-size: 12px;
     font-weight: 600;
-    color: #94a3b8;
+    color: var(--ds-ink-2);
     text-transform: uppercase;
     letter-spacing: 0.1em;
     flex: 1;
@@ -245,8 +245,8 @@
 
 .adm-perm-counter {
     font-size: 11px;
-    color: #94a3b8;
-    background: rgba(255, 255, 255, 0.04);
+    color: var(--ds-ink-2);
+    background: var(--ds-surface-2);
     padding: 2px 8px;
     border-radius: 999px;
     font-weight: 600;
@@ -258,14 +258,14 @@
 .adm-perm-toggle {
     background: transparent;
     border: none;
-    color: #94a3b8;
+    color: var(--ds-ink-2);
     cursor: pointer;
     padding: 2px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
 }
-.adm-perm-toggle:hover { color: #f1f5f9; }
+.adm-perm-toggle:hover { color: var(--ds-ink); }
 .adm-perm-toggle--module { color: #818cf8; }
 
 .adm-perm-grid {
@@ -281,11 +281,11 @@
     padding: 8px 10px;
     border-radius: 8px;
     border: 1px solid rgba(255, 255, 255, 0.04);
-    background: rgba(255, 255, 255, 0.02);
+    background: var(--ds-surface-2);
     cursor: pointer;
     transition: background 0.12s, border-color 0.12s;
 }
-.adm-perm-row:hover { background: rgba(255, 255, 255, 0.04); }
+.adm-perm-row:hover { background: var(--ds-surface-3); }
 .adm-perm-row--on {
     background: rgba(99, 102, 241, 0.08);
     border-color: rgba(99, 102, 241, 0.25);
@@ -302,12 +302,12 @@
 .adm-perm-label {
     flex: 1;
     font-size: 12px;
-    color: #e2e8f0;
+    color: var(--ds-ink);
 }
 
 .adm-perm-key {
     font-size: 10px;
-    color: #64748b;
+    color: var(--ds-ink-3);
     font-family: 'SFMono-Regular', Monaco, 'Cascadia Code', 'Courier New', monospace;
 }
-.adm-perm-row--on .adm-perm-key { color: #94a3b8; }
+.adm-perm-row--on .adm-perm-key { color: var(--ds-ink-2); }
