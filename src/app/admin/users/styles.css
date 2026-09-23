@@ -175,9 +175,9 @@
   font-size: 11px;
   font-weight: 600;
   text-transform: lowercase;
-  background: rgba(99,102,241,0.10);
-  color: #a5b4fc;
-  border: 1px solid rgba(99,102,241,0.25);
+  background: var(--ds-neutral-wash);
+  color: var(--ds-neutral-text);
+  border: 1px solid transparent;
 }
 
 .adm-tag {
@@ -186,9 +186,9 @@
   border-radius: 999px;
   font-size: 10px;
   font-weight: 700;
-  background: rgba(16,185,129,0.10);
-  color: #34d399;
-  border: 1px solid rgba(16,185,129,0.30);
+  background: transparent;
+  color: var(--ds-neutral-text);
+  border: 1px solid var(--ds-neutral-line);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -332,9 +332,9 @@
   margin-right: 4px;
   vertical-align: middle;
 }
-.adm-perm-inherit { background: rgba(99,102,241,0.35); }
-.adm-perm-grant { background: rgba(16,185,129,0.45); }
-.adm-perm-deny { background: rgba(239,68,68,0.45); }
+.adm-perm-inherit { background: var(--ds-ink-3); }
+.adm-perm-grant { background: var(--ds-ok); }
+.adm-perm-deny { background: var(--ds-crit); }
 
 .adm-perm-module h4 {
   margin: 0 0 8px;
@@ -391,8 +391,8 @@
   text-transform: uppercase;
   padding: 1px 5px;
   border-radius: 999px;
-  background: rgba(99,102,241,0.18);
-  color: #a5b4fc;
+  background: var(--ds-neutral-wash);
+  color: var(--ds-neutral-text);
 }
 .adm-perm-desc {
   font-size: 11px;
@@ -421,6 +421,6 @@
 .adm-perm-btn:first-child { border-left: none; }
 .adm-perm-btn:hover:not(:disabled):not(.active) { background: var(--ds-surface-3); color: var(--ds-ink); }
 .adm-perm-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.adm-perm-btn.active { background: rgba(99,102,241,0.22); color: #c7d2fe; }
-.adm-perm-btn-grant.active { background: rgba(16,185,129,0.20); color: #34d399; }
-.adm-perm-btn-deny.active { background: rgba(239,68,68,0.20); color: #f87171; }
+.adm-perm-btn.active { background: var(--ds-neutral-wash); color: var(--ds-ink); }
+.adm-perm-btn-grant.active { background: var(--ds-ok-wash); color: var(--ds-ok-text); }
+.adm-perm-btn-deny.active { background: var(--ds-crit-wash); color: var(--ds-crit-text); }
