@@ -79,7 +79,7 @@
 
 .topbar-addon select:focus {
     outline: none;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.3);
+    box-shadow: var(--ds-focus);
 }
 
 .topbar-right {
@@ -105,8 +105,8 @@
 }
 
 .search-box:focus-within {
-    border-color: rgba(99, 102, 241, 0.5);
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    border-color: var(--ds-info);
+    box-shadow: var(--ds-focus);
     background: var(--ds-surface-3);
 }
 
@@ -158,9 +158,9 @@
 }
 
 .search-go {
-    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    background: var(--ds-crm);
     border: none;
-    color: white;
+    color: var(--ds-on-crm);
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
@@ -170,11 +170,11 @@
     border-radius: 7px;
     cursor: pointer;
     transition: all 0.2s ease;
-    box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--ds-crm) 30%, transparent);
 }
 
 .search-go:hover:not(:disabled) {
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.45);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--ds-crm) 45%, transparent);
 }
 
 .search-go:disabled {
@@ -206,16 +206,16 @@
     align-items: baseline;
     gap: 6px;
     padding: 4px 10px;
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.25);
+    background: var(--ds-crm-wash);
+    border: 1px solid var(--ds-crm-line);
     border-radius: 8px;
     font-size: 11px;
-    color: #c7d2fe;
+    color: var(--ds-crm-text);
 }
 
 .status-pill-num {
     font-weight: 700;
-    color: #a5b4fc;
+    color: var(--ds-crm-text);
     font-size: 13px;
     font-feature-settings: 'tnum';
 }
@@ -223,7 +223,7 @@
 .status-pill-label {
     text-transform: uppercase;
     letter-spacing: 0.06em;
-    color: #818cf8;
+    color: var(--ds-crm-text);
     font-weight: 600;
 }
 
@@ -319,14 +319,14 @@
 }
 
 .primary {
-    background: linear-gradient(135deg, #4f46e5, #7c3aed);
-    color: white;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+    background: var(--ds-crm);
+    color: var(--ds-on-crm);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--ds-crm) 35%, transparent);
 }
 
 .primary:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+    box-shadow: 0 6px 20px color-mix(in srgb, var(--ds-crm) 45%, transparent);
 }
 
 .primary:disabled {
@@ -343,7 +343,7 @@
 
 .ghost:hover:not(:disabled) {
     background: var(--ds-surface-3);
-    border-color: rgba(99, 102, 241, 0.35);
+    border-color: var(--ds-crm-line);
     color: var(--ds-ink);
     transform: translateY(-1px);
 }
@@ -540,7 +540,7 @@ tbody tr {
 }
 
 tbody tr:hover td {
-    background: rgba(99, 102, 241, 0.06);
+    background: var(--ds-surface-2);
     color: var(--ds-ink);
 }
 
@@ -581,10 +581,10 @@ th.sortable .sort-indicator {
 }
 
 th.sortable.active {
-    color: #a5b4fc;
+    color: var(--ds-crm-2);
 }
 
-th.sortable.active .sort-indicator { color: #6366f1; opacity: 1; }
+th.sortable.active .sort-indicator { color: var(--ds-crm); opacity: 1; }
 th.sortable:hover .sort-indicator { opacity: 1; }
 
 /* ── Resize handle ── */
@@ -601,7 +601,7 @@ th.sortable:hover .sort-indicator { opacity: 1; }
 }
 
 .resize-handle:hover, .resize-handle:active {
-    background: rgba(99, 102, 241, 0.5);
+    background: var(--ds-crm);
 }
 
 /* ── Action column (right side, hover-reveal) ── */
@@ -690,8 +690,8 @@ tbody tr:hover .actions {
 .input::placeholder { color: var(--ds-ink-3); }
 
 .input:focus {
-    border-color: #6366f1;
-    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15);
+    border-color: var(--ds-info);
+    box-shadow: var(--ds-focus);
 }
 
 /* ── Approval chips ── */
@@ -740,8 +740,8 @@ tbody tr:hover .actions {
 .chip {
     padding: 3px 8px;
     border-radius: 8px;
-    background: rgba(99, 102, 241, 0.15);
-    color: #a5b4fc;
+    background: var(--ds-crm-wash);
+    color: var(--ds-crm-text);
     font-weight: 600;
     font-size: 12px;
 }
@@ -775,9 +775,9 @@ tbody tr:hover .actions {
 }
 
 .page-arrow:hover:not(:disabled) {
-    background: rgba(99, 102, 241, 0.12);
-    border-color: rgba(99, 102, 241, 0.35);
-    color: #a5b4fc;
+    background: var(--ds-crm-wash);
+    border-color: var(--ds-crm-line);
+    color: var(--ds-crm-text);
 }
 
 .page-arrow:active:not(:disabled) {
