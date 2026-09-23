@@ -9,10 +9,10 @@
     width: max-content;
     min-width: 560px;
     max-width: 90vw;
-    background: #111827;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    background: var(--ds-surface-1);
+    border: 1px solid var(--ds-line);
     border-radius: 16px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255,255,255,0.04);
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--ds-line);
     padding: 14px;
     z-index: 1000;
 }
@@ -24,7 +24,7 @@
     gap: 12px;
     flex-wrap: wrap;
     padding-bottom: 10px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--ds-line);
 }
 
 .filters-actions {
@@ -43,11 +43,11 @@
 .filters-label {
     font-size: 14px;
     font-weight: 700;
-    color: #f1f5f9;
+    color: var(--ds-ink);
 }
 
 .filters-warning {
-    color: #f59e0b;
+    color: var(--ds-warn);
     font-size: 12px;
     font-weight: 600;
     padding: 4px 0;
@@ -55,11 +55,11 @@
 
 .logic-toggle {
     display: flex;
-    background: rgba(255, 255, 255, 0.06);
+    background: var(--ds-surface-2);
     padding: 3px;
     border-radius: 8px;
     gap: 2px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--ds-line);
 }
 
 .logic-toggle button {
@@ -67,7 +67,7 @@
     background: transparent;
     font-size: 11px;
     font-weight: 700;
-    color: #475569;
+    color: var(--ds-ink-3);
     padding: 4px 10px;
     border-radius: 6px;
     cursor: pointer;
@@ -75,9 +75,9 @@
 }
 
 .logic-toggle button.active {
-    background: #6366f1;
-    color: white;
-    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+    background: var(--ds-crm);
+    color: var(--ds-on-crm);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--ds-crm) 35%, transparent);
 }
 
 .filters-list {
@@ -87,7 +87,7 @@
     padding: 10px 0 2px 0;
     max-height: 320px;
     overflow-y: auto;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-top: 1px solid var(--ds-line);
     margin-top: 10px;
 }
 
@@ -95,10 +95,10 @@
     display: flex;
     gap: 8px;
     align-items: center;
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--ds-surface-2);
     padding: 8px;
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--ds-line);
 }
 
 .filter-field,
@@ -118,8 +118,8 @@
 }
 
 .apply-btn.disabled {
-    background: rgba(255, 255, 255, 0.07);
-    color: #475569;
+    background: var(--ds-surface-2);
+    color: var(--ds-ink-dim);
     box-shadow: none;
     cursor: not-allowed;
 }
@@ -128,14 +128,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #475569;
+    color: var(--ds-ink-3);
     border-radius: 8px;
     transition: all 0.2s ease;
 }
 
 .refresh-btn:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.07);
-    color: #6366f1;
+    background: var(--ds-surface-2);
+    color: var(--ds-crm);
 }
 
 .spin {
