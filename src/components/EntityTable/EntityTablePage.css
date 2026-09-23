@@ -360,9 +360,9 @@
 }
 
 .ghost.success {
-    color: #34d399;
-    border-color: rgba(16, 185, 129, 0.25);
-    background: rgba(16, 185, 129, 0.07);
+    color: var(--ds-ok-text);
+    border-color: var(--ds-ok-line);
+    background: var(--ds-ok-soft);
 }
 
 /* ── Dropdowns ── */
@@ -666,9 +666,9 @@ tbody tr:hover .actions {
 }
 
 .icon-btn.success {
-    color: #34d399;
-    border-color: rgba(16, 185, 129, 0.25);
-    background: rgba(16, 185, 129, 0.08);
+    color: var(--ds-ok-text);
+    border-color: var(--ds-ok-line);
+    background: var(--ds-ok-soft);
 }
 
 /* ── Inputs in table ── */
@@ -710,13 +710,13 @@ tbody tr:hover .actions {
 }
 
 .approval-admin {
-    background: rgba(16, 185, 129, 0.15);
-    color: #34d399;
+    background: var(--ds-ok-wash);
+    color: var(--ds-ok-text);
 }
 
 .approval-office {
-    background: rgba(245, 158, 11, 0.15);
-    color: #fbbf24;
+    background: var(--ds-warn-wash);
+    color: var(--ds-warn-text);
 }
 
 /* ── Cell text ── */
@@ -822,8 +822,9 @@ tbody tr:hover .actions {
 }
 
 .snackbar.success {
-    background: linear-gradient(135deg, #059669, #10b981);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: var(--ds-ok);
+    color: var(--ds-bg);
+    border: 1px solid var(--ds-ok-line);
 }
 
 .snackbar.error {
