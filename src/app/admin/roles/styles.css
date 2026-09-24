@@ -116,15 +116,15 @@
 }
 
 .adm-badge--system {
-    background: rgba(245, 158, 11, 0.12);
-    color: #fbbf24;
-    border: 1px solid rgba(245, 158, 11, 0.25);
+    background: transparent;
+    color: var(--ds-neutral-text);
+    border: 1px solid var(--ds-neutral-line);
 }
 
 .adm-badge--custom {
-    background: rgba(99, 102, 241, 0.12);
-    color: #a5b4fc;
-    border: 1px solid rgba(99, 102, 241, 0.25);
+    background: var(--ds-neutral-wash);
+    color: var(--ds-neutral-text);
+    border: 1px solid transparent;
 }
 
 .adm-btn--small {
@@ -267,7 +267,7 @@
     justify-content: center;
 }
 .adm-perm-toggle:hover { color: var(--ds-ink); }
-.adm-perm-toggle--module { color: #818cf8; }
+.adm-perm-toggle--module { color: var(--ds-ink-2); }
 
 .adm-perm-grid {
     display: grid;
@@ -288,12 +288,12 @@
 }
 .adm-perm-row:hover { background: var(--ds-surface-3); }
 .adm-perm-row--on {
-    background: rgba(99, 102, 241, 0.08);
-    border-color: rgba(99, 102, 241, 0.25);
+    background: var(--ds-ok-wash);
+    border-color: var(--ds-ok-line);
 }
 
 .adm-perm-row input[type="checkbox"] {
-    accent-color: #818cf8;
+    accent-color: var(--ds-ok);
     width: 14px;
     height: 14px;
     cursor: pointer;
