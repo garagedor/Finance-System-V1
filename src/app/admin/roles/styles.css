@@ -134,10 +134,10 @@
 }
 
 .adm-btn--danger {
-    color: #f87171;
-    border-color: rgba(248, 113, 113, 0.3);
+    color: var(--ds-crit-text);
+    border-color: var(--ds-crit-line);
 }
-.adm-btn--danger:hover { background: rgba(248, 113, 113, 0.08); }
+.adm-btn--danger:hover { background: var(--ds-crit-wash); }
 
 .adm-back {
     color: var(--ds-crm-2);
@@ -149,9 +149,9 @@
 .adm-back:hover { text-decoration: underline; }
 
 .adm-flash {
-    background: rgba(16, 185, 129, 0.08);
-    border: 1px solid rgba(16, 185, 129, 0.25);
-    color: #6ee7b7;
+    background: var(--ds-ok-soft);
+    border: 1px solid var(--ds-ok-line);
+    color: var(--ds-ok-text);
     padding: 8px 14px;
     border-radius: 8px;
     font-size: 13px;
