@@ -12,21 +12,27 @@ type Block =
   | { type: "recommendations"; items: { title: string; detail: string }[] }
   | { type: "alerts"; items: { severity: string; title: string; detail: string }[] };
 
-const SEV: Record<string, string> = { high: "#f87171", medium: "#f59e0b", low: "#60a5fa", info: "#94a3b8" };
+type SevTier = { text: string; wash: string; line: string };
+const SEV: Record<string, SevTier> = {
+  high:   { text: "var(--ds-crit-text)",    wash: "var(--ds-crit-wash)",    line: "var(--ds-crit-line)" },
+  medium: { text: "var(--ds-warn-text)",    wash: "var(--ds-warn-wash)",    line: "var(--ds-warn-line)" },
+  low:    { text: "var(--ds-info-text)",    wash: "var(--ds-info-wash)",    line: "var(--ds-info-line)" },
+  info:   { text: "var(--ds-neutral-text)", wash: "var(--ds-neutral-wash)", line: "var(--ds-neutral-line)" },
+};
 
 export default function AiBlocksLite({ blocks }: { blocks: Block[] }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       {blocks.map((b, i) => {
         if (b.type === "text")
-          return <p key={i} style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{b.text}</p>;
+          return <p key={i} style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: "var(--ds-ink)", whiteSpace: "pre-wrap" }}>{b.text}</p>;
         if (b.type === "kpis")
           return (
             <div key={i} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(110px,1fr))", gap: 8 }}>
               {b.items.map((k, j) => (
-                <div key={j} style={{ background: "rgba(255,255,255,0.04)", borderRadius: 8, padding: "8px 10px" }}>
-                  <div style={{ fontSize: 10, color: "#64748b" }}>{k.label}</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: k.tone === "neg" ? "#f87171" : k.tone === "pos" ? "#34d399" : "#e2e8f0" }}>{k.value}</div>
+                <div key={j} style={{ background: "var(--ds-surface-2)", borderRadius: 8, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 10, color: "var(--ds-ink-2)" }}>{k.label}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: k.tone === "neg" ? "var(--ds-crit-text)" : k.tone === "pos" ? "var(--ds-ok-text)" : "var(--ds-ink)" }}>{k.value}</div>
                 </div>
               ))}
             </div>
@@ -39,7 +45,7 @@ export default function AiBlocksLite({ blocks }: { blocks: Block[] }) {
               : b.data.slice(0, 12).map((d) => [String(d[b.xKey] ?? ""), ...b.series.map((s) => String(d[s.key] ?? ""))]);
           return (
             <div key={i}>
-              {b.title && <div style={{ fontSize: 11.5, fontWeight: 600, color: "#cbd5e1", marginBottom: 4 }}>{b.title}</div>}
+              {b.title && <div style={{ fontSize: 11.5, fontWeight: 600, color: "var(--ds-ink)", marginBottom: 4 }}>{b.title}</div>}
               <div style={{ overflowX: "auto" }}>
                 <table className="portal-table" style={{ fontSize: 11.5 }}>
                   <thead><tr>{columns.map((c, ci) => <th key={ci}>{c}</th>)}</tr></thead>
@@ -54,8 +60,8 @@ export default function AiBlocksLite({ blocks }: { blocks: Block[] }) {
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {b.items.map((r, j) => (
                 <div key={j} style={{ borderLeft: "2px solid rgba(99,102,241,0.5)", paddingLeft: 9 }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: "#e2e8f0" }}>💡 {r.title}</div>
-                  <div style={{ fontSize: 11.5, color: "#94a3b8" }}>{r.detail}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ds-ink)" }}>💡 {r.title}</div>
+                  <div style={{ fontSize: 11.5, color: "var(--ds-ink-2)" }}>{r.detail}</div>
                 </div>
               ))}
             </div>
@@ -64,11 +70,11 @@ export default function AiBlocksLite({ blocks }: { blocks: Block[] }) {
           return (
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {b.items.map((a, j) => {
-                const c = SEV[a.severity] ?? "#94a3b8";
+                const c = SEV[a.severity] ?? SEV.info;
                 return (
-                  <div key={j} style={{ background: `${c}12`, border: `1px solid ${c}33`, borderRadius: 8, padding: "8px 10px" }}>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: c }}>⚠ {a.title}</div>
-                    <div style={{ fontSize: 11.5, color: "#cbd5e1" }}>{a.detail}</div>
+                  <div key={j} style={{ background: c.wash, border: `1px solid ${c.line}`, borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: c.text }}>⚠ {a.title}</div>
+                    <div style={{ fontSize: 11.5, color: "var(--ds-ink)" }}>{a.detail}</div>
                   </div>
                 );
               })}

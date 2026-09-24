@@ -117,11 +117,11 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
     return (
       <div
         className="flex-shrink-0 px-1 py-2 space-y-1.5"
-        style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
+        style={{ borderTop: '1px solid var(--ds-line)' }}
       >
         {clocks.map((c) => (
           <div key={c.id} className="flex flex-col items-center leading-tight" title={`${c.label} — ${timeFor(c.tz)}`}>
-            <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: '#475569' }}>{c.abbr}</span>
+            <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--ds-ink-2)' }}>{c.abbr}</span>
             <span className="text-[10px] font-medium text-slate-300">{timeFor(c.tz)}</span>
           </div>
         ))}
@@ -133,10 +133,10 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
   return (
     <div
       className="flex-shrink-0 px-2 py-3"
-      style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
+      style={{ borderTop: '1px solid var(--ds-line)' }}
     >
       <div className="flex items-center justify-between px-1 pb-1.5">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: '#475569' }}>
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest" style={{ color: 'var(--ds-ink-2)' }}>
           <FiClock size={11} /> Clocks
         </span>
         <div className="relative" ref={pickerRef}>
@@ -151,7 +151,7 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
           {adding && (
             <div
               className="absolute bottom-7 right-0 z-50 max-h-64 w-44 overflow-y-auto rounded-xl py-1 shadow-2xl"
-              style={{ background: '#0d1526', border: '1px solid rgba(255,255,255,0.12)' }}
+              style={{ background: 'var(--ds-surface-1)', border: '1px solid var(--ds-line-strong)' }}
             >
               {TZ_OPTIONS.map((opt) => (
                 <button
@@ -161,7 +161,7 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
                   className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
                 >
                   <span className="truncate">{opt.label}</span>
-                  <span className="flex-shrink-0 text-[10px] tabular-nums" style={{ color: '#64748b' }}>{timeFor(opt.tz)}</span>
+                  <span className="flex-shrink-0 text-[10px] tabular-nums" style={{ color: 'var(--ds-ink-2)' }}>{timeFor(opt.tz)}</span>
                 </button>
               ))}
             </div>
