@@ -7,6 +7,7 @@ import EntryFormModal, { type FieldDef } from "../../_components/EntryFormModal"
 import AddCrmReportModal from "./AddCrmReportModal";
 import ReportBreakdown from "./ReportBreakdown";
 import PenaltyBreakdown, { type PenaltyLine } from "./PenaltyBreakdown";
+import DisputeBreakdown from "./DisputeBreakdown";
 import AddDisputeRefundModal from "./AddDisputeRefundModal";
 import RecordPaymentModal from "./RecordPaymentModal";
 import ReverseEntryButton from "./ReverseEntryButton";
@@ -233,12 +234,14 @@ export default async function LedgerDetailPage({
                           )}%
                         </div>
                       )}
-                    {(e.type === "dispute" || e.type === "refund") &&
-                      e.charge_snapshot?.posted_party === "combined" && (
-                        <div className="muted small">
-                          Technician {fmt$(Number(e.charge_snapshot.technicianPortion) || 0)} · Area manager {fmt$(Number(e.charge_snapshot.areaManagerOwnPortion) || 0)}
-                        </div>
-                      )}
+                    {(e.type === "dispute" || e.type === "refund") && e.charge_snapshot && (
+                      <>
+                        {e.charge_snapshot.address ? (
+                          <div className="muted small">{String(e.charge_snapshot.address)}</div>
+                        ) : null}
+                        <DisputeBreakdown snapshot={e.charge_snapshot} />
+                      </>
+                    )}
                     {e.type === "penalty" && e.charge_snapshot && Array.isArray(e.charge_snapshot.penalties) ? (
                       <>
                         <div className="muted small">

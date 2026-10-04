@@ -101,11 +101,15 @@ async function loadJob(db: Db, jobId: string): Promise<JobRow | null> {
  *  finance services (e.g. equipment ordering) post to the SAME AM ledger. */
 export async function findOrCreateAmLedger(amName: string, location: string, actor: string, dryRun: boolean) {
   const lc = coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger);
-  const existing = await lc.findOne({ role: "area_manager", holder_name: amName });
+  const name = (amName ?? "").trim();
+  // Reuse an existing AM ledger case-insensitively + whitespace-trimmed, so
+  // "Or" / "OR" / "or " collapse to one ledger instead of spawning duplicates.
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const existing = await lc.findOne({ role: "area_manager", holder_name: { $regex: `^${esc}$`, $options: "i" } });
   if (existing) return existing;
   const ledger: LedgerRecord = {
     _id: newId("ldg"),
-    holder_name: amName,
+    holder_name: name,
     role: "area_manager",
     location: location || "",
     status: "active",
@@ -217,8 +221,15 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     dispute_id: recordId,
     gross_amount: snapshot.disputeOrRefundAmount,
     // Record which party was charged + the posted amount alongside the full
-    // snapshot, so the ledger can show the tech/AM split for a combined charge.
-    charge_snapshot: { ...(snapshot as unknown as Record<string, unknown>), posted_party: input.party ?? null, posted_amount: postedAmount },
+    // snapshot, so the ledger can show the tech/AM split for ANY charge. Also
+    // carry the address + customer so the ledger "view more" can show them.
+    charge_snapshot: {
+      ...(snapshot as unknown as Record<string, unknown>),
+      posted_party: input.party ?? null,
+      posted_amount: postedAmount,
+      address: input.address ?? job.address ?? null,
+      customer_name: input.customer_name ?? job.clientName ?? null,
+    },
     source: "crm" as const,
     updated_at: now,
   };
