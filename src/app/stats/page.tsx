@@ -104,6 +104,7 @@ export default function StatsPage() {
 
   const [filtersDirty, setFiltersDirty] = useState(false);
   const [compareMode, setCompareMode] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [lookups, setLookups] = useState<{ techs: Technician[]; locations: Location[]; providers: Provider[] }>({
     techs: [],
     locations: [],
@@ -181,6 +182,36 @@ export default function StatsPage() {
       locations: locationFilter,
       providers: providerFilter,
     }));
+  };
+
+  // Server-side PDF of the current (applied) view — mirrors the balance report:
+  // hits /api/stats/pdf (react-pdf) with the same filters and downloads the blob.
+  const handleDownloadPdf = async () => {
+    try {
+      setPdfLoading(true);
+      const params = new URLSearchParams();
+      if (activeFilters.startDate) params.set('startDate', activeFilters.startDate);
+      if (activeFilters.endDate) params.set('endDate', activeFilters.endDate);
+      (activeFilters.techs || []).forEach((t) => params.append('tech', t));
+      (activeFilters.locations || []).forEach((l) => params.append('location', l));
+      (activeFilters.providers || []).forEach((p) => params.append('provider', p));
+      const res = await fetch(`/api/stats/pdf?${params.toString()}`);
+      if (!res.ok) throw new Error(`PDF request failed: ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Statistics_Report_${activeFilters.startDate}_to_${activeFilters.endDate}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+    } catch (err) {
+      console.error('Failed to download stats PDF', err);
+      setError('Failed to download PDF');
+    } finally {
+      setPdfLoading(false);
+    }
   };
 
   const fetchStats = async () => {
@@ -366,17 +397,33 @@ export default function StatsPage() {
             <p className="stats-kicker">Analytics</p>
             <h1 className="stats-title">Statistics</h1>
           </div>
-          <button
-            onClick={() => setCompareMode((v) => !v)}
-            style={{
-              background: compareMode ? '#4f46e5' : 'rgba(255,255,255,0.05)',
-              color: compareMode ? '#fff' : '#a5b4fc',
-              border: `1px solid ${compareMode ? 'transparent' : 'rgba(99,102,241,0.4)'}`,
-              borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-            }}
-          >
-            {compareMode ? '← Back to overview' : '⇄ Compare'}
-          </button>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {!compareMode && (
+              <button
+                onClick={handleDownloadPdf}
+                disabled={pdfLoading || loading}
+                style={{
+                  background: 'rgba(16,185,129,0.12)', color: '#6ee7b7',
+                  border: '1px solid rgba(16,185,129,0.4)',
+                  borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700,
+                  cursor: pdfLoading || loading ? 'default' : 'pointer', opacity: pdfLoading || loading ? 0.6 : 1,
+                }}
+              >
+                {pdfLoading ? 'Preparing…' : '⬇ Download report'}
+              </button>
+            )}
+            <button
+              onClick={() => setCompareMode((v) => !v)}
+              style={{
+                background: compareMode ? '#4f46e5' : 'rgba(255,255,255,0.05)',
+                color: compareMode ? '#fff' : '#a5b4fc',
+                border: `1px solid ${compareMode ? 'transparent' : 'rgba(99,102,241,0.4)'}`,
+                borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              {compareMode ? '← Back to overview' : '⇄ Compare'}
+            </button>
+          </div>
         </div>
 
         {compareMode ? (

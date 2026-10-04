@@ -18,311 +18,239 @@ async function getClient(): Promise<MongoClient> {
   return client;
 }
 
+export interface StatsQuery {
+  startDate?: string | null;
+  endDate?: string | null;
+  techs?: string[];
+  locations?: string[];
+  providers?: string[];
+}
+
+export interface StatRow { key: string; count: number; totalAmount: number; totalPaid: number }
+export interface StatusRow { key: string; count: number }
+export interface StatsResult {
+  summary: {
+    count: number;
+    totalAmount: number;
+    totalPaid: number;
+    totalProfit: number;
+    jobsProfit: number;
+    avgTicket: number;
+    avgTicketWithoutPenalty: number;
+    avgClosedTicket: number;
+    closedRatio: number;
+  };
+  byTech: StatRow[];
+  byLocation: StatRow[];
+  byStatus: StatusRow[];
+  byProvider: StatRow[];
+}
+
+// Shared stats aggregation — the on-screen Statistics page (via GET) and the
+// Statistics PDF both call this, so screen and print can never disagree.
+export async function computeStats(q: StatsQuery): Promise<StatsResult> {
+  await ensureJobMirrorsFresh().catch(() => {});
+  const startDate = q.startDate;
+  const endDate = q.endDate;
+  const techs = (q.techs ?? []).map((t) => t.trim()).filter(Boolean);
+  const locations = (q.locations ?? []).map((l) => l.trim()).filter(Boolean);
+  const providers = (q.providers ?? []).map((p) => p.trim()).filter(Boolean);
+
+  const client = await getClient();
+  const collection = client.db(DB_NAME).collection<JobRow>(COLLECTION_NAME);
+
+  const toNumberAgg = (field: string) => ({
+    $convert: { input: field, to: 'double', onError: 0, onNull: 0 },
+  });
+
+  const paidSum = {
+    $add: [
+      toNumberAgg('$techPaidCash'),
+      toNumberAgg('$totalPaidCard'),
+      toNumberAgg('$totalPaidCompanyCheck'),
+      toNumberAgg('$totalPaidFinance'),
+      toNumberAgg('$totalPaidCompanyCash'),
+      toNumberAgg('$lmCash'),
+      toNumberAgg('$lmCheck'),
+    ],
+  };
+
+  const pipeline: Record<string, unknown>[] = [
+    {
+      $addFields: {
+        dateParsed: SRC_DATE_EXPR,
+        _srcStatus: SRC_STATUS_EXPR,
+      },
+    },
+  ];
+
+  const matchStage: Record<string, unknown> = {};
+  if (startDate || endDate) {
+    const range: { $gte?: Date; $lte?: Date } = {};
+    if (startDate) range.$gte = new Date(startDate);
+    if (endDate) range.$lte = new Date(endDate);
+    matchStage.dateParsed = { ...(range.$gte ? { $gte: range.$gte } : {}), ...(range.$lte ? { $lte: range.$lte } : {}) };
+  }
+  const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const and: Record<string, unknown>[] = [];
+
+  if (techs.length > 0) {
+    and.push({ tech: { $in: techs.map((t) => new RegExp(escapeRegex(t), 'i')) } });
+  }
+  if (locations.length > 0) {
+    const regexes = locations.map((l) => new RegExp(`^${escapeRegex(l)}$`, 'i'));
+    and.push({ $or: [{ location: { $in: locations } }, { location: { $in: regexes } }] });
+  }
+  if (providers.length > 0) {
+    const regexes = providers.map((p) => new RegExp(`^${escapeRegex(p)}$`, 'i'));
+    and.push({ provider: { $in: regexes } });
+  }
+  if (and.length) matchStage.$and = and;
+  if (Object.keys(matchStage).length) pipeline.push({ $match: matchStage });
+
+  pipeline.push({
+    $addFields: {
+      dateKey: {
+        $cond: [
+          { $eq: ['$dateParsed', null] },
+          '$date',
+          { $dateToString: { format: '%Y-%m-%d', date: '$dateParsed' } },
+        ],
+      },
+      totalPaid: paidSum,
+      valTotalAmount: {
+        $cond: [{ $gt: [toNumberAgg('$totalAmount'), 0] }, toNumberAgg('$totalAmount'), paidSum],
+      },
+      valFeeNoCheck: {
+        $add: [
+          { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
+          { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
+        ],
+      },
+      valFeeAllKinds: {
+        $add: [
+          { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
+          { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
+          { $multiply: [toNumberAgg('$totalPaidCompanyCheck'), 0.1] },
+        ],
+      },
+      valParts: {
+        $add: [toNumberAgg('$techParts'), toNumberAgg('$companyParts'), toNumberAgg('$lmParts')],
+      },
+    },
+  });
+
+  pipeline.push({
+    $facet: {
+      summary: [
+        {
+          $group: {
+            _id: null,
+            count: { $sum: 1 },
+            totalAmount: { $sum: '$valTotalAmount' },
+            totalPaid: { $sum: toNumberAgg('$totalPaid') },
+            closedCount: { $sum: { $cond: [{ $eq: ['$_srcStatus', 'Closed'] }, 1, 0] } },
+            profitClosedOrXClose: {
+              $sum: {
+                $cond: [
+                  { $or: [{ $eq: ['$_srcStatus', 'Closed'] }, { $eq: ['$_srcStatus', 'X close'] }] },
+                  { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
+                  0,
+                ],
+              },
+            },
+            profitClosedOnly: {
+              $sum: {
+                $cond: [
+                  { $eq: ['$_srcStatus', 'Closed'] },
+                  { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
+                  0,
+                ],
+              },
+            },
+            jobsProfit: {
+              $sum: {
+                $cond: [
+                  { $eq: ['$_srcStatus', 'Closed'] },
+                  { $subtract: [{ $subtract: ['$valTotalAmount', '$valFeeAllKinds'] }, '$valParts'] },
+                  0,
+                ],
+              },
+            },
+          },
+        },
+      ],
+      byTech: [
+        { $match: { tech: { $exists: true, $nin: [null, ''] } } },
+        { $group: { _id: '$tech', count: { $sum: 1 }, totalAmount: { $sum: '$valTotalAmount' }, totalPaid: { $sum: toNumberAgg('$totalPaid') } } },
+        { $sort: { count: -1, _id: 1 } },
+      ],
+      byLocation: [
+        { $match: { location: { $exists: true, $nin: [null, ''] } } },
+        { $group: { _id: '$location', count: { $sum: 1 }, totalAmount: { $sum: '$valTotalAmount' }, totalPaid: { $sum: toNumberAgg('$totalPaid') } } },
+        { $sort: { count: -1, _id: 1 } },
+      ],
+      byStatus: [
+        { $match: { _srcStatus: { $nin: [null, ''] } } },
+        { $group: { _id: '$_srcStatus', count: { $sum: 1 } } },
+        { $sort: { count: -1, _id: 1 } },
+      ],
+      byProvider: [
+        { $match: { provider: { $exists: true, $nin: [null, ''] } } },
+        { $group: { _id: '$provider', count: { $sum: 1 }, totalAmount: { $sum: '$valTotalAmount' }, totalPaid: { $sum: toNumberAgg('$totalPaid') } } },
+        { $sort: { count: -1, _id: 1 } },
+      ],
+    },
+  });
+
+  const [result] = await collection.aggregate(pipeline).toArray();
+  const summaryDoc = result?.summary?.[0] || { count: 0, totalAmount: 0, totalPaid: 0, closedCount: 0 };
+
+  const count = summaryDoc.count || 0;
+  const totalAmount = summaryDoc.totalAmount || 0;
+  const totalPaid = summaryDoc.totalPaid || 0;
+  const closedCount = summaryDoc.closedCount || 0;
+  const profitClosedOrXClose = summaryDoc.profitClosedOrXClose || 0;
+  const profitClosedOnly = summaryDoc.profitClosedOnly || 0;
+  const jobsProfit = summaryDoc.jobsProfit || 0;
+
+  const mapRow = (r: { _id?: unknown; count?: number; totalAmount?: number; totalPaid?: number }): StatRow => ({
+    key: (r._id as string) ?? '',
+    count: r.count ?? 0,
+    totalAmount: r.totalAmount ?? 0,
+    totalPaid: r.totalPaid ?? 0,
+  });
+
+  return {
+    summary: {
+      count,
+      totalAmount,
+      totalPaid,
+      totalProfit: profitClosedOrXClose,
+      jobsProfit,
+      avgTicket: count ? profitClosedOrXClose / count : 0,
+      avgTicketWithoutPenalty: count ? profitClosedOnly / count : 0,
+      avgClosedTicket: closedCount ? jobsProfit / closedCount : 0,
+      closedRatio: count ? closedCount / count : 0,
+    },
+    byTech: (result?.byTech || []).map(mapRow),
+    byLocation: (result?.byLocation || []).map(mapRow),
+    byStatus: (result?.byStatus || []).map((r: { _id?: unknown; count?: number }) => ({ key: (r._id as string) ?? 'Unknown', count: r.count ?? 0 })),
+    byProvider: (result?.byProvider || []).map(mapRow),
+  };
+}
+
 export async function GET(req: NextRequest) {
   try {
-    await ensureJobMirrorsFresh().catch(() => {});
     const { searchParams } = new URL(req.url);
-    const startDate = searchParams.get('startDate');
-    const endDate = searchParams.get('endDate');
-    const techs = searchParams.getAll('tech').map(t => t.trim()).filter(Boolean);
-    const locations = searchParams.getAll('location').map((l) => l.trim()).filter(Boolean);
-    const providers = searchParams.getAll('provider').map((p) => p.trim()).filter(Boolean);
-
-    const client = await getClient();
-    const collection = client.db(DB_NAME).collection<JobRow>(COLLECTION_NAME);
-
-    // Helper for safe number conversion in aggregation
-    const toNumberAgg = (field: string) => ({
-      $convert: { input: field, to: 'double', onError: 0, onNull: 0 },
+    const data = await computeStats({
+      startDate: searchParams.get('startDate'),
+      endDate: searchParams.get('endDate'),
+      techs: searchParams.getAll('tech'),
+      locations: searchParams.getAll('location'),
+      providers: searchParams.getAll('provider'),
     });
-
-    const paidSum = {
-      $add: [
-        toNumberAgg('$techPaidCash'),
-        toNumberAgg('$totalPaidCard'),
-        toNumberAgg('$totalPaidCompanyCheck'),
-        toNumberAgg('$totalPaidFinance'),
-        toNumberAgg('$totalPaidCompanyCash'),
-        toNumberAgg('$lmCash'),
-        toNumberAgg('$lmCheck'),
-      ],
-    };
-
-    const pipeline: any[] = [
-      {
-        $addFields: {
-          // Same multi-format robust derivation the report uses (SRC_DATE_EXPR),
-          // so stats and the provider report can never disagree on which jobs
-          // fall in a date range — and neither drops off-format dates.
-          dateParsed: SRC_DATE_EXPR,
-          // Canonical status derived from the SOURCE field, so a stale/missing
-          // statusCanonical mirror (external writer) can't drop or misclassify a
-          // job. Identical to statusCanonical when the mirror is fresh.
-          _srcStatus: SRC_STATUS_EXPR,
-        },
-      },
-    ];
-
-    const matchStage: any = {};
-    if (startDate || endDate) {
-      const range: any = {};
-      if (startDate) range.$gte = new Date(startDate);
-      if (endDate) range.$lte = new Date(endDate);
-      // Match on the SOURCE-derived dateParsed (not the stale jobDateNormalized
-      // mirror) so externally-written jobs are never dropped from the range.
-      matchStage.dateParsed = { ...(range.$gte ? { $gte: range.$gte } : {}), ...(range.$lte ? { $lte: range.$lte } : {}) };
-    }
-    const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-    if (techs.length > 0) {
-      // Use contains-style case-insensitive regex (mirrors /api/jobs filter
-      // rule for tech). Anchored `^name$` was missing matches because some
-      // Job.tech values differ from the Technician._id by trailing whitespace
-      // or extra characters that the user-facing filter on /jobs ignores.
-      matchStage.$and = [
-        ...(matchStage.$and || []),
-        { tech: { $in: techs.map((t) => new RegExp(escapeRegex(t), 'i')) } },
-      ];
-    }
-    if (locations.length > 0) {
-      // Match exact value OR case-insensitive equality across the selected list.
-      const regexes = locations.map((l) => new RegExp(`^${escapeRegex(l)}$`, 'i'));
-      matchStage.$and = [
-        ...(matchStage.$and || []),
-        { $or: [{ location: { $in: locations } }, { location: { $in: regexes } }] },
-      ];
-    }
-    if (providers.length > 0) {
-      const regexes = providers.map((p) => new RegExp(`^${escapeRegex(p)}$`, 'i'));
-      matchStage.$and = [
-        ...(matchStage.$and || []),
-        { provider: { $in: regexes } },
-      ];
-    }
-    if (Object.keys(matchStage).length) {
-      pipeline.push({ $match: matchStage });
-    }
-
-    pipeline.push({
-      $addFields: {
-        dateKey: {
-          $cond: [
-            { $eq: ['$dateParsed', null] },
-            '$date',
-            { $dateToString: { format: '%Y-%m-%d', date: '$dateParsed' } },
-          ],
-        },
-        totalPaid: paidSum,
-        valTotalAmount: {
-          $cond: [
-            { $gt: [toNumberAgg('$totalAmount'), 0] },
-            toNumberAgg('$totalAmount'),
-            paidSum
-          ]
-        },
-        // Used by avg-ticket calculation below — mirrors the report page's
-        // provider-tab columns: Total Payment − Total Fees − Total Parts.
-        // Excludes BOTH check fees (company check + LM check) — legacy
-        // provider-tab "fees w/o check" convention. calcParts includes lmParts.
-        valFeeNoCheck: {
-          $add: [
-            { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
-            { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
-          ],
-        },
-        // All-kinds fee burden — card 5% + finance 10% + company check 10%.
-        // LM check is fee-free at the company level (owner rule 2026-09-08: the
-        // 10% is a private AM↔tech deduction on the tech report only, never a
-        // company fee). Used for the "Jobs Profit" KPI.
-        valFeeAllKinds: {
-          $add: [
-            { $multiply: [toNumberAgg('$totalPaidCard'), 0.05] },
-            { $multiply: [toNumberAgg('$totalPaidFinance'), 0.1] },
-            { $multiply: [toNumberAgg('$totalPaidCompanyCheck'), 0.1] },
-          ],
-        },
-        valParts: {
-          $add: [
-            toNumberAgg('$techParts'),
-            toNumberAgg('$companyParts'),
-            toNumberAgg('$lmParts'),
-          ],
-        },
-      },
-    });
-
-    pipeline.push({
-      $facet: {
-        summary: [
-          {
-            $group: {
-              _id: null,
-              count: { $sum: 1 },
-              totalAmount: { $sum: '$valTotalAmount' },
-              totalPaid: { $sum: toNumberAgg('$totalPaid') },
-              closedCount: {
-                $sum: { $cond: [{ $eq: ['$_srcStatus', 'Closed'] }, 1, 0] },
-              },
-              // Profit per job = totalPaid − feeNoCheck − parts
-              // (matches the report page provider-tab column subtraction)
-              profitClosedOrXClose: {
-                $sum: {
-                  $cond: [
-                    { $or: [{ $eq: ['$_srcStatus', 'Closed'] }, { $eq: ['$_srcStatus', 'X close'] }] },
-                    { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
-                    0,
-                  ],
-                },
-              },
-              profitClosedOnly: {
-                $sum: {
-                  $cond: [
-                    { $eq: ['$_srcStatus', 'Closed'] },
-                    { $subtract: [{ $subtract: ['$totalPaid', '$valFeeNoCheck'] }, '$valParts'] },
-                    0,
-                  ],
-                },
-              },
-              // Jobs Profit = totalSales − all payment fees − all parts (Closed only).
-              jobsProfit: {
-                $sum: {
-                  $cond: [
-                    { $eq: ['$_srcStatus', 'Closed'] },
-                    { $subtract: [{ $subtract: ['$valTotalAmount', '$valFeeAllKinds'] }, '$valParts'] },
-                    0,
-                  ],
-                },
-              },
-            },
-          },
-        ],
-        byDate: [
-          {
-            $group: {
-              _id: '$dateKey',
-              count: { $sum: 1 },
-              totalAmount: { $sum: '$valTotalAmount' },
-              totalPaid: { $sum: toNumberAgg('$totalPaid') },
-            },
-          },
-          { $sort: { _id: 1 } },
-        ],
-        byTech: [
-          { $match: { tech: { $exists: true, $nin: [null, ''] } } },
-          {
-            $group: {
-              _id: '$tech',
-              count: { $sum: 1 },
-              totalAmount: { $sum: '$valTotalAmount' },
-              totalPaid: { $sum: toNumberAgg('$totalPaid') },
-            },
-          },
-          { $sort: { count: -1, _id: 1 } },
-        ],
-        byLocation: [
-          { $match: { location: { $exists: true, $nin: [null, ''] } } },
-          {
-            $group: {
-              _id: '$location',
-              count: { $sum: 1 },
-              totalAmount: { $sum: '$valTotalAmount' },
-              totalPaid: { $sum: toNumberAgg('$totalPaid') },
-            },
-          },
-          { $sort: { count: -1, _id: 1 } },
-        ],
-        byStatus: [
-          { $match: { _srcStatus: { $nin: [null, ''] } } },
-          {
-            $group: {
-              _id: '$_srcStatus',
-              count: { $sum: 1 },
-            },
-          },
-          { $sort: { count: -1, _id: 1 } },
-        ],
-        byProvider: [
-          { $match: { provider: { $exists: true, $nin: [null, ''] } } },
-          {
-            $group: {
-              _id: '$provider',
-              count: { $sum: 1 },
-              totalAmount: { $sum: '$valTotalAmount' },
-              totalPaid: { $sum: toNumberAgg('$totalPaid') },
-            },
-          },
-          { $sort: { count: -1, _id: 1 } },
-        ],
-      },
-    });
-
-    const [result] = await collection.aggregate(pipeline).toArray();
-
-    const summaryDoc = result?.summary?.[0] || {
-      count: 0,
-      totalAmount: 0,
-      totalPaid: 0,
-      closedCount: 0,
-    };
-
-    const count = summaryDoc.count || 0;
-    const totalAmount = summaryDoc.totalAmount || 0;
-    const totalPaid = summaryDoc.totalPaid || 0;
-    const closedCount = summaryDoc.closedCount || 0;
-    const profitClosedOrXClose = summaryDoc.profitClosedOrXClose || 0;
-    const profitClosedOnly = summaryDoc.profitClosedOnly || 0;
-    const jobsProfit = summaryDoc.jobsProfit || 0;
-
-    return NextResponse.json({
-      summary: {
-        count,
-        totalAmount,
-        totalPaid,
-        // Total profit = Σ (Total Payment − Total Fees − Total Parts) across
-        // Closed + X close jobs. Same scope and definition as the avg ticket
-        // numerator, just not divided.
-        totalProfit: profitClosedOrXClose,
-        // Jobs Profit (Closed only) = totalSales − all payment fees − all parts.
-        // Fees include card 5% + finance 10% + companyCheck 10% (LM check is
-        // fee-free at company level — its 10% is a tech-report AM↔tech item).
-        jobsProfit,
-        // Avg ticket = (Total Payment − Total Fees − Total Parts) / jobs
-        // sourced from the same payment/fees/parts breakdown shown on the
-        // report page provider tab.
-        avgTicket: count ? profitClosedOrXClose / count : 0,
-        avgTicketWithoutPenalty: count ? profitClosedOnly / count : 0,
-        // Avg Closed Ticket = total profit on Closed jobs / count of Closed
-        // jobs. Uses `jobsProfit` which is the closed-only profit pool
-        // already aggregated above (valTotalAmount − all fees − all parts,
-        // summed across status = 'Closed'). The previous formula divided
-        // valTotalAmount across *every* job by the closed count, producing
-        // a misleadingly inflated number.
-        avgClosedTicket: closedCount ? jobsProfit / closedCount : 0,
-        closedRatio: count ? closedCount / count : 0,
-      },
-      byTech: (result?.byTech || []).map((r: any) => ({
-        key: r._id ?? '',
-        count: r.count ?? 0,
-        totalAmount: r.totalAmount ?? 0,
-        totalPaid: r.totalPaid ?? 0,
-      })),
-      byLocation: (result?.byLocation || []).map((r: any) => ({
-        key: r._id ?? '',
-        count: r.count ?? 0,
-        totalAmount: r.totalAmount ?? 0,
-        totalPaid: r.totalPaid ?? 0,
-      })),
-      byStatus: (result?.byStatus || []).map((r: any) => ({
-        key: r._id ?? 'Unknown',
-        count: r.count ?? 0,
-      })),
-      byProvider: (result?.byProvider || []).map((r: any) => ({
-        key: r._id ?? '',
-        count: r.count ?? 0,
-        totalAmount: r.totalAmount ?? 0,
-        totalPaid: r.totalPaid ?? 0,
-      })),
-    });
+    return NextResponse.json(data);
   } catch (err) {
     console.error('GET /api/stats error', err);
     return NextResponse.json({ error: 'Failed to load stats' }, { status: 500 });
