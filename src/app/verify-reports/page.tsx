@@ -279,7 +279,7 @@ function ListView({
         </header>
 
         {error && (
-          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(239,68,68,0.4)' }}>
+          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'var(--ds-crit-line)' }}>
             <p style={{ fontSize: 12, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
               Couldn't load reports
             </p>
@@ -377,9 +377,9 @@ function ListView({
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
               <OverviewStat label="Total Sales"              value={formatCurrency(overviewTotals.sales)}      />
-              <OverviewStat label="Total Balance"            value={formatCurrency(overviewTotals.balance)}    accent={overviewTotals.balance < 0 ? '#f87171' : overviewTotals.balance > 0 ? '#34d399' : undefined} />
+              <OverviewStat label="Total Balance"            value={formatCurrency(overviewTotals.balance)}     />
               <OverviewStat label="Tips"                     value={formatCurrency(overviewTotals.tips)}       />
-              <OverviewStat label="Commission (Tech Payout)" value={formatCurrency(overviewTotals.commission)} accent="#a5b4fc" />
+              <OverviewStat label="Commission (Tech Payout)" value={formatCurrency(overviewTotals.commission)} accent="var(--ds-info-text)" />
             </div>
           </div>
         )}
@@ -423,7 +423,7 @@ function ListView({
                     className="pmr-tech-row"
                     onClick={() => onOpen(r.id)}
                     role="button"
-                    style={selectedReportIds.has(r.id) ? { background: 'rgba(99,102,241,0.06)' } : undefined}
+                    style={selectedReportIds.has(r.id) ? { background: 'var(--ds-neutral-wash)' } : undefined}
                   >
                     {techFilter && (
                       <td
@@ -442,7 +442,7 @@ function ListView({
                     )}
                     <td onClick={(e) => { e.stopPropagation(); if (r.techName) setTechFilter(r.techName); }}
                         title={r.techName ? `Show all weeks for ${r.techName}` : undefined}
-                        style={{ cursor: r.techName ? 'pointer' : undefined, color: techFilter === r.techName ? '#a5b4fc' : undefined, fontWeight: techFilter === r.techName ? 600 : undefined }}>
+                        style={{ cursor: r.techName ? 'pointer' : undefined, color: techFilter === r.techName ? 'var(--ds-info-text)' : undefined, fontWeight: techFilter === r.techName ? 600 : undefined }}>
                       {r.techName || '—'}
                     </td>
                     <td>{r.areaName || '—'}</td>
@@ -454,8 +454,8 @@ function ListView({
                           title="Returned, then edited again by the tech — treat as a re-submission"
                           style={{
                             marginLeft: 6, padding: '1px 6px', borderRadius: 6, fontSize: 11,
-                            fontWeight: 600, background: 'rgba(245,158,11,0.15)', color: '#fbbf24',
-                            border: '1px solid rgba(245,158,11,0.35)', whiteSpace: 'nowrap',
+                            fontWeight: 600, background: 'var(--ds-warn-soft)', color: 'var(--ds-warn-text)',
+                            border: '1px solid var(--ds-warn-line)', whiteSpace: 'nowrap',
                           }}
                         >
                           resubmitted
@@ -465,10 +465,7 @@ function ListView({
                     <td>{r.submittedAt ? formatDisplayDate(r.submittedAt.slice(0, 10)) : '—'}</td>
                     <td>{r.supabaseJobCount}</td>
                     <td style={{ fontWeight: 600 }}>{formatCurrency(r.supabaseTotalSales)}</td>
-                    <td style={{
-                      color: (r.supabaseBalance ?? 0) < 0 ? '#f87171' : (r.supabaseBalance ?? 0) > 0 ? '#34d399' : undefined,
-                      fontWeight: (r.supabaseBalance ?? 0) !== 0 ? 600 : undefined,
-                    }}>
+                    <td style={{ fontWeight: (r.supabaseBalance ?? 0) !== 0 ? 600 : undefined }}>
                       {formatCurrency(r.supabaseBalance || 0)}
                     </td>
                     <td>{formatCurrency(r.supabaseTips || 0)}</td>
@@ -543,7 +540,7 @@ function DetailView({
         </header>
 
         {error && (
-          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(239,68,68,0.4)' }}>
+          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'var(--ds-crit-line)' }}>
             <pre style={{ color: 'var(--ds-crit-text)', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
           </div>
         )}
@@ -590,9 +587,9 @@ function IdentityRow({ ok, ok_label, bad_label }: { ok: boolean; ok_label: strin
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
       {ok
-        ? <FiCheckCircle color="#34d399" />
-        : <FiAlertTriangle color="#fbbf24" />}
-      <span style={{ color: ok ? '#cbd5e1' : '#fbbf24' }}>{ok ? ok_label : bad_label}</span>
+        ? <FiCheckCircle color="var(--ds-ok)" />
+        : <FiAlertTriangle color="var(--ds-warn)" />}
+      <span style={{ color: ok ? 'var(--ds-ink)' : 'var(--ds-warn-text)' }}>{ok ? ok_label : bad_label}</span>
     </div>
   );
 }
@@ -616,7 +613,7 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
     { label: 'Finance (CRM-only)',   value: totals.crm.totalPaidFinance },
   ].filter((e) => e.value > 0);
 
-  const colorForDiff = (d: number) => Math.abs(d) > 1 ? '#fbbf24' : '#34d399';
+  const colorForDiff = (d: number) => (Math.abs(d) > 1 ? 'var(--ds-warn-text)' : 'var(--ds-ok-text)');
 
   return (
     <div className="panel bp-table-panel animate-fade-up" style={{ marginBottom: 12 }}>
@@ -625,7 +622,7 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
           <p className="bp-section-kicker">Summary</p>
           <h3>Totals comparison</h3>
         </div>
-        <span className="bp-pill" style={{ background: summary.mismatched + summary.missingInCrm + summary.missingInReport > 0 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)' }}>
+        <span className="bp-pill" style={{ background: summary.mismatched + summary.missingInCrm + summary.missingInReport > 0 ? 'var(--ds-warn-soft)' : 'var(--ds-ok-wash)' }}>
           ✓ {summary.matched} match · ⚠ {summary.mismatched} mismatch · ✗ {summary.missingInCrm} CRM-only · ✗ {summary.missingInReport} Report-only
         </span>
       </div>
@@ -656,7 +653,7 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
                 <td style={{ textAlign: 'right', color: colorForDiff(r.diff), fontWeight: 600 }}>
                   {r.diff > 0 ? '+' : ''}{formatCurrency(r.diff)}
                 </td>
-                <td>{Math.abs(r.diff) > 1 ? <FiAlertTriangle color="#fbbf24" /> : <FiCheck color="#34d399" />}</td>
+                <td>{Math.abs(r.diff) > 1 ? <FiAlertTriangle color="var(--ds-warn)" /> : <FiCheck color="var(--ds-ok)" />}</td>
               </tr>
             ))}
           </tbody>
@@ -802,10 +799,10 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
 
   const statusBadge = (() => {
     switch (pair.status) {
-      case 'match':              return <span style={pillStyle('#34d399')}><FiCheck /> match</span>;
-      case 'mismatch':           return <span style={pillStyle('#fbbf24')}><FiAlertTriangle /> mismatch</span>;
-      case 'missing-in-crm':     return <span style={pillStyle('#f87171')}><FiX /> CRM-only missing</span>;
-      case 'missing-in-report':  return <span style={pillStyle('#f87171')}><FiX /> Report-only missing</span>;
+      case 'match':              return <span style={pillStyle(PILL_OK)}><FiCheck /> match</span>;
+      case 'mismatch':           return <span style={pillStyle(PILL_WARN)}><FiAlertTriangle /> mismatch</span>;
+      case 'missing-in-crm':     return <span style={pillStyle(PILL_CRIT)}><FiX /> CRM-only missing</span>;
+      case 'missing-in-report':  return <span style={pillStyle(PILL_CRIT)}><FiX /> Report-only missing</span>;
     }
   })();
 
@@ -830,12 +827,12 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
         {pair.status === 'mismatch' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
             {pair.methodDiff && (
-              <span style={{ color: '#fbbf24' }}>
+              <span style={{ color: 'var(--ds-warn-text)' }}>
                 Payment method: reported <strong>{pair.methodDiff.supabase || '—'}</strong> · CRM <strong>{pair.methodDiff.crm || '—'}</strong>
               </span>
             )}
             {pair.diffs.filter((d) => d.exceedsTolerance).map((d) => (
-              <span key={d.field} style={{ color: '#fbbf24' }}>
+              <span key={d.field} style={{ color: 'var(--ds-warn-text)' }}>
                 {d.label}: reported {formatCurrency(d.supabase)} · CRM {formatCurrency(d.crm)} · {d.diff > 0 ? '+' : ''}{formatCurrency(d.diff)}
               </span>
             ))}
@@ -860,7 +857,7 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
           </span>
         )}
         {pair.status === 'missing-in-report' && <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>CRM has it, tech didn't report</span>}
-        {pair.status === 'match' && <span style={{ fontSize: 12, color: '#34d399' }}>All within $1 tolerance</span>}
+        {pair.status === 'match' && <span style={{ fontSize: 12, color: 'var(--ds-ok-text)' }}>All within $1 tolerance</span>}
         {pair.manualLink && pair.supabaseJob && (
           <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <span
@@ -936,27 +933,33 @@ function PaymentMethodCell({ pair }: { pair: Pair }) {
   const crm: string | null = pair.crmJob?.paymentType ?? null;
   const same = sup && crm && sup.toLowerCase() === crm.toLowerCase();
   if (same) {
-    return <span style={methodPillStyle('#a5b4fc')}>{sup}</span>;
+    return <span style={methodPillStyle(METHOD_REPORTED)}>{sup}</span>;
   }
   if (sup && crm) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-        <span style={methodPillStyle('#a5b4fc')}>{sup}</span>
-        <span style={{ ...methodPillStyle('#94a3b8'), opacity: 0.85 }}>CRM: {crm}</span>
+        <span style={methodPillStyle(METHOD_REPORTED)}>{sup}</span>
+        <span style={{ ...methodPillStyle(METHOD_CRM), opacity: 0.85 }}>CRM: {crm}</span>
       </div>
     );
   }
-  if (sup) return <span style={methodPillStyle('#a5b4fc')}>{sup}</span>;
-  if (crm) return <span style={methodPillStyle('#94a3b8')}>{crm}</span>;
+  if (sup) return <span style={methodPillStyle(METHOD_REPORTED)}>{sup}</span>;
+  if (crm) return <span style={methodPillStyle(METHOD_CRM)}>{crm}</span>;
   return <span style={{ color: 'var(--ds-ink-2)', fontSize: 12 }}>—</span>;
 }
 
-function methodPillStyle(color: string): React.CSSProperties {
+/* Payment-method source labels. Which system a value came from is category
+   information, not status, so both tiers are neutral; the CRM pill is already
+   prefixed "CRM:" and the reported value is the filled one. */
+const METHOD_REPORTED: PillTier = { text: 'var(--ds-ink)',          wash: 'var(--ds-neutral-wash)', line: 'var(--ds-neutral-line)' };
+const METHOD_CRM:      PillTier = { text: 'var(--ds-neutral-text)', wash: 'transparent',            line: 'var(--ds-neutral-line)' };
+
+function methodPillStyle(tier: PillTier): React.CSSProperties {
   return {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     padding: '2px 8px', borderRadius: 999,
     fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap',
-    background: color + '18', color, border: `1px solid ${color}40`,
+    background: tier.wash, color: tier.text, border: `1px solid ${tier.line}`,
   };
 }
 
@@ -1045,9 +1048,9 @@ function Badge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 11,
-      background: ok ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)',
-      color: ok ? '#34d399' : '#f87171',
-      border: `1px solid ${ok ? 'rgba(16,185,129,0.30)' : 'rgba(239,68,68,0.30)'}`,
+      background: ok ? 'var(--ds-ok-wash)' : 'var(--ds-warn-soft)',
+      color: ok ? 'var(--ds-ok-text)' : 'var(--ds-warn-text)',
+      border: `1px solid ${ok ? 'var(--ds-ok-line)' : 'var(--ds-warn-line)'}`,
     }}>
       {ok ? <FiCheck size={10} /> : <FiX size={10} />} {label}
     </span>
@@ -1061,9 +1064,9 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
       onClick={onClick}
       style={{
         padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: 'pointer',
-        background: active ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.04)',
-        border: `1px solid ${active ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.10)'}`,
-        color: active ? '#c7d2fe' : '#cbd5e1',
+        background: active ? 'var(--ds-info-wash)' : 'var(--ds-surface-3)',
+        border: `1px solid ${active ? 'var(--ds-info-line)' : 'var(--ds-line)'}`,
+        color: active ? 'var(--ds-info-text)' : 'var(--ds-ink)',
       }}
     >
       {children}
@@ -1079,11 +1082,20 @@ const truncStyle: React.CSSProperties = {
   maxWidth: '100%',
 };
 
-function pillStyle(color: string): React.CSSProperties {
+/* Reconciliation severity. match = both sides agree within TOLERANCE_USD and
+   on payment method; mismatch = both exist but disagree; missing = one side is
+   absent so the comparison cannot be completed. warn uses -soft rather than
+   -wash because text sits on it (-wash measures 4.47 in light). */
+type PillTier = { text: string; wash: string; line: string };
+const PILL_OK:   PillTier = { text: 'var(--ds-ok-text)',   wash: 'var(--ds-ok-wash)',   line: 'var(--ds-ok-line)' };
+const PILL_WARN: PillTier = { text: 'var(--ds-warn-text)', wash: 'var(--ds-warn-soft)', line: 'var(--ds-warn-line)' };
+const PILL_CRIT: PillTier = { text: 'var(--ds-crit-text)', wash: 'var(--ds-crit-wash)', line: 'var(--ds-crit-line)' };
+
+function pillStyle(tier: PillTier): React.CSSProperties {
   return {
     display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999,
     fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-    background: color + '20', color, border: `1px solid ${color}66`,
+    background: tier.wash, color: tier.text, border: `1px solid ${tier.line}`,
   };
 }
 
@@ -1137,7 +1149,7 @@ function ReportNoteCard({ report }: { report: DetailResponse['report'] }) {
   };
 
   return (
-    <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(245,158,11,0.25)' }}>
+    <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'var(--ds-line)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <p className="bp-section-kicker" style={{ margin: 0 }}>Admin Note · CRM only</p>
@@ -1260,7 +1272,7 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
             background: 'var(--ds-surface-2)',
             border: '1px solid var(--ds-line)',
             borderRadius: 8, padding: '6px 8px',
-            fontSize: 12, color: '#e2e8f0',
+            fontSize: 12, color: 'var(--ds-ink)',
             whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           }}
         >
