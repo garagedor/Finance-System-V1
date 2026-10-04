@@ -25,7 +25,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
-  const body = (await req.json().catch(() => ({}))) as { action?: string; jobId?: string; date?: string };
+  const body = (await req.json().catch(() => ({}))) as { action?: string; jobId?: string; date?: string; ledgerId?: string; party?: string; techId?: string };
   const action = body.action;
 
   await ensureFinanceIndexes();
@@ -98,6 +98,10 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   // resolution date; a lost one stays a loss; anything else is still open.
   const status = rec.outcome === "won" ? "won" : rec.outcome === "lost" ? "lost" : "open";
 
+  // Optional: post a chosen party's slice to a chosen ledger (same as adding the
+  // dispute from inside a ledger). Omit both → the engine's default (full AM
+  // charge to the job's Area-Manager ledger), as before.
+  const party = (["technician", "area_manager", "provider", "combined"] as const).find((p) => p === body.party);
   const result = await postDisputeCharge({
     type: "dispute",
     jobId,
@@ -107,6 +111,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     customer_name: rec.customerName || undefined,
     address: rec.serviceAddress || undefined,
     notes: `ScanPay ${rec.disputeId} · ${rec.reason || "dispute"}`,
+    ledgerId: body.ledgerId ? String(body.ledgerId) : undefined,
+    party,
+    techId: body.techId ? String(body.techId) : undefined,
     actor: session.name,
   });
 

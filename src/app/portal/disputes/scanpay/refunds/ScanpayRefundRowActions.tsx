@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import PostToLedgerDialog from "../PostToLedgerDialog";
 
 type Job = { _id: string; date: string | null; address: string | null; clientName: string | null; tech: string | null; collected: number };
 
@@ -100,8 +101,7 @@ export default function ScanpayRefundRowActions({
       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
         {err && <span className="small" style={{ color: "#f87171" }}>{err}</span>}
         <span className="muted small" style={{ color: "#34d399" }}>✔ verified</span>
-        <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
-          onClick={() => simple({ action: "confirm" })}>Post → ledger</button>
+        <PostToLedgerDialog endpoint={`/api/portal/scanpay/refunds/${encodeURIComponent(id)}`} />
         <button className="portal-btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setOpen(true)}>Edit</button>
         <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
           onClick={() => simple({ action: "unverify" })}>Unverify</button>

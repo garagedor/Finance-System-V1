@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await ctx.params;
-  const body = (await req.json().catch(() => ({}))) as { action?: string; jobId?: string; amount?: number; date?: string };
+  const body = (await req.json().catch(() => ({}))) as { action?: string; jobId?: string; amount?: number; date?: string; ledgerId?: string; party?: string; techId?: string };
   const action = body.action;
 
   await ensureFinanceIndexes();
@@ -86,6 +86,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "This refund was already posted" }, { status: 409 });
   }
 
+  // Optional ledger + party choice (same as adding the refund from inside a
+  // ledger). Omit both → default: full AM charge to the job's AM ledger.
+  const party = (["technician", "area_manager", "provider", "combined"] as const).find((p) => p === body.party);
   const result = await postDisputeCharge({
     type: "refund",
     jobId,
@@ -93,6 +96,9 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     date,
     status: "paid", // a refund we've issued
     notes: `ScanPay refund ${rec.paymentId} · invoice ${rec.invoiceNumber}`,
+    ledgerId: body.ledgerId ? String(body.ledgerId) : undefined,
+    party,
+    techId: body.techId ? String(body.techId) : undefined,
     actor: session.name,
   });
 

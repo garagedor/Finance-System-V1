@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import PostToLedgerDialog from "./PostToLedgerDialog";
 
 type Job = { _id: string; date: string | null; address: string | null; clientName: string | null; tech: string | null; location: string | null; collected: number };
 
@@ -89,10 +90,7 @@ export default function ScanpayRowActions({
       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center", flexWrap: "wrap" }}>
         {err && <span className="small" style={{ color: "#f87171", flexBasis: "100%", textAlign: "right" }}>{err}</span>}
         <span className="muted small" style={{ color: "#34d399" }}>✔ verified</span>
-        <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
-          title={suggestedLabel ?? undefined} onClick={() => act({ action: "confirm", jobId: suggestedJobId ?? undefined })}>
-          Post → ledger
-        </button>
+        <PostToLedgerDialog endpoint={`/api/portal/scanpay/${encodeURIComponent(id)}`} />
         <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
           onClick={() => act({ action: "unverify" })}>Unverify</button>
         {chargedToggle}

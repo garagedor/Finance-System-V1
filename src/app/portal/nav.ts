@@ -182,7 +182,7 @@ export const FINANCE_NAV: FinanceModule[] = [
     requires: "finance:area_managers:view",
   },
   {
-    href: "/portal/disputes",
+    href: "/portal/disputes/inbox",
     label: "Disputes & Refunds",
     section: "Tracking",
     title: "Disputes & Refunds",
