@@ -826,7 +826,7 @@ tbody tr:hover .actions {
 
 .snackbar.success {
     background: var(--ds-ok);
-    color: var(--ds-bg);
+    color: var(--ds-on-ok);
     border: 1px solid var(--ds-ok-line);
 }
 

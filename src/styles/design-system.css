@@ -112,6 +112,7 @@
   --ds-on-info:   #0B1A21;   /* foreground on a solid --ds-info fill (shared accent) */
   --ds-on-brand:  #04070C;   /* the tri-colour logo mark */
   --ds-on-crit:   #350F0D;   /* solid danger fills — notification badges */
+  --ds-on-ok:     #0C1A12;   /* solid success fills — snackbars, badges */
 
   /* ── Semantic — never a portal hue ──────────────────────────────────────
      S4 batch 2. Each hue now carries five roles, because one value cannot
@@ -260,6 +261,7 @@
   --ds-on-info:   #FFFFFF;
   --ds-on-brand:  #FFFFFF;
   --ds-on-crit:   #FFFFFF;
+  --ds-on-ok:     #FFFFFF;
 
   /* --ds-ok moved from #137D54 (H 157°) to #15803D (H 142°): the light Finance
      hue #0E7355 sits at H 162°, so the old pair was only 5° apart. */
@@ -325,7 +327,7 @@
     --ds-fin-text:#0D694E; --ds-fin-wash-2:rgba(14,115,85,.16); --ds-fin-line:rgba(14,115,85,.28);
     --ds-whs-text:#1E5BAB; --ds-whs-wash-2:rgba(31,93,174,.16); --ds-whs-line:rgba(31,93,174,.28);
     --ds-on-crm:#FFFFFF; --ds-on-fin:#FFFFFF; --ds-on-whs:#FFFFFF;
-    --ds-on-accent:#FFFFFF; --ds-on-brand:#FFFFFF; --ds-on-crit:#FFFFFF; --ds-on-info:#FFFFFF;
+    --ds-on-accent:#FFFFFF; --ds-on-brand:#FFFFFF; --ds-on-crit:#FFFFFF; --ds-on-info:#FFFFFF; --ds-on-ok:#FFFFFF;
     --ds-ok:#15803D; --ds-warn:#76690F; --ds-crit:#B03830; --ds-info:#0E7297;
     --ds-ok-text:#137638; --ds-warn-text:#75680F; --ds-crit-text:#B03830; --ds-info-text:#0E688A;
     --ds-ok-wash:rgba(21,128,61,.10); --ds-warn-wash:rgba(118,105,15,.10);

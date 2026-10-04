@@ -44,13 +44,15 @@ export function Snackbar({ snackbar }: Props) {
         }
 
         .snackbar.success {
-          background: linear-gradient(135deg, rgba(5,150,105,0.95), rgba(16,185,129,0.95));
-          border: 1px solid rgba(16, 185, 129, 0.4);
+          background: var(--ds-ok);
+          color: var(--ds-on-ok);
+          border: 1px solid var(--ds-ok-line);
         }
 
         .snackbar.error {
-          background: linear-gradient(135deg, rgba(220,38,38,0.95), rgba(239,68,68,0.95));
-          border: 1px solid rgba(239, 68, 68, 0.4);
+          background: var(--ds-crit);
+          color: var(--ds-on-crit);
+          border: 1px solid var(--ds-crit-line);
         }
 
         .snackbar-icon {
@@ -60,7 +62,7 @@ export function Snackbar({ snackbar }: Props) {
           width: 22px;
           height: 22px;
           border-radius: 50%;
-          background: rgba(255, 255, 255, 0.18);
+          background: color-mix(in srgb, currentColor 18%, transparent);
           font-weight: 800;
           font-size: 13px;
           flex-shrink: 0;
@@ -76,7 +78,7 @@ export function Snackbar({ snackbar }: Props) {
           bottom: 0;
           height: 3px;
           width: 100%;
-          background: rgba(255, 255, 255, 0.4);
+          background: color-mix(in srgb, currentColor 40%, transparent);
           transform-origin: left;
           animation: snackbarProgress 2.8s linear forwards;
         }
