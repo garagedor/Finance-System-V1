@@ -13,9 +13,10 @@
 // Sign convention (matches the ledgers everywhere): a POSITIVE balance means the
 // holder/location owes the company; NEGATIVE means the company owes them.
 
-import type { Filter } from "mongodb";
-import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "./finance-db";
+import { ObjectId, type Filter } from "mongodb";
+import { coll, getDb, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "./finance-db";
 import { fetchDashboardData, type DisputeGroup } from "./portal-data";
+import { disputeDetail, type DisputeDetail, type DisputePartsExtra } from "./dispute-detail";
 import type { LedgerRecord, LedgerEntryRecord } from "@/types/finance-ledger";
 import type { PayoutRecord, DebtRecord } from "@/types/finance";
 import type { EquipmentOrder } from "@/types/equipment";
@@ -66,6 +67,8 @@ export interface LedgerDetailEntry {
   description: string;
   amount: number;
   running: number;    // running balance starting from the ledger's opening
+  /** For dispute/refund entries: the full cost-share breakdown, printed inline. */
+  detail?: DisputeDetail | null;
 }
 
 export interface LedgerDetail {
@@ -272,25 +275,44 @@ export async function buildFinancialReport(opts: FinancialReportOptions): Promis
     truncatedLedgers = ledgerRows.length > LEDGER_DETAIL_MAX;
     const detailLedgers = ledgerRows.slice(0, LEDGER_DETAIL_MAX);
     const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
-    const details = await Promise.all(detailLedgers.map(async (lr) => {
-      const raw = await ec.find({ ledger_id: lr.id, date: { $gte: from, $lte: to } })
-        .sort({ date: 1, _id: 1 })
-        .limit(ENTRY_MAX + 1)
-        .toArray();
+    const rawByLedger = await Promise.all(detailLedgers.map(async (lr) => ({
+      lr,
+      raw: await ec.find({ ledger_id: lr.id, date: { $gte: from, $lte: to } }).sort({ date: 1, _id: 1 }).limit(ENTRY_MAX + 1).toArray(),
+    })));
+
+    // Enrich dispute/refund entries with address + parts from the CRM Job, so
+    // the inline breakdown shows them even for entries whose snapshot lacks them.
+    const jobRefs = [...new Set(rawByLedger.flatMap((x) => x.raw).filter((e) => (e.type === "dispute" || e.type === "refund") && e.job_ref).map((e) => String(e.job_ref)))];
+    const extraByRef = new Map<string, DisputePartsExtra>();
+    if (jobRefs.length) {
+      const jdb = await getDb();
+      const objIds = jobRefs.filter((r) => /^[0-9a-fA-F]{24}$/.test(r)).map((r) => new ObjectId(r));
+      const jobs = await jdb.collection("Job").find({ _id: { $in: [...jobRefs, ...objIds] } } as never).toArray();
+      const jmap = new Map(jobs.map((j) => [String((j as { _id?: unknown })._id), j as Record<string, unknown>]));
+      for (const ref of jobRefs) {
+        const j = jmap.get(ref);
+        if (j) extraByRef.set(ref, { address: (j.address as string) ?? null, techParts: Number(j.techParts) || 0, companyParts: Number(j.companyParts) || 0, lmParts: Number(j.lmParts) || 0 });
+      }
+    }
+
+    for (const { lr, raw } of rawByLedger) {
       const truncated = raw.length > ENTRY_MAX;
       const slice = truncated ? raw.slice(0, ENTRY_MAX) : raw;
       let running = lr.opening;
       const entries: LedgerDetailEntry[] = slice.map((e) => {
         running = round2(running + e.amount);
-        return { date: e.date, type: String(e.type), description: e.description ?? "", amount: round2(e.amount), running };
+        const isDispute = (e.type === "dispute" || e.type === "refund") && !!e.charge_snapshot;
+        return {
+          date: e.date, type: String(e.type), description: e.description ?? "", amount: round2(e.amount), running,
+          detail: isDispute ? disputeDetail(e.charge_snapshot as Record<string, unknown>, e.job_ref ? extraByRef.get(String(e.job_ref)) : undefined) : null,
+        };
       });
-      return {
+      ledgerDetailRows.push({
         id: lr.id, holderName: lr.holderName, role: lr.role, location: lr.location, label: lr.label,
         opening: lr.opening, movement: lr.movement, closing: lr.closing, current: lr.current,
         entries, truncated,
-      } as LedgerDetail;
-    }));
-    ledgerDetailRows.push(...details);
+      });
+    }
   }
 
   // 3) Extra whole-system sections — payouts, debts, equipment orders (all in

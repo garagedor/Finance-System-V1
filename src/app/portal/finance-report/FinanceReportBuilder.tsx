@@ -6,8 +6,9 @@
 // same configuration. Type-only import of the data shape — no server code
 // is pulled into the client bundle.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import FilterMultiSelect from "../_components/FilterMultiSelect";
+import DisputeDetailLines from "../_components/DisputeDetailLines";
 import type { FinancialReportData, SectionKey } from "@/lib/financial-report";
 
 const SECTIONS: { key: SectionKey; label: string; hint: string; off?: boolean }[] = [
@@ -435,13 +436,18 @@ function Section({ sk, d }: { sk: SectionKey; d: FinancialReportData }) {
                   <thead><tr><th>Date</th><th>Type</th><th>Description</th><th className="right">Amount</th><th className="right">Running</th></tr></thead>
                   <tbody>
                     {l.entries.map((e, i) => (
-                      <tr key={i}>
-                        <td className="mono">{e.date}</td>
-                        <td className="small">{e.type}</td>
-                        <td>{e.description || "—"}</td>
-                        <td className="right money">{money(e.amount)}</td>
-                        <td className="right money">{money(e.running)}</td>
-                      </tr>
+                      <Fragment key={i}>
+                        <tr>
+                          <td className="mono">{e.date}</td>
+                          <td className="small">{e.type}</td>
+                          <td>{e.description || "—"}</td>
+                          <td className="right money">{money(e.amount)}</td>
+                          <td className="right money">{money(e.running)}</td>
+                        </tr>
+                        {e.detail ? (
+                          <tr><td colSpan={5} style={{ paddingBottom: 8 }}><DisputeDetailLines detail={e.detail} inline /></td></tr>
+                        ) : null}
+                      </Fragment>
                     ))}
                   </tbody>
                   <tfoot><tr><td colSpan={4} style={{ fontWeight: 700 }}>Closing</td><td className="right money" style={{ fontWeight: 700 }}>{money(l.closing)}</td></tr></tfoot>

@@ -4,8 +4,10 @@
 import { Document, Page, Text, View, Image } from "@react-pdf/renderer";
 import { sharedPdfStyles as s, palette, fmtCurrency, fmtDate, fmtTimestamp } from "./sharedPdfStyles";
 import { SectionHeader, KpiCard, KpiGrid, ReportFooter } from "./ReportShared";
+import { DisputeDetailPdf } from "./DisputeDetailPdf";
+import type { DisputeDetail } from "@/lib/dispute-detail";
 
-export interface CustomPdfItem { date: string; primary: string; secondary: string; amount: number }
+export interface CustomPdfItem { date: string; primary: string; secondary: string; amount: number; detail?: DisputeDetail | null }
 export interface CustomPdfGroup { type: string; label: string; amountLabel: string; items: CustomPdfItem[]; subtotal: number }
 
 function GroupTable({ g }: { g: CustomPdfGroup }) {
@@ -20,11 +22,14 @@ function GroupTable({ g }: { g: CustomPdfGroup }) {
           <Text style={[s.tableHeaderCell, { flex: 1.5, textAlign: "right" }] as never}>{g.amountLabel}</Text>
         </View>
         {g.items.map((it, i) => (
-          <View key={i} style={[s.tableRow, i % 2 ? s.tableRowAlt : null].filter(Boolean) as never} wrap={false}>
-            <Text style={[s.tableCell, { flex: 1.3 }] as never}>{fmtDate(it.date)}</Text>
-            <Text style={[s.tableCell, { flex: 3.4 }] as never}>{it.primary || "—"}</Text>
-            <Text style={[s.tableCell, { flex: 2.6 }, s.cellMuted] as never}>{it.secondary || "—"}</Text>
-            <Text style={[s.tableCell, { flex: 1.5, textAlign: "right" }, it.amount > 0 ? s.cellPos : it.amount < 0 ? s.cellNeg : null].filter(Boolean) as never}>{fmtCurrency(it.amount)}</Text>
+          <View key={i}>
+            <View style={[s.tableRow, i % 2 ? s.tableRowAlt : null].filter(Boolean) as never} wrap={false}>
+              <Text style={[s.tableCell, { flex: 1.3 }] as never}>{fmtDate(it.date)}</Text>
+              <Text style={[s.tableCell, { flex: 3.4 }] as never}>{it.primary || "—"}</Text>
+              <Text style={[s.tableCell, { flex: 2.6 }, s.cellMuted] as never}>{it.secondary || "—"}</Text>
+              <Text style={[s.tableCell, { flex: 1.5, textAlign: "right" }, it.amount > 0 ? s.cellPos : it.amount < 0 ? s.cellNeg : null].filter(Boolean) as never}>{fmtCurrency(it.amount)}</Text>
+            </View>
+            {it.detail ? <DisputeDetailPdf detail={it.detail} /> : null}
           </View>
         ))}
         <View style={s.tableTotals} wrap={false}>

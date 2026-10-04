@@ -5,9 +5,11 @@ import "server-only";
 // authoritative, server-computed `amount`, so the builder can cherry-pick
 // specific rows across categories and combine them into one grouped report.
 
+import { ObjectId } from "mongodb";
 import { getDb, coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { calcPaidSum, calcParts, calcJobProfit, calcTotalAfterFee, calcStandardShare, toNumber } from "@/app/api/utils/calculations";
 import { ensureJobMirrorsFresh } from "@/lib/job-mirror";
+import { disputeDetail, type DisputeDetail, type DisputePartsExtra } from "@/lib/dispute-detail";
 import type { JobRow } from "@/types/job";
 import type { LedgerEntryRecord } from "@/types/finance-ledger";
 import type { PayoutRecord, ExpenseRecord, ManualIncomeRecord } from "@/types/finance";
@@ -32,6 +34,8 @@ export interface CustomItem {
   primary: string;   // main label (address / recipient / vendor / description / holder line)
   secondary: string; // sub label (tech · provider / category · status / entry type)
   amount: number;    // authoritative money figure for this row
+  /** For dispute/refund ledger lines: the cost-share breakdown, printed inline. */
+  detail?: DisputeDetail | null;
 }
 
 export interface CustomItemList {
@@ -67,9 +71,28 @@ export async function listCustomItems(p: ListCustomItemsParams): Promise<CustomI
       .find({ ledger_id: p.ledgerId, date: { $gte: from, $lte: to } })
       .sort({ date: 1, _id: 1 }).limit(cap + 1).toArray();
     const truncated = rows.length > cap;
+    const slice = rows.slice(0, cap);
+    // Enrich dispute/refund lines with address + parts from the Job for the inline breakdown.
+    const jobRefs = [...new Set(slice.filter((e) => (e.type === "dispute" || e.type === "refund") && e.job_ref).map((e) => String(e.job_ref)))];
+    const extraByRef = new Map<string, DisputePartsExtra>();
+    if (jobRefs.length) {
+      const objIds = jobRefs.filter((r) => /^[0-9a-fA-F]{24}$/.test(r)).map((r) => new ObjectId(r));
+      const jobs = await db.collection("Job").find({ _id: { $in: [...jobRefs, ...objIds] } } as never).toArray();
+      const jmap = new Map(jobs.map((j) => [String((j as { _id?: unknown })._id), j as Record<string, unknown>]));
+      for (const ref of jobRefs) {
+        const j = jmap.get(ref);
+        if (j) extraByRef.set(ref, { address: (j.address as string) ?? null, techParts: Number(j.techParts) || 0, companyParts: Number(j.companyParts) || 0, lmParts: Number(j.lmParts) || 0 });
+      }
+    }
     return {
       type: p.type, amountLabel: "Amount", truncated,
-      items: rows.slice(0, cap).map((e) => ({ id: e._id, date: e.date, primary: e.description ?? String(e.type), secondary: String(e.type), amount: round2(e.amount) })),
+      items: slice.map((e) => {
+        const isDispute = (e.type === "dispute" || e.type === "refund") && !!e.charge_snapshot;
+        return {
+          id: e._id, date: e.date, primary: e.description ?? String(e.type), secondary: String(e.type), amount: round2(e.amount),
+          detail: isDispute ? disputeDetail(e.charge_snapshot as Record<string, unknown>, e.job_ref ? extraByRef.get(String(e.job_ref)) : undefined) : undefined,
+        };
+      }),
     };
   }
 

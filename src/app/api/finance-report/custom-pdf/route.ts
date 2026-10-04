@@ -47,6 +47,7 @@ export async function POST(req: NextRequest) {
         primary: String(it.primary ?? ""),
         secondary: String(it.secondary ?? ""),
         amount: r2(Number(it.amount)),
+        detail: (it.detail && typeof it.detail === "object") ? (it.detail as CustomPdfItem["detail"]) : null,
       }));
       const subtotal = r2(items.reduce((sum, it) => sum + it.amount, 0));
       return {

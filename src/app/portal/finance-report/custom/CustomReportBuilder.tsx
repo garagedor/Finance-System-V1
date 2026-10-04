@@ -7,9 +7,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import FilterMultiSelect from "../../_components/FilterMultiSelect";
+import DisputeDetailLines from "../../_components/DisputeDetailLines";
 import type { CustomItemType } from "@/lib/custom-report";
+import type { DisputeDetail } from "@/lib/dispute-detail";
 
-type Item = { id: string; date: string; primary: string; secondary: string; amount: number };
+type Item = { id: string; date: string; primary: string; secondary: string; amount: number; detail?: DisputeDetail | null };
 type Scope = "ledger" | "providerish" | "none";
 type Category = { type: CustomItemType; label: string; scope: Scope };
 
@@ -251,15 +253,18 @@ export default function CustomReportBuilder() {
                 <span className="money small" style={{ fontWeight: 700 }}>{money(g.subtotal)}</span>
               </div>
               {g.entries.map((e) => (
-                <div key={e.key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="small" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.item.primary}</div>
-                    <div className="muted small">{e.item.date} · {e.item.secondary}</div>
+                <div key={e.key} style={{ padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="small" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.item.primary}</div>
+                      <div className="muted small">{e.item.date} · {e.item.secondary}</div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      <span className="money small">{money(e.item.amount)}</span>
+                      <button type="button" className="portal-btn portal-btn-ghost" style={{ padding: "0 6px", fontSize: 11 }} onClick={() => setSelected((prev) => { const n = { ...prev }; delete n[e.key]; return n; })}>✕</button>
+                    </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                    <span className="money small">{money(e.item.amount)}</span>
-                    <button type="button" className="portal-btn portal-btn-ghost" style={{ padding: "0 6px", fontSize: 11 }} onClick={() => setSelected((prev) => { const n = { ...prev }; delete n[e.key]; return n; })}>✕</button>
-                  </div>
+                  {e.item.detail ? <DisputeDetailLines detail={e.item.detail} inline /> : null}
                 </div>
               ))}
             </div>

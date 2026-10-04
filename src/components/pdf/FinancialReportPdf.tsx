@@ -15,6 +15,7 @@ import {
   fmtTimestamp,
 } from "./sharedPdfStyles";
 import { SectionHeader, KpiCard, KpiGrid, SnapshotCard, ReportFooter, balanceTone } from "./ReportShared";
+import { DisputeDetailPdf } from "./DisputeDetailPdf";
 import type { SectionKey, FinancialReportData } from "@/lib/financial-report";
 
 // ── Generic data table (dark, matches the balance-report detail table) ──────
@@ -383,18 +384,32 @@ function LedgerStatement({ l }: { l: FinancialReportData["ledgerDetail"]["rows"]
       {l.entries.length === 0 ? (
         <View style={s.emptyState}><Text style={s.emptyText}>No entries in this period.</Text></View>
       ) : (
-        <DataTable
-          stickyHeader={false}
-          cols={[
-            { key: "date", label: "Date", flex: 1.3 },
-            { key: "type", label: "Type", flex: 1.5 },
-            { key: "description", label: "Description", flex: 3.6 },
-            { key: "amount", label: "Amount", flex: 1.3, align: "right", kind: "currency", tone: true },
-            { key: "running", label: "Running", flex: 1.3, align: "right", kind: "currency", tone: true },
-          ]}
-          rows={l.entries.map((e) => ({ date: fmtDate(e.date), type: e.type, description: e.description || "—", amount: e.amount, running: e.running }))}
-          totals={{ date: "Closing", running: l.closing }}
-        />
+        <View style={s.tableContainer}>
+          <View style={s.tableHeader}>
+            <Text style={[s.tableHeaderCell, { flex: 1.3 }] as never}>Date</Text>
+            <Text style={[s.tableHeaderCell, { flex: 1.5 }] as never}>Type</Text>
+            <Text style={[s.tableHeaderCell, { flex: 3.6 }] as never}>Description</Text>
+            <Text style={[s.tableHeaderCell, { flex: 1.3, textAlign: "right" }] as never}>Amount</Text>
+            <Text style={[s.tableHeaderCell, { flex: 1.3, textAlign: "right" }] as never}>Running</Text>
+          </View>
+          {l.entries.map((e, i) => (
+            <View key={i}>
+              <View style={[s.tableRow, i % 2 ? s.tableRowAlt : null].filter(Boolean) as never} wrap={false}>
+                <Text style={[s.tableCell, { flex: 1.3 }] as never}>{fmtDate(e.date)}</Text>
+                <Text style={[s.tableCell, { flex: 1.5 }] as never}>{e.type}</Text>
+                <Text style={[s.tableCell, { flex: 3.6 }] as never}>{e.description || "—"}</Text>
+                <Text style={[s.tableCell, { flex: 1.3, textAlign: "right" }, e.amount > 0 ? s.cellPos : e.amount < 0 ? s.cellNeg : null].filter(Boolean) as never}>{fmtCurrency(e.amount)}</Text>
+                <Text style={[s.tableCell, { flex: 1.3, textAlign: "right" }, e.running > 0 ? s.cellPos : e.running < 0 ? s.cellNeg : null].filter(Boolean) as never}>{fmtCurrency(e.running)}</Text>
+              </View>
+              {e.detail ? <DisputeDetailPdf detail={e.detail} /> : null}
+            </View>
+          ))}
+          <View style={s.tableTotals} wrap={false}>
+            <Text style={[s.totalsCell, { flex: 1.3 }] as never}>Closing</Text>
+            <Text style={[s.totalsCell, { flex: 6.4 }] as never}>{" "}</Text>
+            <Text style={[s.totalsCell, { flex: 1.3, textAlign: "right" }] as never}>{fmtCurrency(l.closing)}</Text>
+          </View>
+        </View>
       )}
       {l.truncated && <Text style={{ fontSize: 7.5, color: palette.slate500, marginTop: 3 }}>Showing the first 300 entries — narrow the period to see the rest.</Text>}
     </View>

@@ -1,6 +1,11 @@
 import Link from "next/link";
-import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
+import { ObjectId } from "mongodb";
+import { coll, getDb, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
 import type { LedgerRecord, LedgerEntryRecord } from "@/types/finance-ledger";
+
+/** Per-entry enrichment pulled from the CRM Job for dispute/refund rows. */
+export type DisputeExtra = { address: string | null; techParts: number; companyParts: number; lmParts: number };
+const numOf = (v: unknown): number => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
 import { fmt$, fmtDate } from "../../format";
 import { PageHeader, StatPill, CardShell, Empty, BackLink } from "../../_components/page-helpers";
 import EntryFormModal, { type FieldDef } from "../../_components/EntryFormModal";
@@ -69,6 +74,29 @@ async function load(id: string) {
     .find({ ledger_id: id })
     .sort({ date: 1, _id: 1 })
     .toArray();
+
+  // Enrich dispute/refund entries with the address + parts from the CRM Job, so
+  // the breakdown shows them even for older entries whose snapshot lacks them.
+  const enrich: Record<string, DisputeExtra> = {};
+  const jobRefs = [...new Set(
+    entries.filter((e) => (e.type === "dispute" || e.type === "refund") && e.job_ref).map((e) => String(e.job_ref)),
+  )];
+  if (jobRefs.length) {
+    const db = await getDb();
+    const objIds = jobRefs.filter((r) => /^[0-9a-fA-F]{24}$/.test(r)).map((r) => new ObjectId(r));
+    const jobs = await db.collection("Job").find({ _id: { $in: [...jobRefs, ...objIds] } } as never).toArray();
+    const jmap = new Map(jobs.map((j) => [String((j as { _id?: unknown })._id), j as Record<string, unknown>]));
+    for (const e of entries) {
+      if ((e.type === "dispute" || e.type === "refund") && e.job_ref) {
+        const j = jmap.get(String(e.job_ref));
+        if (j) enrich[e._id] = {
+          address: (j.address as string) ?? null,
+          techParts: numOf(j.techParts), companyParts: numOf(j.companyParts), lmParts: numOf(j.lmParts),
+        };
+      }
+    }
+  }
+
   let running = 0;
   const withRunning = entries.map((e) => {
     running += e.amount;
@@ -78,7 +106,7 @@ async function load(id: string) {
   const reversedIds = new Set(
     entries.map((e) => e.reverses_id).filter((x): x is string => Boolean(x)),
   );
-  return { ledger, rows: withRunning.reverse(), balance: running, count: entries.length, reversedIds };
+  return { ledger, rows: withRunning.reverse(), balance: running, count: entries.length, reversedIds, enrich };
 }
 
 export default async function LedgerDetailPage({
@@ -235,12 +263,7 @@ export default async function LedgerDetailPage({
                         </div>
                       )}
                     {(e.type === "dispute" || e.type === "refund") && e.charge_snapshot && (
-                      <>
-                        {e.charge_snapshot.address ? (
-                          <div className="muted small">{String(e.charge_snapshot.address)}</div>
-                        ) : null}
-                        <DisputeBreakdown snapshot={e.charge_snapshot} />
-                      </>
+                      <DisputeBreakdown snapshot={e.charge_snapshot} extra={d.enrich[e._id]} />
                     )}
                     {e.type === "penalty" && e.charge_snapshot && Array.isArray(e.charge_snapshot.penalties) ? (
                       <>
