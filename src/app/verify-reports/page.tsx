@@ -1243,7 +1243,7 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
           onClick={() => setMode('editing')}
           style={{
             background: 'transparent', border: 'none',
-            color: '#fbbf24', fontSize: 12, fontWeight: 600,
+            color: 'var(--ds-info-text)', fontSize: 12, fontWeight: 600,
             cursor: 'pointer', padding: 0,
             display: 'inline-flex', alignItems: 'center', gap: 4,
           }}
@@ -1257,8 +1257,8 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div
           style={{
-            background: 'rgba(245,158,11,0.06)',
-            border: '1px solid rgba(245,158,11,0.20)',
+            background: 'var(--ds-surface-2)',
+            border: '1px solid var(--ds-line)',
             borderRadius: 8, padding: '6px 8px',
             fontSize: 12, color: '#e2e8f0',
             whiteSpace: 'pre-wrap', wordBreak: 'break-word',
@@ -1271,9 +1271,9 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
           onClick={() => setMode('editing')}
           style={{
             alignSelf: 'flex-start',
-            background: 'rgba(245,158,11,0.10)',
-            border: '1px solid rgba(245,158,11,0.30)',
-            color: '#fbbf24', fontSize: 11, fontWeight: 600,
+            background: 'var(--ds-surface-2)',
+            border: '1px solid var(--ds-line)',
+            color: 'var(--ds-info-text)', fontSize: 11, fontWeight: 600,
             cursor: 'pointer', padding: '3px 8px', borderRadius: 6,
             display: 'inline-flex', alignItems: 'center', gap: 4,
           }}
@@ -1318,9 +1318,9 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
         rows={2}
         style={{
           width: '100%',
-          background: 'rgba(245,158,11,0.05)',
+          background: 'var(--ds-surface-2)',
           color: 'var(--ds-ink)',
-          border: '1px solid rgba(245,158,11,0.25)',
+          border: '1px solid var(--ds-line-strong)',
           borderRadius: 8,
           padding: '6px 8px',
           fontSize: 12,
@@ -1330,7 +1330,7 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
       />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11 }}>
         {saving && <span style={{ color: 'var(--ds-ink-2)' }}>Saving…</span>}
-        {!saving && dirty && <span style={{ color: '#fbbf24' }}>Press Enter to save</span>}
+        {!saving && dirty && <span style={{ color: 'var(--ds-ink-2)' }}>Press Enter to save</span>}
         {err && <span style={{ color: 'var(--ds-crit-text)' }}>{err}</span>}
       </div>
     </div>
