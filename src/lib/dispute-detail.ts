@@ -3,8 +3,8 @@
 // so the content can never drift between them. No server/client-only imports.
 
 export type DisputeLine = { label: string; value: string; head?: boolean; strong?: boolean; hi?: boolean; sub?: boolean };
-export type DisputePartsExtra = { address?: string | null; techParts?: number; companyParts?: number; lmParts?: number };
-export interface DisputeDetail { address: string; customer: string; lines: DisputeLine[] }
+export type DisputePartsExtra = { address?: string | null; techParts?: number; companyParts?: number; lmParts?: number; techName?: string | null };
+export interface DisputeDetail { address: string; customer: string; tech: string; lines: DisputeLine[] }
 
 const money = (n: number) => {
   const v = Math.round((Number(n) || 0) * 100) / 100;
@@ -14,12 +14,13 @@ const pct = (n: number) => `${Math.round((Number(n) || 0) * 10) / 10}%`;
 const partyLabel = (p: string) => p === "area_manager" ? "area manager" : p === "combined" ? "AM + technician" : p;
 
 export function disputeDetail(snapshot: Record<string, unknown> | null | undefined, extra?: DisputePartsExtra): DisputeDetail {
-  if (!snapshot) return { address: "", customer: "", lines: [] };
+  if (!snapshot) return { address: "", customer: "", tech: "", lines: [] };
   const n = (k: string) => Number(snapshot[k]) || 0;
   const str = (k: string) => (snapshot[k] == null ? "" : String(snapshot[k]));
 
   const address = str("address") || (extra?.address ?? "") || "";
   const customer = str("customer_name");
+  const tech = (extra?.techName ?? "") || "";
   const hasParts = !!extra && extra.techParts != null;
   const partsTotal = hasParts ? (extra!.techParts! + extra!.companyParts! + extra!.lmParts!) : n("partsCost");
 
@@ -49,7 +50,7 @@ export function disputeDetail(snapshot: Record<string, unknown> | null | undefin
     { label: "Parts loss", value: money(n("partsLoss")) },
 
     { label: "Cost-share split", value: "", head: true },
-    { label: `Technician (${pct(techPct)}) — charge the tech this`, value: money(n("technicianPortion")), strong: true, hi: true },
+    { label: `Technician${tech ? ` ${tech}` : ""} (${pct(techPct)}) — charge the tech this`, value: money(n("technicianPortion")), strong: true, hi: true },
     { label: `Area manager own (${pct(amOwn)})`, value: money(n("areaManagerOwnPortion")) },
     { label: `Provider (${pct(provPct)})`, value: money(n("providerCharge")) },
     { label: `Company (${pct(coPct)})`, value: money(n("companyCharge")) },
@@ -62,5 +63,5 @@ export function disputeDetail(snapshot: Record<string, unknown> | null | undefin
     lines.push({ label: partyLabel(party), value: money(n("posted_amount")), strong: true });
   }
 
-  return { address, customer, lines };
+  return { address, customer, tech, lines };
 }

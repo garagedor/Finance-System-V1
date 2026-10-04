@@ -90,7 +90,7 @@ export async function listCustomItems(p: ListCustomItemsParams): Promise<CustomI
         const isDispute = (e.type === "dispute" || e.type === "refund") && !!e.charge_snapshot;
         return {
           id: e._id, date: e.date, primary: e.description ?? String(e.type), secondary: String(e.type), amount: round2(e.amount),
-          detail: isDispute ? disputeDetail(e.charge_snapshot as Record<string, unknown>, e.job_ref ? extraByRef.get(String(e.job_ref)) : undefined) : undefined,
+          detail: isDispute ? disputeDetail(e.charge_snapshot as Record<string, unknown>, { ...(e.job_ref ? extraByRef.get(String(e.job_ref)) : {}), techName: (e.technician_id as string) || null }) : undefined,
         };
       }),
     };

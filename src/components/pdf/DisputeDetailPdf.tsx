@@ -11,6 +11,7 @@ export function DisputeDetailPdf({ detail }: { detail: DisputeDetail }) {
     <View style={{ marginTop: 2, marginBottom: 4, paddingLeft: 10, paddingVertical: 3, borderLeftWidth: 1.5, borderLeftColor: palette.navy600 }} wrap={false}>
       {detail.address ? <Text style={{ fontSize: 7.5, color: palette.slate300 }}>Address: {detail.address}</Text> : null}
       {detail.customer ? <Text style={{ fontSize: 7.5, color: palette.slate300 }}>Customer: {detail.customer}</Text> : null}
+      {detail.tech ? <Text style={{ fontSize: 7.5, color: palette.slate300 }}>Technician: {detail.tech}</Text> : null}
       {detail.lines.map((l, i) =>
         l.head ? (
           <Text key={i} style={{ fontSize: 6.5, color: palette.slate400, textTransform: "uppercase", letterSpacing: 0.5, marginTop: 3 }}>{l.label}</Text>

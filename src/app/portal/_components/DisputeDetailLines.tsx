@@ -23,6 +23,7 @@ export default function DisputeDetailLines({ detail, inline = false }: { detail:
     <div style={{ marginTop: inline ? 4 : 8, border: inline ? "none" : "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: inline ? "0 0 0 8px" : 10, background: inline ? "transparent" : "rgba(255,255,255,0.02)", maxWidth: 460 }}>
       {detail.address && <div className="small" style={{ marginBottom: 2 }}><span className="muted">Address: </span>{detail.address}</div>}
       {detail.customer && <div className="small" style={{ marginBottom: 2 }}><span className="muted">Customer: </span>{detail.customer}</div>}
+      {detail.tech && <div className="small" style={{ marginBottom: 2 }}><span className="muted">Technician: </span>{detail.tech}</div>}
       {detail.lines.map((l, i) => <Line key={i} l={l} />)}
     </div>
   );

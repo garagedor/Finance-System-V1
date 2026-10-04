@@ -4,7 +4,7 @@ import { coll, getDb, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/fi
 import type { LedgerRecord, LedgerEntryRecord } from "@/types/finance-ledger";
 
 /** Per-entry enrichment pulled from the CRM Job for dispute/refund rows. */
-export type DisputeExtra = { address: string | null; techParts: number; companyParts: number; lmParts: number };
+export type DisputeExtra = { address: string | null; techParts: number; companyParts: number; lmParts: number; techName: string | null };
 const numOf = (v: unknown): number => { const x = Number(v); return Number.isFinite(x) ? x : 0; };
 import { fmt$, fmtDate } from "../../format";
 import { PageHeader, StatPill, CardShell, Empty, BackLink } from "../../_components/page-helpers";
@@ -92,6 +92,7 @@ async function load(id: string) {
         if (j) enrich[e._id] = {
           address: (j.address as string) ?? null,
           techParts: numOf(j.techParts), companyParts: numOf(j.companyParts), lmParts: numOf(j.lmParts),
+          techName: (e.technician_id as string) || (j.tech as string) || null,
         };
       }
     }
