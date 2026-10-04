@@ -269,7 +269,7 @@ export function EntityTableFilters<T>({
                     )}
                     <div className="filters-list">
                         {filters.length === 0 ? (
-                            <div className="muted" style={{ textAlign: 'center', padding: '12px', background: '#f8fafc', borderRadius: '8px' }}>
+                            <div className="muted" style={{ textAlign: 'center', padding: '12px', background: 'var(--ds-surface-2)', borderRadius: '8px' }}>
                                 No filters added.
                             </div>
                         ) : (

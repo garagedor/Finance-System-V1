@@ -109,6 +109,7 @@
   --ds-on-fin:    #09221A;
   --ds-on-whs:    #040A12;
   --ds-on-accent: #323A45;   /* the neutral --ac base, no portal class */
+  --ds-on-info:   #0B1A21;   /* foreground on a solid --ds-info fill (shared accent) */
   --ds-on-brand:  #04070C;   /* the tri-colour logo mark */
   --ds-on-crit:   #350F0D;   /* solid danger fills — notification badges */
 
@@ -198,6 +199,13 @@
 
   --ds-focus: 0 0 0 3px var(--ds-info-wash), 0 0 0 1px var(--ds-info);
 
+  /* Blocking overlays: modal backdrops, loading overlays. Deliberately dark in
+     BOTH themes — a scrim is translucent over arbitrary content, so a light
+     scrim cannot guarantee contrast for anything drawn on it. --ds-on-scrim is
+     therefore fixed rather than theme-flipped. Worst measured case 5.92:1. */
+  --ds-scrim: rgba(2, 6, 23, 0.78);
+  --ds-on-scrim: #EDF0F4;
+
   color-scheme: dark;
 }
 
@@ -249,6 +257,7 @@
   --ds-on-fin:    #FFFFFF;
   --ds-on-whs:    #FFFFFF;
   --ds-on-accent: #FFFFFF;
+  --ds-on-info:   #FFFFFF;
   --ds-on-brand:  #FFFFFF;
   --ds-on-crit:   #FFFFFF;
 
@@ -292,6 +301,11 @@
   --ds-elev-2: 0 6px 20px rgba(15, 18, 24, 0.08);
   --ds-elev-3: 0 20px 48px rgba(15, 18, 24, 0.12);
 
+  /* Lighter than dark theme — less suppression is needed over a bright page —
+     but still dark, so --ds-on-scrim holds. */
+  --ds-scrim: rgba(2, 6, 23, 0.66);
+  --ds-on-scrim: #EDF0F4;
+
   color-scheme: light;
 }
 
@@ -311,7 +325,7 @@
     --ds-fin-text:#0D694E; --ds-fin-wash-2:rgba(14,115,85,.16); --ds-fin-line:rgba(14,115,85,.28);
     --ds-whs-text:#1E5BAB; --ds-whs-wash-2:rgba(31,93,174,.16); --ds-whs-line:rgba(31,93,174,.28);
     --ds-on-crm:#FFFFFF; --ds-on-fin:#FFFFFF; --ds-on-whs:#FFFFFF;
-    --ds-on-accent:#FFFFFF; --ds-on-brand:#FFFFFF; --ds-on-crit:#FFFFFF;
+    --ds-on-accent:#FFFFFF; --ds-on-brand:#FFFFFF; --ds-on-crit:#FFFFFF; --ds-on-info:#FFFFFF;
     --ds-ok:#15803D; --ds-warn:#76690F; --ds-crit:#B03830; --ds-info:#0E7297;
     --ds-ok-text:#137638; --ds-warn-text:#75680F; --ds-crit-text:#B03830; --ds-info-text:#0E688A;
     --ds-ok-wash:rgba(21,128,61,.10); --ds-warn-wash:rgba(118,105,15,.10);
@@ -324,6 +338,7 @@
     --ds-neutral-text:#4C5866; --ds-neutral-wash:rgba(76,88,102,.10); --ds-neutral-line:rgba(76,88,102,.26);
     --ds-elev-1:0 1px 3px rgba(15,18,24,.06); --ds-elev-2:0 6px 20px rgba(15,18,24,.08);
     --ds-elev-3:0 20px 48px rgba(15,18,24,.12);
+    --ds-scrim:rgba(2,6,23,.66); --ds-on-scrim:#EDF0F4;
     color-scheme: light;
   }
 }

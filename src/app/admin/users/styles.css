@@ -214,7 +214,7 @@
 /* Modal */
 .adm-modal-backdrop {
   position: fixed; inset: 0; z-index: 100;
-  background: rgba(2,6,23,0.7);
+  background: var(--ds-scrim);
   backdrop-filter: blur(4px);
   display: flex; align-items: flex-start; justify-content: center;
   padding: 8vh 16px;

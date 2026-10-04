@@ -341,7 +341,7 @@ a.u-metric:focus-visible { outline: none; box-shadow: var(--ds-focus); }
 .u-toggle-l { font-size: var(--ds-text-sm); font-weight: var(--ds-w-semi); }
 
 /* ── Modal + drawer ───────────────────────────────────────────────────── */
-.u-scrim { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 100; animation: u-fade var(--ds-dur-base) var(--ds-ease-out); }
+.u-scrim { position: fixed; inset: 0; background: var(--ds-scrim); z-index: 100; animation: u-fade var(--ds-dur-base) var(--ds-ease-out); }
 @keyframes u-fade { from { opacity: 0; } to { opacity: 1; } }
 
 .u-modal {

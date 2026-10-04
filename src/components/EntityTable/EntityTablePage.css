@@ -709,14 +709,17 @@ tbody tr:hover .actions {
     font-size: 12px;
 }
 
+/* Approval chips name the approvers in the cell text, so colour carries no
+   information here. Admin vs Office is actor/category, not status, so the
+   three states share one neutral hue and differ only in text weight. */
 .approval-admin {
-    background: var(--ds-ok-wash);
-    color: var(--ds-ok-text);
+    background: var(--ds-neutral-wash);
+    color: var(--ds-ink);
 }
 
 .approval-office {
-    background: var(--ds-warn-wash);
-    color: var(--ds-warn-text);
+    background: var(--ds-neutral-wash);
+    color: var(--ds-neutral-text);
 }
 
 /* ── Cell text ── */

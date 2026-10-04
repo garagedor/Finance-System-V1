@@ -24,7 +24,7 @@ export function LoadingOverlay({ message, fullPage = false }: LoadingOverlayProp
           display: flex;
           align-items: center;
           justify-content: center;
-          background: rgba(10, 15, 28, 0.82);
+          background: var(--ds-scrim);
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
           z-index: 100;
@@ -52,9 +52,9 @@ export function LoadingOverlay({ message, fullPage = false }: LoadingOverlayProp
           width: 10px;
           height: 10px;
           border-radius: 50%;
-          background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+          background: var(--ds-info);
           animation: bounce 1.3s ease-in-out infinite;
-          box-shadow: 0 0 12px rgba(99, 102, 241, 0.5);
+          box-shadow: 0 0 12px var(--ds-info-line);
         }
 
         .dot:nth-child(1) { animation-delay: 0s; }
@@ -65,7 +65,7 @@ export function LoadingOverlay({ message, fullPage = false }: LoadingOverlayProp
           0%, 80%, 100% { transform: translateY(0) scale(1); }
           40% {
             transform: translateY(-12px) scale(1.1);
-            box-shadow: 0 0 20px rgba(99, 102, 241, 0.6);
+            box-shadow: 0 0 20px var(--ds-info-line);
           }
         }
 
@@ -73,7 +73,7 @@ export function LoadingOverlay({ message, fullPage = false }: LoadingOverlayProp
           margin: 0;
           font-size: 13px;
           font-weight: 500;
-          color: #64748b;
+          color: var(--ds-on-scrim);
           letter-spacing: 0.3px;
         }
       `}</style>

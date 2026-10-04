@@ -327,13 +327,8 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
             const hasAdmin = approvals.some((a) => adminNames.has(a));
             const hasOffice = approvals.some((a) => officeNames.has(a));
             const approvalClass = hasAdmin ? 'approval-admin' : hasOffice ? 'approval-office' : '';
-            const approvalStyle = hasAdmin
-                ? { background: 'rgba(16,185,129,0.15)', color: '#34d399', padding: '2px 7px', borderRadius: '6px' }
-                : hasOffice
-                    ? { background: 'rgba(245,158,11,0.15)', color: '#fbbf24', padding: '2px 7px', borderRadius: '6px' }
-                    : { background: 'rgba(255,255,255,0.08)', color: '#94a3b8', padding: '2px 7px', borderRadius: '6px' };
             return (
-                <span className={`approval-text ${approvalClass}`} title={full} style={approvalStyle}>
+                <span className={`approval-text ${approvalClass}`} title={full}>
                     {full}
                 </span>
             );

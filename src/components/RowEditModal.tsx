@@ -303,7 +303,7 @@ export function RowEditModal<T extends Record<string, any>>({
         .modal-backdrop {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.7);
+          background: var(--ds-scrim);
           backdrop-filter: blur(8px);
           -webkit-backdrop-filter: blur(8px);
           display: flex;
@@ -320,8 +320,8 @@ export function RowEditModal<T extends Record<string, any>>({
         }
 
         .modal-container {
-          background: #111827;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: var(--ds-surface-1);
+          border: 1px solid var(--ds-line-strong);
           border-radius: 16px;
           box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.04);
           max-width: 700px;
@@ -344,8 +344,8 @@ export function RowEditModal<T extends Record<string, any>>({
           align-items: center;
           justify-content: space-between;
           padding: 18px 22px;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-          background: linear-gradient(180deg, rgba(99, 102, 241, 0.08), transparent);
+          border-bottom: 1px solid var(--ds-line);
+          background: linear-gradient(180deg, var(--ds-info-soft), transparent);
           position: relative;
         }
 
@@ -356,24 +356,24 @@ export function RowEditModal<T extends Record<string, any>>({
           right: 0;
           bottom: -1px;
           height: 1px;
-          background: linear-gradient(90deg, transparent, rgba(99, 102, 241, 0.5), transparent);
+          background: linear-gradient(90deg, transparent, var(--ds-info-line), transparent);
         }
 
         .modal-title {
           margin: 0;
           font-size: 17px;
           font-weight: 700;
-          color: #f1f5f9;
+          color: var(--ds-ink);
           letter-spacing: -0.3px;
         }
 
         .modal-close-btn {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: var(--ds-surface-2);
+          border: 1px solid var(--ds-line-strong);
           border-radius: 8px;
           padding: 7px;
           cursor: pointer;
-          color: #94a3b8;
+          color: var(--ds-ink-2);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -381,9 +381,9 @@ export function RowEditModal<T extends Record<string, any>>({
         }
 
         .modal-close-btn:hover {
-          background: rgba(239, 68, 68, 0.1);
-          border-color: rgba(239, 68, 68, 0.3);
-          color: #f87171;
+          background: var(--ds-crit-wash);
+          border-color: var(--ds-crit-line);
+          color: var(--ds-crit-text);
         }
 
         .modal-body {
@@ -411,42 +411,42 @@ export function RowEditModal<T extends Record<string, any>>({
         }
 
         .modal-field-highlight {
-          border: 1px solid rgba(99, 102, 241, 0.4);
-          background: rgba(99, 102, 241, 0.07);
+          border: 1px solid var(--ds-info-line);
+          background: var(--ds-info-soft);
           border-radius: 12px;
           padding: 12px 14px;
         }
 
         .modal-field-highlight .modal-label {
-          color: #a5b4fc;
+          color: var(--ds-info-text);
         }
 
         .modal-hint {
           font-size: 11px;
-          color: #a5b4fc;
+          color: var(--ds-info-text);
           line-height: 1.4;
         }
 
         .modal-reorder-btn {
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: var(--ds-surface-2);
+          border: 1px solid var(--ds-line-strong);
           border-radius: 8px;
           padding: 6px 11px;
           font-size: 12px;
           font-weight: 600;
-          color: #a5b4fc;
+          color: var(--ds-info-text);
           cursor: pointer;
           transition: all 0.2s;
           white-space: nowrap;
         }
         .modal-reorder-btn:hover {
-          border-color: rgba(99, 102, 241, 0.45);
-          color: #c7d2fe;
+          border-color: var(--ds-info-line);
+          color: var(--ds-info-text);
         }
 
         .reorder-note {
           font-size: 12px;
-          color: #94a3b8;
+          color: var(--ds-ink-2);
           margin: 0 0 14px;
         }
         .reorder-list {
@@ -462,28 +462,28 @@ export function RowEditModal<T extends Record<string, any>>({
           align-items: center;
           gap: 10px;
           padding: 10px 12px;
-          background: #1a2236;
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: var(--ds-surface-2);
+          border: 1px solid var(--ds-line);
           border-radius: 9px;
           cursor: grab;
           user-select: none;
           transition: border-color 0.15s, background 0.15s;
         }
         .reorder-item:hover {
-          border-color: rgba(99, 102, 241, 0.4);
-          background: #1e2740;
+          border-color: var(--ds-info-line);
+          background: var(--ds-surface-3);
         }
         .reorder-item:active {
           cursor: grabbing;
         }
         .reorder-grip {
-          color: #64748b;
+          color: var(--ds-ink-3);
           font-size: 15px;
           line-height: 1;
         }
         .reorder-name {
           font-size: 13px;
-          color: #f1f5f9;
+          color: var(--ds-ink);
         }
         .reorder-actions {
           display: flex;
@@ -495,10 +495,10 @@ export function RowEditModal<T extends Record<string, any>>({
         .modal-validation-error {
           margin-top: 14px;
           padding: 10px 14px;
-          background: rgba(239, 68, 68, 0.1);
-          border: 1px solid rgba(239, 68, 68, 0.25);
+          background: var(--ds-crit-wash);
+          border: 1px solid var(--ds-crit-line);
           border-radius: 10px;
-          color: #f87171;
+          color: var(--ds-crit-text);
           font-size: 13px;
           font-weight: 500;
         }
@@ -506,32 +506,32 @@ export function RowEditModal<T extends Record<string, any>>({
         .modal-label {
           font-size: 11px;
           font-weight: 600;
-          color: #94a3b8;
+          color: var(--ds-ink-2);
           text-transform: uppercase;
           letter-spacing: 0.05em;
         }
 
         .modal-input {
           padding: 9px 13px;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          border: 1px solid var(--ds-line-strong);
           border-radius: 10px;
           font-size: 13px;
           font-family: inherit;
-          background: #1a2236;
-          color: #f1f5f9;
+          background: var(--ds-surface-2);
+          color: var(--ds-ink);
           transition: all 0.2s;
           width: 100%;
           box-sizing: border-box;
         }
 
         .modal-input::placeholder {
-          color: #475569;
+          color: var(--ds-ink-3);
         }
 
         .modal-input:focus {
           outline: none;
-          border-color: #6366f1;
-          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+          border-color: var(--ds-info);
+          box-shadow: var(--ds-focus);
         }
 
         textarea.modal-input {
@@ -550,8 +550,8 @@ export function RowEditModal<T extends Record<string, any>>({
         }
 
         select.modal-input option {
-          background: #1a2236;
-          color: #f1f5f9;
+          background: var(--ds-surface-2);
+          color: var(--ds-ink);
         }
 
         .toggle-switch {
@@ -573,8 +573,8 @@ export function RowEditModal<T extends Record<string, any>>({
           position: relative;
           width: 42px;
           height: 24px;
-          background: rgba(255, 255, 255, 0.1);
-          border: 1px solid rgba(255, 255, 255, 0.12);
+          background: var(--ds-surface-3);
+          border: 1px solid var(--ds-line-strong);
           border-radius: 24px;
           transition: all 0.3s ease;
           flex-shrink: 0;
@@ -587,14 +587,14 @@ export function RowEditModal<T extends Record<string, any>>({
           left: 2px;
           width: 18px;
           height: 18px;
-          background: #94a3b8;
+          background: var(--ds-ink-2);
           border-radius: 50%;
           transition: all 0.3s ease;
         }
 
         .toggle-switch input:checked + .toggle-slider {
-          background: linear-gradient(135deg, #4f46e5, #7c3aed);
-          border-color: rgba(99, 102, 241, 0.5);
+          background: var(--ds-info);
+          border-color: var(--ds-info-line);
         }
 
         .toggle-switch input:checked + .toggle-slider::before {
@@ -608,8 +608,8 @@ export function RowEditModal<T extends Record<string, any>>({
           align-items: center;
           gap: 10px;
           padding: 14px 22px;
-          border-top: 1px solid rgba(255, 255, 255, 0.07);
-          background: #0d1526;
+          border-top: 1px solid var(--ds-line);
+          background: var(--ds-bg);
         }
 
         .modal-footer-spacer {
@@ -636,20 +636,20 @@ export function RowEditModal<T extends Record<string, any>>({
         }
 
         .modal-btn-cancel {
-          background: rgba(255, 255, 255, 0.05);
-          color: #94a3b8;
-          border: 1px solid rgba(255, 255, 255, 0.1);
+          background: var(--ds-surface-2);
+          color: var(--ds-ink-2);
+          border: 1px solid var(--ds-line-strong);
         }
 
         .modal-btn-cancel:hover:not(:disabled) {
-          background: rgba(255, 255, 255, 0.09);
-          border-color: rgba(255, 255, 255, 0.18);
-          color: #f1f5f9;
+          background: var(--ds-surface-3);
+          border-color: var(--ds-line-strong);
+          color: var(--ds-ink);
         }
 
         .modal-btn-save {
-          background: linear-gradient(135deg, #4f46e5, #7c3aed);
-          color: white;
+          background: var(--ds-info);
+          color: var(--ds-on-info);
           box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
         }
 
@@ -659,15 +659,15 @@ export function RowEditModal<T extends Record<string, any>>({
         }
 
         .modal-btn-delete {
-          background: rgba(239, 68, 68, 0.1);
-          color: #f87171;
-          border: 1px solid rgba(239, 68, 68, 0.25);
+          background: var(--ds-crit-wash);
+          color: var(--ds-crit-text);
+          border: 1px solid var(--ds-crit-line);
         }
 
         .modal-btn-delete:hover:not(:disabled) {
-          background: rgba(239, 68, 68, 0.18);
-          border-color: rgba(239, 68, 68, 0.45);
-          color: #fca5a5;
+          background: var(--ds-crit-wash-2);
+          border-color: var(--ds-crit-line-2);
+          color: var(--ds-crit-text);
         }
 
         :global(.spin) {

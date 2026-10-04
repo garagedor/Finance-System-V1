@@ -264,7 +264,7 @@
   .sh-side-foot { display: none; }
   .sh.is-open .sh-scrim {
     display: block; position: fixed; inset: 0; z-index: 40;
-    background: rgba(0, 0, 0, 0.5);
+    background: var(--ds-scrim);
   }
 }
 @media (max-width: 680px) {
