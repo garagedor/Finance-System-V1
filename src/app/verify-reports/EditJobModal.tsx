@@ -120,7 +120,7 @@ export default function EditJobModal({
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 100,
-        background: 'rgba(2,6,23,0.7)', backdropFilter: 'blur(4px)',
+        background: 'var(--ds-scrim)', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         padding: '5vh 16px', overflowY: 'auto',
       }}
@@ -129,7 +129,7 @@ export default function EditJobModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 640,
-          background: '#0d1526', border: '1px solid rgba(255,255,255,0.1)',
+          background: 'var(--ds-surface-1)', border: '1px solid var(--ds-line-strong)',
           borderRadius: 12, padding: 20,
           boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
         }}
@@ -137,8 +137,8 @@ export default function EditJobModal({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
           <div>
             <p className="bp-section-kicker">Edit reported job</p>
-            <h3 style={{ margin: '4px 0 0', color: '#e2e8f0' }}>Job details</h3>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>
+            <h3 style={{ margin: '4px 0 0', color: 'var(--ds-ink)' }}>Job details</h3>
+            <p style={{ fontSize: 12, color: 'var(--ds-ink-2)', margin: '4px 0 0' }}>
               Saves to Supabase. Derived totals are recomputed automatically.
             </p>
           </div>
@@ -146,7 +146,7 @@ export default function EditJobModal({
         </div>
 
         {error && (
-          <div style={{ padding: 10, marginBottom: 12, borderRadius: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 12 }}>
+          <div style={{ padding: 10, marginBottom: 12, borderRadius: 6, background: 'var(--ds-crit-soft)', border: '1px solid var(--ds-crit-line)', color: 'var(--ds-crit-text)', fontSize: 12 }}>
             {error}
           </div>
         )}
@@ -214,9 +214,9 @@ export default function EditJobModal({
             disabled={saving}
             className="pmr-clear-btn"
             style={{
-              background: 'rgba(99,102,241,0.18)',
-              borderColor: 'rgba(99,102,241,0.5)',
-              color: '#c7d2fe',
+              background: 'var(--ds-crm-wash)',
+              borderColor: 'var(--ds-crm-line)',
+              color: 'var(--ds-crm-text)',
             }}
           >
             {saving ? 'Saving…' : 'Save changes'}
@@ -230,7 +230,7 @@ export default function EditJobModal({
 function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
   return (
     <div style={{ gridColumn: full ? '1 / -1' : 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{label}</label>
+      <label style={{ fontSize: 11, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>{label}</label>
       {children}
     </div>
   );
@@ -246,7 +246,7 @@ function NumField({ label, v, onChange }: { label: string; v: number | undefined
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ gridColumn: '1 / -1', fontSize: 11, color: '#a5b4fc', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+    <div style={{ gridColumn: '1 / -1', fontSize: 11, color: 'var(--ds-crm-2)', textTransform: 'uppercase', letterSpacing: 0.6, fontWeight: 600, marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--ds-line)' }}>
       {children}
     </div>
   );
@@ -254,19 +254,19 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 
 const inputStyle: React.CSSProperties = {
   padding: '8px 10px', fontSize: 13,
-  background: 'rgba(15,23,42,0.5)', color: '#e2e8f0',
-  border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, outline: 'none',
+  background: 'var(--ds-surface-2)', color: 'var(--ds-ink)',
+  border: '1px solid var(--ds-line-strong)', borderRadius: 8, outline: 'none',
   width: '100%', boxSizing: 'border-box',
 };
 
 const readonlyStyle: React.CSSProperties = {
   padding: '8px 10px', fontSize: 13,
-  background: 'rgba(15,23,42,0.3)', color: '#94a3b8',
-  border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8,
+  background: 'var(--ds-surface-2)', color: 'var(--ds-ink-2)',
+  border: '1px solid var(--ds-line)', borderRadius: 8,
 };
 
 const modalCloseStyle: React.CSSProperties = {
-  background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-  color: '#94a3b8', padding: 6, borderRadius: 6, cursor: 'pointer',
+  background: 'transparent', border: '1px solid var(--ds-line-strong)',
+  color: 'var(--ds-ink-2)', padding: 6, borderRadius: 6, cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
 };

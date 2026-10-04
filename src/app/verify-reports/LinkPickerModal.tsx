@@ -4,8 +4,8 @@ import { FiX } from 'react-icons/fi';
 import { formatCurrency } from '../utils/jobUtils';
 
 const modalCloseStyle: React.CSSProperties = {
-  background: 'transparent', border: '1px solid rgba(255,255,255,0.1)',
-  color: '#94a3b8', padding: 6, borderRadius: 6, cursor: 'pointer',
+  background: 'transparent', border: '1px solid var(--ds-line-strong)',
+  color: 'var(--ds-ink-2)', padding: 6, borderRadius: 6, cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
 };
 
@@ -66,7 +66,7 @@ export default function LinkPickerModal({
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 100,
-        background: 'rgba(2,6,23,0.7)', backdropFilter: 'blur(4px)',
+        background: 'var(--ds-scrim)', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
         padding: '5vh 16px', overflowY: 'auto',
       }}
@@ -75,7 +75,7 @@ export default function LinkPickerModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '100%', maxWidth: 720,
-          background: '#0d1526', border: '1px solid rgba(255,255,255,0.1)',
+          background: 'var(--ds-surface-1)', border: '1px solid var(--ds-line-strong)',
           borderRadius: 12, padding: 20,
           boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
         }}
@@ -83,10 +83,10 @@ export default function LinkPickerModal({
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
           <div>
             <p className="bp-section-kicker">Link to CRM job</p>
-            <h3 style={{ margin: '4px 0 0', color: '#e2e8f0' }}>
+            <h3 style={{ margin: '4px 0 0', color: 'var(--ds-ink)' }}>
               Pair "{job.address || job.customer_name || 'this report job'}" with a CRM job
             </h3>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 12, color: 'var(--ds-ink-2)', margin: '4px 0 0' }}>
               Pick from CRM jobs that aren't currently paired in this report. The override is saved to our DB only.
             </p>
           </div>
@@ -95,7 +95,7 @@ export default function LinkPickerModal({
 
         {/* Direct-ID link: paste any CRM job ObjectId to link without searching. */}
         <div style={{ marginBottom: 10 }}>
-          <p style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 4px' }}>
+          <p style={{ fontSize: 11, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 4px' }}>
             Link by CRM job ID
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -107,8 +107,8 @@ export default function LinkPickerModal({
               placeholder="Paste 24-char Mongo ObjectId (e.g. 6a01…f55)"
               style={{
                 flex: 1,
-                background: 'rgba(15,23,42,0.6)', color: '#e2e8f0',
-                border: `1px solid ${directId && !directIdValid ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.10)'}`,
+                background: 'var(--ds-surface-2)', color: 'var(--ds-ink)',
+                border: `1px solid ${directId && !directIdValid ? 'var(--ds-crit-line)' : 'var(--ds-line-strong)'}`,
                 borderRadius: 8, padding: '8px 10px', fontSize: 13,
                 fontFamily: 'monospace',
               }}
@@ -119,9 +119,9 @@ export default function LinkPickerModal({
               disabled={!directIdValid || !!savingId}
               style={{
                 padding: '8px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                background: directIdValid && !savingId ? 'rgba(99,102,241,0.20)' : 'rgba(255,255,255,0.04)',
-                border: `1px solid ${directIdValid && !savingId ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.08)'}`,
-                color: directIdValid && !savingId ? '#c7d2fe' : '#475569',
+                background: directIdValid && !savingId ? 'var(--ds-crm-wash)' : 'var(--ds-surface-2)',
+                border: `1px solid ${directIdValid && !savingId ? 'var(--ds-crm-line)' : 'var(--ds-line)'}`,
+                color: directIdValid && !savingId ? 'var(--ds-crm-text)' : 'var(--ds-ink-dim)',
                 cursor: directIdValid && !savingId ? 'pointer' : 'not-allowed',
                 whiteSpace: 'nowrap',
               }}
@@ -130,13 +130,13 @@ export default function LinkPickerModal({
             </button>
           </div>
           {directId && !directIdValid && (
-            <p style={{ fontSize: 11, color: '#fca5a5', margin: '4px 0 0' }}>
+            <p style={{ fontSize: 11, color: 'var(--ds-crit-text)', margin: '4px 0 0' }}>
               Must be a 24-character hex ID (Mongo ObjectId). You can copy this from any row's _id in the Tables view.
             </p>
           )}
         </div>
 
-        <p style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 4px' }}>
+        <p style={{ fontSize: 11, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: '0 0 4px' }}>
           Or pick from this report's CRM jobs
         </p>
         <input
@@ -146,21 +146,21 @@ export default function LinkPickerModal({
           placeholder="Filter by address, customer or date…"
           style={{
             width: '100%',
-            background: 'rgba(15,23,42,0.6)', color: '#e2e8f0',
-            border: '1px solid rgba(255,255,255,0.10)', borderRadius: 8,
+            background: 'var(--ds-surface-2)', color: 'var(--ds-ink)',
+            border: '1px solid var(--ds-line-strong)', borderRadius: 8,
             padding: '8px 10px', fontSize: 13, marginBottom: 12,
           }}
         />
 
         {err && (
-          <div style={{ padding: 10, marginBottom: 12, borderRadius: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', color: '#fca5a5', fontSize: 12 }}>
+          <div style={{ padding: 10, marginBottom: 12, borderRadius: 6, background: 'var(--ds-crit-soft)', border: '1px solid var(--ds-crit-line)', color: 'var(--ds-crit-text)', fontSize: 12 }}>
             {err}
           </div>
         )}
 
         <div style={{ maxHeight: '50vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
           {sorted.length === 0 && (
-            <div style={{ padding: 16, fontSize: 13, color: '#64748b', textAlign: 'center' }}>
+            <div style={{ padding: 16, fontSize: 13, color: 'var(--ds-ink-2)', textAlign: 'center' }}>
               {options.length === 0
                 ? 'No CRM jobs in this report’s window.'
                 : 'No CRM jobs match your search.'}
@@ -177,14 +177,14 @@ export default function LinkPickerModal({
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
                   padding: '10px 12px', borderRadius: 8,
-                  background: 'rgba(15,23,42,0.5)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                  color: '#e2e8f0', textAlign: 'left',
+                  background: 'var(--ds-surface-2)',
+                  border: '1px solid var(--ds-line)',
+                  color: 'var(--ds-ink)', textAlign: 'left',
                   cursor: savingId ? 'not-allowed' : 'pointer',
                   opacity: savingId && !isSaving ? 0.5 : 1,
                 }}
-                onMouseEnter={(e) => { if (!savingId) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(99,102,241,0.45)'; }}
-                onMouseLeave={(e) => { if (!savingId) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.08)'; }}
+                onMouseEnter={(e) => { if (!savingId) (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-line-strong)'; }}
+                onMouseLeave={(e) => { if (!savingId) (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-line)'; }}
               >
                 <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -194,25 +194,25 @@ export default function LinkPickerModal({
                         style={{
                           fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
                           padding: '2px 6px', borderRadius: 4,
-                          background: 'rgba(245,158,11,0.15)', color: '#fbbf24',
-                          border: '1px solid rgba(245,158,11,0.35)',
+                          background: 'var(--ds-warn-soft)', color: 'var(--ds-warn-text)',
+                          border: '1px solid var(--ds-warn-line)',
                         }}
                       >
                         Currently paired
                       </span>
                     )}
                   </span>
-                  <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                  <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>
                     {c.date || '—'} · {c.clientName || '(no customer)'}
                     {currentlyPairedWith && (
-                      <> · with <em style={{ color: '#cbd5e1' }}>{currentlyPairedWith.address || currentlyPairedWith.customer || 'another job'}</em></>
+                      <> · with <em style={{ color: 'var(--ds-ink)' }}>{currentlyPairedWith.address || currentlyPairedWith.customer || 'another job'}</em></>
                     )}
                   </span>
                 </div>
-                <span style={{ fontSize: 12, color: '#a5b4fc', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontSize: 12, color: 'var(--ds-ink)', fontVariantNumeric: 'tabular-nums' }}>
                   {formatCurrency(c.totalAmount || 0)}
                 </span>
-                <span style={{ fontSize: 11, color: '#475569' }}>
+                <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>
                   {isSaving ? 'Linking…' : 'Link →'}
                 </span>
               </button>
