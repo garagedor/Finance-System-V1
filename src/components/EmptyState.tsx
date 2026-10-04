@@ -38,8 +38,8 @@ export function EmptyState({
       <div
         className={`flex ${s.iconBox} items-center justify-center rounded-2xl text-slate-500`}
         style={{
-          background: 'rgba(99, 102, 241, 0.08)',
-          border: '1px solid rgba(99, 102, 241, 0.18)',
+          background: 'var(--ds-neutral-wash)',
+          border: '1px solid var(--ds-neutral-line)',
         }}
       >
         {icon ?? DEFAULT_ICON}
