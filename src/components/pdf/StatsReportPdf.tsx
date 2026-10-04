@@ -2,8 +2,8 @@
 // (same data via computeStats). Landscape A4, reusing the shared brand kit.
 
 import { Document, Page, Text, View, Image } from "@react-pdf/renderer";
-import { sharedPdfStyles as s, palette, fmtCurrency, fmtInt, fmtPct, fmtDate, fmtTimestamp } from "./sharedPdfStyles";
-import { SectionHeader, KpiCard, KpiGrid, PiePanel, ReportFooter } from "./ReportShared";
+import { sharedPdfStyles as s, fmtCurrency, fmtInt, fmtPct, fmtDate, fmtTimestamp } from "./sharedPdfStyles";
+import { SectionHeader, KpiCard, KpiGrid, ReportFooter } from "./ReportShared";
 import type { StatsResult } from "@/app/api/stats/route";
 
 interface Col { key: string; label: string; flex: number; align?: "left" | "right"; kind?: "text" | "currency" | "int" }
@@ -37,7 +37,11 @@ const nameCols: Col[] = [
   { key: "totalPaid", label: "Collected", flex: 1.6, align: "right", kind: "currency" },
 ];
 
-const BRAND = ["#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ec4899", "#84cc16", "#0ea5e9", "#f43f5e", "#a855f7"];
+const statusCols: Col[] = [
+  { key: "key", label: "Status", flex: 3 },
+  { key: "count", label: "Jobs", flex: 1, align: "right", kind: "int" },
+  { key: "pct", label: "% of total", flex: 1.4, align: "right" },
+];
 
 export function StatsReportPdf({
   title, startDate, endDate, filters, data, logoSrc,
@@ -50,7 +54,8 @@ export function StatsReportPdf({
   logoSrc?: string | null;
 }) {
   const sum = data.summary;
-  const statusSlices = data.byStatus.map((r, i) => ({ label: r.key, value: r.count, color: BRAND[i % BRAND.length] }));
+  const statusTotal = data.byStatus.reduce((a, r) => a + r.count, 0);
+  const statusRows = data.byStatus.map((r) => ({ key: r.key, count: r.count, pct: fmtPct(statusTotal ? (r.count / statusTotal) * 100 : 0) }));
   const sumRow = (rows: Array<{ count: number; totalAmount: number; totalPaid: number }>) => ({
     count: rows.reduce((a, r) => a + r.count, 0),
     totalAmount: rows.reduce((a, r) => a + r.totalAmount, 0),
@@ -104,7 +109,7 @@ export function StatsReportPdf({
 
           <View style={{ marginTop: 10 }}>
             <SectionHeader kicker="Distribution" title="Jobs by Status" />
-            <PiePanel slices={statusSlices} totalLabel="Total Jobs" />
+            <Table cols={statusCols} rows={statusRows} totals={{ key: "Total", count: statusTotal, pct: "100.0%" }} />
           </View>
 
           <View style={{ marginTop: 10 }}>
@@ -126,5 +131,3 @@ export function StatsReportPdf({
     </Document>
   );
 }
-
-void palette;
