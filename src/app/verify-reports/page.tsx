@@ -108,9 +108,9 @@ export default function VerifyReportsPage() {
         <EmptyState
           size="lg"
           icon={<svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <circle cx="10" cy="10" r="8" stroke="#f87171" strokeWidth="1.5" />
-            <line x1="10" y1="6" x2="10" y2="10.5" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round" />
-            <circle cx="10" cy="13" r="0.75" fill="#f87171" />
+            <circle cx="10" cy="10" r="8" stroke="var(--ds-crit)" strokeWidth="1.5" />
+            <line x1="10" y1="6" x2="10" y2="10.5" stroke="var(--ds-crit)" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="10" cy="13" r="0.75" fill="var(--ds-crit)" />
           </svg>}
           title="Access Denied"
           message="Admin privileges required to verify weekly reports."
@@ -280,12 +280,12 @@ function ListView({
 
         {error && (
           <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(239,68,68,0.4)' }}>
-            <p style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
+            <p style={{ fontSize: 12, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
               Couldn't load reports
             </p>
-            <pre style={{ color: '#f87171', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
+            <pre style={{ color: 'var(--ds-crit-text)', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
             {error.toLowerCase().includes('supabase not configured') && (
-              <p style={{ fontSize: 12, color: '#cbd5e1', marginTop: 10 }}>
+              <p style={{ fontSize: 12, color: 'var(--ds-ink)', marginTop: 10 }}>
                 The Lovable Balance backend isn't connected yet. Add <code>SUPABASE_URL</code> and{' '}
                 <code>SUPABASE_SERVICE_ROLE_KEY</code> to <code>.env.local</code>, then restart the dev server.
               </p>
@@ -309,16 +309,16 @@ function ListView({
         </div>
 
         <div className="animate-fade-up" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+          <span style={{ fontSize: 12, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
             Tech History
           </span>
           <select
             value={techFilter}
             onChange={(e) => setTechFilter(e.target.value)}
             style={{
-              background: 'rgba(15,23,42,0.5)',
-              color: '#e2e8f0',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--ds-surface-2)',
+              color: 'var(--ds-ink)',
+              border: '1px solid var(--ds-line-strong)',
               borderRadius: 8,
               padding: '6px 10px',
               fontSize: 13,
@@ -335,15 +335,15 @@ function ListView({
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '4px 10px', borderRadius: 999,
-                background: 'rgba(99,102,241,0.18)',
-                border: '1px solid rgba(99,102,241,0.35)',
-                color: '#c7d2fe', fontSize: 12, fontWeight: 500,
+                background: 'var(--ds-info-wash)',
+                border: '1px solid var(--ds-info-line)',
+                color: 'var(--ds-info-text)', fontSize: 12, fontWeight: 500,
               }}
             >
               Viewing all weeks for <strong>{techFilter}</strong>
               <button
                 onClick={() => setTechFilter('')}
-                style={{ background: 'transparent', border: 'none', color: '#c7d2fe', cursor: 'pointer', padding: 0, display: 'inline-flex' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--ds-info-text)', cursor: 'pointer', padding: 0, display: 'inline-flex' }}
                 aria-label="Clear tech filter"
               >
                 <FiX size={12} />
@@ -357,7 +357,7 @@ function ListView({
             <p className="bp-section-kicker" style={{ margin: 0 }}>Tech Overview</p>
             <h3 style={{ marginTop: 4, marginBottom: 12 }}>
               {techFilter}
-              <span style={{ color: '#64748b', fontWeight: 400, fontSize: 13 }}>
+              <span style={{ color: 'var(--ds-ink-2)', fontWeight: 400, fontSize: 13 }}>
                 {' · '}
                 {selectedReportIds.size > 0
                   ? <>{selectedReportIds.size} of {visibleReports.length} reports selected</>
@@ -369,7 +369,7 @@ function ListView({
                 <button
                   type="button"
                   onClick={() => setSelectedReportIds(new Set())}
-                  style={{ marginLeft: 12, background: 'transparent', border: 'none', color: '#a5b4fc', cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: 0 }}
+                  style={{ marginLeft: 12, background: 'transparent', border: 'none', color: 'var(--ds-info-text)', cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: 0 }}
                 >
                   Clear selection
                 </button>
@@ -436,7 +436,7 @@ function ListView({
                           checked={selectedReportIds.has(r.id)}
                           onChange={() => toggleReport(r.id)}
                           onClick={(e) => e.stopPropagation()}
-                          style={{ accentColor: '#6366f1', cursor: 'pointer' }}
+                          style={{ accentColor: 'var(--ds-info)', cursor: 'pointer' }}
                         />
                       </td>
                     )}
@@ -472,7 +472,7 @@ function ListView({
                       {formatCurrency(r.supabaseBalance || 0)}
                     </td>
                     <td>{formatCurrency(r.supabaseTips || 0)}</td>
-                    <td style={{ color: '#a5b4fc', fontWeight: 600 }}>{formatCurrency(r.supabaseCommission || 0)}</td>
+                    <td style={{ color: 'var(--ds-ink)', fontWeight: 600 }}>{formatCurrency(r.supabaseCommission || 0)}</td>
                     <td>
                       <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                         <Badge ok={r.techMatched} label="tech" />
@@ -544,7 +544,7 @@ function DetailView({
 
         {error && (
           <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(239,68,68,0.4)' }}>
-            <pre style={{ color: '#f87171', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
+            <pre style={{ color: 'var(--ds-crit-text)', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
           </div>
         )}
 
@@ -575,7 +575,7 @@ function DetailView({
 function IdentityCard({ report }: { report: DetailResponse['report'] }) {
   return (
     <div className="panel" style={{ padding: 16, marginBottom: 12 }}>
-      <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.6, marginBottom: 10 }}>
+      <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--ds-ink-2)', letterSpacing: 0.6, marginBottom: 10 }}>
         Identity check
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -662,13 +662,13 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
           </tbody>
         </table>
         {crmExtras.length > 0 && (
-          <div style={{ padding: '8px 14px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>
+          <div style={{ padding: '8px 14px 14px', borderTop: '1px solid var(--ds-line)' }}>
+            <p style={{ fontSize: 11, color: 'var(--ds-ink-2)', marginBottom: 6 }}>
               CRM has these payment fields that the Lovable app doesn't track (informational only):
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {crmExtras.map((e) => (
-                <span key={e.label} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)', color: '#cbd5e1' }}>
+                <span key={e.label} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999, background: 'var(--ds-surface-3)', border: '1px solid var(--ds-line)', color: 'var(--ds-ink)' }}>
                   {e.label}: {formatCurrency(e.value)}
                 </span>
               ))}
@@ -816,7 +816,7 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
       <td style={{ textAlign: 'left', overflow: 'hidden' }}>
         <div title={address || '—'} style={truncStyle}>{address || '—'}</div>
         {customer && (
-          <div title={customer} style={{ ...truncStyle, fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+          <div title={customer} style={{ ...truncStyle, fontSize: 11, color: 'var(--ds-ink-2)', marginTop: 2 }}>
             {customer}
           </div>
         )}
@@ -843,23 +843,23 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
         )}
         {pair.status === 'missing-in-crm' && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>Tech reported, CRM has no record</span>
+            <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>Tech reported, CRM has no record</span>
             <button
               type="button"
               onClick={onStartLink}
               style={{
                 fontSize: 11, fontWeight: 600,
                 padding: '3px 8px', borderRadius: 6,
-                background: 'rgba(99,102,241,0.12)',
-                border: '1px solid rgba(99,102,241,0.35)',
-                color: '#c7d2fe', cursor: 'pointer',
+                background: 'var(--ds-info-wash)',
+                border: '1px solid var(--ds-info-line)',
+                color: 'var(--ds-info-text)', cursor: 'pointer',
               }}
             >
               Link to CRM job →
             </button>
           </span>
         )}
-        {pair.status === 'missing-in-report' && <span style={{ fontSize: 12, color: '#94a3b8' }}>CRM has it, tech didn't report</span>}
+        {pair.status === 'missing-in-report' && <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>CRM has it, tech didn't report</span>}
         {pair.status === 'match' && <span style={{ fontSize: 12, color: '#34d399' }}>All within $1 tolerance</span>}
         {pair.manualLink && pair.supabaseJob && (
           <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -867,8 +867,8 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
               style={{
                 fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
                 padding: '2px 6px', borderRadius: 4,
-                background: 'rgba(99,102,241,0.18)', color: '#c7d2fe',
-                border: '1px solid rgba(99,102,241,0.35)',
+                background: 'var(--ds-info-wash)', color: 'var(--ds-info-text)',
+                border: '1px solid var(--ds-info-line)',
               }}
               title="Pair set manually by an admin (overrides auto-matcher)"
             >
@@ -879,7 +879,7 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
               onClick={onUnlink}
               style={{
                 background: 'transparent', border: 'none',
-                color: '#94a3b8', fontSize: 11, fontWeight: 600,
+                color: 'var(--ds-ink-2)', fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', padding: 0, textDecoration: 'underline',
               }}
             >
@@ -894,7 +894,7 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
           // missing-in-crm); fall back to the CRM ObjectId for missing-in-
           // report rows so admins can also annotate those.
           const noteOwner = pair.supabaseJob || pair.crmJob;
-          if (!noteOwner) return <span style={{ fontSize: 11, color: '#475569' }}>—</span>;
+          if (!noteOwner) return <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>—</span>;
           const jobId = pair.supabaseJob?.id ?? pair.crmJob?._id;
           return (
             <JobNoteInline
@@ -912,12 +912,12 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
             title="Edit reported job"
             aria-label="Edit reported job"
             style={{
-              background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
-              color: '#94a3b8', padding: 6, borderRadius: 6, cursor: 'pointer',
+              background: 'transparent', border: '1px solid var(--ds-line)',
+              color: 'var(--ds-ink-2)', padding: 6, borderRadius: 6, cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#a5b4fc'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(165,180,252,0.4)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#94a3b8'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ds-ink)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-line-strong)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ds-ink-2)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-line)'; }}
           >
             <FiEdit2 size={13} />
           </button>
@@ -948,7 +948,7 @@ function PaymentMethodCell({ pair }: { pair: Pair }) {
   }
   if (sup) return <span style={methodPillStyle('#a5b4fc')}>{sup}</span>;
   if (crm) return <span style={methodPillStyle('#94a3b8')}>{crm}</span>;
-  return <span style={{ color: '#475569', fontSize: 12 }}>—</span>;
+  return <span style={{ color: 'var(--ds-ink-2)', fontSize: 12 }}>—</span>;
 }
 
 function methodPillStyle(color: string): React.CSSProperties {
@@ -1002,11 +1002,11 @@ function ActionsCard({
   return (
     <div className="panel" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <FiHelpCircle color="#94a3b8" />
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>
+        <FiHelpCircle color="var(--ds-ink-2)" />
+        <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>
           {error
-            ? <span style={{ color: '#f87171' }}>{error}</span>
-            : <>Current status: <strong style={{ color: '#e2e8f0' }}>{currentStatus}</strong></>}
+            ? <span style={{ color: 'var(--ds-crit-text)' }}>{error}</span>
+            : <>Current status: <strong style={{ color: 'var(--ds-ink)' }}>{currentStatus}</strong></>}
         </span>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -1089,9 +1089,9 @@ function pillStyle(color: string): React.CSSProperties {
 
 function OverviewStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
-    <div style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 14px' }}>
-      <p style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>{label}</p>
-      <p style={{ fontSize: 20, fontWeight: 700, color: accent || '#f1f5f9', marginTop: 4, marginBottom: 0, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+    <div style={{ background: 'var(--ds-surface-2)', border: '1px solid var(--ds-line)', borderRadius: 12, padding: '12px 14px' }}>
+      <p style={{ fontSize: 11, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 20, fontWeight: 700, color: accent || 'var(--ds-ink)', marginTop: 4, marginBottom: 0, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
     </div>
   );
 }
@@ -1144,7 +1144,7 @@ function ReportNoteCard({ report }: { report: DetailResponse['report'] }) {
           <h3 style={{ marginTop: 4, marginBottom: 0, fontSize: 15 }}>Notes about this report</h3>
         </div>
         {savedAt && (
-          <span style={{ fontSize: 11, color: '#64748b' }}>
+          <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>
             Last saved {formatDisplayDate(savedAt.slice(0, 10))}{savedBy ? ` · ${savedBy}` : ''}
           </span>
         )}
@@ -1156,9 +1156,9 @@ function ReportNoteCard({ report }: { report: DetailResponse['report'] }) {
         rows={3}
         style={{
           width: '100%',
-          background: 'rgba(15,23,42,0.6)',
-          color: '#e2e8f0',
-          border: '1px solid rgba(255,255,255,0.10)',
+          background: 'var(--ds-surface-2)',
+          color: 'var(--ds-ink)',
+          border: '1px solid var(--ds-line-strong)',
           borderRadius: 10,
           padding: 10,
           fontSize: 13,
@@ -1179,7 +1179,7 @@ function ReportNoteCard({ report }: { report: DetailResponse['report'] }) {
         >
           {saving ? 'Saving…' : dirty ? 'Save note' : 'Saved'}
         </button>
-        {err && <span style={{ fontSize: 12, color: '#f87171' }}>{err}</span>}
+        {err && <span style={{ fontSize: 12, color: 'var(--ds-crit-text)' }}>{err}</span>}
       </div>
     </div>
   );
@@ -1288,7 +1288,7 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
   // ── Editing view ─────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+      <span style={{ fontSize: 10, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
         Admin note · Enter to save · Shift+Enter for new line
       </span>
       <textarea
@@ -1319,7 +1319,7 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
         style={{
           width: '100%',
           background: 'rgba(245,158,11,0.05)',
-          color: '#e2e8f0',
+          color: 'var(--ds-ink)',
           border: '1px solid rgba(245,158,11,0.25)',
           borderRadius: 8,
           padding: '6px 8px',
@@ -1329,9 +1329,9 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
         }}
       />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11 }}>
-        {saving && <span style={{ color: '#94a3b8' }}>Saving…</span>}
+        {saving && <span style={{ color: 'var(--ds-ink-2)' }}>Saving…</span>}
         {!saving && dirty && <span style={{ color: '#fbbf24' }}>Press Enter to save</span>}
-        {err && <span style={{ color: '#f87171' }}>{err}</span>}
+        {err && <span style={{ color: 'var(--ds-crit-text)' }}>{err}</span>}
       </div>
     </div>
   );
