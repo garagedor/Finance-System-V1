@@ -132,7 +132,7 @@ export default function MappingsPage() {
             </Link>
             <p className="bp-kicker">Verification</p>
             <h1 className="bp-title">Identity Mappings</h1>
-            <p style={{ color: '#94a3b8', fontSize: 13, marginTop: 4 }}>
+            <p style={{ color: 'var(--ds-ink-2)', fontSize: 13, marginTop: 4 }}>
               Reconcile names from the Lovable balance app (left) with how they appear in your CRM (right).
               When a Supabase user has at least one mapped CRM name, the verification compares against those names instead of doing an exact match.
             </p>
@@ -140,11 +140,11 @@ export default function MappingsPage() {
         </header>
 
         {error && (
-          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(239,68,68,0.4)' }}>
-            <p style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
+          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'var(--ds-crit-line)' }}>
+            <p style={{ fontSize: 12, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
               Couldn't load mappings
             </p>
-            <pre style={{ color: '#f87171', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
+            <pre style={{ color: 'var(--ds-crit-text)', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
           </div>
         )}
 
@@ -224,7 +224,7 @@ function TechMappingsTable({
               <tr key={u.id}>
                 <td>
                   <div style={{ fontWeight: 600 }}>{u.fullName || '(no name)'}</div>
-                  {u.role && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>{u.role}</div>}
+                  {u.role && <div style={{ fontSize: 11, color: 'var(--ds-ink-2)', marginTop: 2 }}>{u.role}</div>}
                 </td>
                 <td>
                   <MultiPicker
@@ -241,9 +241,9 @@ function TechMappingsTable({
                     onClick={() => onSave(u)}
                     disabled={isSaving}
                     style={{
-                      background: flashed ? 'rgba(34,197,94,0.18)' : undefined,
-                      borderColor: flashed ? 'rgba(34,197,94,0.4)' : undefined,
-                      color: flashed ? '#86efac' : undefined,
+                      background: flashed ? 'var(--ds-ok-wash)' : undefined,
+                      borderColor: flashed ? 'var(--ds-ok-line)' : undefined,
+                      color: flashed ? 'var(--ds-ok-text)' : undefined,
                     }}
                   >
                     {flashed ? <><FiCheck style={{ verticalAlign: 'middle', marginRight: 4 }} />Saved</> : isSaving ? 'Saving…' : 'Save'}
@@ -309,9 +309,9 @@ function AreaMappingsTable({
                     onClick={() => onSave(a)}
                     disabled={isSaving}
                     style={{
-                      background: flashed ? 'rgba(34,197,94,0.18)' : undefined,
-                      borderColor: flashed ? 'rgba(34,197,94,0.4)' : undefined,
-                      color: flashed ? '#86efac' : undefined,
+                      background: flashed ? 'var(--ds-ok-wash)' : undefined,
+                      borderColor: flashed ? 'var(--ds-ok-line)' : undefined,
+                      color: flashed ? 'var(--ds-ok-text)' : undefined,
                     }}
                   >
                     {flashed ? <><FiCheck style={{ verticalAlign: 'middle', marginRight: 4 }} />Saved</> : isSaving ? 'Saving…' : 'Save'}
@@ -359,15 +359,15 @@ function MultiPicker({
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 4,
                 padding: '3px 8px', borderRadius: 999,
-                background: 'rgba(99,102,241,0.18)',
-                border: '1px solid rgba(99,102,241,0.35)',
-                color: '#c7d2fe', fontSize: 12, fontWeight: 500,
+                background: 'var(--ds-info-wash)',
+                border: '1px solid var(--ds-info-line)',
+                color: 'var(--ds-info-text)', fontSize: 12, fontWeight: 500,
               }}
             >
               {s}
               <button
                 onClick={() => toggle(s)}
-                style={{ background: 'transparent', border: 'none', color: '#c7d2fe', cursor: 'pointer', padding: 0, display: 'inline-flex' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--ds-info-text)', cursor: 'pointer', padding: 0, display: 'inline-flex' }}
                 aria-label={`Remove ${s}`}
               >
                 <FiX size={12} />
@@ -377,28 +377,28 @@ function MultiPicker({
         </div>
       )}
       <div style={{ position: 'relative' }}>
-        <FiSearch style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} size={13} />
+        <FiSearch style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ds-ink-2)' }} size={13} />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder}
           style={{
             width: '100%', padding: '8px 10px 8px 30px', fontSize: 13,
-            background: 'rgba(15,23,42,0.5)', color: '#e2e8f0',
-            border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, outline: 'none',
+            background: 'var(--ds-surface-2)', color: 'var(--ds-ink)',
+            border: '1px solid var(--ds-line-strong)', borderRadius: 8, outline: 'none',
           }}
         />
       </div>
       <div
         style={{
           maxHeight: 180, overflowY: 'auto',
-          background: 'rgba(15,23,42,0.4)',
-          border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
+          background: 'var(--ds-surface-2)',
+          border: '1px solid var(--ds-line)', borderRadius: 8,
           padding: 4,
         }}
       >
         {filtered.length === 0 ? (
-          <div style={{ padding: 12, fontSize: 12, color: '#64748b', textAlign: 'center' }}>{emptyText}</div>
+          <div style={{ padding: 12, fontSize: 12, color: 'var(--ds-ink-2)', textAlign: 'center' }}>{emptyText}</div>
         ) : (
           filtered.map((o) => {
             const isOn = selected.includes(o);
@@ -408,17 +408,17 @@ function MultiPicker({
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '6px 8px', borderRadius: 6, cursor: 'pointer',
-                  background: isOn ? 'rgba(99,102,241,0.1)' : 'transparent',
-                  fontSize: 13, color: '#cbd5e1',
+                  background: isOn ? 'var(--ds-neutral-wash)' : 'transparent',
+                  fontSize: 13, color: 'var(--ds-ink)',
                 }}
-                onMouseEnter={(e) => { if (!isOn) (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)'; }}
+                onMouseEnter={(e) => { if (!isOn) (e.currentTarget as HTMLElement).style.background = 'var(--ds-surface-3)'; }}
                 onMouseLeave={(e) => { if (!isOn) (e.currentTarget as HTMLElement).style.background = 'transparent'; }}
               >
                 <input
                   type="checkbox"
                   checked={isOn}
                   onChange={() => toggle(o)}
-                  style={{ accentColor: '#6366f1' }}
+                  style={{ accentColor: 'var(--ds-info)' }}
                 />
                 <span>{o}</span>
               </label>
