@@ -199,10 +199,10 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       <div className="lg-left">
         <div className="lg-box">
           <div className="lg-brand">
-            <div className="lg-logo" aria-hidden="true">LBS</div>
+            <div className="lg-logo" aria-hidden="true">317</div>
             <div>
-              <div className="lg-bname">LBS Garage Door</div>
-              <div className="lg-bsub">Business Ecosystem</div>
+              <div className="lg-bname">317 Eco System</div>
+              <div className="lg-bsub">LBS Garage Door</div>
             </div>
           </div>
 

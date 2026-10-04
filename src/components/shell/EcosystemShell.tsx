@@ -109,10 +109,10 @@ export default function EcosystemShell({
 
       <aside className="sh-side" aria-label={`${PORTAL_LABEL[portal]} navigation`}>
         <Link href="/home" className="sh-brand">
-          <div className="sh-logo" aria-hidden="true">LBS</div>
+          <div className="sh-logo" aria-hidden="true">317</div>
           <div className="sh-brand-txt">
-            <div className="sh-brand-n">LBS Garage Door</div>
-            <div className="sh-brand-s">Business Ecosystem</div>
+            <div className="sh-brand-n">317 Eco System</div>
+            <div className="sh-brand-s">LBS Garage Door</div>
           </div>
         </Link>
 

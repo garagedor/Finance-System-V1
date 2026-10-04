@@ -108,10 +108,10 @@ export default function GatewayPage() {
     <div className="gw">
       <header className="gw-tb">
         <div className="gw-brand">
-          <div className="gw-logo" aria-hidden="true">LBS</div>
+          <div className="gw-logo" aria-hidden="true">317</div>
           <div>
-            <div className="gw-bname">LBS Garage Door</div>
-            <div className="gw-bsub">Business Ecosystem</div>
+            <div className="gw-bname">317 Eco System</div>
+            <div className="gw-bsub">LBS Garage Door</div>
           </div>
         </div>
 
