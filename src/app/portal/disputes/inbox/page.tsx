@@ -11,7 +11,8 @@ import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
 
 type PostedTo = { ledgerId: string; holder: string };
 import { fmt$, fmtDate } from "../../format";
-import { PageHeader, StatPill, CardShell, Empty } from "../../_components/page-helpers";
+import { PageHeader, StatPill, CardShell, Empty, FilterBar, FilterField } from "../../_components/page-helpers";
+import MultiSelect from "../../_components/MultiSelect";
 import ScanpayRowActions from "../scanpay/ScanpayRowActions";
 import ScanpayRefundRowActions from "../scanpay/refunds/ScanpayRefundRowActions";
 import InboxLive from "./InboxLive";
@@ -20,6 +21,9 @@ export const dynamic = "force-dynamic";
 
 type View = "action" | "refunds" | "disputes";
 type Kind = "both" | "disputes" | "refunds";
+type Filters = { q: string; tech: string[]; provider: string[]; am: string[]; matched: string[]; from: string; to: string; min: string; max: string };
+const AM_UNASSIGNED = "⚠ unassigned";
+const enAM = (e?: JobEnrichment) => (e?.areaManager ? e.areaManager : e?.areaManagerMissing ? AM_UNASSIGNED : "");
 // "Needs action" = not verified yet. Verified items live in the Refunds/Disputes tabs.
 const NEEDS = ["new", "matched"] as const;
 
@@ -27,7 +31,7 @@ function matchHay(inv: string, en?: JobEnrichment, extra?: string | null): strin
   return [inv, en?.clientName, en?.address, en?.tech, en?.provider, extra].filter(Boolean).join(" ").toLowerCase();
 }
 
-async function load(view: View, kind: Kind, q: string) {
+async function load(view: View, kind: Kind, f: Filters) {
   await ensureFinanceIndexes();
   const rc = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
   const dc = coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute);
@@ -64,9 +68,32 @@ async function load(view: View, kind: Kind, q: string) {
     }
   }
 
-  const ql = q.trim().toLowerCase();
-  const rRows = ql ? refunds.filter((r) => matchHay(r.invoiceNumber, r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, r.candidates?.[0]?.address).includes(ql)) : refunds;
-  const dRows = ql ? disputes.filter((d) => matchHay(d.invoiceNumber, d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, `${d.customerName} ${d.reason}`).includes(ql)) : disputes;
+  // Filter option lists from all enriched rows (pre-filter), like the old inbox.
+  const allEn = [...refunds, ...disputes].map((x) => (x.matchedJobId ? enrich.get(x.matchedJobId) : undefined));
+  const uniq = (a: string[]) => [...new Set(a.filter(Boolean))].sort();
+  const options = {
+    techs: uniq(allEn.map((e) => e?.tech ?? "")),
+    providers: uniq(allEn.map((e) => e?.provider ?? "")),
+    ams: uniq(allEn.map((e) => enAM(e))),
+  };
+
+  const ql = f.q.trim().toLowerCase();
+  const minN = f.min ? parseFloat(f.min) : null;
+  const maxN = f.max ? parseFloat(f.max) : null;
+  const pass = (e: JobEnrichment | undefined, matched: boolean, day: string, amt: number, hay: string): boolean => {
+    if (ql && !hay.includes(ql)) return false;
+    if (f.tech.length && !f.tech.includes(e?.tech ?? "")) return false;
+    if (f.provider.length && !f.provider.includes(e?.provider ?? "")) return false;
+    if (f.am.length && !f.am.includes(enAM(e))) return false;
+    if (f.matched.length && !f.matched.includes(matched ? "matched" : "unmatched")) return false;
+    if (f.from && (!day || day < f.from)) return false;
+    if (f.to && (!day || day > f.to)) return false;
+    if (minN != null && amt < minN) return false;
+    if (maxN != null && amt > maxN) return false;
+    return true;
+  };
+  const rRows = refunds.filter((r) => pass(r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, !!r.matchedJobId, (r.paymentDate ?? "").slice(0, 10), r.originalAmount, matchHay(r.invoiceNumber, r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, r.candidates?.[0]?.address)));
+  const dRows = disputes.filter((d) => pass(d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, !!d.matchedJobId, (d.disputedAt ?? "").slice(0, 10), d.amount, matchHay(d.invoiceNumber, d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, `${d.customerName} ${d.reason}`)));
 
   // Counts for the tiles + switch (independent of the current view/search).
   const [needsRefunds, needsDisputes, refundsTotal, disputesTotal, refundMissing, postedRef, postedDisp] = await Promise.all([
@@ -80,7 +107,7 @@ async function load(view: View, kind: Kind, q: string) {
   ]);
 
   return {
-    refunds: rRows, disputes: dRows, enrich, postedTo,
+    refunds: rRows, disputes: dRows, enrich, postedTo, options,
     counts: {
       needsAction: needsRefunds + needsDisputes,
       needsRefunds, needsDisputes, refundsTotal, disputesTotal,
@@ -218,10 +245,12 @@ function DisputeCard({ d, en, posted }: { d: ScanpayDisputeRecord; en?: JobEnric
 export default async function InboxPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const sp = await searchParams;
   const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? "" : v ?? "");
+  const arr = (v: string | string[] | undefined) => (Array.isArray(v) ? v.filter(Boolean) : v ? [v] : []);
   const view: View = sp.view === "refunds" || sp.view === "disputes" ? sp.view : "action";
   const kind: Kind = sp.kind === "disputes" || sp.kind === "refunds" ? sp.kind : "both";
-  const q = str(sp.q);
-  const d = await load(view, kind, q);
+  const f: Filters = { q: str(sp.q), tech: arr(sp.tech), provider: arr(sp.provider), am: arr(sp.am), matched: arr(sp.matched), from: str(sp.from), to: str(sp.to), min: str(sp.min), max: str(sp.max) };
+  const d = await load(view, kind, f);
+  const clearHref = view === "action" ? `/portal/disputes/inbox?view=action&kind=${kind}` : `/portal/disputes/inbox?view=${view}`;
 
   const items: Array<{ kind: "r" | "d"; date: string; node: React.ReactNode }> = [
     ...d.refunds.map((r) => ({ kind: "r" as const, date: r.paymentDate ?? "", node: <RefundCard key={`r-${r._id}`} r={r} en={r.matchedJobId ? d.enrich.get(r.matchedJobId) : undefined} posted={d.postedTo[r._id]} /> })),
@@ -259,23 +288,35 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
         {tab("action", "Needs action", d.counts.needsAction)}
         {tab("refunds", "Refunds", d.counts.refundsTotal)}
         {tab("disputes", "Disputes", d.counts.disputesTotal)}
-        <form style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
-          <input type="hidden" name="view" value={view} />
-          {view === "action" && <input type="hidden" name="kind" value={kind} />}
-          <input className="portal-input" type="search" name="q" defaultValue={q} placeholder="Search invoice / customer / tech / address" style={{ minWidth: 220 }} />
-          <button type="submit" className="portal-btn">Search</button>
-          {q && <Link href={view === "action" ? `/portal/disputes/inbox?view=action&kind=${kind}` : `/portal/disputes/inbox?view=${view}`} className="portal-btn portal-btn-ghost">Clear</Link>}
-        </form>
       </div>
 
       {view === "action" && (
-        <div style={{ display: "flex", gap: 6, alignItems: "center", margin: "0 0 12px" }}>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", margin: "0 0 10px" }}>
           <span className="muted small" style={{ marginRight: 2 }}>Show:</span>
           {subTab("both", "Both")}
           {subTab("refunds", "Refunds", d.counts.needsRefunds)}
           {subTab("disputes", "Disputes", d.counts.needsDisputes)}
         </div>
       )}
+
+      <FilterBar>
+        <input type="hidden" name="view" value={view} />
+        {view === "action" && <input type="hidden" name="kind" value={kind} />}
+        <FilterField label="Search"><input className="portal-input" type="search" name="q" defaultValue={f.q} placeholder="invoice / customer / address" style={{ minWidth: 200 }} /></FilterField>
+        <FilterField label="Technician"><MultiSelect name="tech" selected={f.tech} options={d.options.techs} /></FilterField>
+        <FilterField label="Provider"><MultiSelect name="provider" selected={f.provider} options={d.options.providers} /></FilterField>
+        <FilterField label="Area Manager"><MultiSelect name="am" selected={f.am} options={d.options.ams} /></FilterField>
+        <FilterField label="Match"><MultiSelect name="matched" selected={f.matched} options={["matched", "unmatched"]} labels={{ matched: "Matched", unmatched: "Unmatched" }} /></FilterField>
+        <FilterField label="From"><input className="portal-input" type="date" name="from" defaultValue={f.from} /></FilterField>
+        <FilterField label="To"><input className="portal-input" type="date" name="to" defaultValue={f.to} /></FilterField>
+        <FilterField label="Min $"><input className="portal-input" style={{ width: 90 }} type="number" step="0.01" name="min" defaultValue={f.min} /></FilterField>
+        <FilterField label="Max $"><input className="portal-input" style={{ width: 90 }} type="number" step="0.01" name="max" defaultValue={f.max} /></FilterField>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
+          <button type="submit" className="portal-btn portal-btn-primary">Apply</button>
+          <Link href={clearHref} className="portal-btn portal-btn-ghost">Clear</Link>
+        </div>
+      </FilterBar>
+      <div style={{ height: 12 }} />
 
       <CardShell title={view === "action" ? "Needs action" : view === "refunds" ? "Refunds" : "Disputes"} subtitle={`${items.length} shown`}>
         <div style={{ padding: 12 }}>
