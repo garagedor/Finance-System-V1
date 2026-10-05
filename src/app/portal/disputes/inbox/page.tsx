@@ -19,21 +19,28 @@ import InboxLive from "./InboxLive";
 export const dynamic = "force-dynamic";
 
 type View = "action" | "refunds" | "disputes";
-const ACTIONABLE = ["new", "matched", "verified"] as const;
+type Kind = "both" | "disputes" | "refunds";
+// "Needs action" = not verified yet. Verified items live in the Refunds/Disputes tabs.
+const NEEDS = ["new", "matched"] as const;
 
 function matchHay(inv: string, en?: JobEnrichment, extra?: string | null): string {
   return [inv, en?.clientName, en?.address, en?.tech, en?.provider, extra].filter(Boolean).join(" ").toLowerCase();
 }
 
-async function load(view: View, q: string) {
+async function load(view: View, kind: Kind, q: string) {
   await ensureFinanceIndexes();
   const rc = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
   const dc = coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute);
 
-  const refundFilter: Record<string, unknown> | null = view === "disputes" ? null
-    : view === "action" ? { matchStatus: { $in: ACTIONABLE } } : {};
-  const disputeFilter: Record<string, unknown> | null = view === "refunds" ? null
-    : view === "action" ? { matchStatus: { $in: ACTIONABLE } } : {};
+  // Needs action shows only un-verified (new/matched); the kind sub-filter can
+  // narrow it to just disputes or just refunds. Refunds/Disputes tabs show all
+  // statuses for that entity (verified items appear there).
+  const showRefunds = view === "refunds" || (view === "action" && kind !== "disputes");
+  const showDisputes = view === "disputes" || (view === "action" && kind !== "refunds");
+  const refundFilter: Record<string, unknown> | null = !showRefunds ? null
+    : view === "action" ? { matchStatus: { $in: NEEDS } } : {};
+  const disputeFilter: Record<string, unknown> | null = !showDisputes ? null
+    : view === "action" ? { matchStatus: { $in: NEEDS } } : {};
 
   const [refunds, disputes] = await Promise.all([
     refundFilter ? rc.find(refundFilter as never).sort({ paymentDate: -1 }).limit(300).toArray() : Promise.resolve([] as ScanpayRefundRecord[]),
@@ -62,11 +69,12 @@ async function load(view: View, q: string) {
   const dRows = ql ? disputes.filter((d) => matchHay(d.invoiceNumber, d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, `${d.customerName} ${d.reason}`).includes(ql)) : disputes;
 
   // Counts for the tiles + switch (independent of the current view/search).
-  const [rActionable, dActionable, refundQueue, refundMissing, postedRef, postedDisp] = await Promise.all([
-    rc.countDocuments({ matchStatus: { $in: ACTIONABLE } } as never),
-    dc.countDocuments({ matchStatus: { $in: ACTIONABLE } } as never),
-    rc.countDocuments({ matchStatus: { $in: ["new", "matched"] } } as never),
-    rc.countDocuments({ matchStatus: { $in: ["new", "matched"] }, refundAmount: null } as never),
+  const [needsRefunds, needsDisputes, refundsTotal, disputesTotal, refundMissing, postedRef, postedDisp] = await Promise.all([
+    rc.countDocuments({ matchStatus: { $in: NEEDS } } as never),
+    dc.countDocuments({ matchStatus: { $in: NEEDS } } as never),
+    rc.countDocuments({} as never),
+    dc.countDocuments({} as never),
+    rc.countDocuments({ matchStatus: { $in: NEEDS }, refundAmount: null } as never),
     rc.countDocuments({ matchStatus: "posted" } as never),
     dc.countDocuments({ matchStatus: "posted" } as never),
   ]);
@@ -74,9 +82,10 @@ async function load(view: View, q: string) {
   return {
     refunds: rRows, disputes: dRows, enrich, postedTo,
     counts: {
-      needsAction: rActionable + dActionable,
-      refundsActionable: rActionable, disputesActionable: dActionable,
-      refundQueue, refundMissing, posted: postedRef + postedDisp,
+      needsAction: needsRefunds + needsDisputes,
+      needsRefunds, needsDisputes, refundsTotal, disputesTotal,
+      refundsActionable: needsRefunds, disputesActionable: needsDisputes,
+      refundQueue: needsRefunds, refundMissing, posted: postedRef + postedDisp,
     },
   };
 }
@@ -210,8 +219,9 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? "" : v ?? "");
   const view: View = sp.view === "refunds" || sp.view === "disputes" ? sp.view : "action";
+  const kind: Kind = sp.kind === "disputes" || sp.kind === "refunds" ? sp.kind : "both";
   const q = str(sp.q);
-  const d = await load(view, q);
+  const d = await load(view, kind, q);
 
   const items: Array<{ kind: "r" | "d"; date: string; node: React.ReactNode }> = [
     ...d.refunds.map((r) => ({ kind: "r" as const, date: r.paymentDate ?? "", node: <RefundCard key={`r-${r._id}`} r={r} en={r.matchedJobId ? d.enrich.get(r.matchedJobId) : undefined} posted={d.postedTo[r._id]} /> })),
@@ -221,6 +231,11 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const tab = (v: View, label: string, count: number) => (
     <Link href={`/portal/disputes/inbox?view=${v}`} className={`portal-btn ${view === v ? "portal-btn-primary" : ""}`}>
       {label} <span className="muted">{count}</span>
+    </Link>
+  );
+  const subTab = (k: Kind, label: string, count?: number) => (
+    <Link href={`/portal/disputes/inbox?view=action&kind=${k}`} className={`portal-btn ${kind === k ? "portal-btn-primary" : "portal-btn-ghost"}`} style={{ padding: "4px 12px", fontSize: 12 }}>
+      {label}{count != null ? <> <span className="muted">{count}</span></> : null}
     </Link>
   );
 
@@ -240,17 +255,27 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
         <StatPill label="Posted" value={String(d.counts.posted)} />
       </section>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "6px 0 12px" }}>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", margin: "6px 0 10px" }}>
         {tab("action", "Needs action", d.counts.needsAction)}
-        {tab("refunds", "Refunds", d.counts.refundsActionable)}
-        {tab("disputes", "Disputes", d.counts.disputesActionable)}
+        {tab("refunds", "Refunds", d.counts.refundsTotal)}
+        {tab("disputes", "Disputes", d.counts.disputesTotal)}
         <form style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
           <input type="hidden" name="view" value={view} />
+          {view === "action" && <input type="hidden" name="kind" value={kind} />}
           <input className="portal-input" type="search" name="q" defaultValue={q} placeholder="Search invoice / customer / tech / address" style={{ minWidth: 220 }} />
           <button type="submit" className="portal-btn">Search</button>
-          {q && <Link href={`/portal/disputes/inbox?view=${view}`} className="portal-btn portal-btn-ghost">Clear</Link>}
+          {q && <Link href={view === "action" ? `/portal/disputes/inbox?view=action&kind=${kind}` : `/portal/disputes/inbox?view=${view}`} className="portal-btn portal-btn-ghost">Clear</Link>}
         </form>
       </div>
+
+      {view === "action" && (
+        <div style={{ display: "flex", gap: 6, alignItems: "center", margin: "0 0 12px" }}>
+          <span className="muted small" style={{ marginRight: 2 }}>Show:</span>
+          {subTab("both", "Both")}
+          {subTab("refunds", "Refunds", d.counts.needsRefunds)}
+          {subTab("disputes", "Disputes", d.counts.needsDisputes)}
+        </div>
+      )}
 
       <CardShell title={view === "action" ? "Needs action" : view === "refunds" ? "Refunds" : "Disputes"} subtitle={`${items.length} shown`}>
         <div style={{ padding: 12 }}>
