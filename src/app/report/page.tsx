@@ -411,9 +411,9 @@ export default function ReportPage() {
                 fontWeight: 600,
                 letterSpacing: '0.05em',
                 padding: '1px 5px',
-                background: 'rgba(245,158,11,0.15)',
-                color: '#fcd34d',
-                border: '1px solid rgba(245,158,11,0.35)',
+                background: 'var(--ds-warn-soft)',
+                color: 'var(--ds-warn-text)',
+                border: '1px solid var(--ds-warn-line)',
                 borderRadius: 3,
               }}
             >
@@ -469,9 +469,9 @@ export default function ReportPage() {
                 fontWeight: 600,
                 letterSpacing: '0.05em',
                 padding: '1px 5px',
-                background: 'rgba(245,158,11,0.15)',
-                color: '#fcd34d',
-                border: '1px solid rgba(245,158,11,0.35)',
+                background: 'var(--ds-warn-soft)',
+                color: 'var(--ds-warn-text)',
+                border: '1px solid var(--ds-warn-line)',
                 borderRadius: 3,
               }}
             >
@@ -748,13 +748,13 @@ export default function ReportPage() {
             <div className="rpt-table-actions">
               <span
                 title="Drag a column heading to reorder · double-click to rename (saved on this device)"
-                style={{ fontSize: 11, color: '#94a3b8', display: 'inline-flex', alignItems: 'center', gap: 8 }}
+                style={{ fontSize: 11, color: 'var(--ds-ink-2)', display: 'inline-flex', alignItems: 'center', gap: 8 }}
               >
                 ✎ rename / ⇄ reorder columns
                 {hasCustomHeaders && (
                   <button
                     onClick={resetHeaders}
-                    style={{ fontSize: 11, padding: '2px 8px', border: '1px solid rgba(148,163,184,0.4)', borderRadius: 4, background: 'transparent', color: '#818cf8', cursor: 'pointer' }}
+                    style={{ fontSize: 11, padding: '2px 8px', border: '1px solid var(--ds-line-strong)', borderRadius: 4, background: 'transparent', color: 'var(--ds-info-text)', cursor: 'pointer' }}
                   >
                     reset
                   </button>
@@ -844,7 +844,7 @@ export default function ReportPage() {
                                 if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
                                 else if (e.key === 'Escape') setEditingHeaderKey(null);
                               }}
-                              style={{ font: 'inherit', color: '#111', background: '#fff', border: '1px solid #6366f1', borderRadius: 3, padding: '1px 4px', width: `${Math.max(8, labelFor(col).length + 2)}ch` }}
+                              style={{ font: 'inherit', color: 'var(--ds-ink)', background: 'var(--ds-surface-2)', border: '1px solid var(--ds-info)', borderRadius: 3, padding: '1px 4px', width: `${Math.max(8, labelFor(col).length + 2)}ch` }}
                             />
                           ) : labelFor(col)}
                         </th>
@@ -902,8 +902,8 @@ export default function ReportPage() {
         .report-page {
           position: relative;
           min-height: 100vh;
-          background: #0a0f1c;
-          color: #f1f5f9;
+          background: var(--ds-bg);
+          color: var(--ds-ink);
         }
 
         .content {
@@ -928,22 +928,22 @@ export default function ReportPage() {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.22em;
-          color: #818cf8;
+          color: var(--ds-crm-2);
         }
         .rpt-title {
           margin: 4px 0 0;
           font-size: 26px;
           font-weight: 700;
           letter-spacing: -0.5px;
-          color: #f1f5f9;
+          color: var(--ds-ink);
         }
 
         /* ── Tabs ── */
         .rpt-tabs {
           display: inline-flex;
           padding: 4px;
-          background: #111827;
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: var(--ds-surface-2);
+          border: 1px solid var(--ds-line);
           border-radius: 12px;
           gap: 2px;
           width: fit-content;
@@ -957,26 +957,26 @@ export default function ReportPage() {
           padding: 8px 14px;
           font-size: 13px;
           font-weight: 600;
-          color: #64748b;
+          color: var(--ds-ink-2);
           border-radius: 8px;
           cursor: pointer;
           transition: all 0.2s ease;
         }
         .rpt-tab:hover:not(.active) {
-          color: #cbd5e1;
-          background: rgba(255, 255, 255, 0.04);
+          color: var(--ds-ink);
+          background: var(--ds-surface-3);
         }
         .rpt-tab.active {
-          background: linear-gradient(135deg, #4f46e5, #7c3aed);
-          color: white;
-          box-shadow: 0 4px 14px rgba(79, 70, 229, 0.4);
+          background: var(--ds-info);
+          color: var(--ds-on-info);
+          box-shadow: 0 4px 14px var(--ds-info-line);
         }
         .rpt-tab-icon { display: inline-flex; }
 
         /* ── Panel ── */
         .panel {
-          background: #111827;
-          border: 1px solid rgba(255, 255, 255, 0.08);
+          background: var(--ds-surface-2);
+          border: 1px solid var(--ds-line);
           border-radius: 14px;
           padding: 0;
           box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
@@ -991,14 +991,14 @@ export default function ReportPage() {
           gap: 16px;
           padding: 14px 18px;
           margin: 0;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+          border-bottom: 1px solid var(--ds-line);
           flex-wrap: wrap;
         }
         .rpt-section-kicker {
           margin: 0 0 4px;
           font-size: 14px;
           font-weight: 700;
-          color: #f1f5f9;
+          color: var(--ds-ink);
         }
         .rpt-table-meta {
           display: inline-flex;
@@ -1011,29 +1011,29 @@ export default function ReportPage() {
           align-items: baseline;
           gap: 5px;
           padding: 3px 10px;
-          background: rgba(99, 102, 241, 0.1);
-          border: 1px solid rgba(99, 102, 241, 0.25);
+          background: var(--ds-info-wash);
+          border: 1px solid var(--ds-info-line);
           border-radius: 999px;
           font-size: 11px;
-          color: #818cf8;
+          color: var(--ds-info-text);
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.05em;
         }
         .rpt-meta-pill strong {
-          color: #a5b4fc;
+          color: var(--ds-info-text);
           font-size: 13px;
           font-feature-settings: 'tnum';
         }
         .rpt-meta-pages {
           font-size: 11px;
-          color: #475569;
+          color: var(--ds-ink-2);
           text-transform: uppercase;
           letter-spacing: 0.05em;
           font-weight: 500;
         }
         .rpt-meta-pages strong {
-          color: #cbd5e1;
+          color: var(--ds-ink);
           font-size: 12px;
           font-weight: 700;
         }
@@ -1055,7 +1055,7 @@ export default function ReportPage() {
           width: 60%;
           height: 12px;
           border-radius: 4px;
-          background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
+          background: linear-gradient(90deg, var(--ds-surface-2) 0%, var(--ds-surface-3) 50%, var(--ds-surface-2) 100%);
           background-size: 200% 100%;
           animation: rptSkel 1.6s linear infinite;
         }
@@ -1085,14 +1085,14 @@ export default function ReportPage() {
         }
 
         .filter label {
-          color: #94a3b8;
+          color: var(--ds-ink-2);
           font-weight: 600;
         }
 
         .btn-calculate-totals {
-          background: linear-gradient(135deg, #059669, #10b981);
-          color: white;
-          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+          background: var(--ds-crm);
+          color: var(--ds-on-crm);
+          box-shadow: 0 4px 14px var(--ds-crm-line);
           border: none;
           border-radius: 10px;
           padding: 8px 14px;
@@ -1103,21 +1103,21 @@ export default function ReportPage() {
           letter-spacing: 0.01em;
         }
         .btn-calculate-totals:hover:not(:disabled) {
-          box-shadow: 0 6px 22px rgba(16, 185, 129, 0.5);
+          box-shadow: 0 6px 22px var(--ds-crm-line);
           transform: translateY(-1px);
         }
         .btn-calculate-totals:disabled:not(.calculated) {
-          background: rgba(255, 255, 255, 0.05);
-          color: #475569;
+          background: var(--ds-surface-2);
+          color: var(--ds-ink-dim);
           box-shadow: none;
           cursor: not-allowed;
         }
         .btn-calculate-totals.calculated,
         .btn-calculate-totals.calculated:disabled {
-          background: rgba(16, 185, 129, 0.08);
-          color: #34d399;
+          background: var(--ds-ok-soft);
+          color: var(--ds-ok-text);
           box-shadow: none;
-          border: 1px solid rgba(16, 185, 129, 0.25);
+          border: 1px solid var(--ds-ok-line);
           opacity: 1;
           cursor: default;
         }
@@ -1129,13 +1129,13 @@ export default function ReportPage() {
         }
 
         .error {
-          color: #f87171;
+          color: var(--ds-crit-text);
           font-weight: 700;
           font-size: 13px;
         }
 
         .warn {
-          color: #f59e0b;
+          color: var(--ds-warn-text);
           font-weight: 600;
           font-size: 13px;
         }
@@ -1151,7 +1151,7 @@ export default function ReportPage() {
           margin: 0;
           font-size: 15px;
           font-weight: 700;
-          color: #f1f5f9;
+          color: var(--ds-ink);
         }
 
         .table-wrapper {
@@ -1165,10 +1165,10 @@ export default function ReportPage() {
 
         .empty-row td {
           padding: 0 !important;
-          background: #111827 !important;
+          background: var(--ds-surface-2) !important;
           border-bottom: none !important;
         }
-        .empty-row:hover td { background: #111827 !important; }
+        .empty-row:hover td { background: var(--ds-surface-2) !important; }
 
         /* Page arrows */
         .page-arrow {
@@ -1178,33 +1178,33 @@ export default function ReportPage() {
           align-items: center;
           justify-content: center;
           border-radius: 8px;
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          background: rgba(255, 255, 255, 0.04);
-          color: #94a3b8;
+          border: 1px solid var(--ds-line);
+          background: var(--ds-surface-3);
+          color: var(--ds-ink-2);
           cursor: pointer;
           transition: all 0.15s ease;
         }
         .page-arrow:hover:not(:disabled) {
-          background: rgba(99, 102, 241, 0.12);
-          border-color: rgba(99, 102, 241, 0.35);
-          color: #a5b4fc;
+          background: var(--ds-info-wash);
+          border-color: var(--ds-info-line);
+          color: var(--ds-info-text);
         }
         .page-arrow:active:not(:disabled) { transform: scale(0.94); }
         .page-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
 
         .totals-label {
           font-weight: 700 !important;
-          color: #f1f5f9 !important;
-          background: #0d1526 !important;
+          color: var(--ds-ink) !important;
+          background: var(--ds-surface-1) !important;
         }
         .totals-value {
           font-weight: 700 !important;
-          color: #f1f5f9 !important;
-          background: #0d1526 !important;
+          color: var(--ds-ink) !important;
+          background: var(--ds-surface-1) !important;
         }
         .totals-row {
-          background: #0d1526;
-          border-top: 2px solid rgba(99, 102, 241, 0.4);
+          background: var(--ds-surface-1);
+          border-top: 2px solid var(--ds-line-strong);
         }
 
         table {
@@ -1214,7 +1214,7 @@ export default function ReportPage() {
         }
 
         th, td {
-          border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+          border-bottom: 1px solid var(--ds-line);
           padding: 9px 8px;
           font-size: 12.5px;
           text-align: center;
@@ -1222,8 +1222,8 @@ export default function ReportPage() {
         }
 
         th {
-          background: #0d1526;
-          color: #64748b;
+          background: var(--ds-surface-1);
+          color: var(--ds-ink-2);
           font-weight: 700;
           font-size: 11px;
           text-transform: uppercase;
@@ -1234,25 +1234,25 @@ export default function ReportPage() {
         }
 
         td {
-          background: #111827;
-          color: #cbd5e1;
+          background: var(--ds-surface-2);
+          color: var(--ds-ink);
         }
 
         tbody tr:hover td {
-          background: rgba(99, 102, 241, 0.05);
+          background: var(--ds-surface-3);
         }
 
         tfoot td {
           position: sticky;
           bottom: 0;
           z-index: 10;
-          background: #0d1526 !important;
-          border-top: 2px solid rgba(99, 102, 241, 0.4) !important;
-          color: #f1f5f9;
+          background: var(--ds-surface-1) !important;
+          border-top: 2px solid var(--ds-line-strong) !important;
+          color: var(--ds-ink);
         }
 
         .muted {
-          color: #64748b;
+          color: var(--ds-ink-2);
         }
 
         .small {
