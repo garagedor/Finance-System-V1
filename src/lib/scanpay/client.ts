@@ -45,16 +45,31 @@ export async function fetchScanpayDisputes(): Promise<ScanpayDisputeRaw[]> {
 }
 
 // Refunds live inside the payments endpoint, filtered by status and paginated:
-// GET /connect/v1/payments?status=REFUNDED&page=N → { data: { totalCount,
+// GET /connect/v1/payments?status=<STATUS>&page=N → { data: { totalCount,
 // currentPage, payments: [...] } }. NOTE: ScanPay does not expose the refunded
 // amount or refund date here — captured from the human at confirm.
-async function refundsForKey(key: string): Promise<ScanpayRefundRaw[]> {
+//
+// We pull BOTH fully-refunded AND partially-refunded payments. `REFUNDED` is the
+// known status (required); the partial-status spellings are tried tolerantly —
+// an unsupported one just returns nothing and is skipped, so the sync never
+// breaks on a guess. Each payment is deduped by id across statuses.
+const REFUND_STATUSES: { status: string; required: boolean }[] = [
+  { status: "REFUNDED", required: true },
+  { status: "PARTIALLY_REFUNDED", required: false },
+  { status: "PARTIALLY-REFUNDED", required: false },
+  { status: "PARTIAL_REFUND", required: false },
+];
+
+async function paymentsForStatus(key: string, status: string, required: boolean): Promise<ScanpayRefundRaw[]> {
   const headers = { Authorization: `Bearer ${key}`, Accept: "application/json" };
   const out: ScanpayRefundRaw[] = [];
   const MAX_PAGES = 200;
   for (let page = 0; page < MAX_PAGES; page++) {
-    const res = await fetch(`${BASE}/connect/v1/payments?status=REFUNDED&page=${page}`, { headers, cache: "no-store" });
-    if (!res.ok) throw new Error(`ScanPay refunds fetch failed: HTTP ${res.status} ${res.statusText}`);
+    const res = await fetch(`${BASE}/connect/v1/payments?status=${encodeURIComponent(status)}&page=${page}`, { headers, cache: "no-store" });
+    if (!res.ok) {
+      if (required && page === 0) throw new Error(`ScanPay refunds fetch failed: HTTP ${res.status} ${res.statusText}`);
+      break; // optional status not supported / transient — skip it
+    }
     const body = (await res.json()) as { data?: { totalCount?: number; payments?: ScanpayRefundRaw[] } };
     const rows = body?.data?.payments ?? [];
     if (rows.length === 0) break;
@@ -62,6 +77,14 @@ async function refundsForKey(key: string): Promise<ScanpayRefundRaw[]> {
     if (out.length >= (body?.data?.totalCount ?? 0)) break;
   }
   return out;
+}
+
+async function refundsForKey(key: string): Promise<ScanpayRefundRaw[]> {
+  const byId = new Map<string, ScanpayRefundRaw>();
+  for (const { status, required } of REFUND_STATUSES) {
+    for (const r of await paymentsForStatus(key, status, required)) byId.set(r.id, r);
+  }
+  return [...byId.values()];
 }
 
 export async function fetchScanpayRefunds(): Promise<ScanpayRefundRaw[]> {
