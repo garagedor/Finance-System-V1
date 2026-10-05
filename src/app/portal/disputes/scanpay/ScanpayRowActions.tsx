@@ -93,6 +93,8 @@ export default function ScanpayRowActions({
         <PostToLedgerDialog endpoint={`/api/portal/scanpay/${encodeURIComponent(id)}`} />
         <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
           onClick={() => act({ action: "unverify" })}>Unverify</button>
+        <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
+          onClick={() => act({ action: "ignore" })}>Ignore</button>
         {chargedToggle}
       </div>
     );

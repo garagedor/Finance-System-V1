@@ -11,17 +11,17 @@ import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
 
 type PostedTo = { ledgerId: string; holder: string };
 import { fmt$, fmtDate } from "../../format";
-import { PageHeader, StatPill, CardShell, Empty, FilterBar, FilterField } from "../../_components/page-helpers";
-import MultiSelect from "../../_components/MultiSelect";
+import { PageHeader, StatPill, CardShell, Empty } from "../../_components/page-helpers";
+import InboxFilters from "./InboxFilters";
 import ScanpayRowActions from "../scanpay/ScanpayRowActions";
 import ScanpayRefundRowActions from "../scanpay/refunds/ScanpayRefundRowActions";
 import InboxLive from "./InboxLive";
 
 export const dynamic = "force-dynamic";
 
-type View = "action" | "refunds" | "disputes";
+type View = "action" | "refunds" | "disputes" | "posted" | "ignored";
 type Kind = "both" | "disputes" | "refunds";
-type Filters = { q: string; tech: string[]; provider: string[]; am: string[]; matched: string[]; from: string; to: string; min: string; max: string };
+type Filters = { q: string; tech: string[]; provider: string[]; am: string[]; matched: string[]; status: string[]; from: string; to: string; min: string; max: string };
 const AM_UNASSIGNED = "⚠ unassigned";
 const enAM = (e?: JobEnrichment) => (e?.areaManager ? e.areaManager : e?.areaManagerMissing ? AM_UNASSIGNED : "");
 // "Needs action" = not verified yet. Verified items live in the Refunds/Disputes tabs.
@@ -36,15 +36,23 @@ async function load(view: View, kind: Kind, f: Filters) {
   const rc = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
   const dc = coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute);
 
-  // Needs action shows only un-verified (new/matched); the kind sub-filter can
-  // narrow it to just disputes or just refunds. Refunds/Disputes tabs show all
-  // statuses for that entity (verified items appear there).
-  const showRefunds = view === "refunds" || (view === "action" && kind !== "disputes");
-  const showDisputes = view === "disputes" || (view === "action" && kind !== "refunds");
-  const refundFilter: Record<string, unknown> | null = !showRefunds ? null
-    : view === "action" ? { matchStatus: { $in: NEEDS } } : {};
-  const disputeFilter: Record<string, unknown> | null = !showDisputes ? null
-    : view === "action" ? { matchStatus: { $in: NEEDS } } : {};
+  // "Mixed" views (Needs action / Posted / Ignored) span both entities and are
+  // narrowable by the kind sub-filter. Refunds/Disputes tabs show a single
+  // entity across all statuses (verified items appear there).
+  const mixed = view === "action" || view === "posted" || view === "ignored";
+  const showRefunds = view === "refunds" || (mixed && kind !== "disputes");
+  const showDisputes = view === "disputes" || (mixed && kind !== "refunds");
+  // On the Refunds/Disputes tabs the Status filter narrows the DB query (so
+  // e.g. "posted" isn't capped out of the 300-row window). The mixed views each
+  // pin a single matchStatus set.
+  const statusDb: Record<string, unknown> = f.status.length ? { matchStatus: { $in: f.status } } : {};
+  const baseFilter: Record<string, unknown> =
+    view === "action" ? { matchStatus: { $in: NEEDS } }
+    : view === "posted" ? { matchStatus: "posted" }
+    : view === "ignored" ? { matchStatus: "ignored" }
+    : statusDb;
+  const refundFilter: Record<string, unknown> | null = !showRefunds ? null : baseFilter;
+  const disputeFilter: Record<string, unknown> | null = !showDisputes ? null : baseFilter;
 
   const [refunds, disputes] = await Promise.all([
     refundFilter ? rc.find(refundFilter as never).sort({ paymentDate: -1 }).limit(300).toArray() : Promise.resolve([] as ScanpayRefundRecord[]),
@@ -95,8 +103,8 @@ async function load(view: View, kind: Kind, f: Filters) {
   const rRows = refunds.filter((r) => pass(r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, !!r.matchedJobId, (r.paymentDate ?? "").slice(0, 10), r.originalAmount, matchHay(r.invoiceNumber, r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, r.candidates?.[0]?.address)));
   const dRows = disputes.filter((d) => pass(d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, !!d.matchedJobId, (d.disputedAt ?? "").slice(0, 10), d.amount, matchHay(d.invoiceNumber, d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, `${d.customerName} ${d.reason}`)));
 
-  // Counts for the tiles + switch (independent of the current view/search).
-  const [needsRefunds, needsDisputes, refundsTotal, disputesTotal, refundMissing, postedRef, postedDisp] = await Promise.all([
+  // Counts for the tiles + tabs (independent of the current view/search).
+  const [needsRefunds, needsDisputes, refundsTotal, disputesTotal, refundMissing, postedRef, postedDisp, ignoredRef, ignoredDisp] = await Promise.all([
     rc.countDocuments({ matchStatus: { $in: NEEDS } } as never),
     dc.countDocuments({ matchStatus: { $in: NEEDS } } as never),
     rc.countDocuments({} as never),
@@ -104,6 +112,8 @@ async function load(view: View, kind: Kind, f: Filters) {
     rc.countDocuments({ matchStatus: { $in: NEEDS }, refundAmount: null } as never),
     rc.countDocuments({ matchStatus: "posted" } as never),
     dc.countDocuments({ matchStatus: "posted" } as never),
+    rc.countDocuments({ matchStatus: "ignored" } as never),
+    dc.countDocuments({ matchStatus: "ignored" } as never),
   ]);
 
   return {
@@ -112,7 +122,9 @@ async function load(view: View, kind: Kind, f: Filters) {
       needsAction: needsRefunds + needsDisputes,
       needsRefunds, needsDisputes, refundsTotal, disputesTotal,
       refundsActionable: needsRefunds, disputesActionable: needsDisputes,
-      refundQueue: needsRefunds, refundMissing, posted: postedRef + postedDisp,
+      refundQueue: needsRefunds, refundMissing,
+      posted: postedRef + postedDisp, postedRefunds: postedRef, postedDisputes: postedDisp,
+      ignored: ignoredRef + ignoredDisp, ignoredRefunds: ignoredRef, ignoredDisputes: ignoredDisp,
     },
   };
 }
@@ -246,11 +258,17 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const sp = await searchParams;
   const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? "" : v ?? "");
   const arr = (v: string | string[] | undefined) => (Array.isArray(v) ? v.filter(Boolean) : v ? [v] : []);
-  const view: View = sp.view === "refunds" || sp.view === "disputes" ? sp.view : "action";
+  const view: View = sp.view === "refunds" || sp.view === "disputes" || sp.view === "posted" || sp.view === "ignored" ? sp.view : "action";
   const kind: Kind = sp.kind === "disputes" || sp.kind === "refunds" ? sp.kind : "both";
-  const f: Filters = { q: str(sp.q), tech: arr(sp.tech), provider: arr(sp.provider), am: arr(sp.am), matched: arr(sp.matched), from: str(sp.from), to: str(sp.to), min: str(sp.min), max: str(sp.max) };
+  const f: Filters = { q: str(sp.q), tech: arr(sp.tech), provider: arr(sp.provider), am: arr(sp.am), matched: arr(sp.matched), status: arr(sp.status), from: str(sp.from), to: str(sp.to), min: str(sp.min), max: str(sp.max) };
   const d = await load(view, kind, f);
-  const clearHref = view === "action" ? `/portal/disputes/inbox?view=action&kind=${kind}` : `/portal/disputes/inbox?view=${view}`;
+  // Mixed views (Needs action / Posted / Ignored) carry the kind sub-filter.
+  const mixedView = view === "action" || view === "posted" || view === "ignored";
+  const clearHref = mixedView ? `/portal/disputes/inbox?view=${view}&kind=${kind}` : `/portal/disputes/inbox?view=${view}`;
+  // Per-view kind sub-tab counts.
+  const subCounts = view === "posted" ? { r: d.counts.postedRefunds, dd: d.counts.postedDisputes }
+    : view === "ignored" ? { r: d.counts.ignoredRefunds, dd: d.counts.ignoredDisputes }
+    : { r: d.counts.needsRefunds, dd: d.counts.needsDisputes };
 
   const items: Array<{ kind: "r" | "d"; date: string; node: React.ReactNode }> = [
     ...d.refunds.map((r) => ({ kind: "r" as const, date: r.paymentDate ?? "", node: <RefundCard key={`r-${r._id}`} r={r} en={r.matchedJobId ? d.enrich.get(r.matchedJobId) : undefined} posted={d.postedTo[r._id]} /> })),
@@ -263,7 +281,7 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
     </Link>
   );
   const subTab = (k: Kind, label: string, count?: number) => (
-    <Link href={`/portal/disputes/inbox?view=action&kind=${k}`} className={`portal-btn ${kind === k ? "portal-btn-primary" : "portal-btn-ghost"}`} style={{ padding: "4px 12px", fontSize: 12 }}>
+    <Link href={`/portal/disputes/inbox?view=${view}&kind=${k}`} className={`portal-btn ${kind === k ? "portal-btn-primary" : "portal-btn-ghost"}`} style={{ padding: "4px 12px", fontSize: 12 }}>
       {label}{count != null ? <> <span className="muted">{count}</span></> : null}
     </Link>
   );
@@ -288,40 +306,26 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
         {tab("action", "Needs action", d.counts.needsAction)}
         {tab("refunds", "Refunds", d.counts.refundsTotal)}
         {tab("disputes", "Disputes", d.counts.disputesTotal)}
+        {tab("posted", "Posted", d.counts.posted)}
+        {tab("ignored", "Ignored", d.counts.ignored)}
       </div>
 
-      {view === "action" && (
+      {mixedView && (
         <div style={{ display: "flex", gap: 6, alignItems: "center", margin: "0 0 10px" }}>
           <span className="muted small" style={{ marginRight: 2 }}>Show:</span>
           {subTab("both", "Both")}
-          {subTab("refunds", "Refunds", d.counts.needsRefunds)}
-          {subTab("disputes", "Disputes", d.counts.needsDisputes)}
+          {subTab("refunds", "Refunds", subCounts.r)}
+          {subTab("disputes", "Disputes", subCounts.dd)}
         </div>
       )}
 
-      <FilterBar>
-        <input type="hidden" name="view" value={view} />
-        {view === "action" && <input type="hidden" name="kind" value={kind} />}
-        <FilterField label="Search"><input className="portal-input" type="search" name="q" defaultValue={f.q} placeholder="invoice / customer / address" style={{ minWidth: 200 }} /></FilterField>
-        <FilterField label="Technician"><MultiSelect name="tech" selected={f.tech} options={d.options.techs} /></FilterField>
-        <FilterField label="Provider"><MultiSelect name="provider" selected={f.provider} options={d.options.providers} /></FilterField>
-        <FilterField label="Area Manager"><MultiSelect name="am" selected={f.am} options={d.options.ams} /></FilterField>
-        <FilterField label="Match"><MultiSelect name="matched" selected={f.matched} options={["matched", "unmatched"]} labels={{ matched: "Matched", unmatched: "Unmatched" }} /></FilterField>
-        <FilterField label="From"><input className="portal-input" type="date" name="from" defaultValue={f.from} /></FilterField>
-        <FilterField label="To"><input className="portal-input" type="date" name="to" defaultValue={f.to} /></FilterField>
-        <FilterField label="Min $"><input className="portal-input" style={{ width: 90 }} type="number" step="0.01" name="min" defaultValue={f.min} /></FilterField>
-        <FilterField label="Max $"><input className="portal-input" style={{ width: 90 }} type="number" step="0.01" name="max" defaultValue={f.max} /></FilterField>
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-          <button type="submit" className="portal-btn portal-btn-primary">Apply</button>
-          <Link href={clearHref} className="portal-btn portal-btn-ghost">Clear</Link>
-        </div>
-      </FilterBar>
+      <InboxFilters view={view} kind={kind} initial={f} options={d.options} clearHref={clearHref} />
       <div style={{ height: 12 }} />
 
-      <CardShell title={view === "action" ? "Needs action" : view === "refunds" ? "Refunds" : "Disputes"} subtitle={`${items.length} shown`}>
+      <CardShell title={view === "action" ? "Needs action" : view === "refunds" ? "Refunds" : view === "disputes" ? "Disputes" : view === "posted" ? "Posted" : "Ignored"} subtitle={`${items.length} shown`}>
         <div style={{ padding: 12 }}>
           {items.length === 0 ? (
-            <Empty message={view === "action" ? "Nothing needs action — you're all caught up." : "Nothing here. Hit Sync now to pull the latest from ScanPay."} />
+            <Empty message={view === "action" ? "Nothing needs action — you're all caught up." : view === "ignored" ? "Nothing ignored. Use the Ignore button on an item to park it here." : view === "posted" ? "Nothing posted to a ledger yet." : "Nothing here. Hit Sync now to pull the latest from ScanPay."} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {items.map((it) => it.node)}

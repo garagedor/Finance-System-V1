@@ -105,6 +105,8 @@ export default function ScanpayRefundRowActions({
         <button className="portal-btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setOpen(true)}>Edit</button>
         <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
           onClick={() => simple({ action: "unverify" })}>Unverify</button>
+        <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
+          onClick={() => simple({ action: "ignore" })}>Ignore</button>
         {chargedToggle}
       </div>
     );
