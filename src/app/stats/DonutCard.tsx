@@ -39,7 +39,7 @@ export default function DonutCard({
                     animationDuration={650}
                   >
                     {data.map((entry, idx) => (
-                      <Cell key={`${entry.name}-${idx}`} fill={entry.color} stroke="rgba(0,0,0,0.2)" strokeWidth={1} />
+                      <Cell key={`${entry.name}-${idx}`} fill={entry.color} stroke="var(--ds-surface-1)" strokeWidth={1} />
                     ))}
                   </Pie>
                   <Tooltip content={<PieTooltip />} isAnimationActive={false} />

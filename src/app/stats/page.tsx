@@ -341,9 +341,9 @@ export default function StatsPage() {
             size="lg"
             icon={
               <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                <circle cx="10" cy="10" r="8" stroke="#f87171" strokeWidth="1.5"/>
-                <line x1="10" y1="6" x2="10" y2="10.5" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round"/>
-                <circle cx="10" cy="13" r="0.75" fill="#f87171"/>
+                <circle cx="10" cy="10" r="8" stroke="var(--ds-crit)" strokeWidth="1.5"/>
+                <line x1="10" y1="6" x2="10" y2="10.5" stroke="var(--ds-crit)" strokeWidth="1.5" strokeLinecap="round"/>
+                <circle cx="10" cy="13" r="0.75" fill="var(--ds-crit)"/>
               </svg>
             }
             title="Access Denied"
@@ -369,9 +369,9 @@ export default function StatsPage() {
           <button
             onClick={() => setCompareMode((v) => !v)}
             style={{
-              background: compareMode ? '#4f46e5' : 'rgba(255,255,255,0.05)',
-              color: compareMode ? '#fff' : '#a5b4fc',
-              border: `1px solid ${compareMode ? 'transparent' : 'rgba(99,102,241,0.4)'}`,
+              background: compareMode ? 'var(--ds-info)' : 'var(--ds-surface-2)',
+              color: compareMode ? 'var(--ds-on-info)' : 'var(--ds-info-text)',
+              border: `1px solid ${compareMode ? 'transparent' : 'var(--ds-info-line)'}`,
               borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
             }}
           >

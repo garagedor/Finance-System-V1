@@ -72,9 +72,9 @@ export default function HomePage() {
           size="lg"
           icon={
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <circle cx="10" cy="10" r="8" stroke="#f87171" strokeWidth="1.5"/>
-              <line x1="10" y1="6" x2="10" y2="10.5" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round"/>
-              <circle cx="10" cy="13" r="0.75" fill="#f87171"/>
+              <circle cx="10" cy="10" r="8" stroke="var(--ds-crit)" strokeWidth="1.5"/>
+              <line x1="10" y1="6" x2="10" y2="10.5" stroke="var(--ds-crit)" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="10" cy="13" r="0.75" fill="var(--ds-crit)"/>
             </svg>
           }
           title="Access Denied"
@@ -175,16 +175,16 @@ export default function HomePage() {
       <div className="min-h-screen pb-16">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
           <div className="h-12 w-56 rounded-xl shimmer-bg" />
-          <div className="h-20 rounded-2xl border border-white/8 bg-[#111827] shimmer-bg" />
+          <div className="h-20 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-28 rounded-2xl border border-white/8 bg-[#111827] shimmer-bg" />
+              <div key={i} className="h-28 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
             ))}
           </div>
-          <div className="h-[316px] rounded-2xl border border-white/8 bg-[#111827] shimmer-bg" />
+          <div className="h-[316px] rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-72 rounded-2xl border border-white/8 bg-[#111827] shimmer-bg" />
+              <div key={i} className="h-72 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
             ))}
           </div>
         </div>
@@ -251,7 +251,7 @@ export default function HomePage() {
         {/* ── STICKY FILTER BAR ── */}
         <div
           className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 py-2"
-          style={{ background: 'rgba(10,15,28,0.85)', backdropFilter: 'blur(12px)' }}
+          style={{ background: 'var(--ds-scrim)', backdropFilter: 'blur(12px)' }}
         >
           <FiltersPanel
             direction="horizontal"
@@ -348,7 +348,7 @@ export default function HomePage() {
         {/* ── CHART ── */}
         <section className="animate-fade-up">
           <SectionHeading kicker="Distribution" title="Jobs by Location" />
-          <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#111827] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+          <div className="overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
             <div className="h-[300px] px-4 py-5">
               {data.jobsByLocation && data.jobsByLocation.length ? (
                 <LocationBarChart data={data.jobsByLocation} />
@@ -440,13 +440,18 @@ export default function HomePage() {
 
 type Accent = 'indigo' | 'emerald' | 'red' | 'amber' | 'cyan' | 'violet';
 
-const accentMap: Record<Accent, { ring: string; glow: string; icon: string; bg: string }> = {
-  indigo:  { ring: 'rgba(99,102,241,0.25)',  glow: 'rgba(99,102,241,0.12)',  icon: '#a5b4fc', bg: 'rgba(99,102,241,0.08)' },
-  emerald: { ring: 'rgba(16,185,129,0.25)',  glow: 'rgba(16,185,129,0.10)',  icon: '#34d399', bg: 'rgba(16,185,129,0.08)' },
-  red:     { ring: 'rgba(239,68,68,0.25)',   glow: 'rgba(239,68,68,0.10)',   icon: '#f87171', bg: 'rgba(239,68,68,0.08)'  },
-  amber:   { ring: 'rgba(245,158,11,0.25)',  glow: 'rgba(245,158,11,0.10)',  icon: '#fbbf24', bg: 'rgba(245,158,11,0.08)' },
-  cyan:    { ring: 'rgba(6,182,212,0.25)',   glow: 'rgba(6,182,212,0.10)',   icon: '#22d3ee', bg: 'rgba(6,182,212,0.08)'  },
-  violet:  { ring: 'rgba(139,92,246,0.25)',  glow: 'rgba(139,92,246,0.12)',  icon: '#c4b5fd', bg: 'rgba(139,92,246,0.08)' },
+/* KPI cards share one restrained CRM accent. The accent prop is kept so call
+   sites and ordering are untouched, but a card's position no longer picks a
+   hue — positional decoration is not a categorical palette. */
+const KPI_ACCENT = {
+  ring: 'var(--ds-crm-line)',
+  glow: 'var(--ds-crm-wash)',
+  icon: 'var(--ds-crm-text)',
+  bg:   'var(--ds-crm-wash)',
+};
+const accentMap: Record<Accent, typeof KPI_ACCENT> = {
+  indigo: KPI_ACCENT, emerald: KPI_ACCENT, red: KPI_ACCENT,
+  amber:  KPI_ACCENT, cyan:    KPI_ACCENT, violet: KPI_ACCENT,
 };
 
 function FeatureKpiCard({
@@ -455,8 +460,8 @@ function FeatureKpiCard({
   const a = accentMap[accent];
   return (
     <div
-      className="hover-lift group relative overflow-hidden rounded-3xl border bg-[#111827] p-7 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
-      style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+      className="hover-lift group relative overflow-hidden rounded-3xl border bg-[var(--ds-surface-1)] p-7 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
+      style={{ borderColor: 'var(--ds-line)' }}
     >
       <div
         className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full opacity-70 transition-opacity group-hover:opacity-100"
@@ -489,8 +494,8 @@ function KpiCard({
   const a = accentMap[accent];
   return (
     <div
-      className="hover-lift group relative overflow-hidden rounded-2xl border bg-[#111827] p-5 shadow-[0_4px_18px_rgba(0,0,0,0.3)]"
-      style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+      className="hover-lift group relative overflow-hidden rounded-2xl border bg-[var(--ds-surface-1)] p-5 shadow-[0_4px_18px_rgba(0,0,0,0.3)]"
+      style={{ borderColor: 'var(--ds-line)' }}
     >
       <div
         className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-60 transition-opacity group-hover:opacity-100"
@@ -543,7 +548,7 @@ function LeaderboardCard({
   const maxValue = items.length ? Math.max(...items.map(i => i[valueProp] || 0), 1) : 1;
 
   return (
-    <div className="hover-lift flex h-full flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#111827] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+    <div className="hover-lift flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
       <div className="border-b border-white/5 px-5 py-3.5">
         <h3 className="text-sm font-bold tracking-tight text-slate-100">{title}</h3>
       </div>
@@ -564,13 +569,13 @@ function LeaderboardCard({
               }
               const widthPct = Math.max(2, Math.min(100, (val / maxValue) * 100));
               const valueColor =
-                tone === 'good' ? 'text-emerald-400' :
-                tone === 'bad'  ? 'text-red-400' :
-                'text-slate-200';
+                tone === 'good' ? 'text-[var(--ds-ok-text)]' :
+                tone === 'bad'  ? 'text-[var(--ds-crit-text)]' :
+                'text-[var(--ds-ink)]';
               const barColor =
-                tone === 'good' ? 'rgba(16,185,129,0.18)' :
-                tone === 'bad'  ? 'rgba(239,68,68,0.18)' :
-                'rgba(99,102,241,0.16)';
+                tone === 'good' ? 'var(--ds-ok-wash)' :
+                tone === 'bad'  ? 'var(--ds-crit-wash)' :
+                'var(--ds-neutral-wash)';
               const isTopThree = idx < 3;
 
               return (
@@ -585,12 +590,12 @@ function LeaderboardCard({
                     <div
                       className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-bold tabular-nums ${
                         isTopThree
-                          ? 'text-amber-300'
-                          : 'text-slate-600'
+                          ? 'text-[var(--ds-neutral-text)]'
+                          : 'text-[var(--ds-ink-2)]'
                       }`}
                       style={isTopThree ? {
-                        background: 'rgba(245,158,11,0.12)',
-                        border: '1px solid rgba(245,158,11,0.25)',
+                        background: 'var(--ds-neutral-wash)',
+                        border: '1px solid var(--ds-neutral-line)',
                       } : undefined}
                     >
                       {idx + 1}
@@ -635,7 +640,7 @@ function FinancialCard({
   const a = accentMap[tone];
 
   return (
-    <div className="hover-lift overflow-hidden rounded-2xl border border-white/8 bg-[#111827] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+    <div className="hover-lift overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
       {/* Top section: total prominent */}
       <div
         className="relative px-5 py-5"
