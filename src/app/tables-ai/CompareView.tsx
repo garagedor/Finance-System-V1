@@ -10,10 +10,10 @@ const CATEGORY_LABELS: Record<CompareCategory, string> = {
   'production-only': 'Production-only (bot missed)',
 };
 const CATEGORY_COLORS: Record<CompareCategory, string> = {
-  'matched-clean': '#34d399',
-  'matched-mismatch': '#fbbf24',
-  'ai-only': '#f87171',
-  'production-only': '#60a5fa',
+  'matched-clean': 'var(--ds-ok)',
+  'matched-mismatch': 'var(--ds-warn)',
+  'ai-only': 'var(--ds-crit)',
+  'production-only': 'var(--ds-info)',
 };
 
 const fmt = (v: unknown, kind?: string) => {
@@ -54,21 +54,21 @@ export function CompareView() {
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap', marginBottom: 16 }}>
-        <label style={{ fontSize: 12, color: '#94a3b8' }}>
+        <label style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>
           From<br />
           <input type="date" value={start} onChange={(e) => setStart(e.target.value)} style={inputStyle} />
         </label>
-        <label style={{ fontSize: 12, color: '#94a3b8' }}>
+        <label style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>
           To<br />
           <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} style={inputStyle} />
         </label>
         <button type="button" onClick={run} disabled={loading} style={runBtnStyle}>
           {loading ? 'Comparing…' : 'Run comparison'}
         </button>
-        <span style={{ fontSize: 11, color: '#64748b' }}>Bot (aiOriginal) vs production Tables · read-only</span>
+        <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>Bot (aiOriginal) vs production Tables · read-only</span>
       </div>
 
-      {err && <div style={{ color: '#f87171', marginBottom: 12 }}>{err}</div>}
+      {err && <div style={{ color: 'var(--ds-crit-text)', marginBottom: 12 }}>{err}</div>}
 
       {data && (
         <>
@@ -80,18 +80,18 @@ export function CompareView() {
                 onClick={() => setActive(c)}
                 style={{
                   padding: '8px 12px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                  border: `1px solid ${active === c ? CATEGORY_COLORS[c] : 'rgba(255,255,255,0.12)'}`,
-                  background: active === c ? 'rgba(255,255,255,0.06)' : 'transparent',
+                  border: '1px solid var(--ds-line-strong)',
+                  background: active === c ? 'var(--ds-neutral-wash)' : 'transparent',
                 }}
               >
                 <div style={{ fontSize: 20, fontWeight: 700, color: CATEGORY_COLORS[c] }}>{data.counts[c] ?? 0}</div>
-                <div style={{ fontSize: 11, color: '#94a3b8' }}>{CATEGORY_LABELS[c]}</div>
+                <div style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>{CATEGORY_LABELS[c]}</div>
               </button>
             ))}
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {pairs.length === 0 && <div style={{ color: '#64748b', fontSize: 13 }}>No jobs in this category.</div>}
+            {pairs.length === 0 && <div style={{ color: 'var(--ds-ink-2)', fontSize: 13 }}>No jobs in this category.</div>}
             {pairs.map((p) => (
               <PairCard key={`${p.aiJobId}_${p.prodJobId}`} pair={p} />
             ))}
@@ -106,17 +106,17 @@ function PairCard({ pair }: { pair: ComparePair }) {
   const [open, setOpen] = useState(pair.category === 'matched-mismatch');
   const ident = pair.ai ?? pair.production ?? {};
   return (
-    <div style={{ border: '1px solid rgba(255,255,255,0.1)', borderRadius: 10, padding: 12 }}>
+    <div style={{ border: '1px solid var(--ds-line)', borderRadius: 10, padding: 12 }}>
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', cursor: pair.diffs.length ? 'pointer' : 'default' }} onClick={() => pair.diffs.length && setOpen((o) => !o)}>
         <span style={{ fontWeight: 600 }}>{(ident as any).clientName || (ident as any).address || '(no name)'}</span>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>{(ident as any).date ?? ''} · {(ident as any).tech ?? ''}</span>
+        <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>{(ident as any).date ?? ''} · {(ident as any).tech ?? ''}</span>
         {pair.prodJobId && pair.aiJobId && (
-          <span style={{ fontSize: 11, color: '#64748b' }}>
+          <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>
             match: {pair.matchBy} · confidence {(pair.confidence * 100).toFixed(0)}%
           </span>
         )}
         {pair.mismatchCount > 0 && (
-          <span style={{ fontSize: 11, marginLeft: 'auto', color: '#fbbf24' }}>{pair.mismatchCount} field(s) differ</span>
+          <span style={{ fontSize: 11, marginLeft: 'auto', color: 'var(--ds-warn-text)' }}>{pair.mismatchCount} field(s) differ</span>
         )}
       </div>
 
@@ -124,7 +124,7 @@ function PairCard({ pair }: { pair: ComparePair }) {
         <div style={{ marginTop: 10, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ color: '#94a3b8', textAlign: 'left' }}>
+              <tr style={{ color: 'var(--ds-ink-2)', textAlign: 'left' }}>
                 <th style={th}>Field</th>
                 <th style={th}>Production (employee)</th>
                 <th style={th}>AI (bot)</th>
@@ -133,11 +133,11 @@ function PairCard({ pair }: { pair: ComparePair }) {
             </thead>
             <tbody>
               {pair.diffs.map((d: FieldDiff) => (
-                <tr key={d.field} style={{ background: d.match ? 'transparent' : 'rgba(251,191,36,0.08)' }}>
+                <tr key={d.field} style={{ background: d.match ? 'transparent' : 'var(--ds-warn-soft)' }}>
                   <td style={td}>{d.label}</td>
                   <td style={td}>{fmt(d.production, d.kind)}</td>
                   <td style={td}>{fmt(d.ai, d.kind)}</td>
-                  <td style={{ ...td, color: d.match ? '#34d399' : '#f87171' }}>{d.match ? '✓' : '✗'}</td>
+                  <td style={{ ...td, color: d.match ? 'var(--ds-ok-text)' : 'var(--ds-warn-text)' }}>{d.match ? '✓' : '✗'}</td>
                 </tr>
               ))}
             </tbody>
@@ -148,7 +148,7 @@ function PairCard({ pair }: { pair: ComparePair }) {
   );
 }
 
-const inputStyle: React.CSSProperties = { background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 8, padding: '6px 8px', color: 'inherit' };
-const runBtnStyle: React.CSSProperties = { padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(99,102,241,0.5)', background: 'rgba(99,102,241,0.25)', color: '#c7d2fe', cursor: 'pointer' };
-const th: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.1)' };
-const td: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.05)' };
+const inputStyle: React.CSSProperties = { borderRadius: 8, padding: '6px 8px', color: 'inherit' };
+const runBtnStyle: React.CSSProperties = { padding: '8px 16px', borderRadius: 8, border: '1px solid var(--ds-info-line)', background: 'var(--ds-info-wash)', color: 'var(--ds-info-text)', cursor: 'pointer' };
+const th: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid var(--ds-line-strong)' };
+const td: React.CSSProperties = { padding: '6px 10px', borderBottom: '1px solid var(--ds-line)' };
