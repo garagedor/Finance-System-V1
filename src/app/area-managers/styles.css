@@ -219,6 +219,7 @@
   resize: vertical;
   font-family: inherit;
 }
+.am-textarea:focus { border-color: var(--ds-info); box-shadow: var(--ds-focus); }
 
 .am-balance-grid {
   display: grid;

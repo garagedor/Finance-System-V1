@@ -140,7 +140,7 @@ export default function AreaManagersPage() {
                     <td style={{ textAlign: 'right' }}>
                       {r.balance
                         ? (
-                          <span style={{ color: r.balance.openBalance >= 0 ? '#34d399' : '#f87171', fontWeight: 600 }}>
+                          <span style={{ fontWeight: 600 }}>
                             {formatCurrency(r.balance.openBalance)}
                           </span>
                         )
