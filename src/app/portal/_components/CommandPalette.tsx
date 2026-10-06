@@ -105,8 +105,8 @@ export default function CommandPalette() {
         onClick={(e) => e.stopPropagation()}
         style={{ width: "min(640px, 92vw)", maxHeight: "70vh", display: "flex", flexDirection: "column", padding: 0 }}
       >
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid #1f2940", display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ color: "#94a3b8", fontSize: 13 }}>⌘K</span>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--ds-line)", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ color: "var(--ds-ink-2)", fontSize: 13 }}>⌘K</span>
           <input
             ref={inputRef}
             type="text"
@@ -154,11 +154,11 @@ export default function CommandPalette() {
                       width: "100%",
                       textAlign: "left",
                       padding: "8px 12px",
-                      background: isActive ? "rgba(99,102,241,0.16)" : "transparent",
+                      background: isActive ? "var(--ds-neutral-wash)" : "transparent",
                       border: "1px solid transparent",
-                      borderLeft: isActive ? "3px solid #6366f1" : "3px solid transparent",
+                      borderLeft: isActive ? "3px solid var(--ds-info)" : "3px solid transparent",
                       borderRadius: 6,
-                      color: "#e2e8f0",
+                      color: "var(--ds-ink)",
                       fontFamily: "inherit",
                       fontSize: 13,
                       cursor: "pointer",
@@ -172,7 +172,7 @@ export default function CommandPalette() {
             </div>
           ))}
         </div>
-        <div style={{ padding: "8px 12px", borderTop: "1px solid #1f2940", fontSize: 11, color: "#64748b", display: "flex", gap: 12 }}>
+        <div style={{ padding: "8px 12px", borderTop: "1px solid var(--ds-line)", fontSize: 11, color: "var(--ds-ink-2)", display: "flex", gap: 12 }}>
           <span>↑↓ navigate</span>
           <span>↵ open</span>
           <span>esc close</span>

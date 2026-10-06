@@ -3,8 +3,8 @@
 // feel responsive despite the Frankfurt<->US round-trip. The sidebar/shell stays
 // mounted; only this content area shows the shimmer.
 const block = (extra: React.CSSProperties = {}): React.CSSProperties => ({
-  background: 'rgba(255,255,255,0.05)',
-  border: '1px solid rgba(255,255,255,0.06)',
+  background: 'var(--ds-surface-2)',
+  border: '1px solid var(--ds-line)',
   borderRadius: 12,
   ...extra,
 });
@@ -14,7 +14,7 @@ export default function PortalLoading() {
     <div className="animate-pulse" style={{ padding: 24 }} aria-busy="true" aria-label="Loading">
       {/* Page title */}
       <div style={{ ...block(), height: 26, width: 220, borderRadius: 8, marginBottom: 8, border: 'none' }} />
-      <div style={{ ...block(), height: 13, width: 320, borderRadius: 6, marginBottom: 24, border: 'none', background: 'rgba(255,255,255,0.035)' }} />
+      <div style={{ ...block(), height: 13, width: 320, borderRadius: 6, marginBottom: 24, border: 'none', background: 'var(--ds-surface-2)' }} />
 
       {/* KPI cards row */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(190px, 1fr))', gap: 12, marginBottom: 20 }}>
@@ -24,7 +24,7 @@ export default function PortalLoading() {
       </div>
 
       {/* Main content panel */}
-      <div style={block({ height: 340, background: 'rgba(255,255,255,0.03)' })} />
+      <div style={block({ height: 340, background: 'var(--ds-surface-2)' })} />
     </div>
   );
 }

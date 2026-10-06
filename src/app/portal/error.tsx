@@ -47,7 +47,7 @@ export default function PortalError({
             IP isn&apos;t on the MongoDB Atlas allow-list, or the cluster is paused.
 
             <ol style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20, fontSize: 13, lineHeight: 1.7 }}>
-              <li>Open <a href="https://cloud.mongodb.com" target="_blank" rel="noreferrer" style={{ color: "#818cf8" }}>cloud.mongodb.com</a> and log in</li>
+              <li>Open <a href="https://cloud.mongodb.com" target="_blank" rel="noreferrer" style={{ color: "var(--ds-fin-2)" }}>cloud.mongodb.com</a> and log in</li>
               <li>Your project → <strong>Network Access</strong> → <strong>+ ADD IP ADDRESS</strong></li>
               <li>Choose <em>Add Current IP Address</em> (or <code className="mono">0.0.0.0/0</code> for dev = anywhere)</li>
               <li>If <strong>Database</strong> shows the cluster <em>Paused</em>, click <strong>Resume</strong></li>
@@ -74,10 +74,10 @@ export default function PortalError({
           style={{
             margin: 0,
             padding: 12,
-            background: "#0a0f1c",
+            background: "var(--ds-surface-2)",
             borderRadius: 8,
             fontSize: 11.5,
-            color: "#fca5a5",
+            color: "var(--ds-crit-text)",
             overflowX: "auto",
             maxHeight: 280,
             whiteSpace: "pre-wrap",

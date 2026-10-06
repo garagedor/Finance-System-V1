@@ -31,7 +31,7 @@ export default function FilterMultiSelect({
         {values.length === 0 ? "All" : values.length <= 2 ? values.join(", ") : `${values.length} selected`} {open ? "▲" : "▼"}
       </button>
       {open && (
-        <div style={{ marginTop: 4, border: "1px solid rgba(255,255,255,0.12)", borderRadius: 8, background: "#0b1220", maxHeight: 200, overflowY: "auto" }}>
+        <div style={{ marginTop: 4, border: "1px solid var(--ds-line-strong)", borderRadius: 8, background: "var(--ds-surface-1)", maxHeight: 200, overflowY: "auto" }}>
           <input className="portal-input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search…" style={{ padding: "5px 8px", margin: 6, width: "calc(100% - 12px)", fontSize: 12 }} />
           {values.length > 0 && (
             <button type="button" onClick={() => onChange([])} className="portal-btn portal-btn-ghost" style={{ padding: "2px 8px", fontSize: 11, margin: "0 6px 4px" }}>Clear</button>

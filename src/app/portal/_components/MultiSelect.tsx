@@ -51,7 +51,7 @@ export default function MultiSelect({
         onClick={() => setOpen((o) => !o)}
         style={{ textAlign: "left", minWidth: 150, cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}
       >
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: sel.length ? undefined : "#94a3b8" }}>{summary}</span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: sel.length ? undefined : "var(--ds-ink-2)" }}>{summary}</span>
         <span style={{ opacity: 0.6, fontSize: 10 }}>▾</span>
       </button>
 
