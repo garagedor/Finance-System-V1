@@ -178,7 +178,7 @@ export function EntityTableFilters<T>({
         <div className="filters-inline relative" ref={filtersRef}>
             <button
                 ref={triggerRef}
-                className={`flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-medium text-sm text-slate-600 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all ${filtersOpen ? 'bg-blue-50 border-blue-200 text-blue-600' : ''
+                className={`flex items-center gap-2 px-3 py-1.5 bg-[var(--ds-surface-1)] border border-[var(--ds-line)] rounded-lg font-medium text-sm text-[var(--ds-ink-2)] shadow-sm hover:bg-[var(--ds-surface-2)] hover:border-[var(--ds-line-strong)] transition-all ${filtersOpen ? 'bg-[var(--ds-neutral-wash)] border-[var(--ds-line-strong)] text-[var(--ds-ink)]' : ''
                     }`}
                 onClick={handleToggle}
             >

@@ -122,7 +122,7 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
         {clocks.map((c) => (
           <div key={c.id} className="flex flex-col items-center leading-tight" title={`${c.label} — ${timeFor(c.tz)}`}>
             <span className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: 'var(--ds-ink-2)' }}>{c.abbr}</span>
-            <span className="text-[10px] font-medium text-slate-300">{timeFor(c.tz)}</span>
+            <span className="text-[10px] font-medium text-[var(--ds-ink)]">{timeFor(c.tz)}</span>
           </div>
         ))}
       </div>
@@ -144,7 +144,7 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
             type="button"
             onClick={() => setAdding((v) => !v)}
             title="Add a clock"
-            className="flex h-5 w-5 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-white/5 hover:text-slate-200"
+            className="flex h-5 w-5 items-center justify-center rounded-md text-[var(--ds-ink-2)] transition-colors hover:bg-[var(--ds-surface-1)]/5 hover:text-[var(--ds-ink)]"
           >
             <FiPlus size={13} />
           </button>
@@ -158,7 +158,7 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
                   key={opt.tz + opt.label}
                   type="button"
                   onClick={() => addClock(opt)}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs text-slate-300 transition-colors hover:bg-white/5 hover:text-white"
+                  className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left text-xs text-[var(--ds-ink)] transition-colors hover:bg-[var(--ds-surface-1)]/5 hover:text-[var(--ds-ink)]"
                 >
                   <span className="truncate">{opt.label}</span>
                   <span className="flex-shrink-0 text-[10px] tabular-nums" style={{ color: 'var(--ds-ink-2)' }}>{timeFor(opt.tz)}</span>
@@ -172,14 +172,14 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
       <div className="space-y-0.5">
         {clocks.map((c) => (
           <div key={c.id} className="group flex items-center justify-between gap-2 rounded-lg px-2 py-1">
-            <span className="truncate text-xs font-medium text-slate-400">{c.label}</span>
+            <span className="truncate text-xs font-medium text-[var(--ds-ink-2)]">{c.label}</span>
             <span className="flex items-center gap-1">
-              <span className="text-xs font-semibold tabular-nums text-slate-200">{timeFor(c.tz)}</span>
+              <span className="text-xs font-semibold tabular-nums text-[var(--ds-ink)]">{timeFor(c.tz)}</span>
               <button
                 type="button"
                 onClick={() => removeClock(c.id)}
                 title={`Remove ${c.label}`}
-                className="flex h-4 w-4 items-center justify-center rounded text-slate-600 opacity-0 transition-all hover:text-red-400 group-hover:opacity-100"
+                className="flex h-4 w-4 items-center justify-center rounded text-[var(--ds-ink-2)] opacity-0 transition-all hover:text-[var(--ds-crit-text)] group-hover:opacity-100"
               >
                 <FiX size={12} />
               </button>
@@ -187,7 +187,7 @@ export default function SidebarClocks({ collapsed }: { collapsed: boolean }) {
           </div>
         ))}
         {clocks.length === 0 && (
-          <p className="px-2 py-1 text-[11px] text-slate-600">No clocks. Tap + to add one.</p>
+          <p className="px-2 py-1 text-[11px] text-[var(--ds-ink-2)]">No clocks. Tap + to add one.</p>
         )}
       </div>
     </div>

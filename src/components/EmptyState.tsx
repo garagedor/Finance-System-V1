@@ -36,7 +36,7 @@ export function EmptyState({
   return (
     <div className={`flex flex-col items-center justify-center text-center ${s.wrap} ${className} animate-fade-up`}>
       <div
-        className={`flex ${s.iconBox} items-center justify-center rounded-2xl text-slate-500`}
+        className={`flex ${s.iconBox} items-center justify-center rounded-2xl text-[var(--ds-ink-2)]`}
         style={{
           background: 'var(--ds-neutral-wash)',
           border: '1px solid var(--ds-neutral-line)',
@@ -44,8 +44,8 @@ export function EmptyState({
       >
         {icon ?? DEFAULT_ICON}
       </div>
-      <p className={`font-semibold text-slate-200 ${s.title}`}>{title}</p>
-      {message && <p className={`max-w-[320px] text-slate-500 ${s.message}`}>{message}</p>}
+      <p className={`font-semibold text-[var(--ds-ink)] ${s.title}`}>{title}</p>
+      {message && <p className={`max-w-[320px] text-[var(--ds-ink-2)] ${s.message}`}>{message}</p>}
       {action && <div className="mt-1">{action}</div>}
     </div>
   );
