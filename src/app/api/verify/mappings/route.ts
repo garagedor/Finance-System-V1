@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getMongoClient } from "@/lib/mongo";
 import type { JobRow } from '../../../../types/job';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../lib/supabase-server';
+import { requireVerifyRead, requireVerifyWrite } from '@/lib/verify-auth';
 import {
   listTechMappings,
   listAreaMappings,
@@ -17,6 +18,11 @@ const LOCATION_COLLECTION = 'Location';
 
 // GET — list every Supabase user/area, every CRM tech/location, and current mappings.
 export async function GET(_req: NextRequest) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may read verify-reports data.
+  const denied = await requireVerifyRead();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json(
       { error: 'Supabase not configured', detail: 'Set SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_ADMIN_EMAIL, and SUPABASE_ADMIN_PASSWORD in .env.local' },
@@ -93,6 +99,11 @@ export async function GET(_req: NextRequest) {
 //   { kind: 'tech', supabaseUserId, supabaseFullName, crmTechNames }
 //   { kind: 'area', supabaseAreaId, supabaseAreaName, crmLocationNames }
 export async function PUT(req: NextRequest) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may change verify-reports data.
+  const denied = await requireVerifyWrite();
+  if (denied) return denied;
+
   try {
     const body = await req.json();
     const kind = body?.kind;

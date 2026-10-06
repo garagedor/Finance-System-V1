@@ -4,6 +4,7 @@ import type { JobRow } from '../../../../types/job';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../lib/supabase-server';
 import { matchTechWithMapping, matchAreaWithMapping } from '../../../../lib/verify/mapping';
 import { listTechMappings, listAreaMappings } from '../../../../lib/verify/mapping-store';
+import { requireVerifyRead } from '@/lib/verify-auth';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -14,6 +15,11 @@ const LOCATION_COLLECTION = 'Location';
 const DEFAULT_STATUSES = ['Submitted'];
 
 export async function GET(req: NextRequest) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may read verify-reports data.
+  const denied = await requireVerifyRead();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json(
       { error: 'Supabase not configured', detail: 'Set SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_ADMIN_EMAIL, and SUPABASE_ADMIN_PASSWORD in .env.local' },
