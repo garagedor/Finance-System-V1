@@ -206,7 +206,7 @@ export default async function ScanpayInboxPage({ searchParams }: { searchParams:
                       {en?.areaManager
                         ? en.areaManager
                         : en?.areaManagerMissing
-                          ? <span style={{ color: "#f59e0b" }}>⚠ unassigned</span>
+                          ? <span style={{ color: "var(--ds-warn-text)" }}>⚠ unassigned</span>
                           : "—"}
                     </td>
                     <td className="small muted">{r.reason || "—"}</td>
@@ -224,7 +224,7 @@ export default async function ScanpayInboxPage({ searchParams }: { searchParams:
                           <div className="small">{best.address ?? r.matchedJobId}</div>
                           <div className="muted small">
                             {en?.jobStatus && (
-                              <span style={{ color: /closed|x close/i.test(en.jobStatus) ? "#34d399" : "#f59e0b", fontWeight: 600 }}>
+                              <span style={{ color: "var(--ds-ink)", fontWeight: 600 }}>
                                 {en.jobStatus}
                               </span>
                             )}

@@ -98,7 +98,7 @@ export default function AddCrmReportModal({
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 100, paddingTop: 60, overflowY: "auto",
           }}
@@ -106,13 +106,13 @@ export default function AddCrmReportModal({
         >
           <div
             style={{
-              background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
+              background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14,
               padding: 24, width: "min(560px, 95vw)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>Add CRM Balance Report</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>Add CRM Balance Report</h2>
               <button onClick={() => setOpen(false)} className="portal-btn portal-btn-ghost"
                 style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
@@ -145,11 +145,11 @@ export default function AddCrmReportModal({
                     ))}
                   </div>
                 )}
-                <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8 }}>
+                <div style={{ maxHeight: 200, overflowY: "auto", border: "1px solid var(--ds-line)", borderRadius: 8 }}>
                   {options.length === 0 ? (
                     <div className="muted small" style={{ padding: 10, textAlign: "center" }}>{techs.length === 0 ? "Loading…" : "No matches."}</div>
                   ) : options.map((o) => (
-                    <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                    <label key={o.value} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 10px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid var(--ds-surface-2)" }}>
                       <input type="checkbox" checked={subjects.includes(o.value)} onChange={() => toggleSubject(o.value)} style={{ width: 15, height: 15 }} />
                       {o.label}
                     </label>
@@ -173,7 +173,7 @@ export default function AddCrmReportModal({
                 </div>
               </div>
 
-              <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 13, color: "#94a3b8" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, fontSize: 13, color: "var(--ds-ink-2)" }}>
                 <input type="checkbox" checked={includeTips}
                   onChange={(e) => setIncludeTips(e.target.checked)}
                   style={{ width: 16, height: 16 }} />

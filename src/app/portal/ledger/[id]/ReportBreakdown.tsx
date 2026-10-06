@@ -48,7 +48,7 @@ export default function ReportBreakdown({ meta }: { meta: LedgerReportMeta }) {
       </button>
 
       {open && (
-        <div style={{ marginTop: 8, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 8, padding: 10, background: "rgba(255,255,255,0.02)" }}>
+        <div style={{ marginTop: 8, border: "1px solid var(--ds-line)", borderRadius: 8, padding: 10, background: "var(--ds-surface-2)" }}>
           {weeks.map((w) => (
             <div key={w.week_start} style={{ marginBottom: 14 }}>
               <div className="muted small" style={{ fontWeight: 600, marginBottom: 4 }}>

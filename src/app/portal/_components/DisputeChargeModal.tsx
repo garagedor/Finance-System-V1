@@ -224,14 +224,14 @@ export default function DisputeChargeModal({
 
       {open && (
         <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+          style={{ position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 44, paddingBottom: 40, overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) close(); }}
         >
-          <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 22, width: "min(760px, 96vw)" }}
+          <div style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 22, width: "min(760px, 96vw)" }}
             onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>New {label} — charge to {ledgerId ? `${ledgerName ?? "this"}’s ledger` : "Area Manager"}</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>New {label} — charge to {ledgerId ? `${ledgerName ?? "this"}’s ledger` : "Area Manager"}</h2>
               <button onClick={close} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
 
@@ -251,7 +251,7 @@ export default function DisputeChargeModal({
                   <div><label className="portal-label" style={{ fontSize: 11 }}>To</label><input type="date" className="portal-input" value={fEnd} onChange={(e) => setFEnd(e.target.value)} style={{ padding: "6px 8px" }} /></div>
                 </div>
 
-                <div style={{ maxHeight: 300, overflowY: "auto", marginTop: 10, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+                <div style={{ maxHeight: 300, overflowY: "auto", marginTop: 10, border: "1px solid var(--ds-line)", borderRadius: 8 }}>
                   {disputes.length === 0 ? (
                     <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : "No collected disputes match — adjust the filters (only job-matched disputes are chargeable)."}</div>
                   ) : (
@@ -262,7 +262,7 @@ export default function DisputeChargeModal({
                       </tr></thead>
                       <tbody>
                         {disputes.map((d) => (
-                          <tr key={d.id} style={{ cursor: "pointer", background: selected.includes(d.id) ? "rgba(129,140,248,0.08)" : undefined }} onClick={() => toggle(d.id)}>
+                          <tr key={d.id} style={{ cursor: "pointer", background: selected.includes(d.id) ? "var(--ds-neutral-wash)" : undefined }} onClick={() => toggle(d.id)}>
                             <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.includes(d.id)} onChange={() => toggle(d.id)} /></td>
                             <td className="small mono">{d.disputedAt ? d.disputedAt.slice(0, 10) : "—"}</td>
                             <td>{d.customerName || d.serviceAddress || "—"}
@@ -280,7 +280,7 @@ export default function DisputeChargeModal({
 
                 {/* Party + date/notes + post — one party applies to every ticked dispute */}
                 <div style={{ marginTop: 12 }}>
-                  <label className="portal-label">Charge which party&apos;s slice? <span style={{ color: "#f87171" }}>*</span> <span className="muted small">(applied to all selected · technician slice uses each job&apos;s own %)</span></label>
+                  <label className="portal-label">Charge which party&apos;s slice? <span style={{ color: "var(--ds-crit-text)" }}>*</span> <span className="muted small">(applied to all selected · technician slice uses each job&apos;s own %)</span></label>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                     {PARTIES.map(([v, l]) => (
                       <button key={v} type="button"
@@ -322,7 +322,7 @@ export default function DisputeChargeModal({
                   <div><label className="portal-label" style={{ fontSize: 11 }}>From</label><input type="date" className="portal-input" value={fStart} onChange={(e) => setFStart(e.target.value)} style={{ padding: "6px 8px" }} /></div>
                   <div><label className="portal-label" style={{ fontSize: 11 }}>To</label><input type="date" className="portal-input" value={fEnd} onChange={(e) => setFEnd(e.target.value)} style={{ padding: "6px 8px" }} /></div>
                 </div>
-                <div style={{ maxHeight: 340, overflowY: "auto", marginTop: 10, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+                <div style={{ maxHeight: 340, overflowY: "auto", marginTop: 10, border: "1px solid var(--ds-line)", borderRadius: 8 }}>
                   {jobs.length === 0 ? (
                     <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loadingJobs ? "Searching…" : (q || fProvider.length || fLocation.length || fAM.length || fTech.length || fStart || fEnd) ? "No jobs match your search / filters." : "Type or pick a filter to find jobs."}</div>
                   ) : (
@@ -346,7 +346,7 @@ export default function DisputeChargeModal({
             ) : (
               /* ═══ DISPUTES MODULE: Step 2 — amount + preview ═══ */
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-                <div style={{ gridColumn: "span 2", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ gridColumn: "span 2", background: "var(--ds-surface-2)", border: "1px solid var(--ds-line)", borderRadius: 8, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <strong>{job.clientName ?? job.address ?? job._id}</strong> <span className="muted small">· {job.tech ?? "—"} · {job.location ?? "—"}</span>
                     <div className="muted small">Collected {money(job.collected)} · tip {money(job.grossTip)} · parts {money(job.parts)}</div>
@@ -355,7 +355,7 @@ export default function DisputeChargeModal({
                 </div>
 
                 <div>
-                  <label className="portal-label">{label} amount <span style={{ color: "#f87171" }}>*</span></label>
+                  <label className="portal-label">{label} amount <span style={{ color: "var(--ds-crit-text)" }}>*</span></label>
                   <input type="number" step="0.01" min="0" className="portal-input" autoFocus value={amount}
                     onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
                 </div>
@@ -372,10 +372,10 @@ export default function DisputeChargeModal({
                   {previewErr ? (
                     <div className="portal-alert portal-alert-error">{previewErr}</div>
                   ) : preview ? (
-                    <div style={{ border: "1px solid rgba(129,140,248,0.3)", background: "rgba(129,140,248,0.06)", borderRadius: 10, padding: 12 }}>
+                    <div style={{ border: "1px solid var(--ds-info-line)", background: "var(--ds-info-soft)", borderRadius: 10, padding: 12 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
                         <span className="small muted">Posts to {preview.areaManagerName}&apos;s ledger · <span style={{ textTransform: "capitalize" }}>{preview.disputeClassification}</span> {label.toLowerCase()}</span>
-                        <span style={{ fontSize: 20, fontWeight: 800, color: "#c7d2fe" }}>{money(preview.amLedgerCharge)}</span>
+                        <span style={{ fontSize: 20, fontWeight: 800, color: "var(--ds-ink)" }}>{money(preview.amLedgerCharge)}</span>
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, fontSize: 12 }}>
                         <Fig label="Technician portion" v={preview.technicianPortion} />

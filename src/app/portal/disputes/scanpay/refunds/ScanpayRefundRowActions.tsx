@@ -98,8 +98,8 @@ export default function ScanpayRefundRowActions({
   if (matchStatus === "verified") {
     return (
       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end", alignItems: "center" }}>
-        {err && <span className="small" style={{ color: "#f87171" }}>{err}</span>}
-        <span className="muted small" style={{ color: "#34d399" }}>✔ verified</span>
+        {err && <span className="small" style={{ color: "var(--ds-crit-text)" }}>{err}</span>}
+        <span className="muted small" style={{ color: "var(--ds-ok-text)" }}>✔ verified</span>
         <button className="portal-btn portal-btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} disabled={busy}
           onClick={() => simple({ action: "confirm" })}>Post → ledger</button>
         <button className="portal-btn" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => setOpen(true)}>Edit</button>
@@ -122,26 +122,26 @@ export default function ScanpayRefundRowActions({
       {chargedToggle}
 
       {open && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 50, overflowY: "auto" }}
+        <div style={{ position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 50, overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}>
-          <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 20, width: "min(640px, 96vw)", textAlign: "left" }}
+          <div style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 20, width: "min(640px, 96vw)", textAlign: "left" }}
             onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h3 style={{ margin: 0, fontSize: 15, color: "#f1f5f9" }}>Verify refund — match job + amount</h3>
+              <h3 style={{ margin: 0, fontSize: 15, color: "var(--ds-ink)" }}>Verify refund — match job + amount</h3>
               <button className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }} onClick={() => setOpen(false)}>✕</button>
             </div>
 
             {/* Job */}
             <label className="portal-label">Job</label>
             {jobId && !picking ? (
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8, padding: "8px 10px", marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, background: "var(--ds-surface-2)", border: "1px solid var(--ds-line)", borderRadius: 8, padding: "8px 10px", marginBottom: 12 }}>
                 <span className="small">{jobLabel ?? jobId}</span>
                 <button className="portal-btn portal-btn-ghost" style={{ padding: "3px 8px", fontSize: 11 }} onClick={() => setPicking(true)}>Change</button>
               </div>
             ) : (
               <div style={{ marginBottom: 12 }}>
                 <input className="portal-input" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search job by address / customer / tech" onKeyDown={(e) => { if (e.key === "Enter") search(); }} />
-                <div style={{ maxHeight: 240, overflowY: "auto", marginTop: 8, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+                <div style={{ maxHeight: 240, overflowY: "auto", marginTop: 8, border: "1px solid var(--ds-line)", borderRadius: 8 }}>
                   {jobs.length === 0 ? (
                     <div className="muted small" style={{ padding: 12, textAlign: "center" }}>{loading ? "Searching…" : "Type to search."}</div>
                   ) : (
@@ -164,12 +164,12 @@ export default function ScanpayRefundRowActions({
             {/* Amount + date */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
               <div>
-                <label className="portal-label">Refunded amount <span style={{ color: "#f87171" }}>*</span></label>
+                <label className="portal-label">Refunded amount <span style={{ color: "var(--ds-crit-text)" }}>*</span></label>
                 <input type="number" step="0.01" min="0" className="portal-input" value={amount} onChange={(e) => setAmount(e.target.value)} />
                 <div className="muted small" style={{ marginTop: 2 }}>Originally paid {money(originalAmount)} — edit for partial refunds.</div>
               </div>
               <div>
-                <label className="portal-label">Refund date <span style={{ color: "#f87171" }}>*</span></label>
+                <label className="portal-label">Refund date <span style={{ color: "var(--ds-crit-text)" }}>*</span></label>
                 <input type="date" className="portal-input" value={date} onChange={(e) => setDate(e.target.value)} />
                 <div className="muted small" style={{ marginTop: 2 }}>ScanPay doesn&apos;t supply this — set the actual date.</div>
               </div>

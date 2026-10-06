@@ -29,7 +29,7 @@ async function load() {
   return { rows, cmap, total, errors };
 }
 
-const KIND_COLOR: Record<string, string> = { dispute: "#818cf8", refund: "#34d399", unrecognized: "#f59e0b" };
+const KIND_COLOR: Record<string, string> = { dispute: "var(--ds-ink)", refund: "var(--ds-ink)", unrecognized: "var(--ds-ink)" };
 
 export default async function ScanpayWebhookLogPage() {
   const d = await load();
@@ -71,14 +71,14 @@ export default async function ScanpayWebhookLogPage() {
                   <td className="small" style={{ color: KIND_COLOR[r.kind] ?? undefined, fontWeight: 600 }}>{r.kind}</td>
                   <td className="small muted">{r.event ? String(r.event) : "—"}</td>
                   <td className="small">
-                    {r.error ? <span style={{ color: "#f87171" }}>⚠ {r.error}</span>
-                      : r.processed ? <span style={{ color: "#34d399" }}>✓</span>
+                    {r.error ? <span style={{ color: "var(--ds-crit-text)" }}>⚠ {r.error}</span>
+                      : r.processed ? <span style={{ color: "var(--ds-ok-text)" }}>✓</span>
                       : <span className="muted">—</span>}
                   </td>
                   <td>
                     <details>
-                      <summary style={{ cursor: "pointer", fontSize: 12, color: "#818cf8" }}>view</summary>
-                      <pre style={{ maxWidth: 520, maxHeight: 260, overflow: "auto", fontSize: 11, background: "rgba(255,255,255,0.03)", padding: 8, borderRadius: 6, marginTop: 6 }}>
+                      <summary style={{ cursor: "pointer", fontSize: 12, color: "var(--ds-fin-2)" }}>view</summary>
+                      <pre style={{ maxWidth: 520, maxHeight: 260, overflow: "auto", fontSize: 11, background: "var(--ds-surface-2)", padding: 8, borderRadius: 6, marginTop: 6 }}>
                         {JSON.stringify(r.raw ?? {}, null, 2)}
                       </pre>
                     </details>

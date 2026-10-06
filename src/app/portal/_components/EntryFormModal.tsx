@@ -106,7 +106,7 @@ export default function EntryFormModal({
           style={{
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.7)",
+            background: "var(--ds-scrim)",
             backdropFilter: "blur(4px)",
             display: "flex",
             alignItems: "flex-start",
@@ -122,8 +122,8 @@ export default function EntryFormModal({
         >
           <div
             style={{
-              background: "#111827",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "var(--ds-surface-1)",
+              border: "1px solid var(--ds-line)",
               borderRadius: 14,
               padding: 24,
               width: "min(620px, 92vw)",
@@ -131,7 +131,7 @@ export default function EntryFormModal({
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>
                 {editing ? `Edit ${title}` : `New ${title}`}
               </h2>
               <button
@@ -150,11 +150,11 @@ export default function EntryFormModal({
                 >
                   <label className="portal-label">
                     {f.label}
-                    {f.required && <span style={{ color: "#f87171", marginLeft: 4 }}>*</span>}
+                    {f.required && <span style={{ color: "var(--ds-crit-text)", marginLeft: 4 }}>*</span>}
                   </label>
                   {renderField(f, initial?.[f.name])}
                   {f.help && (
-                    <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>{f.help}</div>
+                    <div style={{ fontSize: 11, color: "var(--ds-ink-2)", marginTop: 4 }}>{f.help}</div>
                   )}
                 </div>
               ))}
@@ -244,7 +244,7 @@ function renderField(f: FieldDef, currentValue: unknown) {
           defaultChecked={currentValue === true || f.defaultValue === true}
           style={{ width: 16, height: 16 }}
         />
-        <span style={{ fontSize: 13, color: "#94a3b8" }}>{f.help ?? "Yes"}</span>
+        <span style={{ fontSize: 13, color: "var(--ds-ink-2)" }}>{f.help ?? "Yes"}</span>
       </div>
     );
   }

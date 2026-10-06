@@ -69,17 +69,17 @@ export default function ResolveDisputeModal({
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 60, overflowY: "auto",
           }}
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
           <div
-            style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 24, width: "min(460px, 95vw)" }}
+            style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 24, width: "min(460px, 95vw)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>Resolve dispute</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>Resolve dispute</h2>
               <button onClick={() => setOpen(false)} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
 
@@ -115,7 +115,7 @@ export default function ResolveDisputeModal({
               <input type="date" className="portal-input" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
 
-            <div className="portal-alert" style={{ marginBottom: 14, background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.25)" }}>
+            <div className="portal-alert portal-alert-info" style={{ marginBottom: 14 }}>
               <span>i</span>
               <div className="small">
                 {outcome === "lost"

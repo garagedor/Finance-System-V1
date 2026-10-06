@@ -140,7 +140,7 @@ export default function RecordPaymentModal({
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 100, paddingTop: 50, paddingBottom: 40, overflowY: "auto",
           }}
@@ -148,13 +148,13 @@ export default function RecordPaymentModal({
         >
           <div
             style={{
-              background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
+              background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14,
               padding: 24, width: "min(580px, 95vw)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>Record payment</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>Record payment</h2>
               <button onClick={() => setOpen(false)} className="portal-btn portal-btn-ghost"
                 style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
@@ -190,7 +190,7 @@ export default function RecordPaymentModal({
               </div>
 
               {newBalance != null && (
-                <div className="portal-alert" style={{ marginBottom: 12, background: "rgba(99,102,241,0.10)", border: "1px solid rgba(99,102,241,0.25)" }}>
+                <div className="portal-alert portal-alert-info" style={{ marginBottom: 12 }}>
                   <span>→</span>
                   <div>
                     Balance {fmt$(currentBalance, { showSign: true })} →{" "}
@@ -202,7 +202,7 @@ export default function RecordPaymentModal({
               )}
 
               {/* Matching */}
-              <div style={{ marginBottom: 14, border: "1px solid rgba(255,255,255,0.07)", borderRadius: 8, padding: 12 }}>
+              <div style={{ marginBottom: 14, border: "1px solid var(--ds-line)", borderRadius: 8, padding: 12 }}>
                 {linked ? (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                     <div className="small">
@@ -293,8 +293,8 @@ export default function RecordPaymentModal({
 
 const rowStyle: React.CSSProperties = {
   display: "flex", justifyContent: "space-between", width: "100%", gap: 8, textAlign: "left",
-  padding: "7px 8px", marginBottom: 4, cursor: "pointer", background: "rgba(255,255,255,0.03)",
-  border: "1px solid rgba(255,255,255,0.06)", borderRadius: 6, color: "#cbd5e1", fontSize: 12.5,
+  padding: "7px 8px", marginBottom: 4, cursor: "pointer", background: "var(--ds-surface-2)",
+  border: "1px solid var(--ds-line)", borderRadius: 6, color: "var(--ds-ink-2)", fontSize: 12.5,
 };
 const ellipsis: React.CSSProperties = { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" };
 

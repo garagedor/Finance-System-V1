@@ -177,7 +177,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
                     <td className="small">{en?.tech ?? "—"}</td>
                     <td className="small">{en?.provider ?? "—"}</td>
                     <td className="small">
-                      {en?.areaManager ? en.areaManager : en?.areaManagerMissing ? <span style={{ color: "#f59e0b" }}>⚠ unassigned</span> : "—"}
+                      {en?.areaManager ? en.areaManager : en?.areaManagerMissing ? <span style={{ color: "var(--ds-warn-text)" }}>⚠ unassigned</span> : "—"}
                     </td>
                     <td className="right money">{fmt$(r.originalAmount)}</td>
                     <td className="right money">{r.computedShare?.jobCollected != null ? fmt$(r.computedShare.jobCollected) : en ? fmt$(en.collected) : "—"}</td>
@@ -189,7 +189,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
                           <div className="small">{best.address ?? r.matchedJobId}</div>
                           <div className="muted small">
                             {en?.jobStatus && (
-                              <span style={{ color: /closed|x close/i.test(en.jobStatus) ? "#34d399" : "#f59e0b", fontWeight: 600 }}>
+                              <span style={{ color: "var(--ds-ink)", fontWeight: 600 }}>
                                 {en.jobStatus}
                               </span>
                             )}
@@ -204,7 +204,7 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
                       {r.refundAmount != null ? (
                         <>
                           <div className="money money-neg">−{fmt$(r.refundAmount)}</div>
-                          <div className="small" style={{ fontWeight: 600, color: isFull ? "#34d399" : "#f59e0b" }}>
+                          <div className="small" style={{ fontWeight: 600, color: "var(--ds-ink-2)" }}>
                             {isFull ? "Full refund" : `Partial · ${pct}%`}
                           </div>
                         </>

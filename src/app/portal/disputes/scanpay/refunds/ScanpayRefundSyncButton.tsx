@@ -30,7 +30,7 @@ export default function ScanpayRefundSyncButton() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
       {msg && <span className="muted small">{msg}</span>}
-      {err && <span className="small" style={{ color: "#f87171" }}>{err}</span>}
+      {err && <span className="small" style={{ color: "var(--ds-crit-text)" }}>{err}</span>}
       <button className="portal-btn portal-btn-primary" onClick={sync} disabled={busy}>
         {busy ? "Syncing…" : "↻ Sync ScanPay refunds"}
       </button>
