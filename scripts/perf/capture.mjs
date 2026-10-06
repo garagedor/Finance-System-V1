@@ -17,7 +17,11 @@ mkdirSync(OUT, { recursive: true });
 
 const env = readFileSync(new URL("../../.env.local", import.meta.url), "utf8");
 const uri = env.split("\n").find((l) => l.startsWith("MONGODB_URI=")).slice(12).trim().replace(/^["']|["']$/g, "");
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET ?? "super-secret-key-for-development");
+if (!process.env.JWT_SECRET) {
+  console.error("JWT_SECRET is not set. This script signs a session token and has no fallback.");
+  process.exit(1);
+}
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // Stable stringify (sorted keys) so file diffs are meaningful.
 function stable(v) {

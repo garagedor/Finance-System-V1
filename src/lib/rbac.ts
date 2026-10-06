@@ -13,10 +13,10 @@ import type { User, UserType } from "@/types/user";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, getDb } from "./finance-db";
 import { ensureRbacReady } from "./rbac-seed";
 import { userIdFilter } from "./user-id";
+import { jwtSecret } from "./jwt-secret";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET ?? "super-secret-key-for-development"
-);
+// Resolved lazily and never defaulted — see lib/jwt-secret.ts. A missing
+// secret throws on first use rather than silently substituting a known string.
 
 export interface RbacSession {
   userId?: string;
@@ -42,7 +42,7 @@ export async function readSession(): Promise<RbacSession | null> {
     const c = await cookies();
     const token = c.get("session")?.value;
     if (!token) return null;
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, jwtSecret());
     const claims = payload as JwtClaims;
     if (!claims.name) return null;
     const type = (claims.type ?? "simple") as UserType;
@@ -183,7 +183,7 @@ export async function signSessionToken(args: {
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()
     .setExpirationTime(args.expiresIn ?? "7d")
-    .sign(JWT_SECRET);
+    .sign(jwtSecret());
 }
 
 // Make ensureFinanceIndexes import non-orphan (used implicitly via coll())

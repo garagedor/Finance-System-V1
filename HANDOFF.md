@@ -121,9 +121,12 @@ caught up, and ask what they want to work on next (then ask "local or online?").
   Interim: lazy-load recharts/ag-grid to slim the ~1.1MB bundle (helps mobile, not
   latency).
 - 🟠 **Pending hygiene:** rotate the shared `admin123`-style passwords; move Mongo URI
-  to `MONGODB_URI`; move JWT secret to `JWT_SECRET` env (currently falls back to
-  `'super-secret-key-for-development'` in login/middleware/users — must all match).
-  User also needs to set `JWT_SECRET` in Vercel.
+  to `MONGODB_URI`.
+- ✅ **JWT secret — done 2026-10-06.** `JWT_SECRET` is required and resolved in one
+  place (`src/lib/jwt-secret.ts`); there is no development fallback anywhere. The
+  application now fails closed without it. Confirmed configured in Vercel for both
+  Production and Preview. Do not reintroduce a default — see
+  `docs/AUTH-INTEGRATION-GATE-PLAN.md` §0.
 - **5,572 jobs have NO `date` field** — invisible to date filters; left untouched.
 - **Recurring expenses:** analyzed Plaid `finance_bank_txn_synced`. True fixed monthly
   bills ≈ $3,900/mo (RingCentral, storage units, RPS, software subs); LightingPR is

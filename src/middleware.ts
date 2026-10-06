@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { jwtSecret } from '@/lib/jwt-secret';
 
 // SECURITY NOTE (perf review, Phase 10): this middleware verifies the session
 // JWT on every /api/* request and returns 401 when it's missing/invalid. Routes
@@ -14,10 +15,9 @@ import { jwtVerify } from 'jose';
 // migrating is cosmetic and should be validated against real auth flows.)
 
 // MUST resolve the secret exactly like the signer (src/lib/rbac.ts) — otherwise
-// every real token fails verification and the whole API locks out.
-const JWT_SECRET = new TextEncoder().encode(
-    process.env.JWT_SECRET ?? 'super-secret-key-for-development'
-);
+// every real token fails verification and the whole API locks out. Both now go
+// through lib/jwt-secret.ts, which has no imports precisely so this file can
+// use it on the Edge runtime. Do not import anything else here.
 
 export async function middleware(request: NextRequest) {
     // Only protect /api routes
@@ -48,7 +48,12 @@ export async function middleware(request: NextRequest) {
     try {
         // Actually verify the signature + expiry (previously this only checked
         // the cookie was present, so any non-empty value passed).
-        await jwtVerify(sessionCookie.value, JWT_SECRET);
+        //
+        // jwtSecret() throws when JWT_SECRET is unset. That is deliberate: an
+        // unconfigured deployment denies every API request rather than falling
+        // back to a known string and accepting forged ones. The failure is
+        // loud, total and recoverable; the alternative is silent and not.
+        await jwtVerify(sessionCookie.value, jwtSecret());
         return NextResponse.next();
     } catch (error) {
         console.error('JWT verification failed:', error);
