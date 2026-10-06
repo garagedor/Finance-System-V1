@@ -9,6 +9,7 @@ import { requirePermission } from "@/lib/rbac";
 import { userIdFilter } from "@/lib/user-id";
 import { PERMISSION_BY_KEY, type Permission, type RoleAuditRecord, type RoleRecord } from "@/types/rbac";
 import type { User, UserType } from "@/types/user";
+import { bumpSessionVersion, invalidatingFields, shouldBumpSessionVersion } from "@/lib/session-version";
 
 export const dynamic = "force-dynamic";
 
@@ -249,6 +250,17 @@ export async function PATCH(req: NextRequest) {
     }
 
     await usersColl.updateOne(userIdFilter<User>(body._id), { $set: set });
+
+    // Anything that changes what this session may do, or who it belongs to,
+    // ends the sessions already issued for it. Disabling an account is the one
+    // that matters most: it must stop working now, not when the cookie
+    // happens to expire. Recorded now; enforcement is a separate, approved
+    // step — see docs/AUTH-INTEGRATION-GATE-PLAN.md step 4.
+    if (shouldBumpSessionVersion(set)) {
+      await bumpSessionVersion(body._id, invalidatingFields(set).join(","));
+      summaryParts.push("sessions invalidated");
+    }
+
     const after = await usersColl.findOne(userIdFilter<User>(body._id));
     await writeAudit({
       target_id: body._id,

@@ -25,6 +25,14 @@ export interface RbacSession {
   roleId?: string;
   permissions: Permission[];
   active: boolean;
+  /**
+   * The version this token was issued against. Absent on tokens predating the
+   * claim, which read as 0.
+   *
+   * Carried and recorded but NOT yet enforced — enforcement is the step that
+   * signs people out. See docs/AUTH-INTEGRATION-GATE-PLAN.md step 4.
+   */
+  sessionVersion: number;
 }
 
 interface JwtClaims {
@@ -34,6 +42,7 @@ interface JwtClaims {
   role_id?: string;
   permissions?: Permission[];
   active?: boolean;
+  session_version?: number;
 }
 
 /** Read + verify the session cookie, hydrate effective permissions. */
@@ -64,6 +73,10 @@ export async function readSession(): Promise<RbacSession | null> {
       roleId: claims.role_id,
       permissions,
       active: claims.active ?? true,
+      // Read, carried, and deliberately NOT yet compared against the stored
+      // value. Enforcement is the step that signs people out and is approved
+      // separately — see docs/AUTH-INTEGRATION-GATE-PLAN.md step 4.
+      sessionVersion: typeof claims.session_version === "number" ? claims.session_version : 0,
     };
   } catch {
     return null;
@@ -170,6 +183,8 @@ export async function signSessionToken(args: {
   role_id?: string;
   permissions: Permission[];
   active: boolean;
+  /** Stamped so a later bump can invalidate this token. Defaults to 0. */
+  session_version?: number;
   expiresIn?: string;
 }): Promise<string> {
   return new SignJWT({
@@ -179,6 +194,7 @@ export async function signSessionToken(args: {
     role_id: args.role_id,
     permissions: args.permissions,
     active: args.active,
+    session_version: args.session_version ?? 0,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()

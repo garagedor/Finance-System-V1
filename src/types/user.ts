@@ -16,6 +16,15 @@ export type User = {
     role_id?: string;
     /** Defaults to true. Set false to disable login without deleting. */
     active?: boolean;
+    /**
+     * Bumped to invalidate every token already issued for this user.
+     * Absent means 0 — no migration writes it to existing users.
+     * See lib/session-version.ts and docs/AUTH-INTEGRATION-GATE-PLAN.md.
+     */
+    session_version?: number;
+    /** Why it was last bumped, and when. Audit only. */
+    session_version_reason?: string;
+    session_version_at?: string;
     /** Extra permission keys granted directly to this user, on top of role. */
     extra_permissions?: Permission[];
     /** Permission keys explicitly denied for this user (overrides role grant). */
