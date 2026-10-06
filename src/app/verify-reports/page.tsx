@@ -6,6 +6,7 @@ import { FiCheck, FiX, FiAlertTriangle, FiArrowLeft, FiChevronRight, FiCheckCirc
 import { useAuth } from '@/components/AuthShell';
 import EmptyState from '@/components/EmptyState';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { SummaryStrip, AlertCard } from '@/components/ui';
 import { formatCurrency, formatDisplayDate } from '../utils/jobUtils';
 import '../balance-report/styles.css';
 import dynamic from 'next/dynamic';
@@ -203,10 +204,21 @@ function ListView({
 
   // The full set of reports rendered in the table — when filtering by tech,
   // ALL of that tech's reports show so the user can tick which to roll up.
+  /* Inbox orientation, derived from the reports already fetched. No request is
+     added and no figure is invented: each one counts a flag the API already
+     returns per report. */
   const visibleReports = useMemo(
     () => (reports || []).filter((r) => !techFilter || r.techName === techFilter),
     [reports, techFilter]
   );
+
+  const inboxStats = useMemo(() => ({
+    awaiting: visibleReports.filter((r) => r.status === 'Submitted').length,
+    // Locked treatment: an identity the system could not resolve is a warning,
+    // because the comparison still runs and may be comparing the wrong person.
+    unmatched: visibleReports.filter((r) => !r.techMatched || !r.areaMatched).length,
+    resubmitted: visibleReports.filter((r) => r.resubmitted).length,
+  }), [visibleReports]);
 
   // Selected report ids (keyed by report.id). Empty set = "include all" in overview.
   const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
@@ -291,6 +303,47 @@ function ListView({
               </p>
             )}
           </div>
+        )}
+
+        {/* ── Reconciliation state, before any of the detail ──
+             Derived from the reports already loaded. Unmatched identity takes
+             the warning family, which is the locked treatment for a tech or
+             area the system could not resolve — it is the one condition here
+             that silently produces a wrong comparison. */}
+        {visibleReports.length > 0 && (
+          <>
+            <SummaryStrip
+              items={[
+                {
+                  label: 'Reports in view',
+                  value: String(visibleReports.length),
+                  sub: techFilter ? `${techFilter} — every week` : statusFilter === 'All' ? 'every status' : `${statusFilter.toLowerCase()}`,
+                },
+                {
+                  label: 'Awaiting review',
+                  value: String(inboxStats.awaiting),
+                  sub: inboxStats.awaiting === 0 ? 'nothing queued' : 'submitted, not yet verified',
+                },
+                {
+                  label: 'Unmatched identity',
+                  value: String(inboxStats.unmatched),
+                  sub: inboxStats.unmatched === 0 ? 'all resolved' : 'tech or area not resolved',
+                },
+                {
+                  label: 'Resubmitted',
+                  value: String(inboxStats.resubmitted),
+                  sub: inboxStats.resubmitted === 0 ? 'none returned' : 'sent back and corrected',
+                },
+              ]}
+            />
+            {inboxStats.unmatched > 0 && (
+              <AlertCard
+                tone="warn"
+                title={`${inboxStats.unmatched} report${inboxStats.unmatched === 1 ? '' : 's'} with an unresolved tech or area`}
+                description="The comparison still runs, but a name the system could not resolve means it may be comparing against the wrong person or the wrong area. Fix the mapping before approving."
+              />
+            )}
+          </>
         )}
 
         <div className="bp-cv-tabs animate-fade-up" style={{ marginBottom: 12 }}>
@@ -553,6 +606,76 @@ function DetailView({
 
         {data && (
           <>
+            {/* ── Reconciliation state, before anything else ──
+                 The locked hierarchy: matched is ok, mismatched is a warning,
+                 and a job present on only one side cannot be reconciled at all,
+                 so it is critical. These four numbers were already computed by
+                 the API and were previously readable only as a single crowded
+                 pill further down the page. */}
+            <SummaryStrip
+              items={[
+                {
+                  label: 'Matched',
+                  value: String(data.summary.matched),
+                  sub: `of ${Math.max(data.summary.supabaseJobCount, data.summary.crmJobCount)} jobs`,
+                },
+                {
+                  label: 'Mismatched',
+                  value: String(data.summary.mismatched),
+                  sub: data.summary.mismatched === 0 ? 'figures agree' : 'figures disagree',
+                },
+                {
+                  label: 'In CRM only',
+                  value: String(data.summary.missingInCrm),
+                  sub: data.summary.missingInCrm === 0 ? 'none' : 'absent from the report',
+                },
+                {
+                  label: 'In report only',
+                  value: String(data.summary.missingInReport),
+                  sub: data.summary.missingInReport === 0 ? 'none' : 'absent from the CRM',
+                },
+              ]}
+            />
+
+            {(() => {
+              const unreconciled = data.summary.missingInCrm + data.summary.missingInReport;
+              const identityUnresolved = !data.report.techMatched || !data.report.areaMatched;
+              if (unreconciled > 0) {
+                return (
+                  <AlertCard
+                    tone="crit"
+                    title={`${unreconciled} job${unreconciled === 1 ? '' : 's'} cannot be reconciled`}
+                    description="A job on one side with nothing to compare it against. Link it, or establish that it should not be there, before approving — the totals below cannot be right while it is unresolved."
+                  />
+                );
+              }
+              if (data.summary.mismatched > 0) {
+                return (
+                  <AlertCard
+                    tone="warn"
+                    title={`${data.summary.mismatched} job${data.summary.mismatched === 1 ? '' : 's'} with figures that disagree`}
+                    description="Every job is paired; some amounts differ beyond tolerance. The rows are highlighted below."
+                  />
+                );
+              }
+              if (identityUnresolved) {
+                return (
+                  <AlertCard
+                    tone="warn"
+                    title="This report's tech or area could not be resolved"
+                    description="Everything reconciles, but an unresolved name means it may have been compared against the wrong person or area."
+                  />
+                );
+              }
+              return (
+                <AlertCard
+                  tone="ok"
+                  title="Fully reconciled"
+                  description="Every job is paired and every figure agrees within tolerance."
+                />
+              );
+            })()}
+
             <IdentityCard report={data.report} />
             <ReportNoteCard report={data.report} />
             <SummaryCard summary={data.summary} totals={data.totals} />
