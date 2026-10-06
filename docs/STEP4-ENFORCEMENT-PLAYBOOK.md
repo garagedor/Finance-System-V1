@@ -86,11 +86,38 @@ lifetime, then enforce.**
 
 ## 5. Recommended sequence
 
-1. Deploy steps 2–3 (already committed, not deployed).
+1. Deploy steps 2–3 (already committed, not deployed).  ✅ **done**
 2. **Wait 7 days** — the cookie lifetime. Every live token now carries the claim.
 3. Confirm with the query in §6.
 4. Deploy step 4 at a quiet hour, announced.
 5. Run §8.
+
+### The clock
+
+```
+AUTH_BASELINE_DEPLOYED_AT    = 2026-10-06T17:40:26Z
+EARLIEST_STEP4_ENFORCEMENT   = 2026-10-13T17:40:26Z
+```
+
+`AUTH_BASELINE_DEPLOYED_AT` is the Vercel Production *ready* timestamp for
+deployment `dpl_CiQT4a5KKT5kKEqxeDpjXp2fSKw2` (SHA `e48e0e7`, alias
+`new-system-v1.vercel.app`), not the commit date. The session cookie's
+lifetime is 7 days, so a token issued in the last second before that
+deployment expires at `EARLIEST_STEP4_ENFORCEMENT`. Enforcing before then
+signs out people whose only fault is that they logged in early.
+
+### Residual risk while the clock runs
+
+Sessions issued before `AUTH_BASELINE_DEPLOYED_AT` carry no `session_version`
+claim. Enforcement is off, so they behave exactly as they did before — which
+means the original gap is still open for them: **disabling a user does not end
+their session**, for up to 7 days. That is the pre-existing behaviour, not a
+regression introduced here, and it is precisely what the wait is burning off.
+It is deliberately *not* patched with a compatibility shim that would treat a
+missing claim as invalid, because that shim is a mass sign-out wearing a
+different name. If a specific account must lose access before
+`EARLIEST_STEP4_ENFORCEMENT`, change its password — that path already works
+today.
 
 Done this way, A and B are indistinguishable in effect and A is chosen for the
 stronger property.
