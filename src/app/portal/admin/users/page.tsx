@@ -122,7 +122,7 @@ export default async function UsersIndexPage({
               return (
                 <tr key={id}>
                   <td>
-                    <Link href={`/portal/admin/users/${encodeURIComponent(id)}`} style={{ color: "#cbd5e1", fontWeight: 500 }}>
+                    <Link href={`/portal/admin/users/${encodeURIComponent(id)}`} style={{ color: "var(--ds-ink)", fontWeight: 500 }}>
                       {u.name}
                     </Link>
                   </td>
