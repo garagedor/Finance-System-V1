@@ -9,6 +9,7 @@ import { useFilterRelationships } from '@/hooks/useFilterRelationships';
 import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
+import { SummaryStrip, AlertCard } from '@/components/ui';
 import { FiAlertTriangle, FiSlash, FiCornerUpLeft, FiUsers, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 
 type ReportType = 'penalty' | 'dispute' | 'refund' | 'provider';
@@ -622,6 +623,52 @@ export default function ReportPage() {
 
   const totalPages = total ? Math.max(1, Math.ceil(total / pageSize)) : 1;
 
+  /* ── Orientation layer ──
+     Everything below is read from state this page already holds. No request is
+     added: `total` is the full matching count the list endpoint already
+     returns, `totals` is the figure the Calculate Totals button already
+     fetches, and the exception flag is one the API already sets per row.
+
+     The headline figure per report type is the column the table already totals,
+     so the number at the top and the number in the footer are the same number —
+     not a second opinion about it. */
+  const HEADLINE: Record<ReportType, { key: string; label: string }> = {
+    penalty:  { key: 'totalLoss',     label: 'Total loss' },
+    dispute:  { key: 'disputed',      label: 'Amount disputed' },
+    refund:   { key: 'refunded',      label: 'Amount refunded' },
+    provider: { key: 'providerShare', label: 'Provider share' },
+  };
+
+  const scope = useMemo(() => {
+    const parts: string[] = [];
+    if (activeFilters.techs.length) parts.push(`${activeFilters.techs.length} tech${activeFilters.techs.length === 1 ? '' : 's'}`);
+    if (activeFilters.locations.length) parts.push(`${activeFilters.locations.length} location${activeFilters.locations.length === 1 ? '' : 's'}`);
+    if (activeFilters.providers.length) parts.push(`${activeFilters.providers.length} provider${activeFilters.providers.length === 1 ? '' : 's'}`);
+    return parts;
+  }, [activeFilters.techs, activeFilters.locations, activeFilters.providers]);
+
+  const periodDays = useMemo(() => {
+    const a = new Date(activeFilters.startDate).getTime();
+    const b = new Date(activeFilters.endDate).getTime();
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    return Math.max(1, Math.round((b - a) / 86_400_000) + 1);
+  }, [activeFilters.startDate, activeFilters.endDate]);
+
+  /* A row the API has flagged as a subcontractor case — the technician's
+     configured share exceeds the 40% pool. It is already in the data and
+     already changes how settlement reads, and it was previously invisible
+     unless you scrolled to the column. Only dispute and refund carry it. */
+  const subcontractorRows = useMemo(
+    () => rows.filter((r) => (r as DisputeRow | RefundRow).isSubcontractor).length,
+    [rows],
+  );
+
+  const headline = HEADLINE[activeFilters.type];
+  const headlineValue =
+    totalsCalculated && totals && totals[headline.key] !== undefined
+      ? formatCurrency(totals[headline.key])
+      : null;
+
   const switchType = (newType: ReportType) => {
     setReportType(newType);
     setRows([]);
@@ -647,15 +694,70 @@ export default function ReportPage() {
 
       <div className="content">
 
-        {/* ── Page Header ── */}
+        {/* ── 1. Context — what you are looking at, in a sentence ── */}
         <div className="rpt-header animate-fade-up">
           <div>
             <p className="rpt-kicker">Reports</p>
-            <h1 className="rpt-title">Operations Reports</h1>
+            <h1 className="rpt-title">
+              {REPORT_TABS.find(t => t.id === activeFilters.type)?.label} report
+            </h1>
+            <p className="rpt-context">
+              {activeFilters.startDate} to {activeFilters.endDate}
+              {periodDays ? ` · ${periodDays} day${periodDays === 1 ? '' : 's'}` : ''}
+              {' · '}
+              {scope.length ? scope.join(' · ') : 'all techs, locations and providers'}
+            </p>
           </div>
         </div>
 
-        {/* ── Tabbed Type Selector ── */}
+        {/* ── 2. Summary — before the detail, never derived from one page ── */}
+        <div className="animate-fade-up" style={{ animationDelay: '30ms' }}>
+          <SummaryStrip
+            items={[
+              {
+                label: 'Records',
+                value: loading && !rows.length ? '—' : String(total || rows.length || 0),
+                sub: totalPages > 1 ? `page ${activeFilters.page} of ${totalPages}` : 'all on one page',
+              },
+              {
+                label: headline.label,
+                value: headlineValue ?? '—',
+                sub: headlineValue
+                  ? 'across every page'
+                  : filtersDirty ? 'apply filters first' : 'press Calculate Totals',
+              },
+              {
+                label: 'Period',
+                value: periodDays ? `${periodDays}d` : '—',
+                sub: `${activeFilters.startDate} → ${activeFilters.endDate}`,
+              },
+              {
+                label: 'Filtered by',
+                value: scope.length ? String(scope.length) : 'none',
+                sub: scope.length ? scope.join(' · ') : 'showing everything in range',
+              },
+            ]}
+          />
+        </div>
+
+        {/* ── 3. Exceptions already present in the data ── */}
+        {subcontractorRows > 0 && (
+          <AlertCard
+            tone="warn"
+            title={`${subcontractorRows} subcontractor case${subcontractorRows === 1 ? '' : 's'} on this page`}
+            description="The technician's configured share exceeds the 40% pool on these rows, so the area manager's net portion reads differently from the pool share. Settlement still recovers the full pool share."
+          />
+        )}
+
+        {!loading && !error && rows.length === 0 && (
+          <AlertCard
+            tone="info"
+            title="Nothing matches this view"
+            description="No records in this date range with these filters. Widen the dates or clear a filter."
+          />
+        )}
+
+        {/* ── 4. Actions — switch report, then narrow it ── */}
         <div className="rpt-tabs animate-fade-up">
           {REPORT_TABS.map(tab => (
             <button
@@ -1259,8 +1361,28 @@ export default function ReportPage() {
           font-size: 12px;
         }
 
+        /* ── S5: the orientation layer ──
+           One sentence under the title saying what this view actually is — the
+           period and what it has been narrowed to. Previously you had to read
+           the filter controls to work that out. */
+        .rpt-context {
+          margin: 7px 0 0;
+          font-size: 13px;
+          color: var(--ds-ink-2);
+          max-width: 76ch;
+        }
+
+        /* Rhythm. The page stays full width because the table needs it, but the
+           four bands above it — context, summary, exceptions, actions — are
+           spaced deliberately rather than inheriting whatever the last element
+           left behind. */
+        .content > * + * { margin-top: 20px; }
+        .rpt-header { margin-bottom: 0; }
+
         @media (max-width: 900px) {
           .content { padding: 16px 12px 32px; }
+          .content > * + * { margin-top: 14px; }
+          .rpt-context { font-size: 12px; }
           .rpt-tabs { width: 100%; overflow-x: auto; }
           .rpt-tab { flex-shrink: 0; }
           .rpt-table-header { flex-direction: column; align-items: flex-start !important; }
