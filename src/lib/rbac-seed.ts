@@ -132,8 +132,7 @@ function seedTemplates(): SeedTemplate[] {
         "crm:stats:view",
         "crm:balance_report:view", "crm:balance_report:export",
         "crm:payment_method_report:view",
-        "crm:verify_reports:view",
-        // Finance — view-heavy, edit reports & disputes only
+                // Finance — view-heavy, edit reports & disputes only
         "finance:dashboard:view",
         "finance:income:view",
         "finance:expenses:view",

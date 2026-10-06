@@ -9,6 +9,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { formatCurrency, formatDisplayDate } from '../utils/jobUtils';
 import '../balance-report/styles.css';
 import dynamic from 'next/dynamic';
+import { clientHasPermission } from '@/lib/permissions-client';
 const EditJobModal = dynamic(() => import('./EditJobModal'), { ssr: false });
 const LinkPickerModal = dynamic(() => import('./LinkPickerModal'), { ssr: false });
 
@@ -102,7 +103,13 @@ export default function VerifyReportsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
 
-  if (!user || user.type !== 'admin') {
+  // Verify is admin-only today, and stays admin-only — but it says so in the
+  // RBAC vocabulary rather than by job title, so the page, the navigation and
+  // the API all gate on the same string. Admin holds this through the seeded
+  // Admin role's ALL_PERMISSIONS; no other seeded role holds it.
+  //
+  // The real boundary is the API, which re-checks server-side on every call.
+  if (!clientHasPermission(user, 'crm:verify_reports:view')) {
     return (
       <div className="flex h-[60vh] items-center justify-center px-6">
         <EmptyState
@@ -113,7 +120,7 @@ export default function VerifyReportsPage() {
             <circle cx="10" cy="13" r="0.75" fill="#f87171" />
           </svg>}
           title="Access Denied"
-          message="Admin privileges required to verify weekly reports."
+          message="You do not have permission to verify weekly reports."
         />
       </div>
     );
