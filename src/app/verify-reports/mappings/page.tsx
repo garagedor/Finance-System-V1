@@ -203,7 +203,7 @@ function TechMappingsTable({
   savedFlash: string | null;
 }) {
   if (users.length === 0) {
-    return <EmptyState size="md" title="No Supabase users" message="Sign up at least one user in the Lovable balance app." />;
+    return <EmptyState size="md" title="No Supabase users" message="Sign up at least one user in the 317 Weekly Balance app." />;
   }
   return (
     <div className="balance-table">
@@ -272,7 +272,7 @@ function AreaMappingsTable({
   savedFlash: string | null;
 }) {
   if (areas.length === 0) {
-    return <EmptyState size="md" title="No Supabase areas" message="Define at least one area in the Lovable balance app." />;
+    return <EmptyState size="md" title="No Supabase areas" message="Define at least one area in the 317 Weekly Balance app." />;
   }
   return (
     <div className="balance-table">

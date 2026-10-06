@@ -248,7 +248,7 @@ function ListView({
             <div className="bp-meta">
               <span className="bp-meta-chip">
                 <span className="bp-meta-chip-label">Source</span>
-                <strong>Lovable Balance App (Supabase)</strong>
+                <strong>317 Weekly Balance</strong>
               </span>
               {reports && (
                 <span className="bp-meta-chip">
@@ -286,7 +286,7 @@ function ListView({
             <pre style={{ color: '#f87171', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
             {error.toLowerCase().includes('supabase not configured') && (
               <p style={{ fontSize: 12, color: '#cbd5e1', marginTop: 10 }}>
-                The Lovable Balance backend isn't connected yet. Add <code>SUPABASE_URL</code> and{' '}
+                The 317 Weekly Balance backend isn't connected yet. Add <code>SUPABASE_URL</code> and{' '}
                 <code>SUPABASE_SERVICE_ROLE_KEY</code> to <code>.env.local</code>, then restart the dev server.
               </p>
             )}
@@ -664,7 +664,7 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
         {crmExtras.length > 0 && (
           <div style={{ padding: '8px 14px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>
-              CRM has these payment fields that the Lovable app doesn't track (informational only):
+              CRM has these payment fields that the 317 Weekly Balance app doesn't track (informational only):
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {crmExtras.map((e) => (
@@ -1152,7 +1152,7 @@ function ReportNoteCard({ report }: { report: DetailResponse['report'] }) {
       <textarea
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Internal notes — not visible to the tech in Lovable."
+        placeholder="Internal notes — not visible to the tech in the Weekly Balance app."
         rows={3}
         style={{
           width: '100%',
