@@ -22,7 +22,18 @@ export type PermissionAction =
   | "reconcile"
   | "deliver"
   | "post_ledger"
-  | "reset_password";
+  | "reset_password"
+  // Warehouse verbs. These exist because the Warehouse application enforces
+  // them; the catalog mirrors its strings rather than translating them.
+  | "submit"
+  | "confirm"
+  | "cancel"
+  | "close"
+  | "count"
+  | "post"
+  | "adjust"
+  | "move"
+  | "admin";
 
 /** A permission identifier of the form `module:section:action`. */
 export type Permission = string;
@@ -31,7 +42,7 @@ export interface PermissionDef {
   /** Stable key — never change once shipped (would break stored role data). */
   key: Permission;
   /** Top-level grouping shown as a section header in the matrix UI. */
-  module: "system" | "crm" | "finance";
+  module: "system" | "crm" | "finance" | "wh";
   /** Sub-grouping inside a module. Same `section` rows are clustered. */
   section: string;
   /** The action verb. */
@@ -51,6 +62,27 @@ function p(
   description?: string
 ): PermissionDef {
   return { key: `${module}:${section}:${action}`, module, section, action, label, description };
+}
+
+/**
+ * Warehouse permissions.
+ *
+ * The key is written out rather than assembled, because Warehouse is a separate
+ * application that enforces these exact strings in its own verifier. Authority
+ * and verifier must agree character for character — a builder deriving
+ * `wh:admin` as `wh:admin:manage` would silently produce a claim Warehouse
+ * ignores. There is deliberately no translation table.
+ *
+ * Source of truth: lbs-warehouse/src/lib/auth/claims.ts WAREHOUSE_PERMISSIONS.
+ */
+function wh(
+  key: Permission,
+  section: string,
+  action: PermissionAction,
+  label: string,
+  description?: string
+): PermissionDef {
+  return { key, module: "wh", section, action, label, description };
 }
 
 /** Every permission the application recognises. Order = display order. */
@@ -186,6 +218,36 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDef> = [
   p("finance", "tasks", "create", "Create tasks"),
   p("finance", "tasks", "edit", "Edit / move tasks"),
   p("finance", "tasks", "delete", "Delete tasks"),
+
+  // ── Warehouse ─────────────────────────────────────────────────────────
+  // Mirrors lbs-warehouse exactly. Holding one of these is what makes a user
+  // entitled to the warehouse module; none grants anything in CRM or Finance,
+  // and no seeded role is given any of them.
+  wh("wh:catalog:view",     "catalog",   "view",    "View products"),
+  wh("wh:catalog:edit",     "catalog",   "edit",    "Edit products"),
+  wh("wh:topology:view",    "topology",  "view",    "View warehouses & locations"),
+  wh("wh:topology:edit",    "topology",  "edit",    "Edit warehouses & locations"),
+
+  wh("wh:po:view",          "po",        "view",    "View purchase orders"),
+  wh("wh:po:create",        "po",        "create",  "Create purchase orders"),
+  wh("wh:po:edit",          "po",        "edit",    "Edit purchase order lines"),
+  wh("wh:po:submit",        "po",        "submit",  "Submit to the supplier"),
+  wh("wh:po:confirm",       "po",        "confirm", "Record supplier confirmation"),
+  wh("wh:po:cancel",        "po",        "cancel",  "Cancel an order", "Unavailable once inbound."),
+  wh("wh:po:close",         "po",        "close",   "Close an order", "Commercial completion after claims and costs settle."),
+
+  wh("wh:shipment:view",    "shipment",  "view",    "View shipments & containers"),
+  wh("wh:shipment:edit",    "shipment",  "edit",    "Edit shipments & allocations"),
+
+  wh("wh:receiving:view",   "receiving", "view",    "View receiving sessions"),
+  wh("wh:receiving:count",  "receiving", "count",   "Count an inbound shipment", "Counting alone never changes inventory."),
+  wh("wh:receiving:post",   "receiving", "post",    "Post counts to inventory", "The moment counts become stock."),
+
+  wh("wh:inventory:view",   "inventory", "view",    "View stock & movements"),
+  wh("wh:inventory:adjust", "inventory", "adjust",  "Adjust stock & change condition", "Appends a correcting movement; never edits history."),
+  wh("wh:putaway:move",     "putaway",   "move",    "Move stock out of receiving"),
+
+  wh("wh:admin",            "admin",     "admin",   "Warehouse administrator", "Implies every other warehouse permission, inside Warehouse only."),
 ] as const;
 
 /** Map from key → definition, for O(1) lookup. */
@@ -200,7 +262,22 @@ export const MODULE_LABEL: Record<PermissionDef["module"], string> = {
   system: "System",
   crm: "CRM",
   finance: "Finance Portal",
+  wh: "Warehouse",
 };
+
+/**
+ * Holding any of these entitles a user to the warehouse module.
+ *
+ * Derived from the catalog rather than listed again, so a permission added
+ * above cannot be forgotten here.
+ */
+export const WAREHOUSE_PERMISSIONS: ReadonlyArray<Permission> = PERMISSION_CATALOG
+  .filter((d) => d.module === "wh")
+  .map((d) => d.key);
+
+export function isWarehousePermission(key: string): boolean {
+  return key.startsWith("wh:");
+}
 
 // ── Records stored in MongoDB ───────────────────────────────────────────────
 
