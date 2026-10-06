@@ -8,7 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getMongoClient } from "@/lib/mongo";
-import { jwtVerify } from 'jose';
+import { readSession, hasPermission } from '@/lib/rbac';
 import type { JobRow } from '../../../../types/job';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../lib/supabase-server';
 import { getTechMappingByUserId } from '../../../../lib/verify/mapping-store';
@@ -17,21 +17,32 @@ import { compare, deriveCrmMethod, type SupabaseReportJob, type CrmJob } from '.
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
-const JWT_SECRET = new TextEncoder().encode('super-secret-key-for-development');
 
+/**
+ * Authorization.
+ *
+ * This route used to verify the session cookie itself, against a signing secret
+ * written as a literal in this file. That meant it trusted a different
+ * authority from the rest of the application: a token the real verifier would
+ * reject could satisfy it, and a token the real verifier accepts could not.
+ *
+ * It now uses the same session authority as every other route. `readSession`
+ * verifies against the configured secret and hydrates the effective permission
+ * list; the permission below is the one that governs writing to weekly
+ * verify-reports, which is exactly what this backfill does. The Admin role
+ * holds every permission, so the previous admin-only requirement still holds —
+ * it is simply expressed as the thing being protected rather than as a job
+ * title.
+ */
+const BACKFILL_PERMISSION = 'crm:verify_reports:edit' as const;
 
-async function requireAdmin(request: NextRequest): Promise<NextResponse | null> {
-  const session = request.cookies.get('session')?.value;
+async function requireBackfillAccess(): Promise<NextResponse | null> {
+  const session = await readSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  try {
-    const { payload } = await jwtVerify(session, JWT_SECRET);
-    if ((payload as { type?: string }).type !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
-    return null;
-  } catch {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!hasPermission(session, BACKFILL_PERMISSION)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
+  return null;
 }
 
 const num = (v: any): number => {
@@ -50,7 +61,9 @@ type Proposal = {
 };
 
 export async function POST(request: NextRequest) {
-  const denied = await requireAdmin(request);
+  // First statement in the handler, before any parameter is read, so dryRun
+  // cannot influence whether the request is authorized.
+  const denied = await requireBackfillAccess();
   if (denied) return denied;
 
   if (!isSupabaseConfigured()) {
