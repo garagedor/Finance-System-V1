@@ -31,10 +31,14 @@ export async function middleware(request: NextRequest) {
     // '/api/ai-jobs/jobs' (the closing-dashboard SHADOW outbox: POST /jobs +
     // PUT /jobs/{id}) — are exempt because they authenticate with the
     // AI_INGEST_TOKEN, not the session cookie. Each self-checks that Bearer token
-    // and fails CLOSED (503) if it is unset. The other /api/ai-jobs/* routes
+    // and fails CLOSED (503) if it is unset.
+    // '/api/internal/auth/session-state' is exempt for the same reason: it is
+    // called by Warehouse with a dedicated service credential, never with a
+    // session cookie, and it authenticates that credential itself and fails
+    // CLOSED (503) when it is unset. The other /api/ai-jobs/* routes
     // (CRUD at '/api/ai-jobs', compare, link) stay JWT-protected — none of them
     // match the '/api/ai-jobs/ingest' or '/api/ai-jobs/jobs' prefixes.
-    const exemptRoutes = ['/api/login', '/api/logout', '/api/scanpay/webhook', '/api/scanpay/cron-sync', '/api/cron/job-mirror-resync', '/api/ai-jobs/ingest', '/api/ai-jobs/jobs'];
+    const exemptRoutes = ['/api/login', '/api/logout', '/api/scanpay/webhook', '/api/scanpay/cron-sync', '/api/cron/job-mirror-resync', '/api/ai-jobs/ingest', '/api/ai-jobs/jobs', '/api/internal/auth/session-state'];
     if (exemptRoutes.some(route => request.nextUrl.pathname.startsWith(route))) {
         return NextResponse.next();
     }
