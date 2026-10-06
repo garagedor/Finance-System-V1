@@ -70,6 +70,9 @@ export function MetricGrid({ children }: { children: React.ReactNode }) {
 }
 
 /* ── Summary strip — compact key values directly above detail ─────────── */
+/* `tone` is an explicit editorial judgement about an outcome — "we lost this"
+   — never a restatement of an amount's sign. Money direction is neutral: a
+   negative balance, a deduction or an "X owes Y" figure carries no tone. */
 export interface StripItem { label: string; value?: string; sub?: string; tone?: 'pos' | 'neg' | 'muted' }
 
 export function SummaryStrip({ items }: { items: StripItem[] }) {

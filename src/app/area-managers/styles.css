@@ -112,7 +112,9 @@
   border: 1px solid var(--ds-line);
   border-radius: 14px;
   padding: 8px;
-  overflow: hidden;
+  /* The table is wider than a phone. Scroll it inside its own card rather
+     than clipping it or letting the page scroll sideways. */
+  overflow-x: auto;
 }
 
 .am-table {
@@ -255,4 +257,14 @@
   gap: 8px;
   align-items: end;
   margin-bottom: 16px;
+}
+
+/* ── Narrow screens ──
+   The header is already flex-wrap, so it stacks on its own; the create form
+   is what overflows, because the name field carries a 220px minimum. Let it
+   take the full row instead. */
+@media (max-width: 640px) {
+  .am-page { padding: 16px; }
+  .am-create-form { width: 100%; }
+  .am-input { min-width: 0; flex: 1; }
 }

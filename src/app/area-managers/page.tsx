@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { FiUserPlus, FiUsers } from 'react-icons/fi';
 import { useAuth } from '@/components/AuthShell';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
+import { SummaryStrip, AlertCard } from '@/components/ui';
 import { formatCurrency } from '../utils/jobUtils';
 import type { AreaManager, AreaManagerBalance } from '@/types/areaManager';
 import './styles.css';
@@ -44,6 +45,21 @@ export default function AreaManagersPage() {
   };
 
   useEffect(() => { load(); }, []);
+
+  /* Orientation layer. Every figure below is derived from `rows`, which the
+     page has already fetched — no extra request and no new business rule.
+     Balances stream in per row, so the open-balance total reports how much of
+     the set it has actually seen rather than quietly understating itself. */
+  const summary = useMemo(() => {
+    const withBalance = rows.filter((r) => r.balance);
+    return {
+      count: rows.length,
+      missingW9: rows.filter((r) => !r.w9StoragePath).length,
+      locations: rows.reduce((n, r) => n + (r.locationIds?.length ?? 0), 0),
+      openBalance: withBalance.reduce((n, r) => n + (r.balance?.openBalance ?? 0), 0),
+      balancesLoaded: withBalance.length,
+    };
+  }, [rows]);
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,6 +117,36 @@ export default function AreaManagersPage() {
         </header>
 
         {error && <div className="am-error">{error}</div>}
+
+        {rows.length > 0 && (
+          <SummaryStrip
+            items={[
+              { label: 'Area managers', value: String(summary.count) },
+              {
+                label: 'Open balance',
+                value: formatCurrency(summary.openBalance),
+                sub:
+                  summary.balancesLoaded < summary.count
+                    ? `${summary.balancesLoaded} of ${summary.count} loaded`
+                    : 'across all area managers',
+              },
+              { label: 'Locations covered', value: String(summary.locations) },
+              {
+                label: 'W-9 missing',
+                value: String(summary.missingW9),
+                sub: summary.missingW9 === 0 ? 'all on file' : 'blocks payment',
+              },
+            ]}
+          />
+        )}
+
+        {summary.missingW9 > 0 && (
+          <AlertCard
+            tone="warn"
+            title={`${summary.missingW9} area manager${summary.missingW9 === 1 ? '' : 's'} without a W-9 on file`}
+            description="A missing W-9 blocks payment. Open the profile to upload one."
+          />
+        )}
 
         <div className="am-table-card" style={{ position: 'relative', minHeight: 200 }}>
           {loading && rows.length === 0 && <LoadingOverlay message="Loading area managers..." />}
