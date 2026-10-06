@@ -7,6 +7,7 @@ import { PageHeader, CardShell, Empty, BackLink } from "../../_components/page-h
 import EntryFormModal, { type FieldDef } from "../../_components/EntryFormModal";
 import RowActions from "../../_components/RowActions";
 import EquipmentTabs from "../_components/EquipmentTabs";
+import { SummaryStrip } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -56,6 +57,13 @@ export default async function EquipmentProductsPage() {
 
   const fields = productFields(canEditCost);
 
+  /* Orientation layer — plain counts over the rows already fetched. No money
+     is rolled up here: a catalog total would read as a figure the business
+     could act on, and it is not one. */
+  const activeCount = rows.filter((p) => p.active).length;
+  const categoryCount = new Set(rows.map((p) => p.category).filter(Boolean)).size;
+  const trackedCount = rows.filter((p) => p.trackInventory).length;
+
   return (
     <div className="portal-page">
       <PageHeader
@@ -67,6 +75,25 @@ export default async function EquipmentProductsPage() {
         ) : null}
       />
       <EquipmentTabs active="products" />
+
+      {rows.length > 0 && (
+        <SummaryStrip
+          items={[
+            { label: "Products", value: String(rows.length) },
+            {
+              label: "Active",
+              value: String(activeCount),
+              sub: rows.length - activeCount > 0 ? `${rows.length - activeCount} inactive` : "all available to order",
+            },
+            { label: "Categories", value: String(categoryCount) },
+            {
+              label: "Inventory tracked",
+              value: String(trackedCount),
+              sub: trackedCount === 0 ? "none" : `of ${rows.length}`,
+            },
+          ]}
+        />
+      )}
 
       <CardShell title="Products" subtitle={`${rows.length} product${rows.length === 1 ? "" : "s"}`}>
         {rows.length === 0 ? (
