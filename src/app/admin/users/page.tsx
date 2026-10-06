@@ -10,6 +10,7 @@ import EmptyState from '@/components/EmptyState';
 import type { User, UserType } from '@/types/user';
 import type { Permission } from '@/types/rbac';
 import { PERMISSION_CATALOG, MODULE_LABEL } from '@/types/rbac';
+import { SummaryStrip, AlertCard } from '@/components/ui';
 import { AdminTabs } from '../_components/AdminTabs';
 import '../roles/styles.css';
 import './styles.css';
@@ -63,6 +64,13 @@ export default function AdminUsersPage() {
 
   const roleByKey = useMemo(() => new Map(roles.map((r) => [r.key, r])), [roles]);
   const roleById = useMemo(() => new Map(roles.map((r) => [r._id, r])), [roles]);
+
+  /* Orientation layer, derived from `users` already in state. "Without a
+     role" is the one that matters: those accounts resolve permissions through
+     the legacy `type` fallback instead of an explicit RBAC role. */
+  const activeCount = users.filter((u) => u.active !== false).length;
+  const adminCount = users.filter((u) => u.type === 'admin').length;
+  const noRoleCount = users.filter((u) => !u.role_id).length;
 
   const visibleUsers = useMemo(() => {
     if (!search.trim()) return users;
@@ -153,6 +161,36 @@ export default function AdminUsersPage() {
         </header>
 
         <AdminTabs />
+
+        {users.length > 0 && (
+          <>
+            <SummaryStrip
+              items={[
+                { label: 'Accounts', value: String(users.length) },
+                {
+                  label: 'Active',
+                  value: String(activeCount),
+                  sub: users.length - activeCount > 0
+                    ? `${users.length - activeCount} disabled`
+                    : 'none disabled',
+                },
+                { label: 'Admins', value: String(adminCount) },
+                {
+                  label: 'Without a role',
+                  value: String(noRoleCount),
+                  sub: noRoleCount === 0 ? 'all assigned' : 'falls back to legacy type',
+                },
+              ]}
+            />
+            {noRoleCount > 0 && (
+              <AlertCard
+                tone="warn"
+                title={`${noRoleCount} account${noRoleCount === 1 ? '' : 's'} without an assigned role`}
+                description="These fall back to the legacy type lookup for permissions. Assign a role so access is explicit."
+              />
+            )}
+          </>
+        )}
 
         {error && (
           <div className="adm-error">
