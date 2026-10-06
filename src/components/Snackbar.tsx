@@ -25,7 +25,7 @@ export function Snackbar({ snackbar }: Props) {
           color: white;
           font-weight: 600;
           font-size: 13.5px;
-          box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+          box-shadow: var(--ds-elev-3);
           z-index: 1100;
           backdrop-filter: blur(10px);
           -webkit-backdrop-filter: blur(10px);

@@ -323,7 +323,7 @@ export function RowEditModal<T extends Record<string, any>>({
           background: var(--ds-surface-1);
           border: 1px solid var(--ds-line-strong);
           border-radius: 16px;
-          box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255,255,255,0.04);
+          box-shadow: var(--ds-elev-3), 0 0 0 1px var(--ds-line);
           max-width: 700px;
           width: 100%;
           max-height: 85vh;
@@ -543,7 +543,7 @@ export function RowEditModal<T extends Record<string, any>>({
           cursor: pointer;
           appearance: none;
           -webkit-appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+          background-image: var(--ds-select-arrow);
           background-repeat: no-repeat;
           background-position: right 12px center;
           padding-right: 32px;

@@ -12,7 +12,7 @@
     background: var(--ds-surface-1);
     border: 1px solid var(--ds-line);
     border-radius: 16px;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--ds-line);
+    box-shadow: var(--ds-elev-3), 0 0 0 1px var(--ds-line);
     padding: 14px;
     z-index: 1000;
 }

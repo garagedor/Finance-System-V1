@@ -21,7 +21,7 @@ export default function LocationBarChart({ data }: { data: Array<{ _id?: string;
             borderRadius: '12px',
             background: '#1a2236',
             border: '1px solid rgba(255,255,255,0.1)',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.6)',
+            boxShadow: 'var(--ds-elev-3)',
             fontSize: '13px',
             fontWeight: 600,
             color: '#f1f5f9',

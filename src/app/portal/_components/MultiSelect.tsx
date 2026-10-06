@@ -58,7 +58,7 @@ export default function MultiSelect({
       {open && (
         <div
           className="portal-card"
-          style={{ position: "absolute", zIndex: 60, top: "calc(100% + 4px)", left: 0, minWidth: "100%", width: "max-content", maxWidth: 280, maxHeight: 280, overflowY: "auto", padding: 6, boxShadow: "0 10px 30px rgba(0,0,0,0.4)" }}
+          style={{ position: "absolute", zIndex: 60, top: "calc(100% + 4px)", left: 0, minWidth: "100%", width: "max-content", maxWidth: 280, maxHeight: 280, overflowY: "auto", padding: 6, boxShadow: "var(--ds-elev-2)" }}
         >
           {sel.length > 0 && (
             <button

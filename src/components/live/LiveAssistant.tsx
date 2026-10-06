@@ -565,7 +565,7 @@ export default function LiveAssistant() {
             overflow: "hidden",
             background: "var(--ds-surface-1)",
             border: "1px solid var(--ds-line-strong)",
-            boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
+            boxShadow: "var(--ds-elev-3)",
           }}
         >
           {/* Header */}
@@ -734,7 +734,7 @@ export default function LiveAssistant() {
             fontSize: 15,
             lineHeight: 1.45,
             textAlign: "center",
-            boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+            boxShadow: "var(--ds-elev-3)",
             animation: reduceMotion ? undefined : "aiCaptionIn 0.25s ease",
           }}
         >

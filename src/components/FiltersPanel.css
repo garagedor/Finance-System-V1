@@ -2,7 +2,7 @@
     background: var(--ds-surface-1);
     border-radius: 16px;
     border: 1px solid var(--ds-line);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--ds-elev-2);
     padding: 20px;
     display: flex;
     gap: 14px;
@@ -12,7 +12,7 @@
 }
 
 .filters-panel:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--ds-elev-3);
 }
 
 /* Horizontal layout */
@@ -113,7 +113,7 @@
 
 /* Custom dropdown arrow */
 .filter-field select {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-image: var(--ds-select-arrow);
     background-position: right 0.75rem center;
     background-repeat: no-repeat;
     background-size: 1.25em 1.25em;

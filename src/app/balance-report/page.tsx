@@ -1302,7 +1302,7 @@ export default function BalanceReportPage() {
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
-              boxShadow: '0 18px 60px rgba(0,0,0,0.55)',
+              boxShadow: 'var(--ds-elev-3)',
             }}
           >
             <div

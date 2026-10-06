@@ -70,7 +70,7 @@
   background: var(--ds-surface-1);
   border: 1px solid var(--ds-line-strong);
   border-radius: 12px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.04);
+  box-shadow: var(--ds-elev-3), 0 0 0 1px var(--ds-line);
   max-height: 320px;
   overflow: hidden;
   z-index: 1001;

@@ -979,7 +979,7 @@ export default function ReportPage() {
           border: 1px solid var(--ds-line);
           border-radius: 14px;
           padding: 0;
-          box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+          box-shadow: var(--ds-elev-2);
           overflow: hidden;
         }
 

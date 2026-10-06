@@ -131,7 +131,7 @@ export default function EditJobModal({
           width: '100%', maxWidth: 640,
           background: 'var(--ds-surface-1)', border: '1px solid var(--ds-line-strong)',
           borderRadius: 12, padding: 20,
-          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.5)',
+          boxShadow: 'var(--ds-elev-3)',
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>

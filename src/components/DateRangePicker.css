@@ -56,7 +56,7 @@
     font-family: inherit;
     border-radius: 14px;
     border: 1px solid var(--ds-line-strong);
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.04);
+    box-shadow: var(--ds-elev-3), 0 0 0 1px var(--ds-line);
     overflow: hidden;
     background: var(--ds-surface-1);
 }

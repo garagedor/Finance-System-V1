@@ -207,6 +207,12 @@
   --ds-scrim: rgba(2, 6, 23, 0.78);
   --ds-on-scrim: #EDF0F4;
 
+  /* A <select>'s chevron is a background-image, so unlike a mask it cannot
+     reference a colour token — the hue is baked into the data URI. Shipping
+     the whole URL as a token is the only way to let it follow the theme.
+     The stroke is --ds-ink-2 in each theme. */
+  --ds-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23A6B0BE' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E");
+
   color-scheme: dark;
 }
 
@@ -308,6 +314,8 @@
   --ds-scrim: rgba(2, 6, 23, 0.66);
   --ds-on-scrim: #EDF0F4;
 
+  --ds-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%234C5866' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E");
+
   color-scheme: light;
 }
 
@@ -341,6 +349,7 @@
     --ds-elev-1:0 1px 3px rgba(15,18,24,.06); --ds-elev-2:0 6px 20px rgba(15,18,24,.08);
     --ds-elev-3:0 20px 48px rgba(15,18,24,.12);
     --ds-scrim:rgba(2,6,23,.66); --ds-on-scrim:#EDF0F4;
+    --ds-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%234C5866' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E");
     color-scheme: light;
   }
 }
