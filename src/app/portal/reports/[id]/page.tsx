@@ -201,8 +201,8 @@ export default async function ReportDetail({
           <pre
             style={{
               padding: 16,
-              background: "#0a0f1c",
-              color: "#cbd5e1",
+              background: "var(--ds-surface-2)",
+              color: "var(--ds-ink)",
               fontSize: 11.5,
               overflowX: "auto",
               maxHeight: 560,

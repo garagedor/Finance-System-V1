@@ -253,7 +253,7 @@ export default function ImportHistoricalButton() {
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 100, paddingTop: 40, paddingBottom: 40, overflowY: "auto",
           }}
@@ -263,7 +263,7 @@ export default function ImportHistoricalButton() {
         >
           <div
             style={{
-              background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
+              background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14,
               padding: 24, width: "min(720px, 95vw)",
             }}
             onClick={(e) => e.stopPropagation()}
@@ -278,7 +278,7 @@ export default function ImportHistoricalButton() {
               )}
             </div>
 
-            <p style={{ fontSize: 13, color: "#94a3b8", marginTop: 0, marginBottom: 18, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: "var(--ds-ink-2)", marginTop: 0, marginBottom: 18, lineHeight: 1.5 }}>
               Iterates Monday-Sunday weeks in the range. For each week, scans the CRM for active techs and
               locations, then saves a Tech Report and Area Manager Report per active subject — same data
               shape as the CRM&apos;s balance-report screen.
@@ -290,7 +290,7 @@ export default function ImportHistoricalButton() {
                   <label className="portal-label">From</label>
                   <input type="date" className="portal-input" required disabled={running}
                     value={from} onChange={(e) => setFrom(e.target.value)} />
-                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+                  <div style={{ fontSize: 11, color: "var(--ds-ink-2)", marginTop: 4 }}>
                     Snapped to start of week (Monday)
                   </div>
                 </div>
@@ -319,18 +319,18 @@ export default function ImportHistoricalButton() {
               {(running || progress.weeksTotal > 0) && (
                 <div
                   style={{
-                    background: "rgba(99, 102, 241, 0.06)",
-                    border: "1px solid rgba(99, 102, 241, 0.2)",
+                    background: "var(--ds-info-soft)",
+                    border: "1px solid var(--ds-info-line)",
                     borderRadius: 10,
                     padding: 14,
                     marginBottom: 16,
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6 }}>
-                    <span style={{ color: "#cbd5e1", fontWeight: 600 }}>
+                    <span style={{ color: "var(--ds-ink)", fontWeight: 600 }}>
                       Week {progress.weeksDone} / {progress.weeksTotal} ({pctDone}%)
                     </span>
-                    <span className="mono" style={{ color: "#94a3b8" }}>{progress.currentWeek}</span>
+                    <span className="mono" style={{ color: "var(--ds-ink-2)" }}>{progress.currentWeek}</span>
                   </div>
                   <div className="portal-bar" style={{ height: 8 }}>
                     <div
@@ -339,17 +339,17 @@ export default function ImportHistoricalButton() {
                     />
                   </div>
                   <div style={{ display: "flex", gap: 16, marginTop: 12, fontSize: 12, flexWrap: "wrap" }}>
-                    <span style={{ color: "#10b981" }}>
+                    <span style={{ color: "var(--ds-ok-text)" }}>
                       <strong>+{progress.techReportsCreated}</strong> tech reports
                     </span>
-                    <span style={{ color: "#10b981" }}>
+                    <span style={{ color: "var(--ds-ok-text)" }}>
                       <strong>+{progress.amReportsCreated}</strong> AM reports
                     </span>
-                    <span style={{ color: "#94a3b8" }}>
+                    <span style={{ color: "var(--ds-ink-2)" }}>
                       <strong>{progress.skipped}</strong> skipped
                     </span>
                     {progress.errors > 0 && (
-                      <span style={{ color: "#f87171" }}>
+                      <span style={{ color: "var(--ds-crit-text)" }}>
                         <strong>{progress.errors}</strong> errors
                       </span>
                     )}
@@ -357,17 +357,17 @@ export default function ImportHistoricalButton() {
 
                   {progress.log.length > 0 && (
                     <details style={{ marginTop: 12 }}>
-                      <summary style={{ fontSize: 11, color: "#64748b", cursor: "pointer" }}>
+                      <summary style={{ fontSize: 11, color: "var(--ds-ink-2)", cursor: "pointer" }}>
                         Activity log ({progress.log.length})
                       </summary>
                       <pre
                         style={{
                           marginTop: 8,
                           padding: 10,
-                          background: "#0a0f1c",
+                          background: "var(--ds-surface-2)",
                           borderRadius: 6,
                           fontSize: 10.5,
-                          color: "#cbd5e1",
+                          color: "var(--ds-ink)",
                           maxHeight: 220,
                           overflowY: "auto",
                           fontFamily: "ui-monospace, SF Mono, Menlo, monospace",
