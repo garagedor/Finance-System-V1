@@ -9,7 +9,11 @@ const uri = env.split("\n").find((l) => l.startsWith("MONGODB_URI=")).slice(12).
 const c = new MongoClient(uri); await c.connect();
 const roles = await c.db("ag").collection("finance_role").find({}).toArray();
 const perms = [...new Set(roles.flatMap((r) => r.permissions ?? []))];
-const sec = new TextEncoder().encode(process.env.JWT_SECRET ?? "super-secret-key-for-development");
+if (!process.env.JWT_SECRET) {
+  console.error("JWT_SECRET is not set. This script signs a session token and has no fallback.");
+  process.exit(1);
+}
+const sec = new TextEncoder().encode(process.env.JWT_SECRET);
 const tok = await new SignJWT({ _id: "perf-admin", name: "Perf Admin", type: "admin", permissions: perms, active: true })
   .setProtectedHeader({ alg: "HS256" }).setIssuedAt().setExpirationTime("2h").sign(sec);
 async function conns() { try { const s = await c.db("admin").command({ serverStatus: 1 }); return s.connections?.current; } catch (e) { return `n/a (${e.codeName || e.message})`; } }
