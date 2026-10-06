@@ -13,6 +13,7 @@ import type { User, UserType } from "@/types/user";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, getDb } from "./finance-db";
 import { ensureRbacReady } from "./rbac-seed";
 import { userIdFilter } from "./user-id";
+import { checkSessionLive } from "./session-version";
 import { jwtSecret } from "./jwt-secret";
 
 // Resolved lazily and never defaulted — see lib/jwt-secret.ts. A missing
@@ -56,6 +57,25 @@ export async function readSession(): Promise<RbacSession | null> {
     if (!claims.name) return null;
     const type = (claims.type ?? "simple") as UserType;
 
+    /* ── Enforcement (Auth Integration Gate step 4) ──
+       A signature proves this token was issued. It does not prove the session
+       behind it still exists, and from here that is checked rather than
+       assumed: the user must exist, be enabled, and carry exactly the version
+       stamped into the token.
+
+       Strict by decision. A token with no `session_version` claim reads as 0
+       and is rejected unless the stored value is also 0 — there is no branch
+       that treats a missing version as acceptable, because such a branch only
+       ever matters during the incident it would let through.
+
+       `return null` because every caller already handles a null session as
+       signed out; no route changed for this. */
+    const presented = typeof claims.session_version === "number" ? claims.session_version : 0;
+    if (claims._id) {
+      const verdict = await checkSessionLive(claims._id, presented);
+      if (!verdict.live) return null;
+    }
+
     // Permissions in JWT → done. Otherwise legacy token: compute from DB.
     let permissions = Array.isArray(claims.permissions) ? claims.permissions : undefined;
     if (!permissions) {
@@ -73,10 +93,7 @@ export async function readSession(): Promise<RbacSession | null> {
       roleId: claims.role_id,
       permissions,
       active: claims.active ?? true,
-      // Read, carried, and deliberately NOT yet compared against the stored
-      // value. Enforcement is the step that signs people out and is approved
-      // separately — see docs/AUTH-INTEGRATION-GATE-PLAN.md step 4.
-      sessionVersion: typeof claims.session_version === "number" ? claims.session_version : 0,
+      sessionVersion: presented,
     };
   } catch {
     return null;
