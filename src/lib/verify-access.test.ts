@@ -12,11 +12,12 @@ import { clientHasPermission } from "./permissions-client.ts";
 import { hasPermission } from "./rbac.ts";
 import type { RbacSession } from "./rbac.ts";
 import { VERIFY_READ, VERIFY_WRITE } from "./verify-auth.ts";
-import { visibleGroups, CRM_NAV } from "../components/shell/nav-config.ts";
 
 const LIB = import.meta.dirname;
 const SEED = readFileSync(join(LIB, "rbac-seed.ts"), "utf8");
 const PAGE = readFileSync(join(LIB, "..", "app", "verify-reports", "page.tsx"), "utf8");
+const LAYOUT = readFileSync(join(LIB, "..", "app", "layout.tsx"), "utf8");
+const SHELL = readFileSync(join(LIB, "..", "components", "AuthShell.tsx"), "utf8");
 
 /** The permissions the ADMIN role carries: everything. */
 const adminUser = { permissions: [VERIFY_READ, VERIFY_WRITE] };
@@ -50,17 +51,24 @@ test("the page gates on the permission, not on an account type", () => {
 
 /* ── Navigation ───────────────────────────────────────────────────────── */
 
-function verifyLinkVisible(permissions: string[], isAdmin: boolean): boolean {
-  return visibleGroups(CRM_NAV, permissions, isAdmin)
-    .some((g) => g.items.some((i) => i.href === "/verify-reports"));
-}
+// The nav list is declared inline in a server component that pulls in next/font,
+// so these read the declaration rather than importing it.
 
-test("a location manager does not receive the Verify navigation entry", () => {
-  assert.equal(verifyLinkVisible(lmUser.permissions, false), false);
+test("the Verify nav entry carries the same permission the page gates on", () => {
+  const entry = /\{[^{}]*href:\s*"\/verify-reports"[^{}]*\}/.exec(LAYOUT);
+  assert.ok(entry, "the nav list must still declare /verify-reports");
+  assert.ok(
+    entry[0].includes('permission: "crm:verify_reports:view"'),
+    "the link must be gated on the permission, so nobody is shown a page they will be refused",
+  );
 });
 
-test("an admin still receives it", () => {
-  assert.equal(verifyLinkVisible(adminUser.permissions, false), true);
+test("the shell honours that key, and lets an admin through", () => {
+  const code = SHELL.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  assert.ok(
+    /!link\.permission\s*\|\|\s*user\.type === 'admin'\s*\|\|\s*\(user\.permissions \?\? \[\]\)\.includes\(link\.permission\)/.test(code),
+    "AuthShell must still filter nav links on link.permission",
+  );
 });
 
 /* ── API ──────────────────────────────────────────────────────────────── */
