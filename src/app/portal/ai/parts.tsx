@@ -7,10 +7,10 @@ export function EngineBanner() {
       style={{
         padding: "12px 16px",
         marginBottom: 16,
-        borderColor: "rgba(245,158,11,0.35)",
-        background: "rgba(245,158,11,0.08)",
+        borderColor: "var(--ds-warn-line)",
+        background: "var(--ds-warn-soft)",
         fontSize: 13,
-        color: "#fcd9a3",
+        color: "var(--ds-warn-text)",
       }}
     >
       <strong>🔌 Engine not connected.</strong> Add <code className="mono">ANTHROPIC_API_KEY</code> to{" "}

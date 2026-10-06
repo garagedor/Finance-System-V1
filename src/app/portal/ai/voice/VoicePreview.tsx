@@ -99,7 +99,7 @@ export default function VoicePreview({
       style={{
         cursor: !voiceId || disabled ? "not-allowed" : "pointer",
         opacity: !voiceId || disabled ? 0.5 : 1,
-        color: state === "error" ? "#fca5a5" : state === "playing" ? "#c7d2fe" : undefined,
+        color: state === "error" ? "var(--ds-crit-text)" : state === "playing" ? "var(--ds-info-text)" : undefined,
         whiteSpace: "nowrap",
       }}
     >
