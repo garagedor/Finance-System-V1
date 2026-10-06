@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import type { User, AuthUser } from '../../../types/user';
 import { computeEffectivePermissions, signSessionToken } from '@/lib/rbac';
 import { ensureRbacReady } from '@/lib/rbac-seed';
+import { sessionVersionOf } from "@/lib/session-version";
 
 const DB_NAME = 'ag';
 const USERS_COLLECTION = 'users';
@@ -200,6 +201,9 @@ export async function POST(req: NextRequest) {
             role_id: user.role_id,
             permissions,
             active: user.active ?? true,
+            // Stamped so a later bump can invalidate this token. Absent on the
+            // user record means 0 — no migration writes it to anyone.
+            session_version: sessionVersionOf(user),
         });
 
         const response = NextResponse.json(authUser);

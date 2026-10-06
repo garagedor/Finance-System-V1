@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { coll, FINANCE_COLLECTIONS, newId, ensureFinanceIndexes } from "@/lib/finance-db";
 import { requirePermission } from "@/lib/rbac";
+import { bumpRoleHolders, roleEditInvalidates } from "@/lib/session-version";
 import {
   ALL_PERMISSIONS,
   PERMISSION_BY_KEY,
@@ -151,12 +152,22 @@ export async function PATCH(req: NextRequest) {
     set.updated_by = session.name;
 
     await rolesColl.updateOne({ _id: body._id }, { $set: set });
+
+    // The case most easily missed: without this, removing a permission from a
+    // role changes nothing for anyone already signed in, because their token
+    // carries the old list. One updateMany over the role's holders.
+    let sessionsInvalidated = 0;
+    if (roleEditInvalidates(existing, set)) {
+      sessionsInvalidated = await bumpRoleHolders(body._id, "role permissions changed");
+    }
+
     const after = await rolesColl.findOne({ _id: body._id });
 
     // Summarise change
     const added = (set.permissions ?? existing.permissions).filter((p) => !existing.permissions.includes(p));
     const removed = existing.permissions.filter((p) => !(set.permissions ?? existing.permissions).includes(p));
     const summary = [
+      sessionsInvalidated > 0 && `${sessionsInvalidated} session(s) invalidated`,
       set.name && `renamed → ${set.name}`,
       added.length && `+${added.length} perm`,
       removed.length && `−${removed.length} perm`,
