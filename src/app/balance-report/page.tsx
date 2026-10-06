@@ -125,11 +125,16 @@ const renderApprovalsCell = (job: BalanceRow): ReactNode => {
   const names = job.approvals.map((a) => a.name).join(', ');
   const hasAdmin = job.approvals.some((a) => a.role === 'admin');
   const hasOffice = job.approvals.some((a) => a.role === 'office');
+  // Approval chips name the approvers in the cell text, so colour carries no
+  // information here. Admin vs Office is actor/category, not status, so the
+  // three states share one neutral hue and differ only in text emphasis.
+  // Mirrors .approval-text / .approval-admin / .approval-office in
+  // components/EntityTable/EntityTablePage.css, which this route does not load.
   const style = hasAdmin
-    ? { background: 'rgba(16,185,129,0.15)', color: '#34d399' }
+    ? { background: 'var(--ds-neutral-wash)', color: 'var(--ds-ink)' }
     : hasOffice
-      ? { background: 'rgba(245,158,11,0.15)', color: '#fbbf24' }
-      : { background: 'rgba(255,255,255,0.08)', color: '#94a3b8' };
+      ? { background: 'var(--ds-neutral-wash)', color: 'var(--ds-neutral-text)' }
+      : { background: 'var(--ds-surface-3)', color: 'var(--ds-ink-2)' };
   return (
     <span title={names} style={{ ...style, padding: '2px 6px', borderRadius: '8px', fontSize: '12px', fontWeight: 500, whiteSpace: 'nowrap', display: 'inline-block' }}>
       {names}
@@ -203,22 +208,21 @@ const COLUMN_GROUPS: ColGroup[] = [
     cols: [
       {
         key: 'balance', label: 'Balance',
-        renderBody: (j) => <td key="balance" style={{ color: j.balance > 0 ? '#34d399' : j.balance < 0 ? '#f87171' : undefined, fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance)}</td>,
-        renderTotal: (t) => <td key="balance" style={{ color: t.balance > 0 ? '#34d399' : t.balance < 0 ? '#f87171' : undefined }}>{formatCurrency(t.balance)}</td>,
+        renderBody: (j) => <td key="balance" style={{ fontWeight: j.balance !== 0 ? 600 : undefined }}>{formatCurrency(j.balance)}</td>,
+        renderTotal: (t) => <td key="balance">{formatCurrency(t.balance)}</td>,
       },
       {
         key: 'balance-with-tips', label: 'Balance + Tips',
         renderBody: (j) => (
           <td key="balance-with-tips"
               title={`Includes Net Tip of ${formatCurrency(j.tipsTotal)} owed to the technician`}
-              style={{ color: j.balanceWithTips > 0 ? '#34d399' : j.balanceWithTips < 0 ? '#f87171' : undefined, fontWeight: j.balanceWithTips !== 0 ? 600 : undefined }}>
+              style={{ fontWeight: j.balanceWithTips !== 0 ? 600 : undefined }}>
             {formatCurrency(j.balanceWithTips)}
           </td>
         ),
         renderTotal: (t) => (
           <td key="balance-with-tips"
-              title={`Includes Net Tips of ${formatCurrency(t.tipsTotal)} owed to the technician`}
-              style={{ color: t.balanceWithTips > 0 ? '#34d399' : t.balanceWithTips < 0 ? '#f87171' : undefined }}>
+              title={`Includes Net Tips of ${formatCurrency(t.tipsTotal)} owed to the technician`}>
             {formatCurrency(t.balanceWithTips)}
           </td>
         ),
@@ -822,7 +826,7 @@ export default function BalanceReportPage() {
               onClick={handlePreviewPdf}
               disabled={loading || pdfLoading || closedRows.length === 0 || !appliedTech}
               title="Preview the official PDF in a modal before downloading"
-              style={{ background: 'rgba(255,255,255,0.04)', color: '#cbd5e1', borderColor: 'rgba(255,255,255,0.12)' }}
+              style={{ background: 'var(--ds-surface-2)', color: 'var(--ds-ink-2)', borderColor: 'var(--ds-line-strong)' }}
             >
               <FiEye size={14} />
               {pdfLoading && !pdfPreviewUrl ? 'Loading…' : 'Preview PDF'}
@@ -940,7 +944,7 @@ export default function BalanceReportPage() {
               className="bp-pill"
               aria-haspopup="menu"
               aria-expanded={kpiOpen}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0' }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', border: '1px solid var(--ds-line-strong)', background: 'var(--ds-surface-2)', color: 'var(--ds-ink)' }}
             >
               <span>Metrics: <strong>{PRESET_TAB_LABELS[kpiPreset]}</strong></span>
               <span style={{ opacity: 0.6 }}>· {visibleKpiCount}/{ALL_KPI_KEYS.length}</span>
@@ -1091,14 +1095,7 @@ export default function BalanceReportPage() {
                     were dropped to make the report easier to read. */}
                 <li>
                   <span className="bp-snap-label bp-snap-strong">Balance</span>
-                  <span
-                    className="bp-snap-value bp-snap-strong"
-                    style={{
-                      color:
-                        closedTotals.balance > 0 ? '#34d399' :
-                        closedTotals.balance < 0 ? '#f87171' : undefined,
-                    }}
-                  >
+                  <span className="bp-snap-value bp-snap-strong">
                     {formatCurrency(closedTotals.balance)}
                   </span>
                 </li>
@@ -1117,11 +1114,6 @@ export default function BalanceReportPage() {
                   </span>
                   <span
                     className="bp-snap-value bp-snap-strong"
-                    style={{
-                      color:
-                        closedTotals.balanceWithTips > 0 ? '#34d399' :
-                        closedTotals.balanceWithTips < 0 ? '#f87171' : undefined,
-                    }}
                     title={`Includes Net Tips of ${formatCurrency(closedTotals.tipsTotal)} owed to the technician`}
                   >
                     {formatCurrency(closedTotals.balanceWithTips)}
@@ -1148,7 +1140,7 @@ export default function BalanceReportPage() {
                 className="bp-pill"
                 aria-haspopup="menu"
                 aria-expanded={columnsOpen}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)', color: '#e2e8f0' }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', border: '1px solid var(--ds-line-strong)', background: 'var(--ds-surface-2)', color: 'var(--ds-ink)' }}
               >
                 <span>View: <strong>{PRESET_LABELS[columnsPreset]}</strong></span>
                 <span style={{ opacity: 0.6 }}>· {totalVisibleCount}/{ALL_COL_KEYS.length}</span>
@@ -1291,7 +1283,7 @@ export default function BalanceReportPage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(2, 6, 23, 0.78)',
+            background: 'var(--ds-scrim)',
             backdropFilter: 'blur(4px)',
             zIndex: 10000,
             display: 'flex',
@@ -1304,8 +1296,8 @@ export default function BalanceReportPage() {
             onClick={(e) => e.stopPropagation()}
             style={{
               flex: 1,
-              background: '#0a0f1c',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--ds-bg)',
+              border: '1px solid var(--ds-line-strong)',
               borderRadius: 10,
               display: 'flex',
               flexDirection: 'column',
@@ -1319,15 +1311,15 @@ export default function BalanceReportPage() {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px 18px',
-                background: '#111827',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                background: 'var(--ds-surface-1)',
+                borderBottom: '1px solid var(--ds-line)',
               }}
             >
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: 11, color: '#818cf8', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700 }}>
+                <span style={{ fontSize: 11, color: 'var(--ds-crm-2)', textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700 }}>
                   PDF Preview
                 </span>
-                <span style={{ fontSize: 14, color: '#f1f5f9', fontWeight: 600, marginTop: 2 }}>
+                <span style={{ fontSize: 14, color: 'var(--ds-ink)', fontWeight: 600, marginTop: 2 }}>
                   {mode === 'tech' ? 'Tech' : 'Location'} Report — {titleSubject || '—'}
                 </span>
               </div>
@@ -1346,7 +1338,7 @@ export default function BalanceReportPage() {
                   onClick={closePdfPreview}
                   className="bp-pdf-btn"
                   title="Close preview (Esc)"
-                  style={{ background: 'rgba(255,255,255,0.04)', color: '#cbd5e1', borderColor: 'rgba(255,255,255,0.12)' }}
+                  style={{ background: 'var(--ds-surface-2)', color: 'var(--ds-ink-2)', borderColor: 'var(--ds-line-strong)' }}
                 >
                   <FiX size={14} />
                   Close
@@ -1356,7 +1348,7 @@ export default function BalanceReportPage() {
             <iframe
               title="PDF preview"
               src={pdfPreviewUrl}
-              style={{ flex: 1, width: '100%', border: 'none', background: '#0a0f1c' }}
+              style={{ flex: 1, width: '100%', border: 'none', background: 'var(--ds-bg)' }}
             />
           </div>
         </div>
@@ -1369,13 +1361,20 @@ export default function BalanceReportPage() {
 
 type BpAccent = 'indigo' | 'cyan' | 'emerald' | 'violet' | 'red' | 'amber';
 
-const bpAccents: Record<BpAccent, { bg: string; border: string; text: string; glow: string }> = {
-  indigo:  { bg: 'rgba(99,102,241,0.10)',  border: 'rgba(99,102,241,0.25)',  text: '#a5b4fc', glow: 'rgba(99,102,241,0.12)' },
-  cyan:    { bg: 'rgba(6,182,212,0.10)',   border: 'rgba(6,182,212,0.25)',   text: '#22d3ee', glow: 'rgba(6,182,212,0.10)'  },
-  emerald: { bg: 'rgba(16,185,129,0.10)',  border: 'rgba(16,185,129,0.25)',  text: '#34d399', glow: 'rgba(16,185,129,0.10)' },
-  violet:  { bg: 'rgba(139,92,246,0.10)',  border: 'rgba(139,92,246,0.25)',  text: '#c4b5fd', glow: 'rgba(139,92,246,0.10)' },
-  red:     { bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.25)',   text: '#f87171', glow: 'rgba(239,68,68,0.10)'  },
-  amber:   { bg: 'rgba(245,158,11,0.10)',  border: 'rgba(245,158,11,0.25)',  text: '#fbbf24', glow: 'rgba(245,158,11,0.10)' },
+/* KPI cards share one restrained CRM accent. The accent prop is kept so call
+   sites and ordering are untouched, but a card's position no longer picks a
+   hue — positional decoration is not a categorical palette. (Only indigo,
+   cyan, emerald and violet have call sites; red and amber are unreachable but
+   stay because Record<BpAccent, …> requires every key.) */
+const BP_KPI_ACCENT = {
+  bg:     'var(--ds-crm-wash)',
+  border: 'var(--ds-crm-line)',
+  text:   'var(--ds-crm-text)',
+  glow:   'var(--ds-crm-wash)',
+};
+const bpAccents: Record<BpAccent, typeof BP_KPI_ACCENT> = {
+  indigo: BP_KPI_ACCENT, cyan: BP_KPI_ACCENT, emerald: BP_KPI_ACCENT,
+  violet: BP_KPI_ACCENT, red:  BP_KPI_ACCENT, amber:   BP_KPI_ACCENT,
 };
 
 function BpKpi({ label, value, icon, accent }: { label: string; value: string; icon: ReactNode; accent: BpAccent }) {
