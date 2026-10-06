@@ -10,10 +10,15 @@
  * stamps it into every token it issues. Bumping it makes every token already
  * out there stale.
  *
- * This module writes the number and decides when. **Nothing enforces it yet** —
- * see docs/AUTH-INTEGRATION-GATE-PLAN.md step 4, which is the step that signs
- * people out and needs its own approval. Until then this is inert: the claim is
- * written and read, and no request is refused because of it.
+ * This module writes the number, decides when, and — since step 4 — answers
+ * whether a presented token is still live.
+ *
+ * Enforcement is strict by decision: a token must carry the exact current
+ * version of a user who exists and is enabled. There is no branch where a
+ * missing version is treated as acceptable. Such a branch is indistinguishable
+ * from the real thing on every normal request; the only moment it matters is
+ * an old token presented after a user has been disabled, which is precisely
+ * the moment this exists for.
  */
 import "server-only";
 import { getDb } from "./finance-db";
@@ -103,4 +108,43 @@ export function roleEditInvalidates(before: RoleRecord, after: Partial<RoleRecor
   const a = [...before.permissions].sort().join("|");
   const b = [...after.permissions].sort().join("|");
   return a !== b;
+}
+
+
+/* ── Enforcement ───────────────────────────────────────────────────────── */
+
+export type SessionVerdict =
+  | { live: true; version: number }
+  | { live: false; reason: "unknown_user" | "disabled" | "version_mismatch" };
+
+/**
+ * Is the session behind this token still live?
+ *
+ * Answers from the canonical user record, not from the token. That is the
+ * whole point: a signature proves the token was issued, and nothing more. The
+ * cost is an indexed read on the auth path, accepted deliberately — token
+ * validity is supposed to depend on current user state.
+ *
+ * Fails closed on every path. An unreadable user is an invalid session, not a
+ * valid one.
+ */
+export async function checkSessionLive(
+  userId: string,
+  presentedVersion: number,
+): Promise<SessionVerdict> {
+  const users = (await getDb()).collection<User>(USERS);
+  const user = await users.findOne(userIdFilter<User>(userId), {
+    // Only what the decision needs. Nothing else leaves the database.
+    projection: { session_version: 1, active: 1 },
+  });
+
+  if (!user) return { live: false, reason: "unknown_user" };
+  if (user.active === false) return { live: false, reason: "disabled" };
+
+  const stored = sessionVersionOf(user);
+  // Exact match. A higher presented version is as wrong as a lower one — it
+  // cannot have been issued by this authority, so it is a forgery or a bug.
+  if (presentedVersion !== stored) return { live: false, reason: "version_mismatch" };
+
+  return { live: true, version: stored };
 }
