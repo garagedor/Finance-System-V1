@@ -598,9 +598,9 @@ export function RowEditModal<T extends Record<string, any>>({
         }
 
         .toggle-switch input:checked + .toggle-slider::before {
-          background: white;
+          background: var(--ds-on-info);
           transform: translateX(18px);
-          box-shadow: 0 2px 6px rgba(99, 102, 241, 0.5);
+          box-shadow: 0 2px 6px var(--ds-info-line);
         }
 
         .modal-footer {
@@ -650,12 +650,12 @@ export function RowEditModal<T extends Record<string, any>>({
         .modal-btn-save {
           background: var(--ds-info);
           color: var(--ds-on-info);
-          box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+          box-shadow: 0 4px 12px var(--ds-info-line);
         }
 
         .modal-btn-save:hover:not(:disabled) {
           transform: translateY(-1px);
-          box-shadow: 0 6px 18px rgba(99, 102, 241, 0.5);
+          box-shadow: 0 6px 18px var(--ds-info-line);
         }
 
         .modal-btn-delete {

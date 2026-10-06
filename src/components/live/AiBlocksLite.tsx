@@ -59,7 +59,7 @@ export default function AiBlocksLite({ blocks }: { blocks: Block[] }) {
           return (
             <div key={i} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {b.items.map((r, j) => (
-                <div key={j} style={{ borderLeft: "2px solid rgba(99,102,241,0.5)", paddingLeft: 9 }}>
+                <div key={j} style={{ borderLeft: "2px solid var(--ds-line-strong)", paddingLeft: 9 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ds-ink)" }}>💡 {r.title}</div>
                   <div style={{ fontSize: 11.5, color: "var(--ds-ink-2)" }}>{r.detail}</div>
                 </div>
