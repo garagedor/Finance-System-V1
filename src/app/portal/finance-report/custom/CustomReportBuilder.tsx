@@ -162,7 +162,17 @@ export default function CustomReportBuilder() {
       if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `HTTP ${r.status}`); }
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
-      window.open(url, "_blank", "noopener");
+      // Download with the server's configured filename (the editable pattern).
+      // A blob preview tab would ignore Content-Disposition, so we name it here.
+      const cd = r.headers.get("content-disposition") || "";
+      const m = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(cd);
+      const name = m ? decodeURIComponent(m[1].replace(/"$/, "")) : "Custom_Report.pdf";
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) { setErr(e instanceof Error ? e.message : "Failed to export"); } finally { setPosting(false); }
   }

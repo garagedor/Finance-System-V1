@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef, type ReactNode } from 'react';
 import { formatCurrency, formatDisplayDate } from '../utils/jobUtils';
+import { buildReportFilename, REPORT_FILENAME_DEFAULTS } from '@/lib/report-filename-format';
 import { Technician, Location } from '@/types/job';
 import './styles.css';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
@@ -670,15 +671,32 @@ export default function BalanceReportPage() {
   const titleSubject = mode === 'tech' ? techNameForHeader : locationNameForHeader;
 
   const [pdfLoading, setPdfLoading] = useState(false);
+  // Editable download-filename pattern (managed in Portal → Settings). Falls
+  // back to the default if the fetch fails so a download is never blocked.
+  const [filenamePattern, setFilenamePattern] = useState<string>(REPORT_FILENAME_DEFAULTS.balance);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/portal/settings/report-filenames')
+      .then((r) => r.json())
+      .then((j) => { if (alive && j?.patterns?.balance) setFilenamePattern(j.patterns.balance); })
+      .catch(() => { /* keep default */ });
+    return () => { alive = false; };
+  }, []);
   // Preview-modal state. `pdfPreviewUrl` is a blob URL; while it's set
   // the modal is open. We revoke it on close so the in-memory blob is
   // freed (~one PDF can be several hundred KB).
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
-  const pdfFilename = () => {
-    const safeSubject = (titleSubject || 'Report').replace(/[^A-Za-z0-9_\- ]/g, '').trim() || 'Report';
-    return `${mode === 'tech' ? 'Tech' : 'Location'}_Report_${safeSubject}_${appliedStart}_to_${appliedEnd}.pdf`;
-  };
+  const pdfFilename = () =>
+    buildReportFilename(filenamePattern, {
+      mode: mode === 'tech' ? 'Tech' : 'Location',
+      subject: titleSubject,
+      tech: techNameForHeader,
+      location: locationNameForHeader,
+      start: appliedStart,
+      end: appliedEnd,
+      today: new Date().toISOString().slice(0, 10),
+    });
 
   // Shared blob fetcher — used by both Download and Preview so the network
   // round-trip / error handling lives in one place. Returns a Blob or null

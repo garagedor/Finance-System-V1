@@ -4,6 +4,7 @@ import { PageHeader, StatPill, CardShell, Empty, StatusPill } from "../_componen
 import { DbDownBanner } from "../_components/DbDownBanner";
 import RowActions from "../_components/RowActions";
 import PayoutProfileForm from "./PayoutProfileForm";
+import ReportFilenameSettingsForm from "./ReportFilenameSettingsForm";
 
 export const dynamic = "force-dynamic";
 
@@ -94,6 +95,13 @@ export default async function SettingsPage() {
             </tbody>
           </table>
         )}
+      </CardShell>
+
+      <CardShell
+        title="Report download filenames"
+        subtitle="Customize how each downloaded report PDF is named"
+      >
+        <ReportFilenameSettingsForm />
       </CardShell>
 
       <CardShell title="Role access">

@@ -114,6 +114,8 @@ export const FINANCE_COLLECTIONS = {
   scanpayDispute:   "finance_scanpay_dispute",     // raw ScanPay disputes inbox (new → matched → posted/ignored)
   scanpayRefund:    "finance_scanpay_refund",      // raw ScanPay refunds inbox (amount/date entered by human)
   scanpayWebhookLog:"finance_scanpay_webhook_log", // raw ScanPay webhook events (audit + payload discovery)
+  // ─── App settings (global singletons) ───
+  reportFilenameSettings: "finance_report_filename_settings", // editable download-filename patterns per report
   // ─── RBAC + audit ───
   role:             "finance_role",                // role definitions
   auditLog:         "finance_audit",               // unified audit log (replaces finance_role_audit)

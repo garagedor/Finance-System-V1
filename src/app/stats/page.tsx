@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useRef } from 'react';
 import { formatCurrency } from '../utils/jobUtils';
+import { buildReportFilename, REPORT_FILENAME_DEFAULTS } from '@/lib/report-filename-format';
 import './styles.css';
 import { Technician, Location, Provider } from '@/types/job';
 import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
@@ -84,6 +85,15 @@ export default function StatsPage() {
   const [stats, setStats] = useState<StatsResponse>(emptyStats);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filenamePattern, setFilenamePattern] = useState<string>(REPORT_FILENAME_DEFAULTS.stats);
+  useEffect(() => {
+    let alive = true;
+    fetch('/api/portal/settings/report-filenames')
+      .then((r) => r.json())
+      .then((j) => { if (alive && j?.patterns?.stats) setFilenamePattern(j.patterns.stats); })
+      .catch(() => { /* keep default */ });
+    return () => { alive = false; };
+  }, []);
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(defaultEndDate);
   const [techs, setTechs] = useState<string[]>([]);
@@ -201,7 +211,12 @@ export default function StatsPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Statistics_Report_${activeFilters.startDate}_to_${activeFilters.endDate}.pdf`;
+      a.download = buildReportFilename(filenamePattern, {
+        subject: '',
+        start: activeFilters.startDate,
+        end: activeFilters.endDate,
+        today: new Date().toISOString().slice(0, 10),
+      });
       document.body.appendChild(a);
       a.click();
       a.remove();

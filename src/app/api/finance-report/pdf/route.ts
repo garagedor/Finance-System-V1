@@ -13,6 +13,8 @@ import path from "path";
 import { readPortalSession } from "@/lib/portal-auth";
 import { buildFinancialReport, SECTION_KEYS, type SectionKey } from "@/lib/financial-report";
 import { FinancialReportPdf } from "@/components/pdf/FinancialReportPdf";
+import { getReportFilenames } from "@/lib/report-filenames";
+import { buildReportFilename } from "@/lib/report-filename-format";
 
 // Force Node runtime — @react-pdf/renderer needs Node APIs (not available on Edge).
 export const runtime = "nodejs";
@@ -38,9 +40,6 @@ async function loadLogoDataUrl(): Promise<string | null> {
 
 const csv = (v: string | null): string[] =>
   (v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
-
-const safeFilename = (s: string): string =>
-  String(s || "Report").replace(/[^A-Za-z0-9_\- ]/g, "").replace(/\s+/g, "_").slice(0, 60) || "Report";
 
 function defaultRange(): { from: string; to: string } {
   const now = new Date();
@@ -79,7 +78,14 @@ export async function GET(req: NextRequest) {
     const element = createElement(FinancialReportPdf, { data, sections, title, preparedFor, logoSrc });
     const pdfBuffer = await renderToBuffer(element as never);
 
-    const filename = `Financial_Report_${safeFilename(title)}_${from}_to_${to}.pdf`;
+    const patterns = await getReportFilenames();
+    const filename = buildReportFilename(patterns.finance, {
+      subject: title,
+      preparedFor: preparedFor ?? "",
+      start: from,
+      end: to,
+      today: new Date().toISOString().slice(0, 10),
+    }, "Financial_Report");
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
