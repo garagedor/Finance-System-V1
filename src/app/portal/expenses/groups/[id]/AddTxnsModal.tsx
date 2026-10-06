@@ -133,14 +133,14 @@ export default function AddTxnsModal({
 
       {open && (
         <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+          style={{ position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 48, paddingBottom: 40, overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
-          <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 22, width: "min(760px, 96vw)" }}
+          <div style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 22, width: "min(760px, 96vw)" }}
             onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>Add transactions</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>Add transactions</h2>
               <button onClick={() => setOpen(false)} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
 
@@ -199,7 +199,7 @@ export default function AddTxnsModal({
               <button type="button" className="portal-btn" onClick={search} disabled={loading}>{loading ? "…" : "Search"}</button>
             </div>
 
-            <div style={{ maxHeight: 360, overflowY: "auto", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+            <div style={{ maxHeight: 360, overflowY: "auto", border: "1px solid var(--ds-line)", borderRadius: 8 }}>
               {rows.length === 0 ? (
                 <div className="muted small" style={{ padding: 14, textAlign: "center" }}>
                   {loading ? "Loading…" : "No ungrouped transactions match. (Transactions already in a group are hidden.)"}
@@ -219,7 +219,7 @@ export default function AddTxnsModal({
                   </thead>
                   <tbody>
                     {sortedRows.map((r) => (
-                      <tr key={r._id} style={{ cursor: "pointer", background: sel.has(r._id) ? "rgba(129,140,248,0.10)" : undefined }}
+                      <tr key={r._id} style={{ cursor: "pointer", background: sel.has(r._id) ? "var(--ds-neutral-wash)" : undefined }}
                         onClick={() => toggle(r._id)}>
                         <td onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" checked={sel.has(r._id)} onChange={() => toggle(r._id)} />

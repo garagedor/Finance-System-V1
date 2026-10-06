@@ -135,7 +135,7 @@ export default function ReconcileClient({ unmatched }: Props) {
                     onClick={() => setActiveTxnId(t._id)}
                     style={{
                       cursor: "pointer",
-                      background: activeTxnId === t._id ? "rgba(99,102,241,0.1)" : undefined,
+                      background: activeTxnId === t._id ? "var(--ds-neutral-wash)" : undefined,
                     }}
                   >
                     <td className="small mono">{t.date}</td>
@@ -182,8 +182,8 @@ export default function ReconcileClient({ unmatched }: Props) {
           <div style={{ padding: "12px 16px" }}>
             <div
               style={{
-                background: "rgba(99,102,241,0.06)",
-                border: "1px solid rgba(99,102,241,0.2)",
+                background: "var(--ds-info-soft)",
+                border: "1px solid var(--ds-info-line)",
                 borderRadius: 10,
                 padding: "12px 14px",
                 marginBottom: 14,
@@ -221,7 +221,7 @@ export default function ReconcileClient({ unmatched }: Props) {
 
             {!loading && suggestions.length > 0 && (
               <>
-                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#94a3b8", marginBottom: 10 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ds-ink-2)", marginBottom: 10 }}>
                   <input type="checkbox" checked={flipToPaid} onChange={(e) => setFlipToPaid(e.target.checked)} />
                   <span>Also mark the matched expense/payout as paid</span>
                 </label>
@@ -231,8 +231,8 @@ export default function ReconcileClient({ unmatched }: Props) {
                     <div
                       key={`${s.kind}-${s.id}`}
                       style={{
-                        background: "#0d1526",
-                        border: "1px solid rgba(255,255,255,0.07)",
+                        background: "var(--ds-surface-2)",
+                        border: "1px solid var(--ds-line)",
                         borderRadius: 10,
                         padding: 12,
                       }}
@@ -275,7 +275,7 @@ export default function ReconcileClient({ unmatched }: Props) {
                   ))}
                 </div>
 
-                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                <div style={{ marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--ds-line)", display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <button
                     className="portal-btn portal-btn-ghost"
                     onClick={() => ignoreTxn(prompt("Reason for ignoring?") || "ignored")}

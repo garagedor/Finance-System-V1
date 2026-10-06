@@ -39,8 +39,8 @@ export default async function EquipmentReturnsPage() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r._id}>
-                    <td className="mono small"><Link href={`/portal/equipment/returns/${r._id}`} style={{ color: "#818cf8", textDecoration: "none" }}>{r.returnNumber}</Link></td>
-                    <td className="mono small"><Link href={`/portal/equipment/orders/${r.orderId}`} style={{ color: "#818cf8", textDecoration: "none" }}>{r.orderNumber}</Link></td>
+                    <td className="mono small"><Link href={`/portal/equipment/returns/${r._id}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{r.returnNumber}</Link></td>
+                    <td className="mono small"><Link href={`/portal/equipment/orders/${r.orderId}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{r.orderNumber}</Link></td>
                     <td>{r.areaManagerName}</td>
                     <td className="right small">{r.items.reduce((s, it) => s + it.qtyReturned, 0)}</td>
                     <td className="right money">{fmt$(r.creditAmount)}</td>

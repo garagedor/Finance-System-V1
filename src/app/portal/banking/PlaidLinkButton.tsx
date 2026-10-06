@@ -122,7 +122,7 @@ export default function PlaidLinkButton({
           : label ?? (updateAccessToken ? "Reconnect" : "+ Connect bank")}
       </button>
       {error && (
-        <span style={{ marginLeft: 10, fontSize: 12, color: "#f87171" }}>
+        <span style={{ marginLeft: 10, fontSize: 12, color: "var(--ds-crit-text)" }}>
           {error}
         </span>
       )}

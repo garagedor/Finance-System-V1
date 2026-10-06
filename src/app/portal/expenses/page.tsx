@@ -219,7 +219,7 @@ export default async function ExpensesPage({
                   <td className="small">
                     {labelForCat(r.category)}
                     {r.ledger_id && (
-                      <div className="small" style={{ color: "#818cf8" }}>
+                      <div className="small" style={{ color: "var(--ds-fin-2)" }}>
                         ↪ to {r.ledger_holder ?? "ledger"}
                       </div>
                     )}

@@ -101,7 +101,7 @@ export default async function ExpenseGroupsPage() {
                 return (
                   <tr key={g._id}>
                     <td>
-                      <Link href={`/portal/expenses/groups/${g._id}`} style={{ color: "#818cf8", fontWeight: 600, textDecoration: "none" }}>
+                      <Link href={`/portal/expenses/groups/${g._id}`} style={{ color: "var(--ds-fin-2)", fontWeight: 600, textDecoration: "none" }}>
                         {g.name}
                       </Link>
                       {g.note && <div className="muted small">{g.note}</div>}

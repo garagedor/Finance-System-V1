@@ -230,7 +230,7 @@ export default async function RecurringExpensesPage() {
                     <td className="small muted">
                       {labelForCat(t.category)}
                       {t.ledger_id && (
-                        <div className="small" style={{ color: "#818cf8" }}>
+                        <div className="small" style={{ color: "var(--ds-fin-2)" }}>
                           ↪ {d.ledgerName.get(t.ledger_id) ?? "ledger"}
                         </div>
                       )}
@@ -249,10 +249,10 @@ export default async function RecurringExpensesPage() {
                     <td className="muted small">{t.vendor_name ?? "—"}</td>
                     <td className="right money" style={{ fontWeight: 600 }}>{fmt$(t.amount)}</td>
                     <td className="small mono">
-                      <span style={{ color: isDue ? "#f87171" : "#cbd5e1" }}>
+                      <span style={{ color: isDue ? "var(--ds-ink)" : "var(--ds-ink-2)" }}>
                         {fmtDate(t.next_due_date)}
                       </span>
-                      {isDue && <div className="muted small" style={{ color: "#f87171" }}>due</div>}
+                      {isDue && <div className="muted small" style={{ color: "var(--ds-ink-2)" }}>due</div>}
                     </td>
                     <td className="right small">{s.count}</td>
                     <td className="right money">
@@ -297,7 +297,7 @@ export default async function RecurringExpensesPage() {
         <span>ℹ</span>
         <div>
           <strong>How it works:</strong> templates are blueprints. When you click <em>Generate due expenses</em>{" "}
-          (or Run on a specific row), the system creates real entries on the <Link href="/portal/expenses" style={{ color: "#818cf8" }}>Expenses page</Link>{" "}
+          (or Run on a specific row), the system creates real entries on the <Link href="/portal/expenses" style={{ color: "var(--ds-fin-2)" }}>Expenses page</Link>{" "}
           for every period that has come due. Generation is idempotent — running it twice never creates duplicates.
           Templates marked <em>Paid</em> auto-mark the generated expense as paid; <em>Unpaid</em> requires reconciliation
           (e.g. matching a Plaid bank transaction).

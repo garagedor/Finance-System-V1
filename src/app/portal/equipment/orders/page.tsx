@@ -77,7 +77,7 @@ export default async function EquipmentOrdersPage() {
               <tbody>
                 {rows.map((o) => (
                   <tr key={o._id}>
-                    <td className="mono small"><Link href={`/portal/equipment/orders/${o._id}`} style={{ color: "#818cf8", textDecoration: "none" }}>{o.orderNumber}</Link></td>
+                    <td className="mono small"><Link href={`/portal/equipment/orders/${o._id}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{o.orderNumber}</Link></td>
                     <td className="small mono">{fmtDate(o.orderDate)}</td>
                     <td>{o.areaManagerName}{o.area && <div className="muted small">{o.area}</div>}</td>
                     <td className="right small">{o.totals?.itemCount ?? 0}</td>

@@ -46,7 +46,7 @@ export default function SyncButton({ itemId, label }: { itemId?: string; label?:
       >
         {busy ? "Syncing…" : label ?? "↻ Sync now"}
       </button>
-      {msg && <span style={{ fontSize: 11, color: "#94a3b8" }}>{msg}</span>}
+      {msg && <span style={{ fontSize: 11, color: "var(--ds-ink-2)" }}>{msg}</span>}
     </div>
   );
 }
