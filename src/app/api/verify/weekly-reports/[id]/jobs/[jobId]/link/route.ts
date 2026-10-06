@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../../../../../lib/supabase-server';
 import { upsertLink, removeLink } from '../../../../../../../../lib/verify/links-store';
+import { requireVerifyWrite } from '@/lib/verify-auth';
 
 // PUT { crmJobId } — manually link a Lovable job to a specific CRM job.
 // PUT { crmJobId: null } or DELETE — remove the manual link.
@@ -8,6 +9,11 @@ export async function PUT(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; jobId: string }> },
 ) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may change verify-reports data.
+  const denied = await requireVerifyWrite();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
@@ -36,6 +42,11 @@ export async function PUT(
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; jobId: string }> }) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may change verify-reports data.
+  const denied = await requireVerifyWrite();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }

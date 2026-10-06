@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../lib/supabase-server';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { requireVerifyWrite } from '@/lib/verify-auth';
 
 // All write actions for the Week Control page. Mirrors the edge functions
 // invoked by Lovable's AdminSettings.tsx so behavior stays identical.
@@ -33,6 +34,11 @@ async function invokeEdgeFn<T = any>(supa: SupabaseClient, name: string, body: u
 }
 
 export async function POST(req: NextRequest) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may change verify-reports data.
+  const denied = await requireVerifyWrite();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }
@@ -75,6 +81,11 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may change verify-reports data.
+  const denied = await requireVerifyWrite();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }

@@ -1,11 +1,17 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../../lib/supabase-server';
+import { requireVerifyRead } from '@/lib/verify-auth';
 
 // GET — combined state for the Week Control page:
 //   - currentWeek: { week_start, week_end, allowed, is_locked, opens_at, open_hour, open_minute, ... }
 //   - locks: rows from week_locks
 //   - weeks: distinct week_start values from weekly_reports
 export async function GET() {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may read verify-reports data.
+  const denied = await requireVerifyRead();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }

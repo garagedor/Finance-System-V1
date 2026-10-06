@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../../../../lib/supabase-server';
+import { requireVerifyWrite } from '@/lib/verify-auth';
 
 // PATCH a single weekly_report_job. We only write the input fields the schema
 // accepts — derived ones (job_total, tech_30, company_70, payment_fee, balance,
@@ -41,6 +42,11 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string; jobId: string }> },
 ) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may change verify-reports data.
+  const denied = await requireVerifyWrite();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }

@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient, isSupabaseConfigured } from '../../../../../../lib/supabase-server';
 import { upsertNote } from '../../../../../../lib/verify/notes-store';
+import { requireVerifyWrite } from '@/lib/verify-auth';
 
 // PUT an admin-only note for the whole report. Stored in our Mongo (NOT
 // Lovable's Supabase) so techs never see it on their app.
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may change verify-reports data.
+  const denied = await requireVerifyWrite();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json({ error: 'Supabase not configured' }, { status: 503 });
   }

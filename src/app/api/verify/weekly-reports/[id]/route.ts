@@ -8,12 +8,18 @@ import { getTechMappingByUserId, getAreaMappingByAreaId } from '../../../../../l
 import { getNote, getJobNotesForReport, upsertNote } from '../../../../../lib/verify/notes-store';
 import { getLinksForReport } from '../../../../../lib/verify/links-store';
 import { compare, deriveCrmMethod, type SupabaseReportJob, type CrmJob } from '../../../../../lib/verify/compare';
+import { requireVerifyRead, requireVerifyWrite } from '@/lib/verify-auth';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
 
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may read verify-reports data.
+  const denied = await requireVerifyRead();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json(
       { error: 'Supabase not configured', detail: 'Set SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_ADMIN_EMAIL, and SUPABASE_ADMIN_PASSWORD in .env.local' },
@@ -268,6 +274,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 const ALLOWED_STATUSES = new Set(['Submitted', 'Under Review', 'Returned', 'Approved']);
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Authorization. Middleware proves there is a session; this proves the
+  // session may change verify-reports data.
+  const denied = await requireVerifyWrite();
+  if (denied) return denied;
+
   if (!isSupabaseConfigured()) {
     return NextResponse.json(
       { error: 'Supabase not configured', detail: 'Set SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_ADMIN_EMAIL, and SUPABASE_ADMIN_PASSWORD in .env.local' },
