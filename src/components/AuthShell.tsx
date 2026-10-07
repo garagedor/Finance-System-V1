@@ -1,12 +1,10 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { hasWarehouseEntitlement } from '@/lib/warehouse-entitlement';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  FiLogOut, FiUser, FiHome, FiGrid, FiBarChart2, FiShield,
-  FiDollarSign, FiFileText, FiChevronLeft, FiChevronRight, FiMenu, FiPieChart, FiCreditCard, FiCheckSquare, FiCpu,
-} from 'react-icons/fi';
+import { FiBarChart2, FiCheckSquare, FiChevronLeft, FiChevronRight, FiCpu, FiCreditCard, FiDollarSign, FiFileText, FiGrid, FiHome, FiLogOut, FiMenu, FiPackage, FiPieChart, FiShield, FiUser } from 'react-icons/fi';
 import LoginPage from './LoginPage';
 import dynamic from 'next/dynamic';
 import SidebarClocks from './SidebarClocks';
@@ -23,7 +21,16 @@ import {
   visibleNavFor,
 } from '@/app/portal/nav';
 
-type NavLink = { href: string; label: string; adminOnly?: boolean; permission?: string };
+type NavLink = {
+  href: string;
+  label: string;
+  adminOnly?: boolean;
+  permission?: string;
+  /** Show only with canonical Warehouse entitlement. Deliberately not a
+   *  permission string: `permission` is subject to the admin bypass below,
+   *  and Warehouse access must never be implied by being an admin. */
+  warehouse?: boolean;
+};
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -48,6 +55,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number; className?:
   '/finance': FiPieChart,
   '/payment-method-report': FiCreditCard,
   '/verify-reports': FiCheckSquare,
+  '/warehouse': FiPackage,
   '/portal/dashboard': FiPieChart,
   '/portal/ai': FiCpu,
   '/admin/users': FiShield,
@@ -262,6 +270,10 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
                   (link) =>
                     !link.permission || user.type === 'admin' || (user.permissions ?? []).includes(link.permission),
                 )
+                // No admin exception here, on purpose. Entitlement is canonical
+                // permission membership and nothing else, so an admin holding no
+                // warehouse permission does not see the card.
+                .filter((link) => !link.warehouse || hasWarehouseEntitlement(user.permissions ?? []))
                 .map((link) => {
                 const Icon = NAV_ICONS[link.href] || FiGrid;
                 const isActive = pathname === link.href || pathname.startsWith(link.href + '/');

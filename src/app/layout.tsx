@@ -29,6 +29,9 @@ export default function RootLayout({
     { href: "/payment-method-report", label: "Payment Methods" },
     { href: "/verify-reports", label: "Verify Reports", permission: "crm:verify_reports:view" },
     { href: "/portal/dashboard", label: "Finance Portal" },
+    // Visible only to an identity that actually holds a canonical Warehouse
+    // permission. Not admin, not a role name — see AuthShell.
+    { href: "/warehouse", label: "Warehouse", warehouse: true },
     { href: "/portal/ai", label: "AI Workspace", permission: "system:ai:view" },
     { href: "/admin/users", label: "Admin", adminOnly: true },
   ];

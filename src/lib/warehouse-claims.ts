@@ -5,6 +5,7 @@
  * The shape is Warehouse's, not ours: see lbs-warehouse/docs/AUTH.md.
  */
 import { isWarehousePermission } from "@/types/rbac";
+import { hasWarehouseEntitlement as entitledByPermissions } from "./warehouse-entitlement";
 
 export type WarehouseAccountType = "employee" | "warehouse_agent";
 export type WarehouseModule = "crm" | "finance" | "warehouse";
@@ -31,9 +32,15 @@ export function warehousePermissionsOf(session: SessionLike): string[] {
   return session.permissions.filter(isWarehousePermission);
 }
 
-/** Whether the session may use Warehouse at all. */
+/**
+ * Whether the session may use Warehouse at all.
+ *
+ * Delegates the permission half to the shared helper so token issuance and the
+ * gateway card cannot drift apart. The `active` half is this layer's: a
+ * disabled account is not entitled to anything.
+ */
 export function hasWarehouseEntitlement(session: SessionLike): boolean {
-  return session.active && warehousePermissionsOf(session).length > 0;
+  return session.active && entitledByPermissions(session.permissions);
 }
 
 /**

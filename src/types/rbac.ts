@@ -275,8 +275,19 @@ export const WAREHOUSE_PERMISSIONS: ReadonlyArray<Permission> = PERMISSION_CATAL
   .filter((d) => d.module === "wh")
   .map((d) => d.key);
 
+/**
+ * Canonical membership, not prefix recognition.
+ *
+ * This decides what enters a Warehouse token's `warehouse_permissions` claim,
+ * so a string that merely looks like one — `wh:dashboard:view`, say, which does
+ * not exist — must not qualify. Two catalog filters elsewhere already stop an
+ * unknown key becoming effective; this closes the gap at the point where the
+ * claim is built rather than relying on them.
+ */
+const WAREHOUSE_PERMISSION_SET: ReadonlySet<string> = new Set(WAREHOUSE_PERMISSIONS);
+
 export function isWarehousePermission(key: string): boolean {
-  return key.startsWith("wh:");
+  return WAREHOUSE_PERMISSION_SET.has(key);
 }
 
 // ── Records stored in MongoDB ───────────────────────────────────────────────
