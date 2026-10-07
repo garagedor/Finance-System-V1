@@ -116,3 +116,38 @@ test("no Finance nav entry points at a route the source of truth dropped", () =>
     .filter((h) => !truth.has(h) && h !== "/portal/disputes/scanpay");
   assert.deepEqual(stale, [], `nav points at superseded screens: ${stale.join(", ")}`);
 });
+
+// A href that is present but gated on the wrong permission is still a lost
+// entry point: the module simply disappears for the roles that should see it.
+// Covering the href is therefore not enough — the shell must reveal each
+// module on at least every permission portal/nav.ts reveals it on.
+test("the shell reveals each Finance module on every permission the source of truth does", () => {
+  const shellItems = new Map(
+    FIN_NAV.flatMap((g) => g.items).map((i) => [i.href, i.requires ?? []])
+  );
+  const gaps: string[] = [];
+  for (const m of FINANCE_NAV) {
+    const want = Array.isArray(m.requires) ? m.requires : [m.requires];
+    const got = shellItems.get(m.href);
+    if (got === undefined) continue;            // covered by the coverage test
+    if (got.length === 0) continue;             // deliberately open to everyone
+    for (const p of want) {
+      if (!got.includes(p)) gaps.push(`${m.href} is hidden from holders of ${p}`);
+    }
+  }
+  assert.deepEqual(gaps, [], gaps.join("; "));
+});
+
+test("the three Finance entries that were gated on the wrong permission are fixed", () => {
+  const byHref = new Map(
+    FIN_NAV.flatMap((g) => g.items).map((i) => [i.href, i.requires ?? []])
+  );
+  assert.ok(byHref.get("/portal/ledger")?.includes("finance:area_managers:view"),
+    "the Ledger must stay visible to area-manager viewers");
+  assert.equal(byHref.get("/portal/equipment")?.length, 4,
+    "Equipment is revealed by any one of four permissions");
+  assert.ok(byHref.get("/portal/import")?.includes("finance:expenses:create"),
+    "CSV import belongs to whoever can create expenses, not to user admins");
+  assert.equal(byHref.get("/portal/import")?.includes("system:users:view"), false,
+    "user administration is not a licence to import finance data");
+});

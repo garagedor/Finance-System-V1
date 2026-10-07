@@ -128,7 +128,10 @@ export const FIN_NAV: NavGroup[] = [
   {
     label: 'Balances & claims',
     items: [
-      { href: '/portal/ledger', label: 'Ledgers', icon: FiArchive, requires: ['finance:debts:view'] },
+      // portal/nav.ts gates the Ledger on finance:area_managers:view. Listing
+      // only finance:debts:view hid it from anyone holding the first and not
+      // the second. Both are listed so no one loses the entry.
+      { href: '/portal/ledger', label: 'Ledgers', icon: FiArchive, requires: ['finance:area_managers:view', 'finance:debts:view'] },
       { href: '/portal/debts', label: 'Debts', icon: FiDollarSign, requires: ['finance:debts:view'] },
       // The inbox REPLACED /portal/disputes as the primary screen on 2026-10-05.
       // The shell nav was written before that and still pointed the headline
@@ -138,7 +141,13 @@ export const FIN_NAV: NavGroup[] = [
       // source of truth, lists only the inbox.
       { href: '/portal/disputes/inbox', label: 'Disputes & refunds', icon: FiAlertTriangle, requires: ['finance:disputes:view'] },
       { href: '/portal/disputes/scanpay', label: 'ScanPay disputes', icon: FiShield, requires: ['finance:disputes:view'] },
-      { href: '/portal/equipment', label: 'Equipment', icon: FiPackage, requires: ['finance:equipment:view'] },
+      // Equipment is one entry whose in-page tabs cover orders / catalog /
+      // returns / reports / finance. portal/nav.ts reveals it on ANY of four
+      // permissions; listing one hid it from order-, catalog- and
+      // profitability-only users.
+      { href: '/portal/equipment', label: 'Equipment', icon: FiPackage,
+        requires: ['finance:equipment:view', 'finance:equipment_orders:view',
+                   'finance:equipment_products:view', 'finance:equipment_profitability:view'] },
     ],
   },
   {
@@ -164,7 +173,11 @@ export const FIN_NAV: NavGroup[] = [
     items: [
       { href: '/portal/admin/users', label: 'Users & roles', icon: FiShield, requires: ['system:users:view', 'system:roles:view'] },
       { href: '/portal/settings', label: 'Settings', icon: FiSettings, requires: ['finance:settings:view'] },
-      { href: '/portal/import', label: 'CSV import', icon: FiUpload, requires: ['system:users:view'] },
+      // CSV import writes expenses and income, so portal/nav.ts gates it on
+      // those create permissions. system:users:view was the wrong key in both
+      // directions: it hid the tool from bookkeepers and offered it to user
+      // administrators who cannot import.
+      { href: '/portal/import', label: 'CSV import', icon: FiUpload, requires: ['finance:expenses:create', 'finance:income:create'] },
       { href: '/portal/me/security', label: 'My security', icon: FiLock },
     ],
   },
