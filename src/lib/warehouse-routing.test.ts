@@ -23,8 +23,7 @@ const LIB = import.meta.dirname;
 const MW = readFileSync(join(LIB, "..", "middleware.ts"), "utf8");
 const ENTER = readFileSync(
   join(LIB, "..", "app", "api", "auth", "warehouse-enter", "route.ts"), "utf8");
-const SHELL = readFileSync(join(LIB, "..", "components", "AuthShell.tsx"), "utf8");
-const LAYOUT = readFileSync(join(LIB, "..", "app", "layout.tsx"), "utf8");
+const PORTALS = readFileSync(join(LIB, "..", "config", "portals.ts"), "utf8");
 // Line comments first: a `/*` inside a line comment would otherwise open a
 // block that swallows real code — which it did, and the test "failed" on
 // source that was never actually missing.
@@ -78,23 +77,35 @@ test("canonicalWarehousePermissions keeps only real members", () => {
 
 /* ── The gateway card ─────────────────────────────────────────────────── */
 
-test("the Warehouse nav entry is declared and flagged, not permission-gated", () => {
-  const entry = /\{[^{}]*href:\s*"\/warehouse"[^{}]*\}/.exec(LAYOUT);
-  assert.ok(entry, "layout must declare the /warehouse nav entry");
-  assert.ok(entry[0].includes("warehouse: true"), "it must use the entitlement flag");
-  assert.equal(/permission:/.test(entry[0]), false,
-    "it must NOT use `permission`, which the admin bypass would defeat");
+test("the Gateway's Warehouse card uses canonical membership, not a prefix", () => {
+  // Design 360 moved navigation out of AuthShell into the ecosystem shell, so
+  // the rule now lives on the portal card. The design branch shipped it with
+  // anyOf: ['warehouse:'] — a prefix no permission has ever used — which is
+  // why this asserts the shape rather than trusting the name.
+  const code = strip(PORTALS);
+  assert.equal(/anyOf:\s*\[\s*'warehouse:'/.test(code), false,
+    "the 'warehouse:' prefix is not the locked vocabulary");
+  assert.ok(code.includes("exactAnyOf: WAREHOUSE_PERMISSIONS"),
+    "entitlement must be membership of the locked twenty");
+  assert.ok(code.includes("noAdminBypass: true"),
+    "an administrator holding no warehouse permission is not entitled");
+  assert.equal(/key: 'whs'[\s\S]{0,400}?soon:\s*true/.test(code), false,
+    "Warehouse is live; it must not still be flagged as not yet built");
 });
 
-test("the shell gates that flag on entitlement with no admin exception", () => {
-  const code = strip(SHELL);
-  const line = code.split("\n").find((l) => l.includes("link.warehouse"));
-  assert.ok(line, "AuthShell must filter on link.warehouse");
-  assert.ok(line.includes("hasWarehouseEntitlement"), "it must use the shared helper");
-  assert.equal(/user\.type === 'admin'/.test(line), false,
-    "the warehouse filter must carry no admin exception");
-  assert.equal(/startsWith\(['"]wh:/.test(code), false,
-    "the shell must not recognise warehouse permissions by prefix");
+test("…and grantedPortals honours that, with no admin shortcut", async () => {
+  const { grantedPortals } = await import("../config/portals.ts");
+  assert.equal(grantedPortals([], "admin").includes("whs"), false,
+    "an admin with zero warehouse permissions must NOT get the card");
+  assert.equal(grantedPortals(["crm:jobs:view", "finance:payouts:view"], "admin").includes("whs"), false);
+  assert.equal(grantedPortals(["wh:dashboard:view"], "simple").includes("whs"), false,
+    "a bogus wh: string must not grant it");
+  assert.equal(grantedPortals(["wh:catalog:view"], "simple").includes("whs"), true,
+    "one canonical permission grants it");
+  assert.equal(grantedPortals(["wh:admin"], "simple").includes("whs"), true);
+  // and the other portals keep their existing behaviour
+  assert.equal(grantedPortals(["crm:jobs:view"], "simple").includes("crm"), true);
+  assert.equal(grantedPortals([], "admin").includes("crm"), true, "admin shortcut still applies to CRM");
 });
 
 /* ── The entry route ──────────────────────────────────────────────────── */
