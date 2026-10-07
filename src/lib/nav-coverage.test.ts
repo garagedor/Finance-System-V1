@@ -40,10 +40,22 @@ test("the CRM entries the old flat nav carried are all still present", () => {
   const old = [
     "/tables", "/tables-ai", "/stats", "/balance-report", "/report",
     "/payment-method-report", "/verify-reports", "/portal/dashboard",
-    "/portal/ai", "/admin/users", "/finance",
+    "/portal/ai", "/admin/users",
   ];
   const missing = old.filter((h) => !all.has(h));
   assert.deepEqual(missing, [], `lost from navigation: ${missing.join(", ")}`);
+});
+
+test("the legacy /finance screen stays out of the navigation", () => {
+  // Owner decision, 2026-10-07: the Finance portal at /portal/dashboard is the
+  // user-facing surface. /finance remains reachable by direct URL, but it is
+  // not promoted back into the nav without an explicit decision. This test is
+  // the guard against it drifting back in.
+  const all = new Set([...hrefs(CRM_NAV), ...hrefs(FIN_NAV)]);
+  assert.equal(all.has("/finance"), false,
+    "/finance (legacy) must not appear in the navigation");
+  assert.ok(all.has("/portal/dashboard"),
+    "the Finance portal it defers to must itself be reachable");
 });
 
 test("the CRM dashboard entry points at its new home", () => {

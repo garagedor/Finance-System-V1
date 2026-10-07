@@ -77,10 +77,13 @@ export const CRM_NAV: NavGroup[] = [
   },  {
     label: 'Administration',
     items: [
-      // Both lost their nav entry when the flat layout.tsx list was replaced.
-      // Admin is gated on the permission rather than the old adminOnly flag.
+      // Lost its nav entry when the flat layout.tsx list was replaced.
+      // Gated on the permission rather than the old adminOnly flag.
       { href: '/admin/users', label: 'Users & roles', icon: FiShield, requires: ['system:users:view'] },
-      { href: '/finance', label: 'Finance (legacy)', icon: FiDollarSign, requires: ['finance:dashboard:view'] },
+      // /finance (legacy) is deliberately NOT listed. The route still exists
+      // and stays reachable by direct URL for compatibility, but the Finance
+      // portal at /portal/dashboard is the user-facing surface. Owner
+      // decision, 2026-10-07 — do not re-add without an explicit call.
     ],
   },
   {
