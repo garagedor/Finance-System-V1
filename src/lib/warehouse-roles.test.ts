@@ -10,7 +10,7 @@ import {
   WAREHOUSE_ROLE_TEMPLATES,
 } from "./warehouse-roles.ts";
 import { PERMISSION_BY_KEY, WAREHOUSE_PERMISSIONS, isWarehousePermission } from "../types/rbac.ts";
-import { accountTypeOf, buildWarehouseClaims, modulesOf, type SessionLike } from "./warehouse-claims.ts";
+import { accountTypeOf, buildWarehouseClaims, modulesOf, nonWarehousePermissionsOf, type SessionLike } from "./warehouse-claims.ts";
 
 const byName = (n: string) => {
   const r = WAREHOUSE_ROLE_TEMPLATES.find((t) => t.name === n);
@@ -112,9 +112,10 @@ test("the Agent template holds nothing outside Warehouse", () => {
     "the irreversible ledger write stays with an employee");
 });
 
-test("the Agent template really does produce a warehouse_agent identity", () => {
+test("the Agent template, DECLARED, produces a warehouse_agent identity", () => {
   const s: SessionLike = {
     userId: "a1", name: "Agent", active: true, sessionVersion: 0,
+    isWarehouseAgent: true,
     permissions: [...byName("Warehouse Agent").permissions],
   };
   assert.equal(accountTypeOf(s), "warehouse_agent");
@@ -122,17 +123,31 @@ test("the Agent template really does produce a warehouse_agent identity", () => 
   assert.deepEqual(buildWarehouseClaims(s).modules, ["warehouse"]);
 });
 
+test("the same permissions UNDECLARED are an employee — warehouse-only staff", () => {
+  const s: SessionLike = {
+    userId: "e1", name: "Receiving clerk", active: true, sessionVersion: 0,
+    permissions: [...byName("Warehouse Receiving").permissions],
+  };
+  assert.equal(accountTypeOf(s), "employee");
+});
+
 test("ONE non-warehouse permission destroys the agent identity — crm, finance or system", () => {
   // This is why an agent account must hold warehouse permissions and nothing
   // else: redaction keys off account type, so this silently un-redacts unit
   // costs rather than failing loudly.
+  // Historical: this is what the derived model did, and why it was replaced.
+  // A declared agent is no longer reclassified — issuance refuses instead.
   for (const contaminant of ["crm:jobs:view", "finance:payouts:view", "system:users:edit"]) {
-    const s: SessionLike = {
+    const undeclared: SessionLike = {
       userId: "a1", name: "Agent", active: true, sessionVersion: 0,
       permissions: [...byName("Warehouse Agent").permissions, contaminant],
     };
-    assert.equal(accountTypeOf(s), "employee",
-      `${contaminant} must turn the identity into an employee`);
+    assert.equal(accountTypeOf(undeclared), "employee");
+
+    const declared: SessionLike = { ...undeclared, isWarehouseAgent: true };
+    assert.equal(accountTypeOf(declared), "warehouse_agent",
+      `${contaminant} must NOT silently demote a declared agent`);
+    assert.deepEqual(nonWarehousePermissionsOf(declared), [contaminant]);
   }
 });
 

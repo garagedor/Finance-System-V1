@@ -64,17 +64,22 @@ test("only warehouse permissions travel", () => {
   assert.equal(JSON.stringify(claims).includes("finance:payouts:view"), false);
 });
 
-test("an identity holding only warehouse permissions is an agent", () => {
-  const agent = session({ permissions: ["wh:po:view", "wh:shipment:view"] });
+test("an identity holding only warehouse permissions is NOT an agent unless declared", () => {
+  // The old rule inferred this, which misclassified internal warehouse-only
+  // staff as supplier agents and showed them redacted purchase orders.
+  const internal = session({ permissions: ["wh:po:view", "wh:shipment:view"] });
+  assert.equal(accountTypeOf(internal), "employee");
+
+  const agent = session({ permissions: ["wh:po:view", "wh:shipment:view"], isWarehouseAgent: true });
   assert.equal(accountTypeOf(agent), "warehouse_agent");
   assert.deepEqual(modulesOf(agent), ["warehouse"]);
 });
 
-test("an agent token can never carry crm or finance", () => {
-  // Not by a rule applied afterwards — by construction. Account type is read
-  // from what the identity holds, so the two cannot disagree. Warehouse's
-  // verifier refuses the combination outright.
-  const agent = session({ permissions: ["wh:po:view"] });
+test("a declared agent token can never carry crm or finance", () => {
+  // The declaration fixes the account type; issuance refuses outright if such
+  // an identity holds anything outside Warehouse, so the two cannot disagree.
+  // Warehouse's verifier refuses the combination as well.
+  const agent = session({ permissions: ["wh:po:view"], isWarehouseAgent: true });
   const claims = buildWarehouseClaims(agent);
   assert.equal(claims.account_type, "warehouse_agent");
   assert.deepEqual(claims.modules, ["warehouse"]);
@@ -180,7 +185,7 @@ async function mintLikeTheRoute(s: SessionLike, key = privateKey, alg = "RS256")
 }
 
 test("a token the CRM mints verifies against the Warehouse public key", async () => {
-  const token = await mintLikeTheRoute(session());
+  const token = await mintLikeTheRoute(session({ isWarehouseAgent: true }));
   const { payload } = await jwtVerify(token, await importSPKI(publicKey, "RS256"), {
     algorithms: ["RS256"],
     issuer: "https://crm.test",

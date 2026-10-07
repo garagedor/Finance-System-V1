@@ -201,6 +201,7 @@ export async function POST(req: NextRequest) {
             role_id: user.role_id,
             permissions,
             active: user.active ?? true,
+            warehouse_agent: user.warehouse_agent === true,
             // Stamped so a later bump can invalidate this token. Absent on the
             // user record means 0 — no migration writes it to anyone.
             session_version: sessionVersionOf(user),

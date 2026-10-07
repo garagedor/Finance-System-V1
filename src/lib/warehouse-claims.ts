@@ -25,6 +25,8 @@ export interface SessionLike {
   permissions: readonly string[];
   active: boolean;
   sessionVersion: number;
+  /** Declared external Warehouse Agent. Absent reads as false — employee. */
+  isWarehouseAgent?: boolean;
 }
 
 /** The warehouse permissions this session actually holds. */
@@ -46,17 +48,28 @@ export function hasWarehouseEntitlement(session: SessionLike): boolean {
 /**
  * Which products this identity reaches.
  *
- * An identity holding *only* warehouse permissions is an agent: a
- * supplier-side account with no business inside CRM or Finance. That is read
- * from what they actually hold rather than declared separately, so the two can
- * never disagree — and it means an agent token cannot carry `crm` or `finance`
- * by construction, which is exactly what Warehouse's verifier refuses.
+ * Agent status is DECLARED on the user record, never inferred from what the
+ * account happens to hold. Inference was wrong in both directions: an internal
+ * clerk holding only warehouse permissions was classified as a supplier agent
+ * and shown redacted purchase orders, while an agent that picked up a single
+ * `system:` permission was silently demoted to employee — which is precisely
+ * what switches redaction off. Neither failure is visible in the token.
+ *
+ * A declared agent that holds anything outside the canonical warehouse set is
+ * not reclassified here. It is refused at issuance; see lib/warehouse-mint.ts.
  */
 export function accountTypeOf(session: SessionLike): WarehouseAccountType {
-  const hasOther = session.permissions.some(
-    (p) => p.startsWith("crm:") || p.startsWith("finance:") || p.startsWith("system:"),
-  );
-  return hasOther ? "employee" : "warehouse_agent";
+  return session.isWarehouseAgent === true ? "warehouse_agent" : "employee";
+}
+
+/**
+ * Effective permissions a declared agent may not hold.
+ *
+ * Canonical membership, so this catches `crm:`, `finance:`, `system:` and any
+ * non-catalog string alike — including one that merely starts with `wh:`.
+ */
+export function nonWarehousePermissionsOf(session: SessionLike): string[] {
+  return session.permissions.filter((p) => !isWarehousePermission(p));
 }
 
 export function modulesOf(session: SessionLike): WarehouseModule[] {

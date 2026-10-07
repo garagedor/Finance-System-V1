@@ -5,9 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { ensureFinanceIndexes, getDb, FINANCE_COLLECTIONS, newId } from "@/lib/finance-db";
 import { coll } from "@/lib/finance-db";
-import { requirePermission } from "@/lib/rbac";
+import { computeEffectivePermissions, requirePermission } from "@/lib/rbac";
 import { userIdFilter } from "@/lib/user-id";
-import { PERMISSION_BY_KEY, type Permission, type RoleAuditRecord, type RoleRecord } from "@/types/rbac";
+import { PERMISSION_BY_KEY, isWarehousePermission, type Permission, type RoleAuditRecord, type RoleRecord } from "@/types/rbac";
 import type { User, UserType } from "@/types/user";
 import { bumpSessionVersion, invalidatingFields, shouldBumpSessionVersion } from "@/lib/session-version";
 
@@ -20,6 +20,7 @@ interface PublicUser {
   role_id?: string;
   role_name?: string;
   active: boolean;
+  warehouse_agent: boolean;
   extra_permissions: Permission[];
   denied_permissions: Permission[];
   created_at?: string;
@@ -68,6 +69,7 @@ function toPublic(u: User, roleName?: string): PublicUser {
     role_id: u.role_id,
     role_name: roleName,
     active: u.active ?? true,
+    warehouse_agent: u.warehouse_agent === true,
     extra_permissions: u.extra_permissions ?? [],
     denied_permissions: u.denied_permissions ?? [],
     created_at: u.created_at,
@@ -176,6 +178,7 @@ export async function PATCH(req: NextRequest) {
       type?: UserType;
       role_id?: string | null;
       active?: boolean;
+      warehouse_agent?: boolean;
       extra_permissions?: unknown;
       denied_permissions?: unknown;
       new_password?: string;
@@ -227,6 +230,40 @@ export async function PATCH(req: NextRequest) {
       set.active = body.active;
       summaryParts.push(body.active ? "activated" : "deactivated");
     }
+    if (typeof body.warehouse_agent === "boolean"
+        && body.warehouse_agent !== (existing.warehouse_agent === true)) {
+      if (body.warehouse_agent) {
+        // Turning it ON must not silently strip anything. An account that
+        // holds CRM, Finance or System permissions is not an agent, and
+        // quietly removing them would be a permission change nobody asked
+        // for — so the change is refused and the operator is told what to
+        // remove. The permissions checked are the EFFECTIVE set, because a
+        // role grant is just as disqualifying as a direct one.
+        const effective = await computeEffectivePermissions({
+          type: (body.type ?? existing.type) as UserType,
+          role_id: body.role_id === undefined ? existing.role_id : (body.role_id ?? undefined),
+          _id: existingId,
+        });
+        const proposedExtras = body.extra_permissions !== undefined
+          ? sanitisePermissions(body.extra_permissions)
+          : (existing.extra_permissions ?? []);
+        const offending = [...new Set([...effective, ...proposedExtras])]
+          .filter((perm) => !isWarehousePermission(perm));
+        if (offending.length > 0) {
+          return NextResponse.json({
+            error: "agent_has_non_warehouse_permissions",
+            detail:
+              "A Warehouse Agent may hold only Warehouse permissions. Remove these first, "
+              + "or assign a Warehouse-only role: " + offending.join(", "),
+            offending,
+          }, { status: 409 });
+        }
+      }
+      // Turning it OFF makes the identity an employee and grants nothing.
+      set.warehouse_agent = body.warehouse_agent;
+      summaryParts.push(body.warehouse_agent ? "declared Warehouse Agent" : "cleared Warehouse Agent");
+    }
+
     if (body.extra_permissions !== undefined) {
       set.extra_permissions = sanitisePermissions(body.extra_permissions);
       summaryParts.push(`extras: ${set.extra_permissions.length}`);

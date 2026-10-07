@@ -53,6 +53,7 @@ const INVALIDATING_FIELDS = new Set<keyof User>([
   "extra_permissions",    // different permissions
   "denied_permissions",   // different permissions
   "type",                 // legacy permission source
+  "warehouse_agent",      // identity itself — changes what redaction applies
 ]);
 
 export function shouldBumpSessionVersion(changed: Partial<User>): boolean {

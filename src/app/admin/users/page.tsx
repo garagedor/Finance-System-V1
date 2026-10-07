@@ -420,7 +420,7 @@ function EditUserModal({
     } finally { setBusy(false); }
   };
 
-  const moduleOrder = ['system', 'crm', 'finance'] as const;
+  const moduleOrder = ['system', 'crm', 'finance', 'wh'] as const;
 
   return (
     <ModalShell title={`Edit — ${target.name}`} onClose={onClose} wide>
@@ -468,6 +468,7 @@ function EditUserModal({
                   <strong>{activeRole.label}</strong>.
                 </div>
               )}
+
             </div>
           </>
         )}

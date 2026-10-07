@@ -94,6 +94,7 @@ export default async function UserDetailPage({
             type: user.type,
             role_id: user.role_id,
             active: user.active ?? true,
+            warehouse_agent: user.warehouse_agent === true,
             extra_permissions: user.extra_permissions ?? [],
             denied_permissions: user.denied_permissions ?? [],
           }}

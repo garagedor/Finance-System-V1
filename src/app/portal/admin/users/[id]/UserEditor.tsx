@@ -19,6 +19,7 @@ interface UserShape {
   type: UserType;
   role_id?: string;
   active: boolean;
+  warehouse_agent: boolean;
   extra_permissions: Permission[];
   denied_permissions: Permission[];
 }
@@ -47,6 +48,7 @@ export default function UserEditor({
   const [type, setType] = useState<UserType>(user.type);
   const [roleId, setRoleId] = useState(user.role_id ?? "");
   const [active, setActive] = useState(user.active);
+  const [warehouseAgent, setWarehouseAgent] = useState(user.warehouse_agent);
   const [extras, setExtras] = useState<Set<Permission>>(new Set(user.extra_permissions));
   const [denied, setDenied] = useState<Set<Permission>>(new Set(user.denied_permissions));
   const [newPassword, setNewPassword] = useState("");
@@ -99,6 +101,7 @@ export default function UserEditor({
         type,
         role_id: roleId || null,
         active,
+        warehouse_agent: warehouseAgent,
         extra_permissions: [...extras],
         denied_permissions: [...denied],
       };
@@ -180,6 +183,24 @@ export default function UserEditor({
             <option value="inactive">Inactive (cannot log in)</option>
           </select>
           {isSelf && <span className="muted small">You cannot deactivate your own account.</span>}
+        </label>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, gridColumn: "1 / -1" }}>
+          <span className="portal-label">Warehouse Agent</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={warehouseAgent}
+              onChange={(e) => setWarehouseAgent(e.target.checked)}
+              disabled={!canEdit}
+            />
+            <span className="small">External/restricted Warehouse identity</span>
+          </span>
+          <span className="muted small">
+            Agents cannot hold CRM, Finance or System permissions, and see purchase orders
+            without costs or internal notes. Leave this off for employees — including staff
+            whose only permissions are Warehouse ones. Enabling it is refused while the
+            account still holds a non-Warehouse permission; the message names what to remove.
+          </span>
         </label>
         {canResetPassword && (
           <label style={{ display: "flex", flexDirection: "column", gap: 4, gridColumn: "1 / -1" }}>

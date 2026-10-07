@@ -25,6 +25,20 @@ export type User = {
     /** Why it was last bumped, and when. Audit only. */
     session_version_reason?: string;
     session_version_at?: string;
+    /**
+     * Declares this identity as an external, restricted Warehouse Agent.
+     *
+     * Absent or false means a normal employee — including an employee whose
+     * only permissions are warehouse ones. Agent status is DECLARED, never
+     * inferred from what the account happens to hold: inference was wrong in
+     * both directions, classifying an internal warehouse-only clerk as a
+     * supplier agent, and silently demoting a contaminated agent to employee
+     * (which is what turns financial redaction off).
+     *
+     * A declared agent may hold ONLY canonical warehouse permissions. Warehouse
+     * token issuance fails closed otherwise — see lib/warehouse-mint.ts.
+     */
+    warehouse_agent?: boolean;
     /** Extra permission keys granted directly to this user, on top of role. */
     extra_permissions?: Permission[];
     /** Permission keys explicitly denied for this user (overrides role grant). */

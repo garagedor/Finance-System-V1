@@ -33,6 +33,12 @@ export interface RbacSession {
    * signs people out. See docs/AUTH-INTEGRATION-GATE-PLAN.md step 4.
    */
   sessionVersion: number;
+  /**
+   * Declared external Warehouse Agent. Absent on tokens predating the claim,
+   * which read as false — an old session is an employee, which is what it was
+   * already being treated as.
+   */
+  isWarehouseAgent: boolean;
 }
 
 interface JwtClaims {
@@ -43,6 +49,7 @@ interface JwtClaims {
   permissions?: Permission[];
   active?: boolean;
   session_version?: number;
+  warehouse_agent?: boolean;
 }
 
 /** Read + verify the session cookie, hydrate effective permissions. */
@@ -77,6 +84,7 @@ export async function readSession(): Promise<RbacSession | null> {
       // value. Enforcement is the step that signs people out and is approved
       // separately — see docs/AUTH-INTEGRATION-GATE-PLAN.md step 4.
       sessionVersion: typeof claims.session_version === "number" ? claims.session_version : 0,
+      isWarehouseAgent: claims.warehouse_agent === true,
     };
   } catch {
     return null;
@@ -185,6 +193,8 @@ export async function signSessionToken(args: {
   active: boolean;
   /** Stamped so a later bump can invalidate this token. Defaults to 0. */
   session_version?: number;
+  /** Declared external Warehouse Agent. Defaults to false. */
+  warehouse_agent?: boolean;
   expiresIn?: string;
 }): Promise<string> {
   return new SignJWT({
@@ -195,6 +205,7 @@ export async function signSessionToken(args: {
     permissions: args.permissions,
     active: args.active,
     session_version: args.session_version ?? 0,
+    warehouse_agent: args.warehouse_agent === true,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setIssuedAt()

@@ -17,6 +17,7 @@ import {
 import {
   buildWarehouseClaims,
   hasWarehouseEntitlement,
+  nonWarehousePermissionsOf,
   type SessionLike,
 } from "./warehouse-claims";
 
@@ -25,7 +26,12 @@ export const WAREHOUSE_TOKEN_COOKIE = "wh_token";
 
 export type MintRefusal =
   | { ok: false; reason: "no_session"; status: 401 }
-  | { ok: false; reason: "disabled" | "no_identity" | "not_entitled"; status: 403; detail: string }
+  | {
+      ok: false;
+      reason: "disabled" | "no_identity" | "not_entitled" | "agent_contaminated";
+      status: 403;
+      detail: string;
+    }
   | { ok: false; reason: "not_configured"; status: 503; detail: string };
 
 export type MintResult =
@@ -40,6 +46,7 @@ export function sessionLike(session: RbacSession): SessionLike {
     permissions: session.permissions,
     active: session.active,
     sessionVersion: session.sessionVersion,
+    isWarehouseAgent: session.isWarehouseAgent,
   };
 }
 
@@ -72,6 +79,32 @@ export async function mintWarehouseToken(
       ok: false, reason: "not_entitled", status: 403,
       detail: "This account holds no warehouse permissions.",
     };
+  }
+
+  // A declared agent may hold ONLY canonical warehouse permissions.
+  //
+  // Fail closed rather than reclassify. Treating the identity as an employee
+  // because it holds something unexpected is exactly the silent failure this
+  // declaration exists to end: redaction would stop and the token would look
+  // entirely ordinary. Dropping the offending permission instead would hide a
+  // misconfiguration that someone needs to fix on the account.
+  if (s.isWarehouseAgent === true) {
+    const offending = nonWarehousePermissionsOf(s);
+    if (offending.length > 0) {
+      console.error(
+        `warehouse-mint: refusing to mint for declared agent ${s.userId} — ` +
+          `${offending.length} non-warehouse permission(s)`,
+      );
+      return {
+        ok: false,
+        reason: "agent_contaminated",
+        status: 403,
+        detail:
+          "This account is declared a Warehouse Agent but holds permissions outside " +
+          `Warehouse (${offending.join(", ")}). Remove them, or clear the Warehouse ` +
+          "Agent flag. No token was issued.",
+      };
+    }
   }
 
   let config;
