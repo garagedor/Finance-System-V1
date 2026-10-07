@@ -16,13 +16,20 @@ import {
   FiCheckSquare, FiHome, FiUsers, FiTrendingUp, FiTrendingDown, FiSend,
   FiBriefcase, FiMapPin, FiPackage, FiArchive, FiSettings, FiShield,
   FiUpload, FiLock, FiPieChart, FiTruck, FiClipboard, FiBox, FiLayers,
+  FiAlertTriangle,
 } from 'react-icons/fi';
 import type { PortalKey } from '@/config/portals';
+import { WAREHOUSE_PERMISSIONS } from '@/types/rbac';
 
 export interface NavItem {
   href: string;
   label: string;
   icon: ComponentType<{ size?: number; className?: string }>;
+  /**
+   * Suppress the admin shortcut below for this item. Access must be held, not
+   * implied by being an administrator — the Warehouse rule.
+   */
+  noAdminBypass?: boolean;
   /** Any one of these permissions reveals the item. Empty = always visible. */
   requires?: string[];
   /** Not built yet — rendered disabled so the shape is legible. */
@@ -67,7 +74,31 @@ export const CRM_NAV: NavGroup[] = [
     items: [
       { href: '/verify-reports', label: 'Weekly reports', icon: FiCheckSquare, requires: ['crm:verify_reports:view'] },
     ],
+  },  {
+    label: 'Administration',
+    items: [
+      // Both lost their nav entry when the flat layout.tsx list was replaced.
+      // Admin is gated on the permission rather than the old adminOnly flag.
+      { href: '/admin/users', label: 'Users & roles', icon: FiShield, requires: ['system:users:view'] },
+      { href: '/finance', label: 'Finance (legacy)', icon: FiDollarSign, requires: ['finance:dashboard:view'] },
+    ],
   },
+  {
+    label: 'Warehouse',
+    items: [
+      // The old flat nav carried this link; it is restored with the locked
+      // rule attached — canonical membership of the twenty, and no admin
+      // shortcut, so an administrator holding none of them does not see it.
+      {
+        href: '/warehouse',
+        label: 'Warehouse',
+        icon: FiPackage,
+        requires: [...WAREHOUSE_PERMISSIONS],
+        noAdminBypass: true,
+      },
+    ],
+  },
+
 ];
 
 /* ── Finance ──────────────────────────────────────────────────────────────
@@ -97,6 +128,7 @@ export const FIN_NAV: NavGroup[] = [
       { href: '/portal/ledger', label: 'Ledgers', icon: FiArchive, requires: ['finance:debts:view'] },
       { href: '/portal/debts', label: 'Debts', icon: FiDollarSign, requires: ['finance:debts:view'] },
       { href: '/portal/disputes', label: 'Disputes & refunds', icon: FiShield, requires: ['finance:disputes:view'] },
+      { href: '/portal/disputes/inbox', label: 'Disputes inbox', icon: FiAlertTriangle, requires: ['finance:disputes:view'] },
       { href: '/portal/equipment', label: 'Equipment', icon: FiPackage, requires: ['finance:equipment:view'] },
     ],
   },
@@ -104,6 +136,8 @@ export const FIN_NAV: NavGroup[] = [
     label: 'Reporting',
     items: [
       { href: '/portal/reports', label: 'Balance reports', icon: FiFileText, requires: ['finance:reports:view'] },
+      { href: '/portal/finance-report', label: 'Financial report', icon: FiFileText, requires: ['finance:reports:view'] },
+      { href: '/portal/finance-report/custom', label: 'Custom report', icon: FiFileText, requires: ['finance:reports:view'] },
       { href: '/portal/documents', label: 'Documents', icon: FiClipboard, requires: ['finance:documents:view'] },
     ],
   },
@@ -200,9 +234,13 @@ export function visibleGroups(
   return groups
     .map((g) => ({
       ...g,
-      items: g.items.filter(
-        (it) => !it.requires || isAdmin || it.requires.some((p) => perms.has(p)),
-      ),
+      items: g.items.filter((it) => {
+        if (!it.requires) return true;
+        const held = it.requires.some((p) => perms.has(p));
+        // The admin shortcut is deliberately not universal: an item marked
+        // noAdminBypass must be genuinely held.
+        return it.noAdminBypass ? held : isAdmin || held;
+      }),
     }))
     .filter((g) => g.items.length > 0);
 }
