@@ -127,8 +127,14 @@ export const FIN_NAV: NavGroup[] = [
     items: [
       { href: '/portal/ledger', label: 'Ledgers', icon: FiArchive, requires: ['finance:debts:view'] },
       { href: '/portal/debts', label: 'Debts', icon: FiDollarSign, requires: ['finance:debts:view'] },
-      { href: '/portal/disputes', label: 'Disputes & refunds', icon: FiShield, requires: ['finance:disputes:view'] },
-      { href: '/portal/disputes/inbox', label: 'Disputes inbox', icon: FiAlertTriangle, requires: ['finance:disputes:view'] },
+      // The inbox REPLACED /portal/disputes as the primary screen on 2026-10-05.
+      // The shell nav was written before that and still pointed the headline
+      // label at the old page, so every recent change — the unified inbox, the
+      // filter bar, Posted/Ignored tabs, partial refunds, the post-to-ledger
+      // picker — was invisible while living one route away. portal/nav.ts, the
+      // source of truth, lists only the inbox.
+      { href: '/portal/disputes/inbox', label: 'Disputes & refunds', icon: FiAlertTriangle, requires: ['finance:disputes:view'] },
+      { href: '/portal/disputes/scanpay', label: 'ScanPay disputes', icon: FiShield, requires: ['finance:disputes:view'] },
       { href: '/portal/equipment', label: 'Equipment', icon: FiPackage, requires: ['finance:equipment:view'] },
     ],
   },

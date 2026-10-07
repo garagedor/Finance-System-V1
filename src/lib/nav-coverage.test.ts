@@ -82,3 +82,25 @@ test("the Warehouse nav entry is restored, and keeps the locked rule", async () 
   // and the admin shortcut still works for everything else
   assert.equal(visibleGroups(CRM_NAV, [], true).some((g) => g.items.some((i) => i.href === "/tables")), true);
 });
+
+test("the disputes headline points at the inbox, not the superseded page", () => {
+  // /portal/disputes/inbox replaced /portal/disputes on 2026-10-05. The shell
+  // nav predated that and sent 'Disputes & refunds' to the old screen, so a
+  // month of work was one route away and invisible.
+  const items = FIN_NAV.flatMap((g) => g.items);
+  const headline = items.find((i) => i.label === "Disputes & refunds");
+  assert.ok(headline, "the headline entry must exist");
+  assert.equal(headline.href, "/portal/disputes/inbox");
+  assert.equal(items.some((i) => i.href === "/portal/disputes"), false,
+    "the superseded page must not carry a nav entry");
+});
+
+test("no Finance nav entry points at a route the source of truth dropped", () => {
+  // portal/nav.ts is the live Finance navigation. An entry here that it does
+  // not list is, by definition, a screen it has moved on from.
+  const truth = new Set(FINANCE_NAV.map((m) => m.href));
+  const stale = FIN_NAV.flatMap((g) => g.items)
+    .map((i) => i.href)
+    .filter((h) => !truth.has(h) && h !== "/portal/disputes/scanpay");
+  assert.deepEqual(stale, [], `nav points at superseded screens: ${stale.join(", ")}`);
+});
