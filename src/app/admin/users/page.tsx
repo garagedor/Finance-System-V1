@@ -83,10 +83,10 @@ export default function AdminUsersPage() {
   }
 
   const handleResetPassword = async (target: UserRow, newPassword: string) => {
-    const res = await fetch('/api/users', {
-      method: 'PUT',
+    const res = await fetch('/api/portal/admin/users', {
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ _id: target._id, password: newPassword }),
+      body: JSON.stringify({ _id: target._id, new_password: newPassword }),
     });
     const j = await res.json();
     if (!res.ok) throw new Error(j.detail || j.error || `HTTP ${res.status}`);
@@ -98,8 +98,8 @@ export default function AdminUsersPage() {
       if (!confirm('Disable your OWN account? You will be logged out and locked out.')) return;
     }
     try {
-      const res = await fetch('/api/users', {
-        method: 'PUT',
+      const res = await fetch('/api/portal/admin/users', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ _id: target._id, active: !(target.active !== false) }),
       });
@@ -118,7 +118,7 @@ export default function AdminUsersPage() {
     }
     if (!confirm(`Delete user "${target.name}"? This cannot be undone.`)) return;
     try {
-      const res = await fetch(`/api/users?id=${encodeURIComponent(target._id || '')}`, { method: 'DELETE' });
+      const res = await fetch(`/api/portal/admin/users?_id=${encodeURIComponent(target._id || '')}`, { method: 'DELETE' });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.detail || j.error || `HTTP ${res.status}`);
       load();
@@ -407,8 +407,8 @@ function EditUserModal({
       // re-attaches the canonical system role for the new type.
       if (target.type !== type) body.role_id = null;
       else if (roleId) body.role_id = roleId;
-      const res = await fetch('/api/users', {
-        method: 'PUT',
+      const res = await fetch('/api/portal/admin/users', {
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
@@ -558,11 +558,11 @@ function CreateUserModal({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return setErr('Name is required.');
-    if (password.length < 4) return setErr('Password must be at least 4 characters.');
+    if (password.length < 6) return setErr('Password must be at least 6 characters.');
     setBusy(true);
     setErr(null);
     try {
-      const res = await fetch('/api/users', {
+      const res = await fetch('/api/portal/admin/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), email, password, type, active: true }),

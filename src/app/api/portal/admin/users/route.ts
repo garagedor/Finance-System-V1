@@ -20,6 +20,7 @@ interface PublicUser {
   role_id?: string;
   role_name?: string;
   active: boolean;
+  email?: string;
   warehouse_agent: boolean;
   extra_permissions: Permission[];
   denied_permissions: Permission[];
@@ -69,6 +70,7 @@ function toPublic(u: User, roleName?: string): PublicUser {
     role_id: u.role_id,
     role_name: roleName,
     active: u.active ?? true,
+    ...(u.email ? { email: u.email } : {}),
     warehouse_agent: u.warehouse_agent === true,
     extra_permissions: u.extra_permissions ?? [],
     denied_permissions: u.denied_permissions ?? [],
@@ -108,6 +110,7 @@ export async function POST(req: NextRequest) {
       type?: UserType;
       role_id?: string;
       active?: boolean;
+      email?: string;
       extra_permissions?: unknown;
       denied_permissions?: unknown;
     };
@@ -148,6 +151,7 @@ export async function POST(req: NextRequest) {
       type,
       role_id: roleId,
       active: body.active ?? true,
+      ...(typeof body.email === "string" && body.email.trim() ? { email: body.email.trim() } : {}),
       extra_permissions: sanitisePermissions(body.extra_permissions),
       denied_permissions: sanitisePermissions(body.denied_permissions),
       created_at: now,
@@ -178,6 +182,7 @@ export async function PATCH(req: NextRequest) {
       type?: UserType;
       role_id?: string | null;
       active?: boolean;
+      email?: string;
       warehouse_agent?: boolean;
       extra_permissions?: unknown;
       denied_permissions?: unknown;
@@ -230,6 +235,15 @@ export async function PATCH(req: NextRequest) {
       set.active = body.active;
       summaryParts.push(body.active ? "activated" : "deactivated");
     }
+    if (typeof body.email === "string") {
+      // Profile, not security: deliberately not in INVALIDATING_FIELDS.
+      const email = body.email.trim();
+      if (email !== (existing.email ?? "")) {
+        set.email = email || undefined;
+        summaryParts.push("email");
+      }
+    }
+
     if (typeof body.warehouse_agent === "boolean"
         && body.warehouse_agent !== (existing.warehouse_agent === true)) {
       if (body.warehouse_agent) {
