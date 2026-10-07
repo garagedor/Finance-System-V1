@@ -1,0 +1,367 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LBS Design 360 — ecosystem design tokens  (v2)
+   ───────────────────────────────────────────────────────────────────────────
+   Direction: modern commerce architecture applied to an executive operating
+   system. Summary before detail, generous cards over dense rows, colour used
+   to guide the eye rather than to decorate.
+
+   v2 replaces the "operations console" direction. The important change is the
+   numbers: precision now comes from `font-variant-numeric: tabular-nums` on a
+   proportional sans, NOT from a monospace face. Columns still align exactly;
+   nothing reads as infrastructure tooling. Monospace survives only for true
+   codes — container numbers, invoice IDs, hashes.
+
+   Additive: globals.css and portal/styles.css are untouched, so nothing
+   regresses while screens adopt this one at a time.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  --ds-font: 'Manrope', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Codes and identifiers ONLY. Never for ordinary numbers. */
+  --ds-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --ds-text-2xs: 11px;
+  --ds-text-xs:  12px;
+  --ds-text-sm:  13px;
+  --ds-text-md:  15px;
+  --ds-text-lg:  17px;
+  --ds-text-xl:  20px;
+  --ds-text-2xl: 26px;
+  --ds-text-3xl: 32px;
+  --ds-text-4xl: 40px;
+  --ds-text-5xl: 52px;
+
+  --ds-leading-tight: 1.08;
+  --ds-leading-snug:  1.4;
+  --ds-leading-body:  1.65;
+
+  /* Negative tracking on display sizes — the premium cue */
+  --ds-track-display: -0.03em;
+  --ds-track-title:   -0.02em;
+
+  --ds-w-regular: 400;
+  --ds-w-medium:  500;
+  --ds-w-semi:    600;
+  --ds-w-bold:    700;
+  --ds-w-black:   800;
+
+  /* ── Spacing — 4px base ──────────────────────────────────────────────── */
+  --ds-space-1: 4px;
+  --ds-space-2: 8px;
+  --ds-space-3: 12px;
+  --ds-space-4: 16px;
+  --ds-space-5: 20px;
+  --ds-space-6: 28px;
+  --ds-space-7: 40px;
+  --ds-space-8: 56px;
+  --ds-space-9: 80px;
+
+  /* ── Radius — softer than v1, still precise ──────────────────────────── */
+  --ds-radius-1:    6px;   /* chips, small controls */
+  --ds-radius-2:    10px;  /* buttons, inputs, rows */
+  --ds-radius-3:    14px;  /* cards, panels */
+  --ds-radius-4:    20px;  /* feature cards */
+  --ds-radius-full: 999px;
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --ds-ease:     cubic-bezier(0.32, 0.72, 0, 1);
+  --ds-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ds-dur-fast: 160ms;
+  --ds-dur-base: 260ms;
+  --ds-dur-slow: 420ms;
+
+  /* ── Portal identity ───────────────────────────────────────────────────
+     Enriched from v1 so they can carry gradients and filled tiles, not just
+     hairlines. Each has a lighter partner for text on dark accent fills.     */
+  --ds-crm:   #E8963C;
+  --ds-crm-2: #F5B968;
+  --ds-crm-wash: rgba(232, 150, 60, 0.12);
+  --ds-crm-grad: linear-gradient(135deg, rgba(232, 150, 60, 0.22), rgba(232, 150, 60, 0.04));
+
+  --ds-fin:   #1FA37A;
+  --ds-fin-2: #4CC79E;
+  --ds-fin-wash: rgba(31, 163, 122, 0.12);
+  --ds-fin-grad: linear-gradient(135deg, rgba(31, 163, 122, 0.22), rgba(31, 163, 122, 0.04));
+
+  --ds-whs:   #3D7FD6;
+  --ds-whs-2: #6FA8ED;
+  --ds-whs-wash: rgba(61, 127, 214, 0.12);
+  --ds-whs-grad: linear-gradient(135deg, rgba(61, 127, 214, 0.22), rgba(61, 127, 214, 0.04));
+
+  /* ── S4 batch 3 — identity hues gain the same five roles the semantics got
+     in batch 2, so a portal accent can fill a chip or draw a hairline without
+     reaching for a literal. -text is for text sitting ON an identity wash;
+     -wash-2 is the stronger fill a selected segment needs.                   */
+  --ds-crm-text: #EBA456;  --ds-crm-wash-2: rgba(232, 150, 60, 0.22);  --ds-crm-line: rgba(232, 150, 60, 0.32);
+  --ds-fin-text: #25C291;  --ds-fin-wash-2: rgba(31, 163, 122, 0.22);  --ds-fin-line: rgba(31, 163, 122, 0.32);
+  --ds-whs-text: #7EAAE4;  --ds-whs-wash-2: rgba(61, 127, 214, 0.22);  --ds-whs-line: rgba(61, 127, 214, 0.32);
+
+  /* ── Foreground on a SOLID accent fill ────────────────────────────────────
+     White is not a safe default. On this theme's accents it measures 2.37
+     (CRM), 3.19 (Finance) and 4.03 (Warehouse) — all below the 4.5 a 13px
+     bold button label needs. Each accent therefore names its own foreground:
+     a deep ink carrying that accent's own hue, so the button still reads as
+     one object rather than as black type dropped onto colour.                */
+  --ds-on-crm:    #492F12;
+  --ds-on-fin:    #09221A;
+  --ds-on-whs:    #040A12;
+  --ds-on-accent: #323A45;   /* the neutral --ac base, no portal class */
+  --ds-on-info:   #0B1A21;   /* foreground on a solid --ds-info fill (shared accent) */
+  --ds-on-brand:  #04070C;   /* the tri-colour logo mark */
+  --ds-on-crit:   #350F0D;   /* solid danger fills — notification badges */
+  --ds-on-ok:     #0C1A12;   /* solid success fills — snackbars, badges */
+
+  /* ── Semantic — never a portal hue ──────────────────────────────────────
+     S4 batch 2. Each hue now carries five roles, because one value cannot
+     serve all of them:
+
+       --ds-X        the hue itself. Text on a plain surface (money, trend
+                     figures), progress fills, icons.
+       --ds-X-text   text sitting ON one of the washes below. In dark this is
+                     a lighter tint — a wash lifts the background, so the base
+                     hue loses contrast against it. In light the wash barely
+                     moves white, so -text ≈ the base.
+       --ds-X-wash   fill for small, dense objects: status pills.
+       --ds-X-soft   fill for large objects: alert and banner blocks. Fainter
+                     on purpose — the same alpha that reads as a tint on a
+                     pill reads as a flood across a panel.
+       --ds-X-line   hairline border for either.
+
+     --ds-ok moved from #35B57F (H 155°) to #3FBF6E (H 142°) so positive money
+     cannot be mistaken for Finance-portal teal --ds-fin (H 161°). The gap went
+     from 7° to 19°.
+
+     Batch 2.5: --ds-info moved from #5B8DEF (H 220°) to #2DA7D4 (H 196°) for
+     the same reason — the Warehouse identity --ds-whs sits at H 214°, so an
+     "Open" chip read as a Warehouse marker. Perceptual distance from --ds-whs
+     went from dE 8.9 to dE 33.5. --ds-whs itself is untouched.
+
+     Batch 3.5: the third and last of these. --ds-warn moved from H 39° to
+     H 52° — amber to a true yellow-gold — because the CRM identity sits at
+     H 31-33° and a warning chip beside CRM chrome was only 6-8° away. The
+     move changes hue ONLY: luminance and chroma are held to the decimal, so
+     every warning contrast reading is within 0.06 of what it was. CRM is
+     untouched. Gap 7.6° -> 20.7° dark, 6.2° -> 19.0° light.                  */
+  --ds-ok:   #3FBF6E;
+  --ds-warn: #C4B133;
+  --ds-crit: #E2635C;
+  --ds-info: #2DA7D4;
+
+  --ds-ok-text:   #61CB88;
+  --ds-warn-text: #CAB634;
+  --ds-crit-text: #EEA39F;
+  --ds-info-text: #6CC2E1;
+
+  --ds-ok-wash:   rgba(63, 191, 110, 0.14);
+  --ds-warn-wash: rgba(196, 177, 51, 0.14);
+  --ds-crit-wash: rgba(226, 99, 92, 0.14);
+  --ds-info-wash: rgba(45, 167, 212, 0.14);
+
+  --ds-ok-soft:   rgba(63, 191, 110, 0.08);
+  --ds-warn-soft: rgba(196, 177, 51, 0.08);
+  --ds-crit-soft: rgba(226, 99, 92, 0.08);
+  --ds-info-soft: rgba(45, 167, 212, 0.08);
+
+  --ds-ok-line:   rgba(63, 191, 110, 0.32);
+  --ds-warn-line: rgba(196, 177, 51, 0.32);
+  --ds-crit-line: rgba(226, 99, 92, 0.32);
+  --ds-info-line: rgba(45, 167, 212, 0.32);
+
+  /* Danger is the only semantic with an interactive hover state. */
+  --ds-crit-wash-2: rgba(226, 99, 92, 0.24);
+  --ds-crit-line-2: rgba(226, 99, 92, 0.55);
+
+  /* Neutral status — "draft", "n/a", "not started". Closes the gap found in
+     batch 1: every hue had a wash, the neutral ramp did not. */
+  --ds-neutral-text: #AFB8C4;
+  --ds-neutral-wash: rgba(166, 176, 190, 0.14);
+  --ds-neutral-line: rgba(166, 176, 190, 0.32);
+
+  /* ── DARK (default) ───────────────────────────────────────────────────── */
+  --ds-bg:        #0F1218;
+  --ds-surface-1: #171B23;
+  --ds-surface-2: #1E232D;
+  --ds-surface-3: #262C38;
+
+  --ds-line:        rgba(255, 255, 255, 0.08);
+  --ds-line-strong: rgba(255, 255, 255, 0.14);
+
+  --ds-ink:     #EDF0F4;
+  --ds-ink-2:   #A6B0BE;
+  --ds-ink-3:   #727D8C;
+  --ds-ink-dim: #4E5865;
+
+  --ds-elev-1: 0 1px 3px rgba(0, 0, 0, 0.28);
+  --ds-elev-2: 0 6px 20px rgba(0, 0, 0, 0.34);
+  --ds-elev-3: 0 20px 48px rgba(0, 0, 0, 0.42);
+
+  --ds-focus: 0 0 0 3px var(--ds-info-wash), 0 0 0 1px var(--ds-info);
+
+  /* Blocking overlays: modal backdrops, loading overlays. Deliberately dark in
+     BOTH themes — a scrim is translucent over arbitrary content, so a light
+     scrim cannot guarantee contrast for anything drawn on it. --ds-on-scrim is
+     therefore fixed rather than theme-flipped. Worst measured case 5.92:1. */
+  --ds-scrim: rgba(2, 6, 23, 0.78);
+  --ds-on-scrim: #EDF0F4;
+
+  /* A <select>'s chevron is a background-image, so unlike a mask it cannot
+     reference a colour token — the hue is baked into the data URI. Shipping
+     the whole URL as a token is the only way to let it follow the theme.
+     The stroke is --ds-ink-2 in each theme. */
+  --ds-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23A6B0BE' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E");
+
+  color-scheme: dark;
+}
+
+/* ── LIGHT — designed, not inverted ─────────────────────────────────────
+   Portal hues darken substantially so contrast holds on white; gradients
+   soften; elevation carries the layering that borders carry in dark.       */
+:root[data-theme="light"] {
+  --ds-bg:        #F6F8FA;
+  --ds-surface-1: #FFFFFF;
+  --ds-surface-2: #F1F4F7;
+  --ds-surface-3: #E8ECF1;
+
+  --ds-line:        rgba(15, 18, 24, 0.09);
+  --ds-line-strong: rgba(15, 18, 24, 0.16);
+
+  --ds-ink:     #0F1218;
+  --ds-ink-2:   #4C5866;
+  --ds-ink-3:   #77828F;
+  --ds-ink-dim: #A2ACB8;
+
+  /* Batch 3, rule 4 exception. #B06A12 sat in a dead zone: white on it
+     measured 4.27 and black on its hover partner #8A5210 measured 3.30, so
+     NO foreground cleared 4.5 on both states. Fixed by the smallest possible
+     correction — lightness only, hue held at 33.4° — which also lifts CRM as
+     TEXT on white from 4.27 to 5.22. The partner is unchanged.               */
+  --ds-crm:   #9C5E10;
+  --ds-crm-2: #8A5210;
+  --ds-crm-wash: rgba(156, 94, 16, 0.09);
+  --ds-crm-grad: linear-gradient(135deg, rgba(156, 94, 16, 0.14), rgba(156, 94, 16, 0.02));
+
+  --ds-fin:   #0E7355;
+  --ds-fin-2: #0A5A42;
+  --ds-fin-wash: rgba(14, 115, 85, 0.09);
+  --ds-fin-grad: linear-gradient(135deg, rgba(14, 115, 85, 0.14), rgba(14, 115, 85, 0.02));
+
+  --ds-whs:   #1F5DAE;
+  --ds-whs-2: #17488A;
+  --ds-whs-wash: rgba(31, 93, 174, 0.09);
+  --ds-whs-grad: linear-gradient(135deg, rgba(31, 93, 174, 0.14), rgba(31, 93, 174, 0.02));
+
+  --ds-crm-text: #86510F;  --ds-crm-wash-2: rgba(156, 94, 16, 0.16);  --ds-crm-line: rgba(156, 94, 16, 0.28);
+  --ds-fin-text: #0D694E;  --ds-fin-wash-2: rgba(14, 115, 85, 0.16);  --ds-fin-line: rgba(14, 115, 85, 0.28);
+  --ds-whs-text: #1E5BAB;  --ds-whs-wash-2: rgba(31, 93, 174, 0.16);  --ds-whs-line: rgba(31, 93, 174, 0.28);
+
+  /* Here the accents are dark enough that white is genuinely correct — 5.22,
+     5.83 and 6.49 respectively. The token still exists so the rule is the
+     same in both themes and no component hard-codes a foreground.            */
+  --ds-on-crm:    #FFFFFF;
+  --ds-on-fin:    #FFFFFF;
+  --ds-on-whs:    #FFFFFF;
+  --ds-on-accent: #FFFFFF;
+  --ds-on-info:   #FFFFFF;
+  --ds-on-brand:  #FFFFFF;
+  --ds-on-crit:   #FFFFFF;
+  --ds-on-ok:     #FFFFFF;
+
+  /* --ds-ok moved from #137D54 (H 157°) to #15803D (H 142°): the light Finance
+     hue #0E7355 sits at H 162°, so the old pair was only 5° apart. */
+  --ds-ok:   #15803D;
+  --ds-warn: #76690F;
+  --ds-crit: #B03830;
+  --ds-info: #0E7297;
+
+  /* On white a wash barely lifts the ground, so -text stays at or just below
+     the base rather than lightening as it does in dark. */
+  --ds-ok-text:   #137638;
+  --ds-warn-text: #75680F;
+  --ds-crit-text: #B03830;
+  --ds-info-text: #0E688A;
+
+  --ds-ok-wash:   rgba(21, 128, 61, 0.10);
+  --ds-warn-wash: rgba(118, 105, 15, 0.10);
+  --ds-crit-wash: rgba(176, 56, 48, 0.10);
+  --ds-info-wash: rgba(14, 114, 151, 0.10);
+
+  --ds-ok-soft:   rgba(21, 128, 61, 0.07);
+  --ds-warn-soft: rgba(118, 105, 15, 0.07);
+  --ds-crit-soft: rgba(176, 56, 48, 0.07);
+  --ds-info-soft: rgba(14, 114, 151, 0.07);
+
+  --ds-ok-line:   rgba(21, 128, 61, 0.28);
+  --ds-warn-line: rgba(118, 105, 15, 0.28);
+  --ds-crit-line: rgba(176, 56, 48, 0.28);
+  --ds-info-line: rgba(14, 114, 151, 0.28);
+
+  --ds-crit-wash-2: rgba(176, 56, 48, 0.18);
+  --ds-crit-line-2: rgba(176, 56, 48, 0.45);
+
+  --ds-neutral-text: #4C5866;
+  --ds-neutral-wash: rgba(76, 88, 102, 0.10);
+  --ds-neutral-line: rgba(76, 88, 102, 0.26);
+
+  --ds-elev-1: 0 1px 3px rgba(15, 18, 24, 0.06);
+  --ds-elev-2: 0 6px 20px rgba(15, 18, 24, 0.08);
+  --ds-elev-3: 0 20px 48px rgba(15, 18, 24, 0.12);
+
+  /* Lighter than dark theme — less suppression is needed over a bright page —
+     but still dark, so --ds-on-scrim holds. */
+  --ds-scrim: rgba(2, 6, 23, 0.66);
+  --ds-on-scrim: #EDF0F4;
+
+  --ds-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%234C5866' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E");
+
+  color-scheme: light;
+}
+
+/* Follow the OS when the user has expressed no preference. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    --ds-bg:#F6F8FA; --ds-surface-1:#FFFFFF; --ds-surface-2:#F1F4F7; --ds-surface-3:#E8ECF1;
+    --ds-line:rgba(15,18,24,.09); --ds-line-strong:rgba(15,18,24,.16);
+    --ds-ink:#0F1218; --ds-ink-2:#4C5866; --ds-ink-3:#77828F; --ds-ink-dim:#A2ACB8;
+    --ds-crm:#9C5E10; --ds-crm-2:#8A5210; --ds-crm-wash:rgba(156,94,16,.09);
+    --ds-crm-grad:linear-gradient(135deg,rgba(156,94,16,.14),rgba(156,94,16,.02));
+    --ds-fin:#0E7355; --ds-fin-2:#0A5A42; --ds-fin-wash:rgba(14,115,85,.09);
+    --ds-fin-grad:linear-gradient(135deg,rgba(14,115,85,.14),rgba(14,115,85,.02));
+    --ds-whs:#1F5DAE; --ds-whs-2:#17488A; --ds-whs-wash:rgba(31,93,174,.09);
+    --ds-whs-grad:linear-gradient(135deg,rgba(31,93,174,.14),rgba(31,93,174,.02));
+    --ds-crm-text:#86510F; --ds-crm-wash-2:rgba(156,94,16,.16); --ds-crm-line:rgba(156,94,16,.28);
+    --ds-fin-text:#0D694E; --ds-fin-wash-2:rgba(14,115,85,.16); --ds-fin-line:rgba(14,115,85,.28);
+    --ds-whs-text:#1E5BAB; --ds-whs-wash-2:rgba(31,93,174,.16); --ds-whs-line:rgba(31,93,174,.28);
+    --ds-on-crm:#FFFFFF; --ds-on-fin:#FFFFFF; --ds-on-whs:#FFFFFF;
+    --ds-on-accent:#FFFFFF; --ds-on-brand:#FFFFFF; --ds-on-crit:#FFFFFF; --ds-on-info:#FFFFFF; --ds-on-ok:#FFFFFF;
+    --ds-ok:#15803D; --ds-warn:#76690F; --ds-crit:#B03830; --ds-info:#0E7297;
+    --ds-ok-text:#137638; --ds-warn-text:#75680F; --ds-crit-text:#B03830; --ds-info-text:#0E688A;
+    --ds-ok-wash:rgba(21,128,61,.10); --ds-warn-wash:rgba(118,105,15,.10);
+    --ds-crit-wash:rgba(176,56,48,.10); --ds-info-wash:rgba(14,114,151,.10);
+    --ds-ok-soft:rgba(21,128,61,.07); --ds-warn-soft:rgba(118,105,15,.07);
+    --ds-crit-soft:rgba(176,56,48,.07); --ds-info-soft:rgba(14,114,151,.07);
+    --ds-ok-line:rgba(21,128,61,.28); --ds-warn-line:rgba(118,105,15,.28);
+    --ds-crit-line:rgba(176,56,48,.28); --ds-info-line:rgba(14,114,151,.28);
+    --ds-crit-wash-2:rgba(176,56,48,.18); --ds-crit-line-2:rgba(176,56,48,.45);
+    --ds-neutral-text:#4C5866; --ds-neutral-wash:rgba(76,88,102,.10); --ds-neutral-line:rgba(76,88,102,.26);
+    --ds-elev-1:0 1px 3px rgba(15,18,24,.06); --ds-elev-2:0 6px 20px rgba(15,18,24,.08);
+    --ds-elev-3:0 20px 48px rgba(15,18,24,.12);
+    --ds-scrim:rgba(2,6,23,.66); --ds-on-scrim:#EDF0F4;
+    --ds-select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%234C5866' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' d='M2 4.5l4 4 4-4'/%3E%3C/svg%3E");
+    color-scheme: light;
+  }
+}
+
+/* Every duration collapses at the token level, so no component handles this
+   individually — including the access-granted sequence, which then simply
+   shows its final state. */
+@media (prefers-reduced-motion: reduce) {
+  :root { --ds-dur-fast: 0ms; --ds-dur-base: 0ms; --ds-dur-slow: 0ms; }
+}
+
+/* Numbers align without looking like a terminal. Use this, not monospace. */
+.ds-num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+/* Codes and identifiers only. */
+.ds-code { font-family: var(--ds-font-code); font-variant-numeric: tabular-nums; }

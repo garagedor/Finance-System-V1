@@ -217,7 +217,7 @@ export default async function RecurringIncomePage() {
                     <td className="small muted">
                       {labelForSource(t.source)}
                       {t.ledger_id && (
-                        <div className="small" style={{ color: "#818cf8" }}>
+                        <div className="small" style={{ color: "var(--ds-fin-2)" }}>
                           ↩ {d.ledgerName.get(t.ledger_id) ?? "ledger"}
                         </div>
                       )}
@@ -235,10 +235,10 @@ export default async function RecurringIncomePage() {
                     </td>
                     <td className="right money money-pos" style={{ fontWeight: 600 }}>+{fmt$(t.amount)}</td>
                     <td className="small mono">
-                      <span style={{ color: isDue ? "#34d399" : "#cbd5e1" }}>
+                      <span style={{ color: isDue ? "var(--ds-ink)" : "var(--ds-ink-2)" }}>
                         {fmtDate(t.next_due_date)}
                       </span>
-                      {isDue && <div className="muted small" style={{ color: "#34d399" }}>due</div>}
+                      {isDue && <div className="muted small" style={{ color: "var(--ds-ink-2)" }}>due</div>}
                     </td>
                     <td className="right small">{s.count}</td>
                     <td className="right money money-pos">{fmt$(s.total)}</td>
@@ -279,7 +279,7 @@ export default async function RecurringIncomePage() {
         <div>
           <strong>How it works:</strong> templates are blueprints. When you click <em>Generate due income</em>{" "}
           (or Run on a specific row), the system creates real entries on the{" "}
-          <Link href="/portal/income" style={{ color: "#818cf8" }}>Income page</Link>{" "}
+          <Link href="/portal/income" style={{ color: "var(--ds-fin-2)" }}>Income page</Link>{" "}
           for every period that has come due. Generation is idempotent — running it twice never creates duplicates.
         </div>
       </div>

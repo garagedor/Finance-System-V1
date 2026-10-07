@@ -172,7 +172,7 @@ export default function ImportClient() {
                 className="portal-btn"
                 onClick={commit}
                 disabled={committing}
-                style={{ borderColor: "#22c55e", color: "#bbf7d0" }}
+                style={{ borderColor: "var(--ds-fin)", color: "var(--ds-fin-text)" }}
               >
                 {committing ? "Inserting…" : `Insert ${preview.valid} row(s)`}
               </button>
@@ -199,7 +199,7 @@ export default function ImportClient() {
             </div>
           )}
           <p className="muted small" style={{ marginTop: 10 }}>First 5 rows (normalised):</p>
-          <pre style={{ background: "#0a0f1c", padding: 10, borderRadius: 6, fontSize: 12, maxHeight: 220, overflowY: "auto" }}>
+          <pre style={{ background: "var(--ds-surface-2)", padding: 10, borderRadius: 6, fontSize: 12, maxHeight: 220, overflowY: "auto" }}>
 {JSON.stringify(preview.sample, null, 2)}
           </pre>
         </div>

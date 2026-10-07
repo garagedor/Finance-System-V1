@@ -43,9 +43,9 @@ export default function AiTabs() {
             style={
               active
                 ? {
-                    background: "rgba(99,102,241,0.14)",
-                    border: "1px solid rgba(99,102,241,0.35)",
-                    color: "#c7d2fe",
+                    background: "var(--ds-neutral-wash)",
+                    border: "1px solid var(--ds-line-strong)",
+                    color: "var(--ds-ink)",
                   }
                 : undefined
             }

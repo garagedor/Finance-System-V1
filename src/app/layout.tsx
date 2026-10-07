@@ -9,8 +9,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "LBS Garage Door",
-  description: "Management system for LBS Garage Door",
+  title: "317 Eco System",
+  description: "317 Eco System — the LBS Garage Door business platform",
 };
 
 export default function RootLayout({

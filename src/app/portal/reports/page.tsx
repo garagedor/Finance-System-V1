@@ -108,7 +108,7 @@ export default async function ReportsPage({
                   <td className="small mono">{fmtDateTime(r.generated_at)}</td>
                   <td className="small">{REPORT_TYPE_LABELS[r.type] ?? r.type}</td>
                   <td>
-                    <Link href={`/portal/reports/${r._id}`} style={{ color: "#cbd5e1", fontWeight: 500 }}>
+                    <Link href={`/portal/reports/${r._id}`} style={{ color: "var(--ds-ink)", fontWeight: 500 }}>
                       {r.title}
                     </Link>
                     {r.subject_name && <div className="muted small">{r.subject_name}</div>}

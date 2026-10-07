@@ -242,7 +242,7 @@ export default async function ConnectionsPage() {
           <code className="mono" style={{ margin: "0 4px" }}>transactions</code>
           product only. No transfer, ACH initiation, or payment endpoints are wired anywhere
           in this codebase. Access tokens are encrypted at rest with AES-256-GCM.{" "}
-          <Link href="/portal/settings" style={{ color: "#818cf8" }}>Role access settings →</Link>
+          <Link href="/portal/settings" style={{ color: "var(--ds-fin-2)" }}>Role access settings →</Link>
         </div>
       </div>
     </div>

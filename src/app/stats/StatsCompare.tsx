@@ -6,6 +6,9 @@
 // you can compare two date ranges, two technicians, two providers, etc. at once.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+// .portal-btn / .portal-btn-primary live in portal/styles.css, which /stats does
+// not otherwise load. Imported here so the existing classes actually apply.
+import '../portal/styles.css';
 import { formatCurrency } from '../utils/jobUtils';
 import type { Technician, Location, Provider } from '@/types/job';
 import { FilterField } from '@/components/FiltersPanel';
@@ -174,12 +177,12 @@ export default function StatsCompare({
 
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button className="portal-btn portal-btn-primary" onClick={run} disabled={loading}
-          style={{ background: '#4f46e5', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 20px', fontWeight: 700, cursor: 'pointer' }}>
+          style={{ background: 'var(--ds-crm)', color: 'var(--ds-on-crm)', border: 'none', borderRadius: 10, padding: '9px 20px', fontWeight: 700, cursor: 'pointer' }}>
           {loading ? 'Comparing…' : 'Compare'}
         </button>
       </div>
 
-      {error && <div className="panel" style={{ padding: 14, color: '#f87171' }}>{error}</div>}
+      {error && <div className="panel" style={{ padding: 14, color: 'var(--ds-crit-text)' }}>{error}</div>}
 
       {active && statsA && statsB && (
         <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
@@ -203,12 +206,12 @@ export default function StatsCompare({
                 {rows.map((r) => {
                   const up = r.delta > 0.0001;
                   const down = r.delta < -0.0001;
-                  const col = up ? '#34d399' : down ? '#f87171' : '#94a3b8';
+                  const col = up || down ? 'var(--ds-ink)' : 'var(--ds-ink-2)';
                   const deltaStr = r.fmt === 'pct'
                     ? `${r.delta >= 0 ? '+' : ''}${(r.delta * 100).toFixed(1)}pp`
                     : `${r.delta >= 0 ? '+' : ''}${fmtVal(r.fmt, r.delta)}`;
                   return (
-                    <tr key={String(r.key)} style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                    <tr key={String(r.key)} style={{ borderTop: '1px solid var(--ds-line)' }}>
                       <td style={tdStyle}>{r.label}</td>
                       <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtVal(r.fmt, r.av)}</td>
                       <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{fmtVal(r.fmt, r.bv)}</td>
@@ -228,7 +231,7 @@ export default function StatsCompare({
   );
 }
 
-const thStyle: React.CSSProperties = { textAlign: 'left', padding: '12px 16px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#94a3b8', fontWeight: 600, borderBottom: '1px solid rgba(255,255,255,0.1)', verticalAlign: 'top' };
-const tdStyle: React.CSSProperties = { padding: '11px 16px', color: '#e2e8f0' };
-const subHead: React.CSSProperties = { fontSize: 10, color: '#64748b', fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginTop: 3, maxWidth: 240, whiteSpace: 'normal', marginLeft: 'auto' };
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '12px 16px', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--ds-ink-2)', fontWeight: 600, borderBottom: '1px solid var(--ds-line-strong)', verticalAlign: 'top' };
+const tdStyle: React.CSSProperties = { padding: '11px 16px', color: 'var(--ds-ink)' };
+const subHead: React.CSSProperties = { fontSize: 10, color: 'var(--ds-ink-2)', fontWeight: 400, textTransform: 'none', letterSpacing: 0, marginTop: 3, maxWidth: 240, whiteSpace: 'normal', marginLeft: 'auto' };
 const dot = (c: string): React.CSSProperties => ({ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: c, marginRight: 6 });

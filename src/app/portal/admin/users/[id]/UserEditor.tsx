@@ -143,15 +143,15 @@ export default function UserEditor({
   }
 
   const chipColours = {
-    role:    { bg: "#1e1f4d", border: "#6366f1", text: "#e0e7ff" }, // from role
-    extra:   { bg: "#103a25", border: "#22c55e", text: "#bbf7d0" }, // extra grant
-    denied:  { bg: "#3a1010", border: "#ef4444", text: "#fecaca" }, // denied
-    off:     { bg: "transparent", border: "#1f2940", text: "#64748b" },
+    role:    { bg: "var(--ds-info-wash)", border: "var(--ds-info-line)", text: "var(--ds-info-text)" }, // from role
+    extra:   { bg: "var(--ds-ok-wash)", border: "var(--ds-ok-line)", text: "var(--ds-ok-text)" }, // extra grant
+    denied:  { bg: "var(--ds-crit-wash)", border: "var(--ds-crit-line)", text: "var(--ds-crit-text)" }, // denied
+    off:     { bg: "transparent", border: "var(--ds-line)", text: "var(--ds-ink-2)" },
   } as const;
 
   return (
     <div style={{ padding: 0 }}>
-      <div style={{ padding: "16px 18px", borderBottom: "1px solid #1f2940", display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+      <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--ds-line)", display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span className="portal-label">Name</span>
           <input className="portal-input" value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit} />
@@ -217,14 +217,14 @@ export default function UserEditor({
         )}
       </div>
 
-      <div style={{ padding: "10px 18px", borderBottom: "1px solid #1f2940", fontSize: 12, color: "#94a3b8" }}>
-        <strong style={{ color: "#cbd5e1" }}>Custom permissions:</strong>{" "}
-        Click a permission to cycle: off → <span style={{ color: "#bbf7d0" }}>extra grant</span> → <span style={{ color: "#e0e7ff" }}>from role</span> → <span style={{ color: "#fecaca" }}>denied</span> → off. Role-granted permissions appear pre-coloured.
+      <div style={{ padding: "10px 18px", borderBottom: "1px solid var(--ds-line)", fontSize: 12, color: "var(--ds-ink-2)" }}>
+        <strong style={{ color: "var(--ds-ink)" }}>Custom permissions:</strong>{" "}
+        Click a permission to cycle: off → <span style={{ color: "var(--ds-ok-text)" }}>extra grant</span> → <span style={{ color: "var(--ds-info-text)" }}>from role</span> → <span style={{ color: "var(--ds-crit-text)" }}>denied</span> → off. Role-granted permissions appear pre-coloured.
       </div>
 
       {grouped.map((mod) => (
         <div key={mod.module}>
-          <div style={{ padding: "10px 18px", background: "#0c1426", borderBottom: "1px solid #1f2940" }}>
+          <div style={{ padding: "10px 18px", background: "var(--ds-surface-2)", borderBottom: "1px solid var(--ds-line)" }}>
             <strong>{mod.moduleLabel}</strong>
           </div>
           {mod.sections.map((sec) => (
@@ -235,11 +235,11 @@ export default function UserEditor({
                 display: "grid",
                 gridTemplateColumns: "180px 1fr",
                 gap: 16,
-                borderBottom: "1px solid #131a2b",
+                borderBottom: "1px solid var(--ds-line)",
                 alignItems: "center",
               }}
             >
-              <div style={{ fontSize: 13, color: "#cbd5e1", textTransform: "capitalize" }}>
+              <div style={{ fontSize: 13, color: "var(--ds-ink)", textTransform: "capitalize" }}>
                 {sec.section.replace(/_/g, " ")}
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -284,8 +284,8 @@ export default function UserEditor({
         style={{
           position: "sticky",
           bottom: 0,
-          background: "#0a0f1c",
-          borderTop: "1px solid #1f2940",
+          background: "var(--ds-surface-1)",
+          borderTop: "1px solid var(--ds-line)",
           padding: "12px 18px",
           display: "flex",
           justifyContent: "space-between",
@@ -295,7 +295,7 @@ export default function UserEditor({
       >
         <div>
           {canDelete && (
-            <button className="portal-btn" onClick={remove} disabled={saving} style={{ color: "#f87171" }}>
+            <button className="portal-btn" onClick={remove} disabled={saving} style={{ color: "var(--ds-crit-text)" }}>
               Delete user
             </button>
           )}

@@ -38,6 +38,7 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
     useDataHook,
     renderActions,
     topbarAddon,
+    renderSummary,
     hideAddRowButton = false,
     hideActionsColumn = false,
 }: EntityTablePageProps<T, D>) {
@@ -326,13 +327,8 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
             const hasAdmin = approvals.some((a) => adminNames.has(a));
             const hasOffice = approvals.some((a) => officeNames.has(a));
             const approvalClass = hasAdmin ? 'approval-admin' : hasOffice ? 'approval-office' : '';
-            const approvalStyle = hasAdmin
-                ? { background: 'rgba(16,185,129,0.15)', color: '#34d399', padding: '2px 7px', borderRadius: '6px' }
-                : hasOffice
-                    ? { background: 'rgba(245,158,11,0.15)', color: '#fbbf24', padding: '2px 7px', borderRadius: '6px' }
-                    : { background: 'rgba(255,255,255,0.08)', color: '#94a3b8', padding: '2px 7px', borderRadius: '6px' };
             return (
-                <span className={`approval-text ${approvalClass}`} title={full} style={approvalStyle}>
+                <span className={`approval-text ${approvalClass}`} title={full}>
                     {full}
                 </span>
             );
@@ -633,6 +629,15 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
                         )}
                     </div>
                 </div>
+
+                {/* ── Summary (Design 360 S3) ──
+                    Optional and additive: when no `renderSummary` is supplied
+                    this renders nothing and the page is byte-for-byte what it
+                    was. It receives the same `data` the table already holds,
+                    so it introduces no fetch, no query and no state. */}
+                {renderSummary && (
+                    <div className="entity-summary">{renderSummary(data)}</div>
+                )}
 
                 {/* ── Table ── */}
                 <section className="panel table-card">

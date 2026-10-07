@@ -38,7 +38,7 @@ export default function DeleteLedgerButton({
     <>
       <button
         className="portal-btn portal-btn-ghost"
-        style={{ color: "#f87171", borderColor: "rgba(248,113,113,0.3)" }}
+        style={{ color: "var(--ds-crit-text)", borderColor: "var(--ds-crit-line)" }}
         onClick={() => setOpen(true)}
       >
         Delete ledger
@@ -47,7 +47,7 @@ export default function DeleteLedgerButton({
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 100, paddingTop: 80,
           }}
@@ -55,15 +55,15 @@ export default function DeleteLedgerButton({
         >
           <div
             style={{
-              background: "#111827", border: "1px solid rgba(248,113,113,0.35)", borderRadius: 14,
+              background: "var(--ds-surface-1)", border: "1px solid var(--ds-crit-line)", borderRadius: 14,
               padding: 24, width: "min(460px, 92vw)",
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>
+            <h2 style={{ margin: "0 0 10px", fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>
               Delete {holderName}&apos;s ledger?
             </h2>
-            <p className="small" style={{ color: "#cbd5e1", lineHeight: 1.6, marginTop: 0 }}>
+            <p className="small" style={{ color: "var(--ds-ink-2)", lineHeight: 1.6, marginTop: 0 }}>
               This permanently deletes the ledger and all{" "}
               <strong>{entryCount.toLocaleString()}</strong> of its entries (reports, payments,
               disputes, everything). This <strong>cannot be undone</strong>. You can then create a
@@ -79,7 +79,7 @@ export default function DeleteLedgerButton({
               <button
                 type="button"
                 className="portal-btn"
-                style={{ background: "#dc2626", color: "#fff", borderColor: "#dc2626" }}
+                style={{ background: "var(--ds-crit)", color: "var(--ds-on-crit)", borderColor: "var(--ds-crit)" }}
                 onClick={doDelete}
                 disabled={busy}
               >

@@ -47,12 +47,12 @@ type ViewMsg =
   | { role: "assistant"; blocks: Block[]; trace?: Trace };
 
 const SEVERITY_COLOR: Record<string, string> = {
-  high: "#f87171",
-  medium: "#f59e0b",
-  low: "#60a5fa",
-  info: "#94a3b8",
+  high: "var(--ds-crit-text)",
+  medium: "var(--ds-warn-text)",
+  low: "var(--ds-info-text)",
+  info: "var(--ds-ink-2)",
 };
-const PRIORITY_COLOR: Record<string, string> = { high: "#f87171", medium: "#f59e0b", low: "#60a5fa" };
+const PRIORITY_COLOR: Record<string, string> = { high: "var(--ds-crit-text)", medium: "var(--ds-warn-text)", low: "var(--ds-info-text)" };
 
 function textFromBlocks(blocks: Block[]): string {
   const parts = blocks
@@ -69,7 +69,7 @@ function textFromBlocks(blocks: Block[]): string {
 
 function BlockView({ b }: { b: Block }) {
   if (b.type === "text") {
-    return <p style={{ margin: "0 0 4px", fontSize: 13.5, lineHeight: 1.65, color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{b.text}</p>;
+    return <p style={{ margin: "0 0 4px", fontSize: 13.5, lineHeight: 1.65, color: "var(--ds-ink)", whiteSpace: "pre-wrap" }}>{b.text}</p>;
   }
   if (b.type === "kpis") {
     return (
@@ -79,11 +79,11 @@ function BlockView({ b }: { b: Block }) {
             <div className="portal-kpi-label">{k.label}</div>
             <div
               className="portal-kpi-value"
-              style={{ fontSize: 19, color: k.tone === "neg" ? "#f87171" : k.tone === "pos" ? "#34d399" : undefined }}
+              style={{ fontSize: 19, color: k.tone === "neg" ? "var(--ds-crit-text)" : k.tone === "pos" ? "var(--ds-ok-text)" : undefined }}
             >
               {k.value}
             </div>
-            {k.delta && <div style={{ fontSize: 11.5, color: "#64748b", marginTop: 2 }}>{k.delta}</div>}
+            {k.delta && <div style={{ fontSize: 11.5, color: "var(--ds-ink-2)", marginTop: 2 }}>{k.delta}</div>}
           </div>
         ))}
       </div>
@@ -92,7 +92,7 @@ function BlockView({ b }: { b: Block }) {
   if (b.type === "table") {
     return (
       <div>
-        {b.title && <div style={{ fontSize: 12.5, fontWeight: 600, color: "#cbd5e1", marginBottom: 6 }}>{b.title}</div>}
+        {b.title && <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ds-ink)", marginBottom: 6 }}>{b.title}</div>}
         <div style={{ overflowX: "auto" }}>
           <table className="portal-table">
             <thead>
@@ -111,7 +111,7 @@ function BlockView({ b }: { b: Block }) {
   if (b.type === "chart") {
     return (
       <div>
-        {b.title && <div style={{ fontSize: 12.5, fontWeight: 600, color: "#cbd5e1", marginBottom: 6 }}>{b.title}</div>}
+        {b.title && <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--ds-ink)", marginBottom: 6 }}>{b.title}</div>}
         <div style={{ height: 220 }}>
           <ChatChart b={b} />
         </div>
@@ -122,9 +122,9 @@ function BlockView({ b }: { b: Block }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {b.items.map((r, i) => (
-          <div key={i} style={{ borderLeft: `3px solid ${PRIORITY_COLOR[r.priority ?? "low"] ?? "#60a5fa"}`, paddingLeft: 12 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>💡 {r.title}</div>
-            <div style={{ fontSize: 12.5, color: "#94a3b8", lineHeight: 1.55 }}>{r.detail}</div>
+          <div key={i} style={{ borderLeft: `3px solid ${PRIORITY_COLOR[r.priority ?? "low"] ?? "var(--ds-info-text)"}`, paddingLeft: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ds-ink)" }}>💡 {r.title}</div>
+            <div style={{ fontSize: 12.5, color: "var(--ds-ink-2)", lineHeight: 1.55 }}>{r.detail}</div>
           </div>
         ))}
       </div>
@@ -134,11 +134,11 @@ function BlockView({ b }: { b: Block }) {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {b.items.map((a, i) => {
-          const c = SEVERITY_COLOR[a.severity] ?? "#94a3b8";
+          const c = SEVERITY_COLOR[a.severity] ?? "var(--ds-ink-2)";
           return (
             <div key={i} style={{ background: `${c}14`, border: `1px solid ${c}44`, borderRadius: 10, padding: "10px 12px" }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: c }}>⚠ {a.title}</div>
-              <div style={{ fontSize: 12.5, color: "#cbd5e1", lineHeight: 1.55 }}>{a.detail}</div>
+              <div style={{ fontSize: 12.5, color: "var(--ds-ink)", lineHeight: 1.55 }}>{a.detail}</div>
             </div>
           );
         })}
@@ -158,11 +158,11 @@ function TracePanel({ trace }: { trace?: Trace }) {
     trace.areaManager && `🗺 ${trace.areaManager}`,
   ].filter(Boolean) as string[];
   return (
-    <div style={{ marginTop: 10, borderTop: "1px dashed rgba(255,255,255,0.08)", paddingTop: 8 }}>
+    <div style={{ marginTop: 10, borderTop: "1px dashed var(--ds-line)", paddingTop: 8 }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        style={{ background: "none", border: "none", color: "#64748b", fontSize: 11.5, cursor: "pointer", padding: 0 }}
+        style={{ background: "none", border: "none", color: "var(--ds-ink-2)", fontSize: 11.5, cursor: "pointer", padding: 0 }}
       >
         {open ? "▾" : "▸"} Sources &amp; method{trace.model ? ` · ${trace.model}` : ""}
       </button>
@@ -172,23 +172,23 @@ function TracePanel({ trace }: { trace?: Trace }) {
         </div>
       )}
       {open && (
-        <div style={{ marginTop: 8, fontSize: 11.5, color: "#94a3b8", lineHeight: 1.7 }}>
+        <div style={{ marginTop: 8, fontSize: 11.5, color: "var(--ds-ink-2)", lineHeight: 1.7 }}>
           {trace.toolsUsed && trace.toolsUsed.length > 0 && (
             <div>
-              <strong style={{ color: "#cbd5e1" }}>Tools used:</strong>{" "}
+              <strong style={{ color: "var(--ds-ink)" }}>Tools used:</strong>{" "}
               {trace.toolsUsed.map((t) => `${t.name} (${t.summary})`).join(" · ")}
             </div>
           )}
           {trace.freshness && trace.freshness.length > 0 && (
             <div>
-              <strong style={{ color: "#cbd5e1" }}>Data freshness:</strong>{" "}
+              <strong style={{ color: "var(--ds-ink)" }}>Data freshness:</strong>{" "}
               {trace.freshness.map((f) => `${f.source} — synced ${f.lastSync}`).join(" · ")}
             </div>
           )}
           {trace.sources && trace.sources.length > 0 && (
-            <div><strong style={{ color: "#cbd5e1" }}>Sources:</strong> {trace.sources.join(", ")}</div>
+            <div><strong style={{ color: "var(--ds-ink)" }}>Sources:</strong> {trace.sources.join(", ")}</div>
           )}
-          {trace.notes && <div style={{ color: "#fcd9a3" }}><strong>Note:</strong> {trace.notes}</div>}
+          {trace.notes && <div style={{ color: "var(--ds-warn-text)" }}><strong>Note:</strong> {trace.notes}</div>}
         </div>
       )}
     </div>
@@ -260,7 +260,7 @@ export default function ChatPanel({
         {starters.length > 0 && (
           <div style={{ marginTop: 14 }}>
             <div className="portal-kpi-label" style={{ marginBottom: 8 }}>You&apos;ll be able to ask things like</div>
-            <ul style={{ margin: 0, paddingLeft: 18, color: "#94a3b8", fontSize: 13, lineHeight: 1.9 }}>
+            <ul style={{ margin: 0, paddingLeft: 18, color: "var(--ds-ink-2)", fontSize: 13, lineHeight: 1.9 }}>
               {starters.map((s) => <li key={s}>{s}</li>)}
             </ul>
           </div>
@@ -273,7 +273,7 @@ export default function ChatPanel({
     <div className="portal-card" style={{ padding: 0, display: "flex", flexDirection: "column", minHeight: 460 }}>
       <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 14 }}>
         {view.length === 0 && (
-          <div style={{ color: "#94a3b8", fontSize: 13.5, lineHeight: 1.7 }}>
+          <div style={{ color: "var(--ds-ink-2)", fontSize: 13.5, lineHeight: 1.7 }}>
             {greeting}
             {starters.length > 0 && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 16 }}>
@@ -298,9 +298,9 @@ export default function ChatPanel({
                 fontSize: 13.5,
                 lineHeight: 1.6,
                 whiteSpace: "pre-wrap",
-                background: "rgba(99,102,241,0.16)",
-                border: "1px solid rgba(99,102,241,0.28)",
-                color: "#e0e7ff",
+                background: "var(--ds-info-wash)",
+                border: "1px solid var(--ds-info-line)",
+                color: "var(--ds-info-text)",
               }}
             >
               {m.text}
@@ -312,15 +312,15 @@ export default function ChatPanel({
             </div>
           ),
         )}
-        {busy && <div style={{ color: "#64748b", fontSize: 12.5 }}>Thinking…</div>}
-        {error && <div style={{ color: "#f87171", fontSize: 12.5 }}>{error}</div>}
+        {busy && <div style={{ color: "var(--ds-ink-2)", fontSize: 12.5 }}>Thinking…</div>}
+        {error && <div style={{ color: "var(--ds-crit-text)", fontSize: 12.5 }}>{error}</div>}
       </div>
       <form
         onSubmit={(e) => {
           e.preventDefault();
           send(input);
         }}
-        style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid rgba(255,255,255,0.07)" }}
+        style={{ display: "flex", gap: 8, padding: 12, borderTop: "1px solid var(--ds-line)" }}
       >
         <input className="portal-input" style={{ flex: 1 }} placeholder={`Ask ${title}…`} value={input} onChange={(e) => setInput(e.target.value)} disabled={busy} />
         <button type="submit" className="portal-btn portal-btn-primary" disabled={busy || !input.trim()}>Send</button>

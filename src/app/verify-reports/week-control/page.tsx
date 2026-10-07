@@ -169,7 +169,7 @@ export default function WeekControlPage() {
   const cw = state?.currentWeek;
   const isLocked = cw?.is_locked === true;
   const statusLabel = isLocked ? 'Closed' : cw?.allowed ? 'Open' : 'Scheduled';
-  const statusColor = isLocked ? '#f87171' : cw?.allowed ? '#34d399' : '#fbbf24';
+  const statusTier = isLocked ? PILL_OUTLINE : cw?.allowed ? PILL_STRONG : PILL_QUIET;
 
   const lockedSet = useMemo(() => new Set((state?.locks || []).map((l) => l.week_start)), [state]);
   const timeDirty = cw ? (hour !== cw.open_hour || minute !== cw.open_minute) : false;
@@ -189,7 +189,7 @@ export default function WeekControlPage() {
             </Link>
             <p className="bp-kicker">Verification</p>
             <h1 className="bp-title">Week Control</h1>
-            <p style={{ color: '#94a3b8', fontSize: 13, marginTop: 4 }}>
+            <p style={{ color: 'var(--ds-ink-2)', fontSize: 13, marginTop: 4 }}>
               Open new weeks, lock or reopen any week, and configure when reports auto-open. Mirrors the Lovable Settings page — actions run through the same edge functions.
             </p>
           </div>
@@ -200,8 +200,8 @@ export default function WeekControlPage() {
             className="panel animate-fade-up"
             style={{
               padding: 12, marginBottom: 12,
-              borderColor: toast.kind === 'ok' ? 'rgba(52,211,153,0.4)' : 'rgba(239,68,68,0.4)',
-              color: toast.kind === 'ok' ? '#86efac' : '#fca5a5',
+              borderColor: toast.kind === 'ok' ? 'var(--ds-ok-line)' : 'var(--ds-crit-line)',
+              color: toast.kind === 'ok' ? 'var(--ds-ok-text)' : 'var(--ds-crit-text)',
               fontSize: 13,
             }}
           >
@@ -211,8 +211,8 @@ export default function WeekControlPage() {
         )}
 
         {error && (
-          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(239,68,68,0.4)' }}>
-            <pre style={{ color: '#f87171', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
+          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'var(--ds-crit-line)' }}>
+            <pre style={{ color: 'var(--ds-crit-text)', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
           </div>
         )}
 
@@ -226,9 +226,9 @@ export default function WeekControlPage() {
               {cw ? `${formatDisplayDate(cw.week_start)} → ${formatDisplayDate(cw.week_end)}` : '—'}
             </h3>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
-              <span style={{ ...pillStyle(statusColor), fontWeight: 600 }}>{statusLabel}</span>
+              <span style={{ ...pillStyle(statusTier), fontWeight: 600 }}>{statusLabel}</span>
               {cw && (
-                <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>
                   Auto-opens at {String(cw.open_hour).padStart(2, '0')}:{String(cw.open_minute).padStart(2, '0')} (Indiana)
                 </span>
               )}
@@ -259,7 +259,7 @@ export default function WeekControlPage() {
           <div className="panel animate-fade-up" style={{ padding: 16 }}>
             <p className="bp-section-kicker"><FiPlay style={{ verticalAlign: 'middle', marginRight: 6 }} />Open new reports</p>
             <h3 style={{ marginTop: 4 }}>Create draft reports for techs</h3>
-            <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
+            <p style={{ fontSize: 12, color: 'var(--ds-ink-2)', marginTop: 6 }}>
               Auto-runs every Sunday at the configured open-time. Use these to trigger it manually.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 14 }}>
@@ -281,15 +281,15 @@ export default function WeekControlPage() {
               </button>
             </div>
             {failures.length > 0 && (
-              <div style={{ marginTop: 12, padding: 8, borderRadius: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)' }}>
-                <p style={{ fontSize: 11, color: '#fca5a5', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.6 }}>{failures.length} skipped</p>
+              <div style={{ marginTop: 12, padding: 8, borderRadius: 6, background: 'var(--ds-crit-soft)', border: '1px solid var(--ds-crit-line)' }}>
+                <p style={{ fontSize: 11, color: 'var(--ds-crit-text)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.6 }}>{failures.length} skipped</p>
                 {failures.slice(0, 6).map((f) => (
-                  <div key={f.user_id} style={{ fontSize: 12, color: '#cbd5e1' }}>
-                    {f.full_name || f.user_id} — <span style={{ color: '#94a3b8' }}>{f.reason}</span>
+                  <div key={f.user_id} style={{ fontSize: 12, color: 'var(--ds-ink)' }}>
+                    {f.full_name || f.user_id} — <span style={{ color: 'var(--ds-ink-2)' }}>{f.reason}</span>
                   </div>
                 ))}
                 {failures.length > 6 && (
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>+ {failures.length - 6} more</div>
+                  <div style={{ fontSize: 11, color: 'var(--ds-ink-2)', marginTop: 4 }}>+ {failures.length - 6} more</div>
                 )}
               </div>
             )}
@@ -306,14 +306,14 @@ export default function WeekControlPage() {
                 onChange={(e) => setHour(Math.max(0, Math.min(23, Number(e.target.value) || 0)))}
                 style={inputStyle}
               />
-              <span style={{ color: '#64748b', fontSize: 16, fontWeight: 600 }}>:</span>
+              <span style={{ color: 'var(--ds-ink-2)', fontSize: 16, fontWeight: 600 }}>:</span>
               <input
                 type="number" min={0} max={59}
                 value={minute}
                 onChange={(e) => setMinute(Math.max(0, Math.min(59, Number(e.target.value) || 0)))}
                 style={inputStyle}
               />
-              <span style={{ fontSize: 11, color: '#64748b' }}>Indiana time</span>
+              <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>Indiana time</span>
               <button
                 className="pmr-clear-btn"
                 onClick={onSaveOpenTime}
@@ -360,18 +360,18 @@ export default function WeekControlPage() {
             </div>
             {state && state.locks.length > 0 && (
               <div style={{ marginTop: 14 }}>
-                <p style={{ fontSize: 11, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
+                <p style={{ fontSize: 11, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
                   Currently locked
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {state.locks.map((l) => (
-                    <div key={l.week_start} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#cbd5e1' }}>
-                      <span style={{ ...pillStyle('#f87171'), padding: '2px 8px' }}>{formatDisplayDate(l.week_start)}</span>
+                    <div key={l.week_start} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ds-ink)' }}>
+                      <span style={{ ...pillStyle(PILL_OUTLINE), padding: '2px 8px' }}>{formatDisplayDate(l.week_start)}</span>
                       <button
                         onClick={() => onLockWeek('reopen', l.week_start)}
                         disabled={busy !== null}
                         style={{
-                          background: 'transparent', border: 'none', color: '#a5b4fc',
+                          background: 'transparent', border: 'none', color: 'var(--ds-info-text)',
                           fontSize: 12, cursor: 'pointer', padding: 0,
                         }}
                       >
@@ -391,16 +391,25 @@ export default function WeekControlPage() {
 
 const inputStyle: React.CSSProperties = {
   padding: '6px 10px', fontSize: 13,
-  background: 'rgba(15,23,42,0.5)', color: '#e2e8f0',
-  border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, outline: 'none',
+  background: 'var(--ds-surface-2)', color: 'var(--ds-ink)',
+  border: '1px solid var(--ds-line-strong)', borderRadius: 8, outline: 'none',
   width: 64, textAlign: 'center',
 };
 
-function pillStyle(color: string): React.CSSProperties {
+/* Week lifecycle states are Scheduled -> Open -> Closed. None is an error and
+   none is a success: closing a week is the intended end state. The label
+   already names the state, so all three tiers are neutral and differ only by
+   fill and text weight. */
+type PillTier = { text: string; wash: string; line: string };
+const PILL_STRONG:  PillTier = { text: 'var(--ds-ink)',          wash: 'var(--ds-neutral-wash)', line: 'var(--ds-neutral-line)' };
+const PILL_QUIET:   PillTier = { text: 'var(--ds-neutral-text)', wash: 'var(--ds-neutral-wash)', line: 'var(--ds-neutral-line)' };
+const PILL_OUTLINE: PillTier = { text: 'var(--ds-neutral-text)', wash: 'transparent',            line: 'var(--ds-neutral-line)' };
+
+function pillStyle(tier: PillTier): React.CSSProperties {
   return {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     padding: '3px 10px', borderRadius: 999, fontSize: 11,
-    background: color + '22', border: `1px solid ${color}55`, color,
+    background: tier.wash, border: `1px solid ${tier.line}`, color: tier.text,
     textTransform: 'uppercase', letterSpacing: 0.5,
   };
 }

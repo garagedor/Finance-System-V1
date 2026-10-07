@@ -221,7 +221,7 @@ export function RoleEditor({ initial, onSaved }: { initial: Role; onSaved: (r: R
                                 >
                                     {allOn
                                         ? <FiCheckSquare size={16} />
-                                        : <FiSquare size={16} style={{ color: partial ? '#818cf8' : undefined }} />}
+                                        : <FiSquare size={16} style={{ color: partial ? 'var(--ds-crm-2)' : undefined }} />}
                                 </button>
                                 <h2>{mod.label}</h2>
                                 <span className="adm-perm-counter">{onInMod} / {allInMod.length}</span>
@@ -242,7 +242,7 @@ export function RoleEditor({ initial, onSaved }: { initial: Role; onSaved: (r: R
                                             >
                                                 {secAllOn
                                                     ? <FiCheckSquare size={14} />
-                                                    : <FiSquare size={14} style={{ color: secPartial ? '#818cf8' : undefined }} />}
+                                                    : <FiSquare size={14} style={{ color: secPartial ? 'var(--ds-crm-2)' : undefined }} />}
                                             </button>
                                             <h3>{sectionLabel(sec.section)}</h3>
                                             <span className="adm-perm-counter adm-perm-counter--small">

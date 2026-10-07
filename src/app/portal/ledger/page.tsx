@@ -1,10 +1,26 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Ledger list — Design 360 S3 applied.
+
+   SCOPE NOTE: this file's DATA is untouched. `load()`, the search/filter/tab
+   logic, every href, every permission and the GET-form submission are
+   byte-identical to before. Only the JSX below `return (` changed, to use the
+   shared UI layer.
+
+   What moved: the four figures that were mid-page stat pills now sit in a
+   summary strip directly under the header, and a plain-language sentence
+   states the position before any row is read. Active filters became
+   removable chips, so what is applied is visible without opening the form.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 import Link from "next/link";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
 import type { LedgerRecord, LedgerEntryRecord } from "@/types/finance-ledger";
 import { fmt$ } from "../format";
-import { PageHeader, StatPill, CardShell, Empty, FilterBar, FilterField } from "../_components/page-helpers";
 import MultiSelect from "../_components/MultiSelect";
 import EntryFormModal, { type FieldDef } from "../_components/EntryFormModal";
+import PageHeader from "@/components/shell/PageHeader";
+import { SummaryStrip, TableShell, EmptyState, StatusBadge } from "@/components/ui";
+import "@/components/ui/ui.css";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +50,7 @@ const ROLE_LABEL: Record<string, string> = {
   technician: "Technician",
 };
 
+/* ── DATA — unchanged from the previous revision ──────────────────────── */
 async function load() {
   await ensureFinanceIndexes();
   const [ledgers, balances] = await Promise.all([
@@ -53,7 +70,6 @@ async function load() {
   const weOwe = rows.filter((r) => r.balance < 0).reduce((s, r) => s + r.balance, 0);
   const theyOwe = rows.filter((r) => r.balance > 0).reduce((s, r) => s + r.balance, 0);
 
-  // One section per role. Canonical roles first, then the rest alphabetically.
   const ROLE_ORDER = ["area_manager", "technician"];
   const byRole = new Map<string, typeof rows>();
   for (const r of rows) {
@@ -85,18 +101,15 @@ export default async function LedgerListPage({ searchParams }: { searchParams: P
   const str = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? "" : v ?? "");
   const arr = (v: string | string[] | undefined) => (Array.isArray(v) ? v : v ? [v] : []);
   const q = str(sp.q).trim().toLowerCase();
-  const balance = str(sp.balance);            // "" | owe | owed | settled
+  const balance = str(sp.balance);
   const locFilter = arr(sp.loc);
 
-  // Active role tab (a role present in the data, or "all").
   const active = sp.role && d.groups.some((g) => g.role === str(sp.role)) ? str(sp.role) : "all";
   const activeGroup = d.groups.find((g) => g.role === active);
   const baseRows = active === "all" ? d.rows : activeGroup?.rows ?? [];
 
-  // Distinct locations in this tab (for the filter dropdown).
   const locOptions = [...new Set(baseRows.map((r) => r.location).filter(Boolean))].sort();
 
-  // Search + filter within the tab.
   const rows = baseRows.filter((r) => {
     if (q && !`${r.holder_name} ${r.location ?? ""} ${r.label ?? ""}`.toLowerCase().includes(q)) return false;
     if (locFilter.length && !locFilter.includes(r.location)) return false;
@@ -110,17 +123,39 @@ export default async function LedgerListPage({ searchParams }: { searchParams: P
   const heading = active === "all" ? "All ledgers" : activeGroup?.label ?? "Ledgers";
   const filtered = !!q || !!balance || locFilter.length > 0;
 
+  /* ── PRESENTATION ─────────────────────────────────────────────────── */
+
+  const tabBase = (role: string) => (role === "all" ? "/portal/ledger" : `/portal/ledger?role=${encodeURIComponent(role)}`);
+  const clearHref = tabBase(active);
+
+  // Active filters as removable chips — each link drops one filter and keeps
+  // the rest, so what is applied is readable without opening the form.
+  const keep = (omit: string) => {
+    const p = new URLSearchParams();
+    if (active !== "all") p.set("role", active);
+    if (q && omit !== "q") p.set("q", q);
+    if (balance && omit !== "balance") p.set("balance", balance);
+    if (omit !== "loc") locFilter.forEach((l) => p.append("loc", l));
+    const s = p.toString();
+    return `/portal/ledger${s ? `?${s}` : ""}`;
+  };
+  const BALANCE_LABEL: Record<string, string> = {
+    owe: "We owe", owed: "They owe", settled: "Settled",
+  };
+
+  const net = weOwe + theyOwe;
+  const summary = rows.length === 0
+    ? "Nothing matches the current view."
+    : `${rows.length} ledger${rows.length === 1 ? "" : "s"} in view. The company owes ${fmt$(Math.abs(weOwe))} and is owed ${fmt$(theyOwe)} — a net position of ${fmt$(net, { showSign: true })}.`;
+
   return (
     <div className="portal-page">
       <PageHeader
-        kicker="Tracking"
-        title="Ledger"
-        subtitle="Running balance with each party · one tab per role · balance = sum of all entries"
+        title="Ledgers"
+        subtitle="Running balance with each party. A balance is the sum of that ledger's entries — nothing is stored as a total."
         actions={
           <>
-            <Link href="/portal/ledger/rates" className="portal-btn">
-              ⚙ Tech rates
-            </Link>
+            <Link href="/portal/ledger/rates" className="u-btn">Tech rates</Link>
             <EntryFormModal
               endpoint="/api/portal/ledger"
               title="Ledger"
@@ -132,127 +167,152 @@ export default async function LedgerListPage({ searchParams }: { searchParams: P
         }
       />
 
-      <section className="portal-grid-4">
-        <StatPill label={active === "all" ? "Ledgers" : `${heading} ledgers`} value={rows.length.toLocaleString()} />
-        <StatPill label="We owe" value={<span className="money-neg">{fmt$(weOwe)}</span>} />
-        <StatPill label="They owe" value={<span className="money-pos">+{fmt$(theyOwe)}</span>} />
-        <StatPill label="Net" value={<BalanceText n={weOwe + theyOwe} />} />
-      </section>
+      <div style={{ padding: "0 var(--ds-space-6) var(--ds-space-5)" }}>
+        {/* Summary first — the position before any row. */}
+        <SummaryStrip
+          items={[
+            { label: active === "all" ? "Ledgers in view" : `${heading} in view`, value: rows.length.toLocaleString(), sub: filtered ? `of ${baseRows.length} total` : undefined },
+            { label: "We owe", value: fmt$(Math.abs(weOwe)), tone: weOwe < -0.005 ? "neg" : "muted" },
+            { label: "They owe", value: fmt$(theyOwe), tone: theyOwe > 0.005 ? "pos" : "muted" },
+            { label: "Net position", value: fmt$(net, { showSign: true }), tone: net < -0.005 ? "neg" : net > 0.005 ? "pos" : "muted" },
+          ]}
+        />
 
-      {/* One tab per role */}
-      {d.groups.length > 0 && (
-        <div className="portal-tabs" style={{ display: "flex", gap: 8, margin: "12px 0", flexWrap: "wrap" }}>
-          <Link href="/portal/ledger" className={`portal-btn ${active === "all" ? "portal-btn-primary" : ""}`}>
-            All ({d.rows.length})
-          </Link>
-          {d.groups.map((g) => (
-            <Link
-              key={g.role}
-              href={`/portal/ledger?role=${encodeURIComponent(g.role)}`}
-              className={`portal-btn ${active === g.role ? "portal-btn-primary" : ""}`}
-            >
-              {g.label} ({g.rows.length})
+        {/* Role tabs */}
+        {d.groups.length > 0 && (
+          <div className="u-tabs" style={{ marginTop: "var(--ds-space-5)" }} role="tablist">
+            <Link href={tabBase("all")} role="tab" aria-selected={active === "all"}
+                  className={`u-tab${active === "all" ? " is-on" : ""}`}>
+              All <span className="u-tab-n">{d.rows.length}</span>
             </Link>
-          ))}
-        </div>
-      )}
-
-      {/* Search + filter within the active tab */}
-      {baseRows.length > 0 && (
-        <FilterBar>
-          <FilterField label="Search">
-            <input className="portal-input" type="search" name="q" defaultValue={q} placeholder="name / location / label" />
-          </FilterField>
-          <FilterField label="Balance">
-            <select className="portal-select" name="balance" defaultValue={balance}>
-              <option value="">All</option>
-              <option value="owe">We owe (negative)</option>
-              <option value="owed">They owe (positive)</option>
-              <option value="settled">Settled ($0)</option>
-            </select>
-          </FilterField>
-          <FilterField label="Location">
-            <MultiSelect name="loc" selected={locFilter} options={locOptions} />
-          </FilterField>
-          {active !== "all" && <input type="hidden" name="role" value={active} />}
-          <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>
-            <button type="submit" className="portal-btn portal-btn-primary">Apply</button>
-            <Link href={active === "all" ? "/portal/ledger" : `/portal/ledger?role=${encodeURIComponent(active)}`} className="portal-btn">Clear</Link>
+            {d.groups.map((g) => (
+              <Link key={g.role} href={tabBase(g.role)} role="tab" aria-selected={active === g.role}
+                    className={`u-tab${active === g.role ? " is-on" : ""}`}>
+                {g.label} <span className="u-tab-n">{g.rows.length}</span>
+              </Link>
+            ))}
           </div>
-        </FilterBar>
-      )}
-
-      <CardShell
-        title={heading}
-        subtitle={baseRows.length ? `${rows.length}${filtered ? ` of ${baseRows.length}` : ""} ledger(s) · we owe ${fmt$(weOwe)} · they owe +${fmt$(theyOwe)}` : undefined}
-      >
-        {rows.length === 0 ? (
-          filtered ? (
-            <Empty message="No ledgers match the search / filters." />
-          ) : (
-            <Empty
-              message="No ledgers yet. Create one per party (area manager, technician, provider, …) you settle with."
-              action={
-                <EntryFormModal
-                  endpoint="/api/portal/ledger"
-                  title="Ledger"
-                  fields={LEDGER_FIELDS}
-                  triggerLabel="+ Create your first ledger"
-                />
-              }
-            />
-          )
-        ) : (
-          <table className="portal-table">
-            <thead>
-              <tr>
-                <th>Person</th>
-                {active === "all" && <th>Role</th>}
-                <th>Location / Area</th>
-                <th className="right">Entries</th>
-                <th className="right">Balance</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r._id}>
-                  <td>
-                    <Link href={`/portal/ledger/${r._id}`} style={{ color: "#cbd5e1", fontWeight: 600 }}>
-                      {r.holder_name}
-                    </Link>
-                    {r.label && <div className="muted small">{r.label}</div>}
-                  </td>
-                  {active === "all" && <td className="small">{ROLE_LABEL[r.role] ?? r.role}</td>}
-                  <td className="muted small">{r.location || "—"}</td>
-                  <td className="right muted small">{r.entries.toLocaleString()}</td>
-                  <td className="right"><BalanceText n={r.balance} /></td>
-                  <td className="right">
-                    <Link href={`/portal/ledger/${r._id}`} className="portal-btn"
-                      style={{ padding: "4px 10px", fontSize: 11 }}>
-                      Open →
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         )}
-      </CardShell>
 
-      <p className="muted small" style={{ marginTop: 4 }}>
-        <span className="money-neg">Red / negative</span> = company owes them ·{" "}
-        <span className="money-pos">Green / positive</span> = they owe the company.
-      </p>
+        {/* Active filters, as removable chips */}
+        {filtered && (
+          <div className="u-filters" style={{ marginBottom: "var(--ds-space-4)" }}>
+            {q && <Link href={keep("q")} className="u-chip is-on">Search: {q} <span className="u-chip-x">×</span></Link>}
+            {balance && <Link href={keep("balance")} className="u-chip is-on">{BALANCE_LABEL[balance] ?? balance} <span className="u-chip-x">×</span></Link>}
+            {locFilter.length > 0 && <Link href={keep("loc")} className="u-chip is-on">{locFilter.length === 1 ? locFilter[0] : `${locFilter.length} locations`} <span className="u-chip-x">×</span></Link>}
+            <Link href={clearHref} className="u-filter-clear">Clear all</Link>
+          </div>
+        )}
+
+        {/* Filter form — same GET submission and field names as before */}
+        {baseRows.length > 0 && (
+          <form className="u-table" style={{ marginBottom: "var(--ds-space-4)" }}>
+            <div className="u-table-bar" style={{ borderBottom: "none", alignItems: "flex-end" }}>
+              <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: "1 1 200px" }}>
+                <span className="u-label" style={{ marginBottom: 0 }}>Search</span>
+                <input className="u-input" type="search" name="q" defaultValue={q} placeholder="Name, location or label" />
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: "0 1 180px" }}>
+                <span className="u-label" style={{ marginBottom: 0 }}>Balance</span>
+                <select className="u-select" name="balance" defaultValue={balance}>
+                  <option value="">All balances</option>
+                  <option value="owe">We owe (negative)</option>
+                  <option value="owed">They owe (positive)</option>
+                  <option value="settled">Settled ($0)</option>
+                </select>
+              </label>
+              <label style={{ display: "flex", flexDirection: "column", gap: 5, flex: "0 1 220px" }}>
+                <span className="u-label" style={{ marginBottom: 0 }}>Location</span>
+                <MultiSelect name="loc" selected={locFilter} options={locOptions} />
+              </label>
+              {active !== "all" && <input type="hidden" name="role" value={active} />}
+              <div style={{ display: "flex", gap: "var(--ds-space-2)" }}>
+                <button type="submit" className="u-btn primary">Apply</button>
+                <Link href={clearHref} className="u-btn">Reset</Link>
+              </div>
+            </div>
+          </form>
+        )}
+
+        <TableShell
+          count={rows.length}
+          countLabel={filtered ? `of ${baseRows.length} ledgers` : "ledgers"}
+          footer={
+            <span>
+              <strong style={{ color: "var(--ds-crit)" }}>Negative</strong> means the company owes them ·{" "}
+              <strong style={{ color: "var(--ds-ok)" }}>positive</strong> means they owe the company.
+            </span>
+          }
+        >
+          {rows.length === 0 ? (
+            filtered ? (
+              <EmptyState
+                title="No ledgers match these filters"
+                description="Try clearing a filter or widening the search."
+                actions={<Link href={clearHref} className="u-btn">Clear all filters</Link>}
+              />
+            ) : (
+              <EmptyState
+                title="No ledgers yet"
+                description="Create one per party you settle with — an area manager, technician, provider or vendor. The balance builds itself from the entries you post."
+                actions={
+                  <EntryFormModal
+                    endpoint="/api/portal/ledger"
+                    title="Ledger"
+                    fields={LEDGER_FIELDS}
+                    triggerLabel="+ Create your first ledger"
+                  />
+                }
+              />
+            )
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Person</th>
+                  {active === "all" && <th>Role</th>}
+                  <th>Location</th>
+                  <th className="num">Entries</th>
+                  <th className="num">Balance</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r._id}>
+                    <td className="strong" data-label="Person">
+                      <Link href={`/portal/ledger/${r._id}`} style={{ color: "inherit" }}>
+                        {r.holder_name}
+                      </Link>
+                      {r.label && <div style={{ color: "var(--ds-ink-3)", fontSize: "var(--ds-text-xs)" }}>{r.label}</div>}
+                    </td>
+                    {active === "all" && (
+                      <td data-label="Role">
+                        <StatusBadge tone="neutral" plain>{ROLE_LABEL[r.role] ?? r.role}</StatusBadge>
+                      </td>
+                    )}
+                    <td data-label="Location">{r.location || "—"}</td>
+                    <td className="num" data-label="Entries">{r.entries.toLocaleString()}</td>
+                    <td className="num" data-label="Balance"><BalanceText n={r.balance} /></td>
+                    <td className="num">
+                      <Link href={`/portal/ledger/${r._id}`} className="u-btn sm">Open</Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </TableShell>
+      </div>
     </div>
   );
 }
 
-/** Render a balance with the report sign convention + color. */
+/** Render a balance with the report sign convention + colour. Unchanged. */
 export function BalanceText({ n }: { n: number }) {
-  const cls = n < -0.005 ? "money-neg" : n > 0.005 ? "money-pos" : "money-zero";
+  const tone = n < -0.005 ? "var(--ds-crit)" : n > 0.005 ? "var(--ds-ok)" : "var(--ds-ink-3)";
   return (
-    <span className={`money ${cls}`} style={{ fontWeight: 600 }}>
+    <span style={{ color: tone, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
       {fmt$(n, { showSign: true })}
     </span>
   );

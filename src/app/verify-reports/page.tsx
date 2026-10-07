@@ -6,6 +6,7 @@ import { FiCheck, FiX, FiAlertTriangle, FiArrowLeft, FiChevronRight, FiCheckCirc
 import { useAuth } from '@/components/AuthShell';
 import EmptyState from '@/components/EmptyState';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { SummaryStrip, AlertCard } from '@/components/ui';
 import { formatCurrency, formatDisplayDate } from '../utils/jobUtils';
 import '../balance-report/styles.css';
 import dynamic from 'next/dynamic';
@@ -115,9 +116,9 @@ export default function VerifyReportsPage() {
         <EmptyState
           size="lg"
           icon={<svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <circle cx="10" cy="10" r="8" stroke="#f87171" strokeWidth="1.5" />
-            <line x1="10" y1="6" x2="10" y2="10.5" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round" />
-            <circle cx="10" cy="13" r="0.75" fill="#f87171" />
+            <circle cx="10" cy="10" r="8" stroke="var(--ds-crit)" strokeWidth="1.5" />
+            <line x1="10" y1="6" x2="10" y2="10.5" stroke="var(--ds-crit)" strokeWidth="1.5" strokeLinecap="round" />
+            <circle cx="10" cy="13" r="0.75" fill="var(--ds-crit)" />
           </svg>}
           title="Access Denied"
           message="You do not have permission to verify weekly reports."
@@ -210,10 +211,21 @@ function ListView({
 
   // The full set of reports rendered in the table — when filtering by tech,
   // ALL of that tech's reports show so the user can tick which to roll up.
+  /* Inbox orientation, derived from the reports already fetched. No request is
+     added and no figure is invented: each one counts a flag the API already
+     returns per report. */
   const visibleReports = useMemo(
     () => (reports || []).filter((r) => !techFilter || r.techName === techFilter),
     [reports, techFilter]
   );
+
+  const inboxStats = useMemo(() => ({
+    awaiting: visibleReports.filter((r) => r.status === 'Submitted').length,
+    // Locked treatment: an identity the system could not resolve is a warning,
+    // because the comparison still runs and may be comparing the wrong person.
+    unmatched: visibleReports.filter((r) => !r.techMatched || !r.areaMatched).length,
+    resubmitted: visibleReports.filter((r) => r.resubmitted).length,
+  }), [visibleReports]);
 
   // Selected report ids (keyed by report.id). Empty set = "include all" in overview.
   const [selectedReportIds, setSelectedReportIds] = useState<Set<string>>(new Set());
@@ -286,18 +298,59 @@ function ListView({
         </header>
 
         {error && (
-          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(239,68,68,0.4)' }}>
-            <p style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
+          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'var(--ds-crit-line)' }}>
+            <p style={{ fontSize: 12, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
               Couldn't load reports
             </p>
-            <pre style={{ color: '#f87171', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
+            <pre style={{ color: 'var(--ds-crit-text)', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
             {error.toLowerCase().includes('supabase not configured') && (
-              <p style={{ fontSize: 12, color: '#cbd5e1', marginTop: 10 }}>
+              <p style={{ fontSize: 12, color: 'var(--ds-ink)', marginTop: 10 }}>
                 The 317 Weekly Balance backend isn't connected yet. Add <code>SUPABASE_URL</code> and{' '}
                 <code>SUPABASE_SERVICE_ROLE_KEY</code> to <code>.env.local</code>, then restart the dev server.
               </p>
             )}
           </div>
+        )}
+
+        {/* ── Reconciliation state, before any of the detail ──
+             Derived from the reports already loaded. Unmatched identity takes
+             the warning family, which is the locked treatment for a tech or
+             area the system could not resolve — it is the one condition here
+             that silently produces a wrong comparison. */}
+        {visibleReports.length > 0 && (
+          <>
+            <SummaryStrip
+              items={[
+                {
+                  label: 'Reports in view',
+                  value: String(visibleReports.length),
+                  sub: techFilter ? `${techFilter} — every week` : statusFilter === 'All' ? 'every status' : `${statusFilter.toLowerCase()}`,
+                },
+                {
+                  label: 'Awaiting review',
+                  value: String(inboxStats.awaiting),
+                  sub: inboxStats.awaiting === 0 ? 'nothing queued' : 'submitted, not yet verified',
+                },
+                {
+                  label: 'Unmatched identity',
+                  value: String(inboxStats.unmatched),
+                  sub: inboxStats.unmatched === 0 ? 'all resolved' : 'tech or area not resolved',
+                },
+                {
+                  label: 'Resubmitted',
+                  value: String(inboxStats.resubmitted),
+                  sub: inboxStats.resubmitted === 0 ? 'none returned' : 'sent back and corrected',
+                },
+              ]}
+            />
+            {inboxStats.unmatched > 0 && (
+              <AlertCard
+                tone="warn"
+                title={`${inboxStats.unmatched} report${inboxStats.unmatched === 1 ? '' : 's'} with an unresolved tech or area`}
+                description="The comparison still runs, but a name the system could not resolve means it may be comparing against the wrong person or the wrong area. Fix the mapping before approving."
+              />
+            )}
+          </>
         )}
 
         <div className="bp-cv-tabs animate-fade-up" style={{ marginBottom: 12 }}>
@@ -316,16 +369,16 @@ function ListView({
         </div>
 
         <div className="animate-fade-up" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+          <span style={{ fontSize: 12, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
             Tech History
           </span>
           <select
             value={techFilter}
             onChange={(e) => setTechFilter(e.target.value)}
             style={{
-              background: 'rgba(15,23,42,0.5)',
-              color: '#e2e8f0',
-              border: '1px solid rgba(255,255,255,0.1)',
+              background: 'var(--ds-surface-2)',
+              color: 'var(--ds-ink)',
+              border: '1px solid var(--ds-line-strong)',
               borderRadius: 8,
               padding: '6px 10px',
               fontSize: 13,
@@ -342,15 +395,15 @@ function ListView({
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 6,
                 padding: '4px 10px', borderRadius: 999,
-                background: 'rgba(99,102,241,0.18)',
-                border: '1px solid rgba(99,102,241,0.35)',
-                color: '#c7d2fe', fontSize: 12, fontWeight: 500,
+                background: 'var(--ds-info-wash)',
+                border: '1px solid var(--ds-info-line)',
+                color: 'var(--ds-info-text)', fontSize: 12, fontWeight: 500,
               }}
             >
               Viewing all weeks for <strong>{techFilter}</strong>
               <button
                 onClick={() => setTechFilter('')}
-                style={{ background: 'transparent', border: 'none', color: '#c7d2fe', cursor: 'pointer', padding: 0, display: 'inline-flex' }}
+                style={{ background: 'transparent', border: 'none', color: 'var(--ds-info-text)', cursor: 'pointer', padding: 0, display: 'inline-flex' }}
                 aria-label="Clear tech filter"
               >
                 <FiX size={12} />
@@ -364,7 +417,7 @@ function ListView({
             <p className="bp-section-kicker" style={{ margin: 0 }}>Tech Overview</p>
             <h3 style={{ marginTop: 4, marginBottom: 12 }}>
               {techFilter}
-              <span style={{ color: '#64748b', fontWeight: 400, fontSize: 13 }}>
+              <span style={{ color: 'var(--ds-ink-2)', fontWeight: 400, fontSize: 13 }}>
                 {' · '}
                 {selectedReportIds.size > 0
                   ? <>{selectedReportIds.size} of {visibleReports.length} reports selected</>
@@ -376,7 +429,7 @@ function ListView({
                 <button
                   type="button"
                   onClick={() => setSelectedReportIds(new Set())}
-                  style={{ marginLeft: 12, background: 'transparent', border: 'none', color: '#a5b4fc', cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: 0 }}
+                  style={{ marginLeft: 12, background: 'transparent', border: 'none', color: 'var(--ds-info-text)', cursor: 'pointer', fontSize: 12, fontWeight: 600, padding: 0 }}
                 >
                   Clear selection
                 </button>
@@ -384,9 +437,9 @@ function ListView({
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
               <OverviewStat label="Total Sales"              value={formatCurrency(overviewTotals.sales)}      />
-              <OverviewStat label="Total Balance"            value={formatCurrency(overviewTotals.balance)}    accent={overviewTotals.balance < 0 ? '#f87171' : overviewTotals.balance > 0 ? '#34d399' : undefined} />
+              <OverviewStat label="Total Balance"            value={formatCurrency(overviewTotals.balance)}     />
               <OverviewStat label="Tips"                     value={formatCurrency(overviewTotals.tips)}       />
-              <OverviewStat label="Commission (Tech Payout)" value={formatCurrency(overviewTotals.commission)} accent="#a5b4fc" />
+              <OverviewStat label="Commission (Tech Payout)" value={formatCurrency(overviewTotals.commission)} accent="var(--ds-info-text)" />
             </div>
           </div>
         )}
@@ -430,7 +483,7 @@ function ListView({
                     className="pmr-tech-row"
                     onClick={() => onOpen(r.id)}
                     role="button"
-                    style={selectedReportIds.has(r.id) ? { background: 'rgba(99,102,241,0.06)' } : undefined}
+                    style={selectedReportIds.has(r.id) ? { background: 'var(--ds-neutral-wash)' } : undefined}
                   >
                     {techFilter && (
                       <td
@@ -443,13 +496,13 @@ function ListView({
                           checked={selectedReportIds.has(r.id)}
                           onChange={() => toggleReport(r.id)}
                           onClick={(e) => e.stopPropagation()}
-                          style={{ accentColor: '#6366f1', cursor: 'pointer' }}
+                          style={{ accentColor: 'var(--ds-info)', cursor: 'pointer' }}
                         />
                       </td>
                     )}
                     <td onClick={(e) => { e.stopPropagation(); if (r.techName) setTechFilter(r.techName); }}
                         title={r.techName ? `Show all weeks for ${r.techName}` : undefined}
-                        style={{ cursor: r.techName ? 'pointer' : undefined, color: techFilter === r.techName ? '#a5b4fc' : undefined, fontWeight: techFilter === r.techName ? 600 : undefined }}>
+                        style={{ cursor: r.techName ? 'pointer' : undefined, color: techFilter === r.techName ? 'var(--ds-info-text)' : undefined, fontWeight: techFilter === r.techName ? 600 : undefined }}>
                       {r.techName || '—'}
                     </td>
                     <td>{r.areaName || '—'}</td>
@@ -461,8 +514,8 @@ function ListView({
                           title="Returned, then edited again by the tech — treat as a re-submission"
                           style={{
                             marginLeft: 6, padding: '1px 6px', borderRadius: 6, fontSize: 11,
-                            fontWeight: 600, background: 'rgba(245,158,11,0.15)', color: '#fbbf24',
-                            border: '1px solid rgba(245,158,11,0.35)', whiteSpace: 'nowrap',
+                            fontWeight: 600, background: 'var(--ds-warn-soft)', color: 'var(--ds-warn-text)',
+                            border: '1px solid var(--ds-warn-line)', whiteSpace: 'nowrap',
                           }}
                         >
                           resubmitted
@@ -472,14 +525,11 @@ function ListView({
                     <td>{r.submittedAt ? formatDisplayDate(r.submittedAt.slice(0, 10)) : '—'}</td>
                     <td>{r.supabaseJobCount}</td>
                     <td style={{ fontWeight: 600 }}>{formatCurrency(r.supabaseTotalSales)}</td>
-                    <td style={{
-                      color: (r.supabaseBalance ?? 0) < 0 ? '#f87171' : (r.supabaseBalance ?? 0) > 0 ? '#34d399' : undefined,
-                      fontWeight: (r.supabaseBalance ?? 0) !== 0 ? 600 : undefined,
-                    }}>
+                    <td style={{ fontWeight: (r.supabaseBalance ?? 0) !== 0 ? 600 : undefined }}>
                       {formatCurrency(r.supabaseBalance || 0)}
                     </td>
                     <td>{formatCurrency(r.supabaseTips || 0)}</td>
-                    <td style={{ color: '#a5b4fc', fontWeight: 600 }}>{formatCurrency(r.supabaseCommission || 0)}</td>
+                    <td style={{ color: 'var(--ds-ink)', fontWeight: 600 }}>{formatCurrency(r.supabaseCommission || 0)}</td>
                     <td>
                       <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
                         <Badge ok={r.techMatched} label="tech" />
@@ -550,8 +600,8 @@ function DetailView({
         </header>
 
         {error && (
-          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(239,68,68,0.4)' }}>
-            <pre style={{ color: '#f87171', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
+          <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'var(--ds-crit-line)' }}>
+            <pre style={{ color: 'var(--ds-crit-text)', fontSize: 12, whiteSpace: 'pre-wrap', margin: 0 }}>{error}</pre>
           </div>
         )}
 
@@ -563,6 +613,76 @@ function DetailView({
 
         {data && (
           <>
+            {/* ── Reconciliation state, before anything else ──
+                 The locked hierarchy: matched is ok, mismatched is a warning,
+                 and a job present on only one side cannot be reconciled at all,
+                 so it is critical. These four numbers were already computed by
+                 the API and were previously readable only as a single crowded
+                 pill further down the page. */}
+            <SummaryStrip
+              items={[
+                {
+                  label: 'Matched',
+                  value: String(data.summary.matched),
+                  sub: `of ${Math.max(data.summary.supabaseJobCount, data.summary.crmJobCount)} jobs`,
+                },
+                {
+                  label: 'Mismatched',
+                  value: String(data.summary.mismatched),
+                  sub: data.summary.mismatched === 0 ? 'figures agree' : 'figures disagree',
+                },
+                {
+                  label: 'In CRM only',
+                  value: String(data.summary.missingInCrm),
+                  sub: data.summary.missingInCrm === 0 ? 'none' : 'absent from the report',
+                },
+                {
+                  label: 'In report only',
+                  value: String(data.summary.missingInReport),
+                  sub: data.summary.missingInReport === 0 ? 'none' : 'absent from the CRM',
+                },
+              ]}
+            />
+
+            {(() => {
+              const unreconciled = data.summary.missingInCrm + data.summary.missingInReport;
+              const identityUnresolved = !data.report.techMatched || !data.report.areaMatched;
+              if (unreconciled > 0) {
+                return (
+                  <AlertCard
+                    tone="crit"
+                    title={`${unreconciled} job${unreconciled === 1 ? '' : 's'} cannot be reconciled`}
+                    description="A job on one side with nothing to compare it against. Link it, or establish that it should not be there, before approving — the totals below cannot be right while it is unresolved."
+                  />
+                );
+              }
+              if (data.summary.mismatched > 0) {
+                return (
+                  <AlertCard
+                    tone="warn"
+                    title={`${data.summary.mismatched} job${data.summary.mismatched === 1 ? '' : 's'} with figures that disagree`}
+                    description="Every job is paired; some amounts differ beyond tolerance. The rows are highlighted below."
+                  />
+                );
+              }
+              if (identityUnresolved) {
+                return (
+                  <AlertCard
+                    tone="warn"
+                    title="This report's tech or area could not be resolved"
+                    description="Everything reconciles, but an unresolved name means it may have been compared against the wrong person or area."
+                  />
+                );
+              }
+              return (
+                <AlertCard
+                  tone="ok"
+                  title="Fully reconciled"
+                  description="Every job is paired and every figure agrees within tolerance."
+                />
+              );
+            })()}
+
             <IdentityCard report={data.report} />
             <ReportNoteCard report={data.report} />
             <SummaryCard summary={data.summary} totals={data.totals} />
@@ -582,7 +702,7 @@ function DetailView({
 function IdentityCard({ report }: { report: DetailResponse['report'] }) {
   return (
     <div className="panel" style={{ padding: 16, marginBottom: 12 }}>
-      <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: '#94a3b8', letterSpacing: 0.6, marginBottom: 10 }}>
+      <p style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', color: 'var(--ds-ink-2)', letterSpacing: 0.6, marginBottom: 10 }}>
         Identity check
       </p>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -597,9 +717,9 @@ function IdentityRow({ ok, ok_label, bad_label }: { ok: boolean; ok_label: strin
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
       {ok
-        ? <FiCheckCircle color="#34d399" />
-        : <FiAlertTriangle color="#fbbf24" />}
-      <span style={{ color: ok ? '#cbd5e1' : '#fbbf24' }}>{ok ? ok_label : bad_label}</span>
+        ? <FiCheckCircle color="var(--ds-ok)" />
+        : <FiAlertTriangle color="var(--ds-warn)" />}
+      <span style={{ color: ok ? 'var(--ds-ink)' : 'var(--ds-warn-text)' }}>{ok ? ok_label : bad_label}</span>
     </div>
   );
 }
@@ -623,7 +743,7 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
     { label: 'Finance (CRM-only)',   value: totals.crm.totalPaidFinance },
   ].filter((e) => e.value > 0);
 
-  const colorForDiff = (d: number) => Math.abs(d) > 1 ? '#fbbf24' : '#34d399';
+  const colorForDiff = (d: number) => (Math.abs(d) > 1 ? 'var(--ds-warn-text)' : 'var(--ds-ok-text)');
 
   return (
     <div className="panel bp-table-panel animate-fade-up" style={{ marginBottom: 12 }}>
@@ -632,7 +752,7 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
           <p className="bp-section-kicker">Summary</p>
           <h3>Totals comparison</h3>
         </div>
-        <span className="bp-pill" style={{ background: summary.mismatched + summary.missingInCrm + summary.missingInReport > 0 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)' }}>
+        <span className="bp-pill" style={{ background: summary.mismatched + summary.missingInCrm + summary.missingInReport > 0 ? 'var(--ds-warn-soft)' : 'var(--ds-ok-wash)' }}>
           ✓ {summary.matched} match · ⚠ {summary.mismatched} mismatch · ✗ {summary.missingInCrm} CRM-only · ✗ {summary.missingInReport} Report-only
         </span>
       </div>
@@ -663,19 +783,19 @@ function SummaryCard({ summary, totals }: { summary: DetailResponse['summary']; 
                 <td style={{ textAlign: 'right', color: colorForDiff(r.diff), fontWeight: 600 }}>
                   {r.diff > 0 ? '+' : ''}{formatCurrency(r.diff)}
                 </td>
-                <td>{Math.abs(r.diff) > 1 ? <FiAlertTriangle color="#fbbf24" /> : <FiCheck color="#34d399" />}</td>
+                <td>{Math.abs(r.diff) > 1 ? <FiAlertTriangle color="var(--ds-warn)" /> : <FiCheck color="var(--ds-ok)" />}</td>
               </tr>
             ))}
           </tbody>
         </table>
         {crmExtras.length > 0 && (
-          <div style={{ padding: '8px 14px 14px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <p style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>
+          <div style={{ padding: '8px 14px 14px', borderTop: '1px solid var(--ds-line)' }}>
+            <p style={{ fontSize: 11, color: 'var(--ds-ink-2)', marginBottom: 6 }}>
               CRM has these payment fields that the 317 Weekly Balance app doesn't track (informational only):
             </p>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {crmExtras.map((e) => (
-                <span key={e.label} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.10)', color: '#cbd5e1' }}>
+                <span key={e.label} style={{ fontSize: 12, padding: '4px 10px', borderRadius: 999, background: 'var(--ds-surface-3)', border: '1px solid var(--ds-line)', color: 'var(--ds-ink)' }}>
                   {e.label}: {formatCurrency(e.value)}
                 </span>
               ))}
@@ -809,10 +929,10 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
 
   const statusBadge = (() => {
     switch (pair.status) {
-      case 'match':              return <span style={pillStyle('#34d399')}><FiCheck /> match</span>;
-      case 'mismatch':           return <span style={pillStyle('#fbbf24')}><FiAlertTriangle /> mismatch</span>;
-      case 'missing-in-crm':     return <span style={pillStyle('#f87171')}><FiX /> CRM-only missing</span>;
-      case 'missing-in-report':  return <span style={pillStyle('#f87171')}><FiX /> Report-only missing</span>;
+      case 'match':              return <span style={pillStyle(PILL_OK)}><FiCheck /> match</span>;
+      case 'mismatch':           return <span style={pillStyle(PILL_WARN)}><FiAlertTriangle /> mismatch</span>;
+      case 'missing-in-crm':     return <span style={pillStyle(PILL_CRIT)}><FiX /> CRM-only missing</span>;
+      case 'missing-in-report':  return <span style={pillStyle(PILL_CRIT)}><FiX /> Report-only missing</span>;
     }
   })();
 
@@ -823,7 +943,7 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
       <td style={{ textAlign: 'left', overflow: 'hidden' }}>
         <div title={address || '—'} style={truncStyle}>{address || '—'}</div>
         {customer && (
-          <div title={customer} style={{ ...truncStyle, fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
+          <div title={customer} style={{ ...truncStyle, fontSize: 11, color: 'var(--ds-ink-2)', marginTop: 2 }}>
             {customer}
           </div>
         )}
@@ -837,12 +957,12 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
         {pair.status === 'mismatch' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12 }}>
             {pair.methodDiff && (
-              <span style={{ color: '#fbbf24' }}>
+              <span style={{ color: 'var(--ds-warn-text)' }}>
                 Payment method: reported <strong>{pair.methodDiff.supabase || '—'}</strong> · CRM <strong>{pair.methodDiff.crm || '—'}</strong>
               </span>
             )}
             {pair.diffs.filter((d) => d.exceedsTolerance).map((d) => (
-              <span key={d.field} style={{ color: '#fbbf24' }}>
+              <span key={d.field} style={{ color: 'var(--ds-warn-text)' }}>
                 {d.label}: reported {formatCurrency(d.supabase)} · CRM {formatCurrency(d.crm)} · {d.diff > 0 ? '+' : ''}{formatCurrency(d.diff)}
               </span>
             ))}
@@ -850,32 +970,32 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
         )}
         {pair.status === 'missing-in-crm' && (
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: '#94a3b8' }}>Tech reported, CRM has no record</span>
+            <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>Tech reported, CRM has no record</span>
             <button
               type="button"
               onClick={onStartLink}
               style={{
                 fontSize: 11, fontWeight: 600,
                 padding: '3px 8px', borderRadius: 6,
-                background: 'rgba(99,102,241,0.12)',
-                border: '1px solid rgba(99,102,241,0.35)',
-                color: '#c7d2fe', cursor: 'pointer',
+                background: 'var(--ds-info-wash)',
+                border: '1px solid var(--ds-info-line)',
+                color: 'var(--ds-info-text)', cursor: 'pointer',
               }}
             >
               Link to CRM job →
             </button>
           </span>
         )}
-        {pair.status === 'missing-in-report' && <span style={{ fontSize: 12, color: '#94a3b8' }}>CRM has it, tech didn't report</span>}
-        {pair.status === 'match' && <span style={{ fontSize: 12, color: '#34d399' }}>All within $1 tolerance</span>}
+        {pair.status === 'missing-in-report' && <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>CRM has it, tech didn't report</span>}
+        {pair.status === 'match' && <span style={{ fontSize: 12, color: 'var(--ds-ok-text)' }}>All within $1 tolerance</span>}
         {pair.manualLink && pair.supabaseJob && (
           <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
             <span
               style={{
                 fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
                 padding: '2px 6px', borderRadius: 4,
-                background: 'rgba(99,102,241,0.18)', color: '#c7d2fe',
-                border: '1px solid rgba(99,102,241,0.35)',
+                background: 'var(--ds-info-wash)', color: 'var(--ds-info-text)',
+                border: '1px solid var(--ds-info-line)',
               }}
               title="Pair set manually by an admin (overrides auto-matcher)"
             >
@@ -886,7 +1006,7 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
               onClick={onUnlink}
               style={{
                 background: 'transparent', border: 'none',
-                color: '#94a3b8', fontSize: 11, fontWeight: 600,
+                color: 'var(--ds-ink-2)', fontSize: 11, fontWeight: 600,
                 cursor: 'pointer', padding: 0, textDecoration: 'underline',
               }}
             >
@@ -901,7 +1021,7 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
           // missing-in-crm); fall back to the CRM ObjectId for missing-in-
           // report rows so admins can also annotate those.
           const noteOwner = pair.supabaseJob || pair.crmJob;
-          if (!noteOwner) return <span style={{ fontSize: 11, color: '#475569' }}>—</span>;
+          if (!noteOwner) return <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>—</span>;
           const jobId = pair.supabaseJob?.id ?? pair.crmJob?._id;
           return (
             <JobNoteInline
@@ -919,12 +1039,12 @@ function PairRow({ pair, reportId, onEdit, onStartLink, onUnlink }: {
             title="Edit reported job"
             aria-label="Edit reported job"
             style={{
-              background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
-              color: '#94a3b8', padding: 6, borderRadius: 6, cursor: 'pointer',
+              background: 'transparent', border: '1px solid var(--ds-line)',
+              color: 'var(--ds-ink-2)', padding: 6, borderRadius: 6, cursor: 'pointer',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             }}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = '#a5b4fc'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(165,180,252,0.4)'; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = '#94a3b8'; (e.currentTarget as HTMLElement).style.borderColor = 'rgba(255,255,255,0.12)'; }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ds-ink)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-line-strong)'; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--ds-ink-2)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--ds-line)'; }}
           >
             <FiEdit2 size={13} />
           </button>
@@ -943,27 +1063,33 @@ function PaymentMethodCell({ pair }: { pair: Pair }) {
   const crm: string | null = pair.crmJob?.paymentType ?? null;
   const same = sup && crm && sup.toLowerCase() === crm.toLowerCase();
   if (same) {
-    return <span style={methodPillStyle('#a5b4fc')}>{sup}</span>;
+    return <span style={methodPillStyle(METHOD_REPORTED)}>{sup}</span>;
   }
   if (sup && crm) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-start' }}>
-        <span style={methodPillStyle('#a5b4fc')}>{sup}</span>
-        <span style={{ ...methodPillStyle('#94a3b8'), opacity: 0.85 }}>CRM: {crm}</span>
+        <span style={methodPillStyle(METHOD_REPORTED)}>{sup}</span>
+        <span style={{ ...methodPillStyle(METHOD_CRM), opacity: 0.85 }}>CRM: {crm}</span>
       </div>
     );
   }
-  if (sup) return <span style={methodPillStyle('#a5b4fc')}>{sup}</span>;
-  if (crm) return <span style={methodPillStyle('#94a3b8')}>{crm}</span>;
-  return <span style={{ color: '#475569', fontSize: 12 }}>—</span>;
+  if (sup) return <span style={methodPillStyle(METHOD_REPORTED)}>{sup}</span>;
+  if (crm) return <span style={methodPillStyle(METHOD_CRM)}>{crm}</span>;
+  return <span style={{ color: 'var(--ds-ink-2)', fontSize: 12 }}>—</span>;
 }
 
-function methodPillStyle(color: string): React.CSSProperties {
+/* Payment-method source labels. Which system a value came from is category
+   information, not status, so both tiers are neutral; the CRM pill is already
+   prefixed "CRM:" and the reported value is the filled one. */
+const METHOD_REPORTED: PillTier = { text: 'var(--ds-ink)',          wash: 'var(--ds-neutral-wash)', line: 'var(--ds-neutral-line)' };
+const METHOD_CRM:      PillTier = { text: 'var(--ds-neutral-text)', wash: 'transparent',            line: 'var(--ds-neutral-line)' };
+
+function methodPillStyle(tier: PillTier): React.CSSProperties {
   return {
     display: 'inline-flex', alignItems: 'center', gap: 4,
     padding: '2px 8px', borderRadius: 999,
     fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap',
-    background: color + '18', color, border: `1px solid ${color}40`,
+    background: tier.wash, color: tier.text, border: `1px solid ${tier.line}`,
   };
 }
 
@@ -1009,11 +1135,11 @@ function ActionsCard({
   return (
     <div className="panel" style={{ padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <FiHelpCircle color="#94a3b8" />
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>
+        <FiHelpCircle color="var(--ds-ink-2)" />
+        <span style={{ fontSize: 12, color: 'var(--ds-ink-2)' }}>
           {error
-            ? <span style={{ color: '#f87171' }}>{error}</span>
-            : <>Current status: <strong style={{ color: '#e2e8f0' }}>{currentStatus}</strong></>}
+            ? <span style={{ color: 'var(--ds-crit-text)' }}>{error}</span>
+            : <>Current status: <strong style={{ color: 'var(--ds-ink)' }}>{currentStatus}</strong></>}
         </span>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -1052,9 +1178,9 @@ function Badge({ ok, label }: { ok: boolean; label: string }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, fontSize: 11,
-      background: ok ? 'rgba(16,185,129,0.10)' : 'rgba(239,68,68,0.10)',
-      color: ok ? '#34d399' : '#f87171',
-      border: `1px solid ${ok ? 'rgba(16,185,129,0.30)' : 'rgba(239,68,68,0.30)'}`,
+      background: ok ? 'var(--ds-ok-wash)' : 'var(--ds-warn-soft)',
+      color: ok ? 'var(--ds-ok-text)' : 'var(--ds-warn-text)',
+      border: `1px solid ${ok ? 'var(--ds-ok-line)' : 'var(--ds-warn-line)'}`,
     }}>
       {ok ? <FiCheck size={10} /> : <FiX size={10} />} {label}
     </span>
@@ -1068,9 +1194,9 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
       onClick={onClick}
       style={{
         padding: '4px 12px', borderRadius: 999, fontSize: 12, fontWeight: 500, cursor: 'pointer',
-        background: active ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.04)',
-        border: `1px solid ${active ? 'rgba(99,102,241,0.45)' : 'rgba(255,255,255,0.10)'}`,
-        color: active ? '#c7d2fe' : '#cbd5e1',
+        background: active ? 'var(--ds-info-wash)' : 'var(--ds-surface-3)',
+        border: `1px solid ${active ? 'var(--ds-info-line)' : 'var(--ds-line)'}`,
+        color: active ? 'var(--ds-info-text)' : 'var(--ds-ink)',
       }}
     >
       {children}
@@ -1086,19 +1212,28 @@ const truncStyle: React.CSSProperties = {
   maxWidth: '100%',
 };
 
-function pillStyle(color: string): React.CSSProperties {
+/* Reconciliation severity. match = both sides agree within TOLERANCE_USD and
+   on payment method; mismatch = both exist but disagree; missing = one side is
+   absent so the comparison cannot be completed. warn uses -soft rather than
+   -wash because text sits on it (-wash measures 4.47 in light). */
+type PillTier = { text: string; wash: string; line: string };
+const PILL_OK:   PillTier = { text: 'var(--ds-ok-text)',   wash: 'var(--ds-ok-wash)',   line: 'var(--ds-ok-line)' };
+const PILL_WARN: PillTier = { text: 'var(--ds-warn-text)', wash: 'var(--ds-warn-soft)', line: 'var(--ds-warn-line)' };
+const PILL_CRIT: PillTier = { text: 'var(--ds-crit-text)', wash: 'var(--ds-crit-wash)', line: 'var(--ds-crit-line)' };
+
+function pillStyle(tier: PillTier): React.CSSProperties {
   return {
     display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 999,
     fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
-    background: color + '20', color, border: `1px solid ${color}66`,
+    background: tier.wash, color: tier.text, border: `1px solid ${tier.line}`,
   };
 }
 
 function OverviewStat({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
-    <div style={{ background: 'rgba(15,23,42,0.5)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 12, padding: '12px 14px' }}>
-      <p style={{ fontSize: 11, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>{label}</p>
-      <p style={{ fontSize: 20, fontWeight: 700, color: accent || '#f1f5f9', marginTop: 4, marginBottom: 0, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
+    <div style={{ background: 'var(--ds-surface-2)', border: '1px solid var(--ds-line)', borderRadius: 12, padding: '12px 14px' }}>
+      <p style={{ fontSize: 11, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, margin: 0 }}>{label}</p>
+      <p style={{ fontSize: 20, fontWeight: 700, color: accent || 'var(--ds-ink)', marginTop: 4, marginBottom: 0, fontVariantNumeric: 'tabular-nums' }}>{value}</p>
     </div>
   );
 }
@@ -1144,14 +1279,14 @@ function ReportNoteCard({ report }: { report: DetailResponse['report'] }) {
   };
 
   return (
-    <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'rgba(245,158,11,0.25)' }}>
+    <div className="panel" style={{ padding: 16, marginBottom: 12, borderColor: 'var(--ds-line)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 8, gap: 12, flexWrap: 'wrap' }}>
         <div>
           <p className="bp-section-kicker" style={{ margin: 0 }}>Admin Note · CRM only</p>
           <h3 style={{ marginTop: 4, marginBottom: 0, fontSize: 15 }}>Notes about this report</h3>
         </div>
         {savedAt && (
-          <span style={{ fontSize: 11, color: '#64748b' }}>
+          <span style={{ fontSize: 11, color: 'var(--ds-ink-2)' }}>
             Last saved {formatDisplayDate(savedAt.slice(0, 10))}{savedBy ? ` · ${savedBy}` : ''}
           </span>
         )}
@@ -1163,9 +1298,9 @@ function ReportNoteCard({ report }: { report: DetailResponse['report'] }) {
         rows={3}
         style={{
           width: '100%',
-          background: 'rgba(15,23,42,0.6)',
-          color: '#e2e8f0',
-          border: '1px solid rgba(255,255,255,0.10)',
+          background: 'var(--ds-surface-2)',
+          color: 'var(--ds-ink)',
+          border: '1px solid var(--ds-line-strong)',
           borderRadius: 10,
           padding: 10,
           fontSize: 13,
@@ -1186,7 +1321,7 @@ function ReportNoteCard({ report }: { report: DetailResponse['report'] }) {
         >
           {saving ? 'Saving…' : dirty ? 'Save note' : 'Saved'}
         </button>
-        {err && <span style={{ fontSize: 12, color: '#f87171' }}>{err}</span>}
+        {err && <span style={{ fontSize: 12, color: 'var(--ds-crit-text)' }}>{err}</span>}
       </div>
     </div>
   );
@@ -1250,7 +1385,7 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
           onClick={() => setMode('editing')}
           style={{
             background: 'transparent', border: 'none',
-            color: '#fbbf24', fontSize: 12, fontWeight: 600,
+            color: 'var(--ds-info-text)', fontSize: 12, fontWeight: 600,
             cursor: 'pointer', padding: 0,
             display: 'inline-flex', alignItems: 'center', gap: 4,
           }}
@@ -1264,10 +1399,10 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div
           style={{
-            background: 'rgba(245,158,11,0.06)',
-            border: '1px solid rgba(245,158,11,0.20)',
+            background: 'var(--ds-surface-2)',
+            border: '1px solid var(--ds-line)',
             borderRadius: 8, padding: '6px 8px',
-            fontSize: 12, color: '#e2e8f0',
+            fontSize: 12, color: 'var(--ds-ink)',
             whiteSpace: 'pre-wrap', wordBreak: 'break-word',
           }}
         >
@@ -1278,9 +1413,9 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
           onClick={() => setMode('editing')}
           style={{
             alignSelf: 'flex-start',
-            background: 'rgba(245,158,11,0.10)',
-            border: '1px solid rgba(245,158,11,0.30)',
-            color: '#fbbf24', fontSize: 11, fontWeight: 600,
+            background: 'var(--ds-surface-2)',
+            border: '1px solid var(--ds-line)',
+            color: 'var(--ds-info-text)', fontSize: 11, fontWeight: 600,
             cursor: 'pointer', padding: '3px 8px', borderRadius: 6,
             display: 'inline-flex', alignItems: 'center', gap: 4,
           }}
@@ -1295,7 +1430,7 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
   // ── Editing view ─────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <span style={{ fontSize: 10, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
+      <span style={{ fontSize: 10, color: 'var(--ds-ink-2)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
         Admin note · Enter to save · Shift+Enter for new line
       </span>
       <textarea
@@ -1325,9 +1460,9 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
         rows={2}
         style={{
           width: '100%',
-          background: 'rgba(245,158,11,0.05)',
-          color: '#e2e8f0',
-          border: '1px solid rgba(245,158,11,0.25)',
+          background: 'var(--ds-surface-2)',
+          color: 'var(--ds-ink)',
+          border: '1px solid var(--ds-line-strong)',
           borderRadius: 8,
           padding: '6px 8px',
           fontSize: 12,
@@ -1336,9 +1471,9 @@ function JobNoteInline({ reportId, jobId, initial }: { reportId: string; jobId: 
         }}
       />
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', fontSize: 11 }}>
-        {saving && <span style={{ color: '#94a3b8' }}>Saving…</span>}
-        {!saving && dirty && <span style={{ color: '#fbbf24' }}>Press Enter to save</span>}
-        {err && <span style={{ color: '#f87171' }}>{err}</span>}
+        {saving && <span style={{ color: 'var(--ds-ink-2)' }}>Saving…</span>}
+        {!saving && dirty && <span style={{ color: 'var(--ds-ink-2)' }}>Press Enter to save</span>}
+        {err && <span style={{ color: 'var(--ds-crit-text)' }}>{err}</span>}
       </div>
     </div>
   );

@@ -104,7 +104,7 @@ function Field({ label, value, strong, href }: { label: string; value: string; s
     <div className="portal-kpi" style={{ padding: "12px 14px" }}>
       <div className="portal-kpi-label">{label}</div>
       <div className="portal-kpi-value" style={{ fontSize: strong ? 18 : 15 }}>
-        {href ? <Link href={href} style={{ color: "#818cf8", textDecoration: "none" }}>{value}</Link> : value}
+        {href ? <Link href={href} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{value}</Link> : value}
       </div>
     </div>
   );

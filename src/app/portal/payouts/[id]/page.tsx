@@ -47,7 +47,7 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
       />
 
       <section className="portal-grid-4">
-        <StatPill label="Net pay" value={<span className="money" style={{ color: payout.net >= 0 ? "#10b981" : "#ef4444", fontWeight: 700 }}>{fmt$(payout.net)}</span>} />
+        <StatPill label="Net pay" value={<span className="money" style={{ color: "var(--ds-ink)", fontWeight: 700 }}>{fmt$(payout.net)}</span>} />
         <StatPill label="Status" value={<StatusPill status={payout.status} />} />
         <StatPill label="Period" value={`${fmtDate(payout.period_start)} – ${fmtDate(payout.period_end)}`} />
         <StatPill label="Payment method" value={payout.payment_method || "—"} />
@@ -58,11 +58,11 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
       </section>
 
       {payout.status === "paid" && payout.ledger_entry_id && linkedLedger && (
-        <div className="portal-alert" style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.25)" }}>
+        <div className="portal-alert portal-alert-good">
           <span>✓</span>
           <div className="small">
             A payment of <strong>{fmt$(payout.net)}</strong> is posted to{" "}
-            <Link href={`/portal/ledger/${linkedLedger._id}`} style={{ color: "#818cf8", textDecoration: "none" }}>{linkedLedger.holder_name}&apos;s ledger</Link>.
+            <Link href={`/portal/ledger/${linkedLedger._id}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{linkedLedger.holder_name}&apos;s ledger</Link>.
           </div>
         </div>
       )}
@@ -88,7 +88,7 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
       {payout.notes && <CardShell title="Notes"><div style={{ padding: 16 }} className="muted">{payout.notes}</div></CardShell>}
 
       <p className="muted small">
-        <a href={`/payout-statement/${payout._id}`} target="_blank" rel="noopener noreferrer" style={{ color: "#818cf8" }}>Open printable statement (PDF) →</a>
+        <a href={`/payout-statement/${payout._id}`} target="_blank" rel="noopener noreferrer" style={{ color: "var(--ds-fin-2)" }}>Open printable statement (PDF) →</a>
       </p>
     </div>
   );

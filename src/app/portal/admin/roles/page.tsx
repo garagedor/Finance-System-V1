@@ -74,7 +74,7 @@ export default async function RolesIndexPage() {
                 <td>
                   <Link
                     href={`/portal/admin/roles/${r._id}`}
-                    style={{ fontWeight: 500, color: "#cbd5e1" }}
+                    style={{ fontWeight: 500, color: "var(--ds-ink)" }}
                   >
                     {r.name}
                   </Link>

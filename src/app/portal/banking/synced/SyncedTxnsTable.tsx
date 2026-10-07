@@ -114,8 +114,8 @@ export default function SyncedTxnsTable({
           flexWrap: "wrap",
           padding: "10px 12px",
           marginBottom: 10,
-          background: "#0d1526",
-          border: "1px solid rgba(255,255,255,0.07)",
+          background: "var(--ds-surface-2)",
+          border: "1px solid var(--ds-line)",
           borderRadius: 8,
         }}
       >
@@ -199,7 +199,7 @@ export default function SyncedTxnsTable({
             return (
               <tr
                 key={r._id}
-                style={isSel ? { background: "rgba(99,102,241,0.10)" } : undefined}
+                style={isSel ? { background: "var(--ds-neutral-wash)" } : undefined}
               >
                 <td>
                   <input

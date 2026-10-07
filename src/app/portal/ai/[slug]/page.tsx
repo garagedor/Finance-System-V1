@@ -78,7 +78,7 @@ export default async function ExecutiveDesk({
               style={{
                 margin: 0,
                 padding: "12px 18px 16px 32px",
-                color: "#94a3b8",
+                color: "var(--ds-ink-2)",
                 fontSize: 12.5,
                 lineHeight: 1.9,
               }}

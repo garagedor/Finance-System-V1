@@ -72,9 +72,9 @@ export default function HomePage() {
           size="lg"
           icon={
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <circle cx="10" cy="10" r="8" stroke="#f87171" strokeWidth="1.5"/>
-              <line x1="10" y1="6" x2="10" y2="10.5" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round"/>
-              <circle cx="10" cy="13" r="0.75" fill="#f87171"/>
+              <circle cx="10" cy="10" r="8" stroke="var(--ds-crit)" strokeWidth="1.5"/>
+              <line x1="10" y1="6" x2="10" y2="10.5" stroke="var(--ds-crit)" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="10" cy="13" r="0.75" fill="var(--ds-crit)"/>
             </svg>
           }
           title="Access Denied"
@@ -175,16 +175,16 @@ export default function HomePage() {
       <div className="min-h-screen pb-16">
         <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
           <div className="h-12 w-56 rounded-xl shimmer-bg" />
-          <div className="h-20 rounded-2xl border border-white/8 bg-[#111827] shimmer-bg" />
+          <div className="h-20 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-28 rounded-2xl border border-white/8 bg-[#111827] shimmer-bg" />
+              <div key={i} className="h-28 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
             ))}
           </div>
-          <div className="h-[316px] rounded-2xl border border-white/8 bg-[#111827] shimmer-bg" />
+          <div className="h-[316px] rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="h-72 rounded-2xl border border-white/8 bg-[#111827] shimmer-bg" />
+              <div key={i} className="h-72 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
             ))}
           </div>
         </div>
@@ -223,16 +223,16 @@ export default function HomePage() {
         {/* ── PAGE HEADER ── */}
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
           <div>
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-indigo-400">Overview</p>
-            <h1 className="text-3xl font-bold tracking-tight text-white">Dashboard</h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {fmtDate(appliedStart)} <span className="text-slate-700 mx-1">→</span> {fmtDate(appliedEnd)}
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--ds-crm-2)]">Overview</p>
+            <h1 className="text-3xl font-bold tracking-tight text-[var(--ds-ink)]">Dashboard</h1>
+            <p className="mt-1 text-sm text-[var(--ds-ink-2)]">
+              {fmtDate(appliedStart)} <span className="text-[var(--ds-ink-2)] mx-1">→</span> {fmtDate(appliedEnd)}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {loading && (
-              <div className="flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/10 px-3 py-1 text-[11px] font-medium text-indigo-300">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-indigo-400" />
+              <div className="flex items-center gap-2 rounded-full border border-[var(--ds-crm-line)] bg-[var(--ds-crm)]/10 px-3 py-1 text-[11px] font-medium text-[var(--ds-crm-text)]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ds-crm-2)]" />
                 Updating
               </div>
             )}
@@ -240,7 +240,7 @@ export default function HomePage() {
               type="button"
               onClick={() => window.location.reload()}
               title="Hard refresh — reload the page from the server, bypassing the browser cache"
-              className="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 rounded-full border border-[var(--ds-line-strong)] bg-[var(--ds-surface-1)]/5 px-3 py-1 text-[11px] font-medium text-[var(--ds-ink)] hover:bg-[var(--ds-surface-1)]/10 hover:text-[var(--ds-ink)] transition-colors"
             >
               <FiRefreshCw size={12} />
               Hard Refresh
@@ -251,7 +251,7 @@ export default function HomePage() {
         {/* ── STICKY FILTER BAR ── */}
         <div
           className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 py-2"
-          style={{ background: 'rgba(10,15,28,0.85)', backdropFilter: 'blur(12px)' }}
+          style={{ background: 'var(--ds-scrim)', backdropFilter: 'blur(12px)' }}
         >
           <FiltersPanel
             direction="horizontal"
@@ -348,7 +348,7 @@ export default function HomePage() {
         {/* ── CHART ── */}
         <section className="animate-fade-up">
           <SectionHeading kicker="Distribution" title="Jobs by Location" />
-          <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#111827] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+          <div className="overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
             <div className="h-[300px] px-4 py-5">
               {data.jobsByLocation && data.jobsByLocation.length ? (
                 <LocationBarChart data={data.jobsByLocation} />
@@ -440,13 +440,18 @@ export default function HomePage() {
 
 type Accent = 'indigo' | 'emerald' | 'red' | 'amber' | 'cyan' | 'violet';
 
-const accentMap: Record<Accent, { ring: string; glow: string; icon: string; bg: string }> = {
-  indigo:  { ring: 'rgba(99,102,241,0.25)',  glow: 'rgba(99,102,241,0.12)',  icon: '#a5b4fc', bg: 'rgba(99,102,241,0.08)' },
-  emerald: { ring: 'rgba(16,185,129,0.25)',  glow: 'rgba(16,185,129,0.10)',  icon: '#34d399', bg: 'rgba(16,185,129,0.08)' },
-  red:     { ring: 'rgba(239,68,68,0.25)',   glow: 'rgba(239,68,68,0.10)',   icon: '#f87171', bg: 'rgba(239,68,68,0.08)'  },
-  amber:   { ring: 'rgba(245,158,11,0.25)',  glow: 'rgba(245,158,11,0.10)',  icon: '#fbbf24', bg: 'rgba(245,158,11,0.08)' },
-  cyan:    { ring: 'rgba(6,182,212,0.25)',   glow: 'rgba(6,182,212,0.10)',   icon: '#22d3ee', bg: 'rgba(6,182,212,0.08)'  },
-  violet:  { ring: 'rgba(139,92,246,0.25)',  glow: 'rgba(139,92,246,0.12)',  icon: '#c4b5fd', bg: 'rgba(139,92,246,0.08)' },
+/* KPI cards share one restrained CRM accent. The accent prop is kept so call
+   sites and ordering are untouched, but a card's position no longer picks a
+   hue — positional decoration is not a categorical palette. */
+const KPI_ACCENT = {
+  ring: 'var(--ds-crm-line)',
+  glow: 'var(--ds-crm-wash)',
+  icon: 'var(--ds-crm-text)',
+  bg:   'var(--ds-crm-wash)',
+};
+const accentMap: Record<Accent, typeof KPI_ACCENT> = {
+  indigo: KPI_ACCENT, emerald: KPI_ACCENT, red: KPI_ACCENT,
+  amber:  KPI_ACCENT, cyan:    KPI_ACCENT, violet: KPI_ACCENT,
 };
 
 function FeatureKpiCard({
@@ -455,8 +460,8 @@ function FeatureKpiCard({
   const a = accentMap[accent];
   return (
     <div
-      className="hover-lift group relative overflow-hidden rounded-3xl border bg-[#111827] p-7 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
-      style={{ borderColor: 'rgba(255,255,255,0.08)' }}
+      className="hover-lift group relative overflow-hidden rounded-3xl border bg-[var(--ds-surface-1)] p-7 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
+      style={{ borderColor: 'var(--ds-line)' }}
     >
       <div
         className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full opacity-70 transition-opacity group-hover:opacity-100"
@@ -464,10 +469,10 @@ function FeatureKpiCard({
       />
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-400">{label}</p>
-          <p className="mt-3 text-4xl sm:text-5xl font-bold tabular-nums tracking-tight text-white">{value}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--ds-ink-2)]">{label}</p>
+          <p className="mt-3 text-4xl sm:text-5xl font-bold tabular-nums tracking-tight text-[var(--ds-ink)]">{value}</p>
           {typeof jobCount === 'number' && (
-            <p className="mt-2 text-xs tabular-nums text-slate-500">
+            <p className="mt-2 text-xs tabular-nums text-[var(--ds-ink-2)]">
               {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
             </p>
           )}
@@ -489,8 +494,8 @@ function KpiCard({
   const a = accentMap[accent];
   return (
     <div
-      className="hover-lift group relative overflow-hidden rounded-2xl border bg-[#111827] p-5 shadow-[0_4px_18px_rgba(0,0,0,0.3)]"
-      style={{ borderColor: 'rgba(255,255,255,0.07)' }}
+      className="hover-lift group relative overflow-hidden rounded-2xl border bg-[var(--ds-surface-1)] p-5 shadow-[0_4px_18px_rgba(0,0,0,0.3)]"
+      style={{ borderColor: 'var(--ds-line)' }}
     >
       <div
         className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-60 transition-opacity group-hover:opacity-100"
@@ -498,10 +503,10 @@ function KpiCard({
       />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{label}</p>
-          <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-white truncate">{value}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--ds-ink-2)]">{label}</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-[var(--ds-ink)] truncate">{value}</p>
           {typeof jobCount === 'number' && (
-            <p className="mt-0.5 text-[11px] tabular-nums text-slate-500">
+            <p className="mt-0.5 text-[11px] tabular-nums text-[var(--ds-ink-2)]">
               {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
             </p>
           )}
@@ -522,8 +527,8 @@ function KpiCard({
 function SectionHeading({ kicker, title }: { kicker: string; title: string }) {
   return (
     <div className="mb-3 px-1">
-      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-indigo-400">{kicker}</p>
-      <h2 className="text-base font-bold text-slate-100">{title}</h2>
+      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--ds-crm-2)]">{kicker}</p>
+      <h2 className="text-base font-bold text-[var(--ds-ink)]">{title}</h2>
     </div>
   );
 }
@@ -543,9 +548,9 @@ function LeaderboardCard({
   const maxValue = items.length ? Math.max(...items.map(i => i[valueProp] || 0), 1) : 1;
 
   return (
-    <div className="hover-lift flex h-full flex-col overflow-hidden rounded-2xl border border-white/8 bg-[#111827] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
-      <div className="border-b border-white/5 px-5 py-3.5">
-        <h3 className="text-sm font-bold tracking-tight text-slate-100">{title}</h3>
+    <div className="hover-lift flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+      <div className="border-b border-[var(--ds-line)] px-5 py-3.5">
+        <h3 className="text-sm font-bold tracking-tight text-[var(--ds-ink)]">{title}</h3>
       </div>
 
       {!items.length ? (
@@ -564,17 +569,17 @@ function LeaderboardCard({
               }
               const widthPct = Math.max(2, Math.min(100, (val / maxValue) * 100));
               const valueColor =
-                tone === 'good' ? 'text-emerald-400' :
-                tone === 'bad'  ? 'text-red-400' :
-                'text-slate-200';
+                tone === 'good' ? 'text-[var(--ds-ok-text)]' :
+                tone === 'bad'  ? 'text-[var(--ds-crit-text)]' :
+                'text-[var(--ds-ink)]';
               const barColor =
-                tone === 'good' ? 'rgba(16,185,129,0.18)' :
-                tone === 'bad'  ? 'rgba(239,68,68,0.18)' :
-                'rgba(99,102,241,0.16)';
+                tone === 'good' ? 'var(--ds-ok-wash)' :
+                tone === 'bad'  ? 'var(--ds-crit-wash)' :
+                'var(--ds-neutral-wash)';
               const isTopThree = idx < 3;
 
               return (
-                <li key={idx} className="group relative px-4 py-2.5 transition-colors hover:bg-indigo-500/5">
+                <li key={idx} className="group relative px-4 py-2.5 transition-colors hover:bg-[var(--ds-crm)]/5">
                   {/* Ranking bar bg */}
                   <div
                     className="absolute left-0 top-0 h-full transition-all duration-500"
@@ -585,21 +590,21 @@ function LeaderboardCard({
                     <div
                       className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-bold tabular-nums ${
                         isTopThree
-                          ? 'text-amber-300'
-                          : 'text-slate-600'
+                          ? 'text-[var(--ds-neutral-text)]'
+                          : 'text-[var(--ds-ink-2)]'
                       }`}
                       style={isTopThree ? {
-                        background: 'rgba(245,158,11,0.12)',
-                        border: '1px solid rgba(245,158,11,0.25)',
+                        background: 'var(--ds-neutral-wash)',
+                        border: '1px solid var(--ds-neutral-line)',
                       } : undefined}
                     >
                       {idx + 1}
                     </div>
-                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-200">
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--ds-ink)]">
                       {item[keyProp]}
                     </span>
                     {typeof item.count === 'number' && (
-                      <span className="flex-shrink-0 text-[11px] font-medium tabular-nums text-slate-500">
+                      <span className="flex-shrink-0 text-[11px] font-medium tabular-nums text-[var(--ds-ink-2)]">
                         {item.count} {item.count === 1 ? 'job' : 'jobs'}
                       </span>
                     )}
@@ -635,7 +640,7 @@ function FinancialCard({
   const a = accentMap[tone];
 
   return (
-    <div className="hover-lift overflow-hidden rounded-2xl border border-white/8 bg-[#111827] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+    <div className="hover-lift overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
       {/* Top section: total prominent */}
       <div
         className="relative px-5 py-5"
@@ -643,11 +648,11 @@ function FinancialCard({
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">{title}</p>
-            <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-white">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--ds-ink-2)]">{title}</p>
+            <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-[var(--ds-ink)]">
               {formatCurrency(total)}
             </p>
-            <p className="mt-0.5 text-[11px] text-slate-600">{subtitle}</p>
+            <p className="mt-0.5 text-[11px] text-[var(--ds-ink-2)]">{subtitle}</p>
           </div>
           <div
             className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl"
@@ -659,7 +664,7 @@ function FinancialCard({
       </div>
 
       {/* Breakdown */}
-      <div className="border-t border-white/5">
+      <div className="border-t border-[var(--ds-line)]">
         {!items.length ? (
           <div className="py-6">
             <EmptyState size="sm" title="No breakdown" />
@@ -671,16 +676,16 @@ function FinancialCard({
               return (
                 <li
                   key={idx}
-                  className="flex items-center justify-between gap-3 border-b border-white/5 px-5 py-2.5 last:border-0 transition-colors hover:bg-indigo-500/5"
+                  className="flex items-center justify-between gap-3 border-b border-[var(--ds-line)] px-5 py-2.5 last:border-0 transition-colors hover:bg-[var(--ds-crm)]/5"
                 >
-                  <span className="text-[13px] font-medium text-slate-300">{item._id}</span>
+                  <span className="text-[13px] font-medium text-[var(--ds-ink)]">{item._id}</span>
                   <div className="flex items-center gap-3">
                     {typeof jobCount === 'number' && (
-                      <span className="text-[11px] font-medium tabular-nums text-slate-500">
+                      <span className="text-[11px] font-medium tabular-nums text-[var(--ds-ink-2)]">
                         {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
                       </span>
                     )}
-                    <span className="text-[13px] font-semibold tabular-nums text-slate-100">
+                    <span className="text-[13px] font-semibold tabular-nums text-[var(--ds-ink)]">
                       {formatCurrency(item[valueProp])}
                     </span>
                   </div>

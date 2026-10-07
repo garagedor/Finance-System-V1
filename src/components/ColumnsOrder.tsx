@@ -68,11 +68,11 @@ function SortableItem({
         <div
             ref={setNodeRef}
             style={style}
-            className={`group flex items-center px-3 py-2 mb-1 bg-white border border-slate-200 rounded-lg gap-3 select-none hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm ${isDragging ? 'border-blue-400 bg-blue-50 shadow-md transform scale-[1.02] z-50' : ''
+            className={`group flex items-center px-3 py-2 mb-1 bg-[var(--ds-surface-1)] border border-[var(--ds-line)] rounded-lg gap-3 select-none hover:bg-[var(--ds-surface-2)] hover:border-[var(--ds-line-strong)] transition-all shadow-sm ${isDragging ? 'border-[var(--ds-info-line)] bg-[var(--ds-info-wash)] shadow-md transform scale-[1.02] z-50' : ''
                 }`}
         >
             <div
-                className="flex items-center justify-center text-slate-400 p-1 rounded hover:bg-slate-200 hover:text-slate-600 cursor-grab active:cursor-grabbing transition-colors touch-none"
+                className="flex items-center justify-center text-[var(--ds-ink-2)] p-1 rounded hover:bg-[var(--ds-surface-3)] hover:text-[var(--ds-ink-2)] cursor-grab active:cursor-grabbing transition-colors touch-none"
                 {...attributes}
                 {...listeners}
             >
@@ -80,7 +80,7 @@ function SortableItem({
             </div>
 
             <label className="flex-1 flex items-center justify-between cursor-pointer">
-                <span className="flex-1 text-sm font-medium text-slate-700 text-center px-2">
+                <span className="flex-1 text-sm font-medium text-[var(--ds-ink-2)] text-center px-2">
                     {label}
                 </span>
                 <div className="flex items-center justify-center w-8">
@@ -89,7 +89,7 @@ function SortableItem({
                         checked={visible}
                         onChange={onToggle}
                         onClick={(e) => e.stopPropagation()}
-                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer accent-blue-600"
+                        className="w-4 h-4 text-[var(--ds-info)] rounded border-[var(--ds-line-strong)] focus:ring-[var(--ds-info)] cursor-pointer accent-[var(--ds-info)]"
                     />
                 </div>
             </label>
@@ -200,7 +200,7 @@ export function ColumnsOrder<T>({
         <div className="relative" ref={containerRef}>
             <button
                 ref={triggerRef}
-                className={`flex items-center gap-2 px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-medium text-sm text-slate-600 shadow-sm hover:bg-slate-50 hover:border-slate-300 transition-all ${isOpen ? 'bg-blue-50 border-blue-200 text-blue-600' : ''
+                className={`flex items-center gap-2 px-3 py-1.5 bg-[var(--ds-surface-1)] border border-[var(--ds-line)] rounded-lg font-medium text-sm text-[var(--ds-ink-2)] shadow-sm hover:bg-[var(--ds-surface-2)] hover:border-[var(--ds-line-strong)] transition-all ${isOpen ? 'bg-[var(--ds-neutral-wash)] border-[var(--ds-line-strong)] text-[var(--ds-ink)]' : ''
                     }`}
                 onClick={handleToggle}
             >
@@ -214,7 +214,7 @@ export function ColumnsOrder<T>({
             {isOpen && typeof document !== 'undefined' && createPortal((
                 <div
                     ref={popoverRef}
-                    className="w-72 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden flex flex-col max-h-[500px]"
+                    className="w-72 bg-[var(--ds-surface-1)] rounded-xl shadow-xl border border-[var(--ds-line)] overflow-hidden flex flex-col max-h-[500px]"
                     style={{
                         position: 'fixed',
                         top: popoverPos?.top ?? 80,
@@ -222,12 +222,12 @@ export function ColumnsOrder<T>({
                         zIndex: 9999,
                     }}
                 >
-                    <div className="flex justify-between items-center p-3 border-b border-slate-100 bg-slate-50 shrink-0">
-                        <span className="text-sm font-semibold text-slate-900">
+                    <div className="flex justify-between items-center p-3 border-b border-[var(--ds-line)] bg-[var(--ds-surface-2)] shrink-0">
+                        <span className="text-sm font-semibold text-[var(--ds-ink)]">
                             Manage Columns
                         </span>
                         <button
-                            className="text-slate-400 hover:text-slate-600 transition-colors p-1 rounded-full hover:bg-slate-200"
+                            className="text-[var(--ds-ink-2)] hover:text-[var(--ds-ink-2)] transition-colors p-1 rounded-full hover:bg-[var(--ds-surface-3)]"
                             onClick={() => setIsOpen(false)}
                         >
                             <FiX size={16} />
@@ -259,15 +259,15 @@ export function ColumnsOrder<T>({
 
                         <DragOverlay>
                             {activeId ? (
-                                <div className="flex items-center justify-between p-2 bg-white border border-blue-500 rounded-lg shadow-lg opacity-90 cursor-grabbing w-full">
-                                    <div className="flex items-center justify-center text-slate-400 mr-2">
+                                <div className="flex items-center justify-between p-2 bg-[var(--ds-surface-1)] border border-[var(--ds-info)] rounded-lg shadow-lg opacity-90 cursor-grabbing w-full">
+                                    <div className="flex items-center justify-center text-[var(--ds-ink-2)] mr-2">
                                         <FiGrid size={16} />
                                     </div>
-                                    <span className="flex-1 text-sm font-medium text-slate-700 text-center">
+                                    <span className="flex-1 text-sm font-medium text-[var(--ds-ink-2)] text-center">
                                         {columns.find((c) => c.key === activeId)?.label}
                                     </span>
                                     <div className="w-8 flex justify-center">
-                                        <div className="w-4 h-4 border border-blue-500 rounded bg-blue-50"></div>
+                                        <div className="w-4 h-4 border border-[var(--ds-info)] rounded bg-[var(--ds-info-wash)]"></div>
                                     </div>
                                 </div>
                             ) : null}

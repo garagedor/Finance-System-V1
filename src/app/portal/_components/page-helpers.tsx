@@ -112,7 +112,7 @@ export function BackLink({ href, label }: { href: string; label: string }) {
   return (
     <Link
       href={href}
-      style={{ fontSize: 12, color: "#818cf8", textDecoration: "none" }}
+      style={{ fontSize: 12, color: "var(--ds-fin-2)", textDecoration: "none" }}
     >
       ← {label}
     </Link>

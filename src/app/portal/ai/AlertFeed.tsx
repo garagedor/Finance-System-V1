@@ -17,10 +17,10 @@ export type FeedAlert = {
 };
 
 function prioColor(p: number): string {
-  if (p >= 80) return "#f87171";
-  if (p >= 60) return "#f59e0b";
-  if (p >= 40) return "#60a5fa";
-  return "#94a3b8";
+  if (p >= 80) return "var(--ds-crit-text)";
+  if (p >= 60) return "var(--ds-warn-text)";
+  if (p >= 40) return "var(--ds-info-text)";
+  return "var(--ds-ink-2)";
 }
 
 export default function AlertFeed({ alerts, emptyMessage }: { alerts: FeedAlert[]; emptyMessage: string }) {
@@ -61,24 +61,24 @@ export default function AlertFeed({ alerts, emptyMessage }: { alerts: FeedAlert[
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 600, color: "#e2e8f0" }}>{a.title}</span>
+                <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ds-ink)" }}>{a.title}</span>
                 {a.metric && a.financialImpact == null && (
                   <span style={{ marginLeft: "auto", fontSize: 12.5, fontWeight: 700, color: c }}>{a.metric}</span>
                 )}
               </div>
-              <div style={{ fontSize: 12.5, color: "#94a3b8", lineHeight: 1.5, marginTop: 2 }}>{a.detail}</div>
+              <div style={{ fontSize: 12.5, color: "var(--ds-ink-2)", lineHeight: 1.5, marginTop: 2 }}>{a.detail}</div>
               {facts.length > 0 && (
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
                   {facts.map((f) => (
-                    <span key={f} style={{ fontSize: 11, color: "#cbd5e1", background: "rgba(255,255,255,0.05)", borderRadius: 6, padding: "2px 7px" }}>
+                    <span key={f} style={{ fontSize: 11, color: "var(--ds-ink)", background: "var(--ds-surface-2)", borderRadius: 6, padding: "2px 7px" }}>
                       {f}
                     </span>
                   ))}
                 </div>
               )}
               {a.recommendedAction && (
-                <div style={{ fontSize: 12, color: "#cbd5e1", marginTop: 6 }}>
-                  <strong style={{ color: "#a5b4fc" }}>→ </strong>
+                <div style={{ fontSize: 12, color: "var(--ds-ink)", marginTop: 6 }}>
+                  <strong style={{ color: "var(--ds-info-text)" }}>→ </strong>
                   {a.recommendedAction}
                 </div>
               )}

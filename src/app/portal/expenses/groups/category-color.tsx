@@ -7,17 +7,21 @@ const PALETTE = [
   "#f472b6", "#a3e635", "#fb923c", "#2dd4bf", "#38bdf8", "#e879f9",
 ];
 
+/* 0x22 ≈ 13% alpha, expressed so it works for any colour syntax an
+   override may carry. */
+const alpha13 = (c: string) => `color-mix(in srgb, ${c} 13%, transparent)`;
+
 export function categoryColor(
   category: string | null | undefined,
   overrides?: Record<string, string> | null,
 ): { color: string; bg: string } {
   const key = (category || "other").trim().toLowerCase();
   const override = overrides?.[key];
-  if (override) return { color: override, bg: override + "22" };
+  if (override) return { color: override, bg: alpha13(override) };
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
   const color = PALETTE[h % PALETTE.length];
-  return { color, bg: color + "22" }; // 0x22 ≈ 13% alpha
+  return { color, bg: alpha13(color) };
 }
 
 /** A small pill: colored dot + category label. */

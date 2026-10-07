@@ -234,7 +234,7 @@ export default async function IncomePage({
                   <td className="small">
                     {labelForSource(r.source)}
                     {r.ledger_id && (
-                      <div className="small" style={{ color: "#818cf8" }}>
+                      <div className="small" style={{ color: "var(--ds-fin-2)" }}>
                         ↩ from {r.ledger_holder ?? "ledger"}
                       </div>
                     )}

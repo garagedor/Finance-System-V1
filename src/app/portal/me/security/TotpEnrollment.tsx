@@ -93,7 +93,7 @@ export default function TotpEnrollment({ enabled }: { enabled: boolean }) {
               style={{ flex: 1, letterSpacing: 4 }}
               placeholder="123456 or AAAA-BBBB"
             />
-            <button className="portal-btn" onClick={disable} disabled={busy || !disableCode} style={{ color: "#f87171" }}>
+            <button className="portal-btn" onClick={disable} disabled={busy || !disableCode} style={{ color: "var(--ds-crit-text)" }}>
               {busy ? "…" : "Disable"}
             </button>
           </div>
@@ -137,7 +137,7 @@ export default function TotpEnrollment({ enabled }: { enabled: boolean }) {
         <div style={{ flex: 1, minWidth: 280 }}>
           <p className="portal-label">2. Save these backup codes</p>
           <p className="muted small">Each can be used once if you lose your phone. Print or save somewhere safe — you won&apos;t see them again.</p>
-          <pre style={{ background: "#0a0f1c", padding: 12, borderRadius: 6, fontSize: 13, lineHeight: 1.8 }}>
+          <pre style={{ background: "var(--ds-surface-2)", padding: 12, borderRadius: 6, fontSize: 13, lineHeight: 1.8 }}>
 {setup.backup_codes.join("\n")}
           </pre>
         </div>

@@ -27,10 +27,10 @@ export function DbDownBanner({ error }: { error: string | null }) {
               style={{
                 margin: "6px 0 0",
                 padding: 10,
-                background: "rgba(0,0,0,0.3)",
+                background: "var(--ds-surface-2)",
                 borderRadius: 6,
                 fontSize: 10.5,
-                color: "#fca5a5",
+                color: "var(--ds-crit-text)",
                 overflowX: "auto",
                 fontFamily: "ui-monospace, SF Mono, Menlo, monospace",
               }}

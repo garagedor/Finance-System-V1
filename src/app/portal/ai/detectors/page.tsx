@@ -18,7 +18,7 @@ const CATEGORY_LABEL: Record<DetectorCategory, string> = {
   strategy: "🧭 Strategy",
 };
 
-const SEV_COLOR: Record<string, string> = { high: "#f87171", medium: "#f59e0b", low: "#60a5fa", info: "#94a3b8" };
+const SEV_COLOR: Record<string, string> = { high: "var(--ds-crit-text)", medium: "var(--ds-warn-text)", low: "var(--ds-info-text)", info: "var(--ds-ink-2)" };
 
 export default async function DetectorsPage() {
   const s = await aiSession();
@@ -44,7 +44,7 @@ export default async function DetectorsPage() {
               <div style={{ display: "flex", flexDirection: "column" }}>
                 {list.map((d, i) => {
                   const enabled = cfg[d.id]?.enabled ?? d.enabledByDefault;
-                  const sc = SEV_COLOR[d.defaultSeverity] ?? "#94a3b8";
+                  const sc = SEV_COLOR[d.defaultSeverity] ?? "var(--ds-ink-2)";
                   return (
                     <div
                       key={d.id}
@@ -53,19 +53,19 @@ export default async function DetectorsPage() {
                         alignItems: "center",
                         gap: 14,
                         padding: "13px 16px",
-                        borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.05)",
+                        borderTop: i === 0 ? "none" : "1px solid var(--ds-surface-2)",
                       }}
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontSize: 13.5, fontWeight: 600, color: "#e2e8f0" }}>{d.title}</span>
+                          <span style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ds-ink)" }}>{d.title}</span>
                           <span style={{ fontSize: 10, fontWeight: 700, color: sc, letterSpacing: 0.4 }}>
                             {d.defaultSeverity.toUpperCase()}
                           </span>
-                          <span style={{ fontSize: 10.5, color: "#64748b" }}>{d.executives.join(" · ")}</span>
+                          <span style={{ fontSize: 10.5, color: "var(--ds-ink-2)" }}>{d.executives.join(" · ")}</span>
                         </div>
-                        <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 2 }}>{d.description}</div>
-                        <div style={{ fontSize: 10.5, color: "#475569", marginTop: 3, fontFamily: "monospace" }}>{d.id}</div>
+                        <div style={{ fontSize: 12, color: "var(--ds-ink-2)", marginTop: 2 }}>{d.description}</div>
+                        <div style={{ fontSize: 10.5, color: "var(--ds-ink-3)", marginTop: 3, fontFamily: "monospace" }}>{d.id}</div>
                       </div>
                       <DetectorToggle id={d.id} enabled={enabled} />
                     </div>

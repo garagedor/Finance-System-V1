@@ -43,7 +43,7 @@ export default function GenerateButton({ templateId, label }: { templateId?: str
         {busy ? "Generating…" : label ?? (templateId ? "Generate now" : "↻ Generate due income")}
       </button>
       {msg && (
-        <span style={{ fontSize: 12, color: tone === "ok" ? "#10b981" : "#f87171" }}>{msg}</span>
+        <span style={{ fontSize: 12, color: tone === "ok" ? "var(--ds-ok-text)" : "var(--ds-crit-text)" }}>{msg}</span>
       )}
     </div>
   );

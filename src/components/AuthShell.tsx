@@ -1,36 +1,29 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState } from 'react';
-import { hasWarehouseEntitlement } from '@/lib/warehouse-entitlement';
-import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { FiBarChart2, FiCheckSquare, FiChevronLeft, FiChevronRight, FiCpu, FiCreditCard, FiDollarSign, FiFileText, FiGrid, FiHome, FiLogOut, FiMenu, FiPackage, FiPieChart, FiShield, FiUser } from 'react-icons/fi';
-import LoginPage from './LoginPage';
-import dynamic from 'next/dynamic';
-import SidebarClocks from './SidebarClocks';
-// Lazy-load the voice assistant: it's browser-only (TTS/audio/streaming) and not
-// needed for first paint, so keep it out of the shared layout bundle and hydrate
-// it after the page is interactive, only for users who can use it.
-const LiveAssistant = dynamic(() => import('@/components/live/LiveAssistant'), { ssr: false });
-import type { AuthUser } from '@/types/user';
-import {
-  FINANCE_NAV,
-  FINANCE_GROUPS,
-  isPortalPath,
-  findActiveModule,
-  visibleNavFor,
-} from '@/app/portal/nav';
+/* ═══════════════════════════════════════════════════════════════════════════
+   AuthShell — session context + chrome selection.
 
-type NavLink = {
-  href: string;
-  label: string;
-  adminOnly?: boolean;
-  permission?: string;
-  /** Show only with canonical Warehouse entitlement. Deliberately not a
-   *  permission string: `permission` is subject to the admin bypass below,
-   *  and Warehouse access must never be implied by being an admin. */
-  warehouse?: boolean;
-};
+   Design 360 S2: the authentication logic below is UNCHANGED — same session
+   restore, same global 401 interceptor, same login/logout. What changed is
+   that the hand-rolled sidebar and top bar have been replaced by
+   <EcosystemShell>, which renders navigation from a grouped business-category
+   config and applies portal identity. Page content renders inside it untouched.
+
+   `navLinks` is still accepted so src/app/layout.tsx needs no change; the
+   navigation model now lives in src/components/shell/nav-config.ts.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+import { createContext, useContext, useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
+import dynamic from 'next/dynamic';
+import LoginPage from './LoginPage';
+import EcosystemShell from './shell/EcosystemShell';
+import type { AuthUser } from '@/types/user';
+
+// Browser-only (TTS/audio/streaming) and not needed for first paint.
+const LiveAssistant = dynamic(() => import('@/components/live/LiveAssistant'), { ssr: false });
+
+type NavLink = { href: string; label: string; adminOnly?: boolean; permission?: string };
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -46,77 +39,41 @@ export const useAuth = () => {
   return ctx;
 };
 
-const NAV_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  '/': FiHome,
-  '/tables': FiGrid,
-  '/stats': FiBarChart2,
-  '/balance-report': FiDollarSign,
-  '/report': FiFileText,
-  '/finance': FiPieChart,
-  '/payment-method-report': FiCreditCard,
-  '/verify-reports': FiCheckSquare,
-  '/warehouse': FiPackage,
-  '/portal/dashboard': FiPieChart,
-  '/portal/ai': FiCpu,
-  '/admin/users': FiShield,
-  '/admin/roles': FiShield,
-};
+/** Routes that render with NO chrome — printable documents, and the gateway,
+ *  which is the ecosystem shell rather than a page inside a portal. */
+const BARE_ROUTES = ['/payout-statement', '/home'];
 
-const PAGE_TITLES: Record<string, { title: string; section: string }> = {
-  '/':                       { title: 'Dashboard',             section: 'Overview' },
-  '/tables':                 { title: 'Tables',                section: 'Data' },
-  '/stats':                  { title: 'Statistics',            section: 'Analytics' },
-  '/balance-report':         { title: 'Balance Report',        section: 'Reports' },
-  '/report':                 { title: 'Reports',               section: 'Reports' },
-  '/finance':                { title: 'Finance (legacy)',      section: 'Reports' },
-  '/payment-method-report':  { title: 'Payment Method Report', section: 'Reports' },
-  '/verify-reports':         { title: 'Verify Reports',        section: 'Verification' },
-  '/verify-reports/mappings':{ title: 'Identity Mappings',     section: 'Verification' },
-  '/verify-reports/week-control':{ title: 'Week Control',     section: 'Verification' },
-  '/admin/users':            { title: 'Users',                 section: 'Administration' },
-  '/admin/roles':            { title: 'Roles',                 section: 'Administration' },
-};
-
-export function AuthShell({ children, navLinks }: { children: React.ReactNode; navLinks: NavLink[] }) {
+export function AuthShell({ children }: { children: React.ReactNode; navLinks?: NavLink[] }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('user');
     if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem('user');
-      }
+      try { setUser(JSON.parse(stored)); }
+      catch { localStorage.removeItem('user'); }
     }
   }, []);
 
-  // Global fetch interceptor to handle 401 Unauthorized responses
+  // Global fetch interceptor for 401 — unchanged behaviour.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-
     const originalFetch = window.fetch;
 
     window.fetch = async function (...args) {
       const response = await originalFetch.apply(this, args);
-
-      // If unauthorized, and not already trying to login/logout
-      const url = typeof args[0] === 'string' ? args[0] : (args[0] instanceof Request ? args[0].url : '');
+      const url = typeof args[0] === 'string'
+        ? args[0]
+        : (args[0] instanceof Request ? args[0].url : '');
       if (response.status === 401 && !url.includes('/api/logout') && !url.includes('/api/login')) {
         console.warn('Session expired or unauthorized. Logging out.');
-        // Clear local state
         setUser(null);
         localStorage.removeItem('user');
       }
       return response;
     };
 
-    return () => {
-      window.fetch = originalFetch;
-    };
+    return () => { window.fetch = originalFetch; };
   }, []);
 
   const login = (u: AuthUser) => {
@@ -125,286 +82,28 @@ export function AuthShell({ children, navLinks }: { children: React.ReactNode; n
   };
 
   const logout = async () => {
-    try {
-      await fetch('/api/logout', { method: 'POST' });
-    } catch (e) {
-      console.error('Logout failed:', e);
-    }
+    try { await fetch('/api/logout', { method: 'POST' }); }
+    catch (e) { console.error('Logout failed:', e); }
     setUser(null);
     localStorage.removeItem('user');
   };
 
-  if (!user) {
-    return <LoginPage onLogin={login} />;
-  }
+  if (!user) return <LoginPage onLogin={login} />;
 
-  // Bare routes render with NO app chrome (no sidebar, topbar, or AI orb) — used
-  // for printable documents like the payout statement so they export cleanly.
-  if (pathname?.startsWith('/payout-statement')) {
+  if (BARE_ROUTES.some((r) => pathname?.startsWith(r))) {
     return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
   }
 
-  const roleLabel =
-    user.type === 'admin' ? 'Admin' :
-    user.type === 'office' ? 'Office' :
-    user.type === 'location-manager' ? 'Location Mgr' :
-    user.type === 'bookkeeper' ? 'Bookkeeper' :
-    user.type ?? '';
-
-  const inPortal = isPortalPath(pathname);
-  const activeModule = inPortal ? findActiveModule(pathname) : null;
+  const canUseAssistant =
+    user.type === 'admin' || (user.permissions ?? []).some((p) => p.startsWith('system:ai'));
 
   return (
     <AuthContext.Provider value={{ user, login, logout }}>
-      <div className="flex h-screen overflow-hidden" style={{ background: '#0a0f1c' }}>
-
-        {/* Mobile overlay */}
-        {mobileOpen && (
-          <div
-            className="fixed inset-0 z-40 lg:hidden"
-            style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }}
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
-
-        {/* ── Sidebar ── */}
-        <aside
-          className={`fixed inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ease-in-out lg:relative lg:translate-x-0 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
-          style={{
-            width: collapsed ? 64 : 240,
-            background: '#0d1526',
-            borderRight: '1px solid rgba(255,255,255,0.07)',
-            flexShrink: 0,
-          }}
-        >
-          {/* Brand */}
-          <div
-            className="flex h-14 flex-shrink-0 items-center gap-3 px-4"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}
-          >
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-violet-600 shadow-lg shadow-indigo-500/30">
-              <svg width="16" height="16" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-                <rect x="3" y="3" width="22" height="19" rx="2" stroke="white" strokeWidth="1.8" fill="none"/>
-                <line x1="3"  y1="9"  x2="25" y2="9"  stroke="white" strokeWidth="1.4"/>
-                <line x1="3"  y1="14" x2="25" y2="14" stroke="white" strokeWidth="1.4"/>
-                <line x1="3"  y1="19" x2="25" y2="19" stroke="white" strokeWidth="1.4"/>
-                <line x1="11" y1="22" x2="11" y2="26" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
-                <line x1="17" y1="22" x2="17" y2="26" stroke="white" strokeWidth="1.8" strokeLinecap="round"/>
-              </svg>
-            </div>
-            {!collapsed && (
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-bold leading-tight text-white">LBS Garage Door</span>
-                <span className="text-[10px] uppercase tracking-widest leading-tight" style={{ color: '#475569' }}>Operations</span>
-              </div>
-            )}
-          </div>
-
-          {/* Nav — swaps to Finance modules when inside /portal/* */}
-          <nav className="flex-1 overflow-y-auto px-2 py-4 space-y-0.5">
-            {inPortal ? (
-              <>
-                {FINANCE_GROUPS.map((g) => {
-                  // Admin sees everything; otherwise filter by effective permissions.
-                  const allItems =
-                    user?.type === 'admin'
-                      ? FINANCE_NAV
-                      : visibleNavFor(user?.permissions ?? []);
-                  const items = allItems.filter((m) => m.group === g.key);
-                  if (items.length === 0) return null;
-                  return (
-                    <div key={g.key} className="mb-2">
-                      {!collapsed && (
-                        <div
-                          className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.18em]"
-                          style={{ color: '#475569' }}
-                        >
-                          {g.label}
-                        </div>
-                      )}
-                      {items.map((m) => {
-                        const isActive = activeModule?.href === m.href;
-                        const Icon = m.icon;
-                        return (
-                          <Link
-                            key={m.href}
-                            href={m.href}
-                            onClick={() => setMobileOpen(false)}
-                            title={collapsed ? m.label : undefined}
-                            className={`flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-150 ${
-                              isActive ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-                            }`}
-                            style={
-                              isActive
-                                ? {
-                                    background: 'rgba(99,102,241,0.12)',
-                                    border: '1px solid rgba(99,102,241,0.25)',
-                                  }
-                                : { border: '1px solid transparent' }
-                            }
-                          >
-                            <Icon size={16} className="flex-shrink-0" />
-                            {!collapsed && <span className="truncate">{m.label}</span>}
-                          </Link>
-                        );
-                      })}
-                    </div>
-                  );
-                })}
-                {!collapsed && (
-                  <div className="px-3 pt-4 mt-2" style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-                    <Link
-                      href="/"
-                      className="flex items-center gap-2 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                    >
-                      <FiChevronLeft size={12} />
-                      Back to CRM
-                    </Link>
-                  </div>
-                )}
-              </>
-            ) : (
-              navLinks
-                .filter((link) => !link.adminOnly || user.type === 'admin')
-                .filter(
-                  (link) =>
-                    !link.permission || user.type === 'admin' || (user.permissions ?? []).includes(link.permission),
-                )
-                // No admin exception here, on purpose. Entitlement is canonical
-                // permission membership and nothing else, so an admin holding no
-                // warehouse permission does not see the card.
-                .filter((link) => !link.warehouse || hasWarehouseEntitlement(user.permissions ?? []))
-                .map((link) => {
-                const Icon = NAV_ICONS[link.href] || FiGrid;
-                const isActive = pathname === link.href || pathname.startsWith(link.href + '/');
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => setMobileOpen(false)}
-                    title={collapsed ? link.label : undefined}
-                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-150 ${
-                      isActive ? 'text-indigo-400' : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                    style={
-                      isActive
-                        ? { background: 'rgba(99,102,241,0.12)', border: '1px solid rgba(99,102,241,0.25)' }
-                        : { border: '1px solid transparent' }
-                    }
-                  >
-                    <Icon size={17} className="flex-shrink-0" />
-                    {!collapsed && <span className="truncate">{link.label}</span>}
-                  </Link>
-                );
-              })
-            )}
-          </nav>
-
-          {/* World clocks — Indianapolis / Chicago / Israel by default */}
-          <SidebarClocks collapsed={collapsed} />
-
-          {/* Collapse toggle — desktop only */}
-          <div
-            className="hidden lg:flex flex-shrink-0 items-center p-2"
-            style={{ borderTop: '1px solid rgba(255,255,255,0.07)' }}
-          >
-            <button
-              onClick={() => setCollapsed(!collapsed)}
-              className="flex w-full items-center justify-center rounded-xl p-2 transition-colors"
-              style={{ color: '#475569' }}
-              onMouseEnter={e => (e.currentTarget.style.color = '#94a3b8')}
-              onMouseLeave={e => (e.currentTarget.style.color = '#475569')}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              {collapsed ? <FiChevronRight size={16} /> : <FiChevronLeft size={16} />}
-            </button>
-          </div>
-        </aside>
-
-        {/* ── Main column ── */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-
-          {/* Topbar */}
-          <header
-            className="flex h-14 flex-shrink-0 items-center justify-between gap-3 px-5"
-            style={{ background: '#0d1526', borderBottom: '1px solid rgba(255,255,255,0.07)' }}
-          >
-            {/* Mobile hamburger */}
-            <button
-              className="flex items-center justify-center rounded-xl p-2 text-slate-400 transition-colors hover:text-slate-200 lg:hidden"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
-              onClick={() => setMobileOpen(true)}
-              aria-label="Open navigation"
-            >
-              <FiMenu size={18} />
-            </button>
-
-            {/* Desktop: page breadcrumb */}
-            <div className="hidden lg:flex flex-col leading-tight min-w-0">
-              {activeModule ? (
-                <>
-                  <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                    Finance Portal · {activeModule.section}
-                  </span>
-                  <span className="text-sm font-bold text-slate-200 truncate">
-                    {activeModule.title}
-                  </span>
-                </>
-              ) : (
-                PAGE_TITLES[pathname] && (
-                  <>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">
-                      {PAGE_TITLES[pathname].section}
-                    </span>
-                    <span className="text-sm font-bold text-slate-200 truncate">
-                      {PAGE_TITLES[pathname].title}
-                    </span>
-                  </>
-                )
-              )}
-            </div>
-
-            {/* User chip + logout */}
-            <div className="flex items-center gap-3">
-              <div
-                className="flex items-center gap-2.5 rounded-xl px-3 py-1.5"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
-              >
-                <div
-                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full"
-                  style={{ background: 'rgba(99,102,241,0.2)' }}
-                >
-                  <FiUser size={13} className="text-indigo-400" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-semibold leading-tight text-white">{user.name}</span>
-                  {user.type && (
-                    <span className="text-[10px] font-medium uppercase leading-tight" style={{ color: '#475569' }}>
-                      {roleLabel}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <button
-                onClick={logout}
-                className="flex items-center justify-center rounded-xl border border-white/10 bg-white/5 p-2 text-slate-500 transition-all hover:border-red-500/30 hover:bg-red-500/10 hover:text-red-400 active:scale-95"
-                title="Logout"
-                aria-label="Logout"
-              >
-                <FiLogOut size={16} />
-              </button>
-            </div>
-          </header>
-
-          {/* Page content */}
-          <main className="flex-1 overflow-auto" style={{ background: '#0a0f1c' }}>
-            {children}
-          </main>
-        </div>
-      </div>
-      {/* Global JARVIS live assistant — persists across route changes */}
-      {(user.type === 'admin' || (user.permissions ?? []).some((p) => p.startsWith('system:ai'))) && <LiveAssistant />}
+      <EcosystemShell user={user} onLogout={logout}>
+        {children}
+      </EcosystemShell>
+      {/* Global voice assistant — persists across route changes. */}
+      {canUseAssistant && <LiveAssistant />}
     </AuthContext.Provider>
   );
 }

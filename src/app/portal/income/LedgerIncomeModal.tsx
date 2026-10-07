@@ -132,18 +132,18 @@ export default function LedgerIncomeModal({
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 100, paddingTop: 56, paddingBottom: 40, overflowY: "auto",
           }}
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
           <div
-            style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 24, width: "min(600px, 94vw)" }}
+            style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 24, width: "min(600px, 94vw)" }}
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>
                 {editing ? "Edit ledger income" : "Income from a ledger"}
               </h2>
               <button onClick={() => setOpen(false)} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
@@ -154,7 +154,7 @@ export default function LedgerIncomeModal({
 
             <form onSubmit={onSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
               <div style={{ gridColumn: "span 2" }}>
-                <label className="portal-label">Ledger (who paid us) {!editing && <span style={{ color: "#f87171" }}>*</span>}</label>
+                <label className="portal-label">Ledger (who paid us) {!editing && <span style={{ color: "var(--ds-crit-text)" }}>*</span>}</label>
                 {editing ? (
                   <input className="portal-input" value={holderLabel} disabled style={{ opacity: 0.7 }} />
                 ) : (
@@ -170,11 +170,11 @@ export default function LedgerIncomeModal({
               </div>
 
               <div>
-                <label className="portal-label">Amount (USD) <span style={{ color: "#f87171" }}>*</span></label>
+                <label className="portal-label">Amount (USD) <span style={{ color: "var(--ds-crit-text)" }}>*</span></label>
                 <input type="number" step="0.01" min="0" className="portal-input" required value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0.00" />
               </div>
               <div>
-                <label className="portal-label">Date <span style={{ color: "#f87171" }}>*</span></label>
+                <label className="portal-label">Date <span style={{ color: "var(--ds-crit-text)" }}>*</span></label>
                 <input type="date" className="portal-input" required value={date} onChange={(e) => setDate(e.target.value)} />
               </div>
 

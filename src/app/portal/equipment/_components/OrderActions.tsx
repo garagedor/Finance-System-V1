@@ -80,10 +80,10 @@ export default function OrderActions({
 
       {/* Confirm modal for ledger posting */}
       {confirmOpen && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 80 }}
+        <div style={{ position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 80 }}
           onClick={(e) => { if (e.target === e.currentTarget) setConfirmOpen(false); }}>
-          <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 24, width: "min(520px, 92vw)" }}>
-            <h2 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>Charge to ledger?</h2>
+          <div style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 24, width: "min(520px, 92vw)" }}>
+            <h2 style={{ margin: "0 0 6px", fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>Charge to ledger?</h2>
             <p className="muted small" style={{ marginTop: 0 }}>This posts a one-time debit to the Area Manager&apos;s ledger. It cannot be posted twice.</p>
             <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "8px 14px", margin: "14px 0", fontSize: 13 }}>
               <span className="muted">Area Manager</span><strong>{areaManagerName}</strong>

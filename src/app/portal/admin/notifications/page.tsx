@@ -35,8 +35,8 @@ export default async function NotificationsPage() {
             <TestEmailForm canSend={hasPermission(session, "system:integrations:edit")} />
           ) : (
             <div className="portal-alert portal-alert-warn">
-              Sign up at <a href="https://resend.com" target="_blank" rel="noreferrer" style={{ color: "#818cf8" }}>resend.com</a> (free tier: 3K emails/month), copy your API key, then add to <code>.env.local</code>:
-              <pre style={{ marginTop: 10, background: "#0a0f1c", padding: 10, borderRadius: 6, fontSize: 12 }}>
+              Sign up at <a href="https://resend.com" target="_blank" rel="noreferrer" style={{ color: "var(--ds-fin-2)" }}>resend.com</a> (free tier: 3K emails/month), copy your API key, then add to <code>.env.local</code>:
+              <pre style={{ marginTop: 10, background: "var(--ds-surface-2)", padding: 10, borderRadius: 6, fontSize: 12 }}>
 {`RESEND_API_KEY=re_xxx...
 RESEND_FROM="LBS Finance <noreply@yourdomain.com>"`}
               </pre>

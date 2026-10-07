@@ -1,49 +1,21 @@
 @import "tailwindcss";
+@import "../styles/design-system.css";
 
-:root {
-  /* ── Core surfaces ── */
-  --bg:        #0a0f1c;
-  --surface:   #111827;
-  --surface-2: #1a2236;
-  --surface-3: #0d1526;
-
-  /* ── Borders ── */
-  --border:       rgba(255, 255, 255, 0.07);
-  --border-strong: rgba(255, 255, 255, 0.12);
-
-  /* ── Text ── */
-  --text:   #f1f5f9;
-  --text-2: #94a3b8;
-  --text-3: #475569;
-
-  /* ── Brand accents ── */
-  --indigo:  #6366f1;
-  --violet:  #8b5cf6;
-  --emerald: #10b981;
-  --red:     #ef4444;
-  --amber:   #f59e0b;
-  --cyan:    #06b6d4;
-
-  /* ── Legacy compatibility ── */
-  --background:      #0a0f1c;
-  --foreground:      #f1f5f9;
-  --accent-primary:  #6366f1;
-  --accent-secondary: #8b5cf6;
-  --accent-tertiary: #ec4899;
-
-  color-scheme: dark;
-}
+/* The design-system layer is the single source of truth for colour and for
+   color-scheme. It is imported here so every route that loads globals.css —
+   which is every route — resolves --ds-* and picks up the light/dark blocks.
+   globals.css declares no theme of its own. */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--ds-bg);
+  --color-foreground: var(--ds-ink);
   --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-outfit), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 }
 
 body {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--ds-bg);
+  color: var(--ds-ink);
   font-family: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   min-height: 100vh;
 }
@@ -53,9 +25,9 @@ input {
   text-align: left;
   width: -webkit-fill-available;
   border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text);
+  border: 1px solid var(--ds-line-strong);
+  background: var(--ds-surface-2);
+  color: var(--ds-ink);
   padding: 8px 12px;
   font-size: 14px;
   font-family: inherit;
@@ -63,18 +35,18 @@ input {
 }
 
 input::placeholder {
-  color: var(--text-3);
+  color: var(--ds-ink-3);
 }
 
 input:hover {
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: var(--ds-info-line);
 }
 
 input:focus {
   outline: none;
-  border-color: var(--indigo);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
-  background: var(--surface-2);
+  border-color: var(--ds-info);
+  box-shadow: var(--ds-focus);
+  background: var(--ds-surface-2);
 }
 
 input:disabled {
@@ -88,34 +60,34 @@ select {
   width: 100%;
   max-width: 100%;
   border-radius: 10px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--text);
+  border: 1px solid var(--ds-line-strong);
+  background: var(--ds-surface-2);
+  color: var(--ds-ink);
   padding: 8px 12px;
   font-size: 14px;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.2s ease;
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+  background-image: var(--ds-select-arrow);
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px;
 }
 
 select:hover {
-  border-color: rgba(99, 102, 241, 0.35);
+  border-color: var(--ds-info-line);
 }
 
 select:focus {
   outline: none;
-  border-color: var(--indigo);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+  border-color: var(--ds-info);
+  box-shadow: var(--ds-focus);
 }
 
 select option {
-  background: var(--surface-2);
-  color: var(--text);
+  background: var(--ds-surface-2);
+  color: var(--ds-ink);
 }
 
 /* ── Buttons base ── */
@@ -134,8 +106,8 @@ button:active:not(:disabled) {
 
 /* Primary */
 .btn-primary {
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
-  color: white;
+  background: var(--ds-info);
+  color: var(--ds-on-info);
   border: none;
   border-radius: 10px;
   padding: 0 20px;
@@ -144,13 +116,13 @@ button:active:not(:disabled) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+  box-shadow: 0 4px 12px var(--ds-info-line);
   font-weight: 600;
   font-size: 13px;
 }
 
 .btn-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+  box-shadow: 0 6px 20px var(--ds-info-line);
   transform: translateY(-1px);
 }
 
@@ -163,61 +135,27 @@ button:active:not(:disabled) {
 
 /* Ghost */
 .btn-ghost {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text-2);
-  border: 1px solid var(--border-strong);
+  background: var(--ds-surface-2);
+  color: var(--ds-ink-2);
+  border: 1px solid var(--ds-line-strong);
   padding: 8px 16px;
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(99, 102, 241, 0.35);
-  color: var(--text);
-}
-
-/* Nav active */
-.nav-btn-active {
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
-  color: white;
-  border: none;
-  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
-}
-
-/* Panel */
-.panel-colorful {
-  background: var(--surface);
-  border-radius: 16px;
-  border: 1px solid var(--border);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  padding: 16px 18px;
-  border-left: 4px solid transparent;
-  border-image: linear-gradient(180deg, #6366f1, #8b5cf6, #ec4899) 1;
+  background: var(--ds-surface-3);
+  border-color: var(--ds-info-line);
+  color: var(--ds-ink);
 }
 
 /* ── Scrollbars ── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.2); }
+::-webkit-scrollbar-thumb { background: var(--ds-line-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ds-ink-3); }
 
 /* ── Animation primitives ── */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.96); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-@keyframes slideUp {
-  from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
@@ -236,34 +174,9 @@ button:active:not(:disabled) {
   to   { transform: translateX(100%); }
 }
 
-@keyframes glowPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
-  50%      { box-shadow: 0 0 0 6px rgba(99, 102, 241, 0.2); }
-}
-
 /* ── Animation utilities ── */
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out both;
-}
-
 .animate-fade-up {
   animation: fadeUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.animate-scale-in {
-  animation: scaleIn 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.animate-slide-up {
-  animation: slideUp 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-.animate-pulse-soft {
-  animation: pulseSoft 2s ease-in-out infinite;
-}
-
-.animate-glow {
-  animation: glowPulse 2.4s ease-in-out infinite;
 }
 
 /* Stagger children — apply to parent */
@@ -281,9 +194,9 @@ button:active:not(:disabled) {
 .shimmer-bg {
   background: linear-gradient(
     90deg,
-    rgba(255,255,255,0.04) 0%,
-    rgba(255,255,255,0.08) 50%,
-    rgba(255,255,255,0.04) 100%
+    var(--ds-surface-2) 0%,
+    var(--ds-surface-3) 50%,
+    var(--ds-surface-2) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s linear infinite;
@@ -295,7 +208,7 @@ button:active:not(:disabled) {
 }
 .hover-lift:hover {
   transform: translateY(-2px);
-  border-color: rgba(99, 102, 241, 0.3);
+  border-color: var(--ds-info-line);
 }
 
 /* Top progress bar (refetch indicator) */
@@ -303,14 +216,14 @@ button:active:not(:disabled) {
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--ds-surface-2);
   overflow: hidden;
 }
 .top-progress::before {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, #6366f1 40%, #8b5cf6 60%, transparent);
+  background: linear-gradient(90deg, transparent, var(--ds-info) 40%, var(--ds-info) 60%, transparent);
   animation: progressBar 1.4s linear infinite;
 }
 

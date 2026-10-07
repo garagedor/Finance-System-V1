@@ -128,7 +128,7 @@ export default function NewFollowUpForm() {
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 100, paddingTop: 40, paddingBottom: 40, overflowY: "auto",
           }}
@@ -136,7 +136,7 @@ export default function NewFollowUpForm() {
         >
           <div
             style={{
-              background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
+              background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14,
               padding: 24, width: "min(720px, 95vw)",
             }}
             onClick={(e) => e.stopPropagation()}
@@ -167,7 +167,7 @@ export default function NewFollowUpForm() {
                     <strong>{job.customer ?? "—"}</strong> · {job.address ?? "—"} · {job.area ?? "—"}<br />
                     Tech: {job.tech ?? "—"} · Provider: {job.provider ?? "—"} · Date: {job.date ?? "—"}<br />
                     Total: ${(job.total ?? 0).toFixed(2)} · Parts: ${(job.parts ?? 0).toFixed(2)} · Profit:
-                    <strong style={{ marginLeft: 4, color: "#10b981" }}>${(job.profit ?? 0).toFixed(2)}</strong>
+                    <strong style={{ marginLeft: 4, color: "var(--ds-ink)" }}>${(job.profit ?? 0).toFixed(2)}</strong>
                   </div>
                 </div>
               )}
@@ -228,8 +228,8 @@ export default function NewFollowUpForm() {
                 )}
                 <div>
                   <label className="portal-label">Computed payout</label>
-                  <div className="portal-input" style={{ background: "rgba(16,185,129,0.08)", borderColor: "rgba(16,185,129,0.3)" }}>
-                    <span className="money" style={{ color: "#10b981", fontWeight: 700 }}>
+                  <div className="portal-input" style={{ background: "var(--ds-surface-3)", borderColor: "var(--ds-line-strong)" }}>
+                    <span className="money" style={{ color: "var(--ds-ink)", fontWeight: 700 }}>
                       ${computedAmount.toFixed(2)}
                     </span>
                   </div>

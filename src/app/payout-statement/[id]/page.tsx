@@ -12,11 +12,11 @@ export default async function PayoutStatementPage({ params }: { params: Promise<
   const { id } = await params;
   const session = await readSession();
   if (!hasPermission(session, "finance:payouts:view")) {
-    return <div style={{ padding: 40, fontFamily: "system-ui, sans-serif", color: "#111" }}>Please sign in to the portal to view this statement.</div>;
+    return <div style={{ padding: 40, fontFamily: "system-ui, sans-serif", color: "var(--ds-ink)" }}>Please sign in to the portal to view this statement.</div>;
   }
   await ensureFinanceIndexes();
   const p = await coll<PayoutRecord>(FINANCE_COLLECTIONS.payout).findOne({ _id: id });
-  if (!p) return <div style={{ padding: 40, fontFamily: "system-ui, sans-serif", color: "#111" }}>Payout not found.</div>;
+  if (!p) return <div style={{ padding: 40, fontFamily: "system-ui, sans-serif", color: "var(--ds-ink)" }}>Payout not found.</div>;
 
   const period = `${fmtDate(p.period_start)} — ${fmtDate(p.period_end)}`;
 

@@ -113,7 +113,7 @@ export default function RoleEditor({
 
   return (
     <div style={{ padding: 0 }}>
-      <div style={{ padding: "16px 18px", borderBottom: "1px solid #1f2940", display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+      <div style={{ padding: "16px 18px", borderBottom: "1px solid var(--ds-line)", display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
           <span className="portal-label">Name</span>
           <input
@@ -135,7 +135,7 @@ export default function RoleEditor({
         </label>
       </div>
 
-      <div style={{ padding: "12px 18px", display: "flex", gap: 8, flexWrap: "wrap", borderBottom: "1px solid #1f2940" }}>
+      <div style={{ padding: "12px 18px", display: "flex", gap: 8, flexWrap: "wrap", borderBottom: "1px solid var(--ds-line)" }}>
         <button
           className="portal-btn"
           onClick={() => setMany(grouped.flatMap((m) => m.sections.flatMap((s) => s.perms.map((p) => p.key))), true)}
@@ -164,7 +164,7 @@ export default function RoleEditor({
         >
           Grant all view-only
         </button>
-        <div style={{ marginLeft: "auto", alignSelf: "center", fontSize: 12, color: "#94a3b8" }}>
+        <div style={{ marginLeft: "auto", alignSelf: "center", fontSize: 12, color: "var(--ds-ink-2)" }}>
           {granted.size} / {totalPerms} permissions
         </div>
       </div>
@@ -179,8 +179,8 @@ export default function RoleEditor({
             <div
               style={{
                 padding: "10px 18px",
-                background: "#0c1426",
-                borderBottom: "1px solid #1f2940",
+                background: "var(--ds-surface-2)",
+                borderBottom: "1px solid var(--ds-line)",
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
@@ -218,11 +218,11 @@ export default function RoleEditor({
                   display: "grid",
                   gridTemplateColumns: "180px 1fr",
                   gap: 16,
-                  borderBottom: "1px solid #131a2b",
+                  borderBottom: "1px solid var(--ds-line)",
                   alignItems: "center",
                 }}
               >
-                <div style={{ fontSize: 13, color: "#cbd5e1", textTransform: "capitalize" }}>
+                <div style={{ fontSize: 13, color: "var(--ds-ink)", textTransform: "capitalize" }}>
                   {sec.section.replace(/_/g, " ")}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -239,9 +239,9 @@ export default function RoleEditor({
                           padding: "4px 10px",
                           fontSize: 12,
                           border: "1px solid",
-                          borderColor: on ? "#6366f1" : "#1f2940",
-                          background: on ? "#1e1f4d" : "transparent",
-                          color: on ? "#e0e7ff" : "#94a3b8",
+                          borderColor: on ? "var(--ds-ok-line)" : "var(--ds-line)",
+                          background: on ? "var(--ds-ok-wash)" : "transparent",
+                          color: on ? "var(--ds-ok-text)" : "var(--ds-ink-2)",
                           borderRadius: 6,
                           cursor: canEdit ? "pointer" : "not-allowed",
                           fontFamily: "inherit",
@@ -269,8 +269,8 @@ export default function RoleEditor({
         style={{
           position: "sticky",
           bottom: 0,
-          background: "#0a0f1c",
-          borderTop: "1px solid #1f2940",
+          background: "var(--ds-surface-1)",
+          borderTop: "1px solid var(--ds-line)",
           padding: "12px 18px",
           display: "flex",
           justifyContent: "space-between",
@@ -280,7 +280,7 @@ export default function RoleEditor({
       >
         <div>
           {canDelete && (
-            <button className="portal-btn" onClick={remove} disabled={saving} style={{ color: "#f87171" }}>
+            <button className="portal-btn" onClick={remove} disabled={saving} style={{ color: "var(--ds-crit-text)" }}>
               Delete role
             </button>
           )}

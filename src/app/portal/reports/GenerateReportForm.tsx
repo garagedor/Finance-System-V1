@@ -100,7 +100,7 @@ export default function GenerateReportForm() {
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 100, paddingTop: 60, overflowY: "auto",
           }}
@@ -108,7 +108,7 @@ export default function GenerateReportForm() {
         >
           <div
             style={{
-              background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
+              background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14,
               padding: 24, width: "min(560px, 95vw)",
             }}
             onClick={(e) => e.stopPropagation()}

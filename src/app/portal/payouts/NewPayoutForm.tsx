@@ -143,10 +143,10 @@ export default function NewPayoutForm({
 
       {open && (
         <div
-          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 40, paddingBottom: 40, overflowY: "auto" }}
+          style={{ position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 40, paddingBottom: 40, overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) setOpen(false); }}
         >
-          <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 24, width: "min(820px, 95vw)" }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 24, width: "min(820px, 95vw)" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
               <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700 }}>{editing ? `Edit payout · ${initial!.recipient_name}` : "New payout"}</h2>
               <button onClick={() => setOpen(false)} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
@@ -210,7 +210,7 @@ export default function NewPayoutForm({
                 </select>
               </div>
 
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 14, marginBottom: 12 }}>
+              <div style={{ borderTop: "1px solid var(--ds-line)", paddingTop: 14, marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div className="portal-section-label">Line items</div>
                   <button type="button" className="portal-btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={addItem}>+ Add line</button>
@@ -231,13 +231,13 @@ export default function NewPayoutForm({
                 </div>
               </div>
 
-              <div style={{ background: "rgba(99,102,241,0.06)", border: "1px solid rgba(99,102,241,0.2)", borderRadius: 10, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 24, justifyContent: "space-between" }}>
-                <span style={{ color: "#94a3b8", fontSize: 13 }}>Gross</span>
+              <div style={{ background: "var(--ds-surface-3)", border: "1px solid var(--ds-line-strong)", borderRadius: 10, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 24, justifyContent: "space-between" }}>
+                <span style={{ color: "var(--ds-ink-2)", fontSize: 13 }}>Gross</span>
                 <span className="money" style={{ fontWeight: 600 }}>${gross.toFixed(2)}</span>
-                <span style={{ color: "#94a3b8", fontSize: 13 }}>Deductions</span>
+                <span style={{ color: "var(--ds-ink-2)", fontSize: 13 }}>Deductions</span>
                 <span className="money money-neg" style={{ fontWeight: 600 }}>−${deductions.toFixed(2)}</span>
-                <span style={{ color: "#cbd5e1", fontSize: 14, fontWeight: 600 }}>Net</span>
-                <span className="money" style={{ fontSize: 16, fontWeight: 700, color: net >= 0 ? "#10b981" : "#ef4444" }}>${net.toFixed(2)}</span>
+                <span style={{ color: "var(--ds-ink)", fontSize: 14, fontWeight: 600 }}>Net</span>
+                <span className="money" style={{ fontSize: 16, fontWeight: 700, color: "var(--ds-ink)" }}>${net.toFixed(2)}</span>
               </div>
 
               <div style={{ marginBottom: 14 }}>

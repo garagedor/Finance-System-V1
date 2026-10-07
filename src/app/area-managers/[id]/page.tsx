@@ -268,7 +268,7 @@ export default function AreaManagerDetailPage() {
               <h3>W9 on file</h3>
               {am?.w9StoragePath ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  <div style={{ fontSize: 13, color: '#cbd5e1' }}>
+                  <div style={{ fontSize: 13 }}>
                     <strong>{am.w9FileName}</strong>
                     <span className="am-muted" style={{ marginLeft: 8 }}>uploaded {fmtDate(am.w9UploadedAt)}</span>
                   </div>
@@ -304,19 +304,19 @@ export default function AreaManagerDetailPage() {
               <div className="am-balance-grid">
                 <div className="am-balance-cell">
                   <div className="am-balance-label">Company owes AM</div>
-                  <div className="am-balance-value" style={{ color: '#34d399' }}>{formatCurrency(balance?.companyOwesAm || 0)}</div>
+                  <div className="am-balance-value">{formatCurrency(balance?.companyOwesAm || 0)}</div>
                 </div>
                 <div className="am-balance-cell">
                   <div className="am-balance-label">AM owes Company</div>
-                  <div className="am-balance-value" style={{ color: '#fbbf24' }}>{formatCurrency(balance?.amOwesCompany || 0)}</div>
+                  <div className="am-balance-value">{formatCurrency(balance?.amOwesCompany || 0)}</div>
                 </div>
                 <div className="am-balance-cell">
                   <div className="am-balance-label">Net paid</div>
                   <div className="am-balance-value">{formatCurrency(balance?.netPaid || 0)}</div>
                 </div>
-                <div className="am-balance-cell" style={{ background: 'rgba(99,102,241,0.08)', borderColor: 'rgba(99,102,241,0.3)' }}>
+                <div className="am-balance-cell" style={{ background: 'var(--ds-surface-3)', borderColor: 'var(--ds-line-strong)' }}>
                   <div className="am-balance-label">Open balance</div>
-                  <div className="am-balance-value" style={{ color: (balance?.openBalance ?? 0) >= 0 ? '#34d399' : '#f87171' }}>
+                  <div className="am-balance-value">
                     {formatCurrency(balance?.openBalance || 0)}
                   </div>
                 </div>
@@ -384,9 +384,7 @@ export default function AreaManagerDetailPage() {
                     <td>{p.direction === 'company_to_am' ? 'Company → AM' : 'AM → Company'}</td>
                     <td>{p.method}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <span style={{ color: p.direction === 'company_to_am' ? '#34d399' : '#fbbf24' }}>
-                        {formatCurrency(p.amount)}
-                      </span>
+                      {formatCurrency(p.amount)}
                     </td>
                     <td>{p.note || <span className="am-muted">—</span>}</td>
                     <td style={{ textAlign: 'right' }}>

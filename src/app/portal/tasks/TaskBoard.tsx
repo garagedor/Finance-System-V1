@@ -6,17 +6,17 @@ import type { TaskRecord, TaskStatus, TaskPriority } from "@/types/finance";
 export type BoardUser = { _id: string; name: string };
 
 const COLUMNS: Array<{ key: TaskStatus; label: string; accent: string }> = [
-  { key: "todo", label: "To Do", accent: "#22d3ee" },
-  { key: "in_progress", label: "In Progress", accent: "#fbbf24" },
-  { key: "blocked", label: "Blocked", accent: "#f87171" },
-  { key: "done", label: "Done", accent: "#34d399" },
+  { key: "todo", label: "To Do", accent: "var(--ds-ink-2)" },
+  { key: "in_progress", label: "In Progress", accent: "var(--ds-ink-2)" },
+  { key: "blocked", label: "Blocked", accent: "var(--ds-warn)" },
+  { key: "done", label: "Done", accent: "var(--ds-ink-2)" },
 ];
 
 const PRIORITY: Record<TaskPriority, { label: string; color: string; bg: string }> = {
-  urgent: { label: "Urgent", color: "#fca5a5", bg: "rgba(239,68,68,0.15)" },
-  high: { label: "High", color: "#fdba74", bg: "rgba(249,115,22,0.15)" },
-  medium: { label: "Medium", color: "#93c5fd", bg: "rgba(59,130,246,0.15)" },
-  low: { label: "Low", color: "#cbd5e1", bg: "rgba(148,163,184,0.15)" },
+  urgent: { label: "Urgent", color: "var(--ds-crit-text)", bg: "var(--ds-crit-wash)" },
+  high: { label: "High", color: "var(--ds-warn-text)", bg: "var(--ds-warn-wash)" },
+  medium: { label: "Medium", color: "var(--ds-ink)", bg: "var(--ds-neutral-wash)" },
+  low: { label: "Low", color: "var(--ds-ink-2)", bg: "var(--ds-neutral-wash)" },
 };
 
 const PRIORITY_ORDER: TaskPriority[] = ["urgent", "high", "medium", "low"];
@@ -247,8 +247,8 @@ export default function TaskBoard({
               style={{
                 flex: "1 0 260px",
                 minWidth: 260,
-                background: active ? "rgba(129,140,248,0.08)" : "rgba(255,255,255,0.02)",
-                border: `1px solid ${active ? "rgba(129,140,248,0.5)" : "rgba(255,255,255,0.06)"}`,
+                background: active ? "var(--ds-info-wash)" : "var(--ds-surface-2)",
+                border: `1px solid ${active ? "var(--ds-info-line)" : "var(--ds-line)"}`,
                 borderRadius: 12,
                 padding: 10,
                 transition: "background .12s, border-color .12s",
@@ -256,7 +256,7 @@ export default function TaskBoard({
             >
               <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "2px 4px 10px" }}>
                 <span style={{ width: 8, height: 8, borderRadius: 999, background: col.accent }} />
-                <span style={{ fontWeight: 700, fontSize: 13, color: "#e2e8f0" }}>{col.label}</span>
+                <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ds-ink)" }}>{col.label}</span>
                 <span className="muted small" style={{ marginLeft: "auto" }}>{list.length}</span>
               </div>
 
@@ -344,15 +344,15 @@ function Card({
       onDragEnd={onDragEnd}
       onClick={onClick}
       style={{
-        background: "#111827",
-        border: "1px solid rgba(255,255,255,0.08)",
+        background: "var(--ds-surface-1)",
+        border: "1px solid var(--ds-line)",
         borderRadius: 10,
         padding: "10px 11px",
         cursor: draggable ? "grab" : "pointer",
       }}
     >
       <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: "#f1f5f9", lineHeight: 1.35, flex: 1 }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ds-ink)", lineHeight: 1.35, flex: 1 }}>
           {task.title}
         </span>
         <span style={{ fontSize: 10, fontWeight: 700, color: pr.color, background: pr.bg, padding: "2px 7px", borderRadius: 999, whiteSpace: "nowrap" }}>
@@ -367,7 +367,7 @@ function Card({
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8 }}>
         {task.assignee_name ? (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <span style={{ width: 18, height: 18, borderRadius: 999, background: "rgba(129,140,248,0.25)", color: "#c7d2fe", fontSize: 10, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
+            <span style={{ width: 18, height: 18, borderRadius: 999, background: "var(--ds-neutral-wash)", color: "var(--ds-ink-2)", fontSize: 10, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
               {initials(task.assignee_name)}
             </span>
             <span className="muted small">{task.assignee_name}</span>
@@ -376,7 +376,7 @@ function Card({
           <span className="muted small" style={{ opacity: 0.6 }}>Unassigned</span>
         )}
         {task.due_date && (
-          <span className="small" style={{ marginLeft: "auto", color: overdue ? "#f87171" : "#94a3b8", fontWeight: overdue ? 700 : 400 }}>
+          <span className="small" style={{ marginLeft: "auto", color: overdue ? "var(--ds-warn-text)" : "var(--ds-ink-2)", fontWeight: overdue ? 700 : 400 }}>
             {overdue ? "⚠ " : ""}{task.due_date}
           </span>
         )}
@@ -413,18 +413,18 @@ function TaskModal({
 }) {
   return (
     <div
-      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 60, paddingBottom: 40, overflowY: "auto" }}
+      style={{ position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 60, paddingBottom: 40, overflowY: "auto" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 24, width: "min(560px, 92vw)" }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 24, width: "min(560px, 92vw)" }} onClick={(e) => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>{draft._id ? "Edit task" : "New task"}</h2>
+          <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>{draft._id ? "Edit task" : "New task"}</h2>
           <button onClick={onClose} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
         </div>
 
         <form onSubmit={onSubmit} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div style={{ gridColumn: "span 2" }}>
-            <label className="portal-label">Title <span style={{ color: "#f87171" }}>*</span></label>
+            <label className="portal-label">Title <span style={{ color: "var(--ds-crit-text)" }}>*</span></label>
             <input className="portal-input" autoFocus value={draft.title} onChange={(e) => onChange({ title: e.target.value })} placeholder="What needs to get done?" />
           </div>
 

@@ -1,8 +1,8 @@
 .filters-panel {
-    background: #111827;
+    background: var(--ds-surface-1);
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--ds-line);
+    box-shadow: var(--ds-elev-2);
     padding: 20px;
     display: flex;
     gap: 14px;
@@ -12,7 +12,7 @@
 }
 
 .filters-panel:hover {
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--ds-elev-3);
 }
 
 /* Horizontal layout */
@@ -71,7 +71,7 @@
 .filter-field label {
     font-weight: 600;
     font-size: 12px;
-    color: #94a3b8;
+    color: var(--ds-ink-2);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     margin-left: 2px;
@@ -82,13 +82,13 @@
 .filter-field select {
     appearance: none;
     -webkit-appearance: none;
-    background-color: #1a2236;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--ds-surface-2);
+    border: 1px solid var(--ds-line-strong);
     border-radius: 10px;
     padding: 11px 16px;
     font-size: 14px;
     font-weight: 500;
-    color: #f1f5f9;
+    color: var(--ds-ink);
     height: 46px;
     transition: all 0.2s ease;
     width: 100%;
@@ -96,24 +96,24 @@
 }
 
 .filter-field input::placeholder {
-    color: #475569;
+    color: var(--ds-ink-3);
 }
 
 .filter-field input:hover,
 .filter-field select:hover {
-    border-color: rgba(99, 102, 241, 0.35);
+    border-color: var(--ds-info-line);
 }
 
 .filter-field input:focus,
 .filter-field select:focus {
     outline: none;
-    border-color: #6366f1;
-    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    border-color: var(--ds-info);
+    box-shadow: var(--ds-focus);
 }
 
 /* Custom dropdown arrow */
 .filter-field select {
-    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%2394a3b8' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-image: var(--ds-select-arrow);
     background-position: right 0.75rem center;
     background-repeat: no-repeat;
     background-size: 1.25em 1.25em;
@@ -148,13 +148,13 @@
 
 /* Messages */
 .filters-panel .warn {
-    color: #f59e0b;
+    color: var(--ds-warn-text);
     font-weight: 600;
     font-size: 12px;
     padding: 10px 14px;
-    background: rgba(245, 158, 11, 0.08);
+    background: var(--ds-warn-soft);
     border-radius: 10px;
-    border: 1px solid rgba(245, 158, 11, 0.2);
+    border: 1px solid var(--ds-warn-line);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -162,13 +162,13 @@
 }
 
 .filters-panel .error {
-    color: #f87171;
+    color: var(--ds-crit-text);
     font-weight: 600;
     font-size: 12px;
     padding: 10px 14px;
-    background: rgba(239, 68, 68, 0.08);
+    background: var(--ds-crit-soft);
     border-radius: 10px;
-    border: 1px solid rgba(239, 68, 68, 0.2);
+    border: 1px solid var(--ds-crit-line);
     margin-top: 4px;
 }
 
@@ -186,14 +186,14 @@
     cursor: pointer;
     font-size: 13px;
     transition: all 0.2s ease;
-    background: linear-gradient(135deg, #4f46e5, #7c3aed);
-    color: white;
-    box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
+    background: var(--ds-info);
+    color: var(--ds-on-info);
+    box-shadow: 0 4px 12px var(--ds-info-line);
     white-space: nowrap;
 }
 
 .filters-panel .btn-apply:hover:not(:disabled) {
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+    box-shadow: 0 6px 20px var(--ds-info-line);
     transform: translateY(-1px);
 }
 
@@ -205,8 +205,8 @@
     opacity: 0.5;
     cursor: not-allowed;
     box-shadow: none;
-    background: rgba(255, 255, 255, 0.08);
-    color: #475569;
+    background: var(--ds-surface-2);
+    color: var(--ds-ink-3);
     transform: none;
 }
 
@@ -218,9 +218,9 @@
     width: 40px;
     height: 40px;
     border-radius: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.05);
-    color: #64748b;
+    border: 1px solid var(--ds-line-strong);
+    background: var(--ds-surface-2);
+    color: var(--ds-ink-2);
     cursor: pointer;
     transition: all 0.2s ease;
     padding: 0;
@@ -234,9 +234,9 @@
 }
 
 .btn-refresh:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.09);
-    color: #6366f1;
-    border-color: rgba(99, 102, 241, 0.35);
+    background: var(--ds-surface-3);
+    color: var(--ds-info);
+    border-color: var(--ds-info-line);
 }
 
 .btn-refresh:disabled {

@@ -70,10 +70,10 @@ export default function FinancePage() {
         <EmptyState
           size="lg"
           icon={
-            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <circle cx="10" cy="10" r="8" stroke="#f87171" strokeWidth="1.5" />
-              <line x1="10" y1="6" x2="10" y2="10.5" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round" />
-              <circle cx="10" cy="13" r="0.75" fill="#f87171" />
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true" style={{ color: 'var(--ds-crit)' }}>
+              <circle cx="10" cy="10" r="8" stroke="currentColor" strokeWidth="1.5" />
+              <line x1="10" y1="6" x2="10" y2="10.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="10" cy="13" r="0.75" fill="currentColor" />
             </svg>
           }
           title="Access Denied"
@@ -286,7 +286,7 @@ export default function FinancePage() {
                   <tr key={r.tech}>
                     <td>{r.tech}</td>
                     <td>{r.jobs}</td>
-                    <td style={{ color: r.balance < 0 ? '#f87171' : r.balance > 0 ? '#34d399' : undefined, fontWeight: r.balance !== 0 ? 600 : undefined }}>
+                    <td style={{ fontWeight: r.balance !== 0 ? 600 : undefined }}>
                       {formatCurrency(r.balance)}
                     </td>
                   </tr>
@@ -346,18 +346,11 @@ export default function FinancePage() {
                     <td>{r.jobsTouched}</td>
                     <td>{formatCurrency(r.lmCashTotal)}</td>
                     <td>{formatCurrency(r.lmCheckTotal)}</td>
-                    <td style={{ color: r.lmOwesCompany > 0 ? '#22d3ee' : undefined }}>
-                      {formatCurrency(r.lmOwesCompany)}
-                    </td>
+                    <td>{formatCurrency(r.lmOwesCompany)}</td>
                     <td>{formatCurrency(r.fortyPctPayout)}</td>
                     <td>{formatCurrency(r.lmPartsTotal)}</td>
-                    <td style={{ color: r.companyOwesLm > 0 ? '#a78bfa' : undefined }}>
-                      {formatCurrency(r.companyOwesLm)}
-                    </td>
-                    <td style={{
-                      color: r.netLmOwesCompany > 0 ? '#34d399' : r.netLmOwesCompany < 0 ? '#f87171' : undefined,
-                      fontWeight: r.netLmOwesCompany !== 0 ? 700 : undefined,
-                    }}>
+                    <td>{formatCurrency(r.companyOwesLm)}</td>
+                    <td style={{ fontWeight: r.netLmOwesCompany !== 0 ? 700 : undefined }}>
                       {formatCurrency(r.netLmOwesCompany)}
                     </td>
                   </tr>
@@ -394,13 +387,18 @@ export default function FinancePage() {
 
 type Accent = 'indigo' | 'cyan' | 'emerald' | 'violet' | 'red' | 'amber';
 
-const accents: Record<Accent, { bg: string; border: string; text: string; glow: string }> = {
-  indigo:  { bg: 'rgba(99,102,241,0.10)',  border: 'rgba(99,102,241,0.25)',  text: '#a5b4fc', glow: 'rgba(99,102,241,0.12)' },
-  cyan:    { bg: 'rgba(6,182,212,0.10)',   border: 'rgba(6,182,212,0.25)',   text: '#22d3ee', glow: 'rgba(6,182,212,0.10)'  },
-  emerald: { bg: 'rgba(16,185,129,0.10)',  border: 'rgba(16,185,129,0.25)',  text: '#34d399', glow: 'rgba(16,185,129,0.10)' },
-  violet:  { bg: 'rgba(139,92,246,0.10)',  border: 'rgba(139,92,246,0.25)',  text: '#c4b5fd', glow: 'rgba(139,92,246,0.10)' },
-  red:     { bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.25)',   text: '#f87171', glow: 'rgba(239,68,68,0.10)'  },
-  amber:   { bg: 'rgba(245,158,11,0.10)',  border: 'rgba(245,158,11,0.25)',  text: '#fbbf24', glow: 'rgba(245,158,11,0.10)' },
+/* KPI cards share one restrained CRM accent. The accent prop is kept so call
+   sites and ordering are untouched, but a card's position no longer picks a
+   hue — positional decoration is not a categorical palette. */
+const KPI_ACCENT = {
+  bg:     'var(--ds-crm-wash)',
+  border: 'var(--ds-crm-line)',
+  text:   'var(--ds-crm-text)',
+  glow:   'var(--ds-crm-wash)',
+};
+const accents: Record<Accent, typeof KPI_ACCENT> = {
+  indigo: KPI_ACCENT, cyan: KPI_ACCENT, emerald: KPI_ACCENT,
+  violet: KPI_ACCENT, red:  KPI_ACCENT, amber:   KPI_ACCENT,
 };
 
 function FinanceKpi({ label, value, icon, accent }: { label: string; value: string; icon: React.ReactNode; accent: Accent }) {

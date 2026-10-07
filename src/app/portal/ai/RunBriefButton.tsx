@@ -28,7 +28,7 @@ export default function RunBriefButton({ label = "Run brief now" }: { label?: st
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      {err && <span style={{ color: "#f87171", fontSize: 12 }}>{err}</span>}
+      {err && <span style={{ color: "var(--ds-crit-text)", fontSize: 12 }}>{err}</span>}
       <button type="button" className="portal-btn portal-btn-primary" onClick={run} disabled={busy}>
         {busy ? "Analyzing…" : label}
       </button>

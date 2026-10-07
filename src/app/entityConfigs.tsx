@@ -66,11 +66,7 @@ const ApprovalsCell = ({
   const officeNames: Set<string> = data?.officeNames instanceof Set ? data.officeNames : new Set();
   const hasAdmin = approvals.some((a) => adminNames.has(a));
   const hasOffice = approvals.some((a) => officeNames.has(a));
-  const approvalStyle: React.CSSProperties = hasAdmin
-    ? { background: 'rgba(16,185,129,0.15)', color: '#34d399', padding: '2px 7px', borderRadius: '6px' }
-    : hasOffice
-      ? { background: 'rgba(245,158,11,0.15)', color: '#fbbf24', padding: '2px 7px', borderRadius: '6px' }
-      : { background: 'rgba(255,255,255,0.08)', color: '#94a3b8', padding: '2px 7px', borderRadius: '6px' };
+  const approvalClass = hasAdmin ? 'approval-admin' : hasOffice ? 'approval-office' : '';
 
   const alreadyConfirmed = user?.name ? approvals.includes(user.name) : false;
   const hasAdminApproval = approvals.some((a) => adminNames.has(a));
@@ -86,7 +82,7 @@ const ApprovalsCell = ({
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
       {approvals.length > 0 && (
-        <span className="approval-text" title={approvals.join(', ')} style={approvalStyle}>
+        <span className={`approval-text ${approvalClass}`} title={approvals.join(', ')}>
           {approvals.join(', ')}
         </span>
       )}
@@ -206,7 +202,7 @@ const userColumns: ColumnConfig<User>[] = [
 // Dispute status pipeline — concrete options so the picker doesn't allow typos.
 const DISPUTE_STATUS_OPTIONS = ['in review', 'open', 'partial', 'won', 'lost', 'settled', 'closed'];
 
-const dash = () => <span style={{ color: '#94a3b8' }}>—</span>;
+const dash = () => <span style={{ color: 'var(--ds-ink-2)' }}>—</span>;
 const money = (n?: number) => (n != null ? `$${Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })}` : null);
 
 // Column order matches the operations spreadsheet. Every column is editable:
@@ -220,7 +216,7 @@ const disputeColumns: ColumnConfig<Dispute>[] = [
       return (
         <div style={{ fontSize: 12, lineHeight: 1.35 }}>
           <div style={{ fontWeight: 500 }}>{r.jobAddress ?? dash()}</div>
-          <div style={{ color: '#94a3b8', fontFamily: 'ui-monospace, SF Mono, monospace', fontSize: 10 }}>
+          <div style={{ color: 'var(--ds-ink-2)', fontFamily: 'ui-monospace, SF Mono, monospace', fontSize: 10 }}>
             {r.jobId?.slice(0, 10) ?? '—'}
           </div>
         </div>
@@ -240,7 +236,7 @@ const disputeColumns: ColumnConfig<Dispute>[] = [
         <span style={{ fontSize: 12 }}>
           {full ?? short}
           {full && short && full !== short && (
-            <span style={{ color: '#94a3b8', marginLeft: 6, fontSize: 10 }}>({short})</span>
+            <span style={{ color: 'var(--ds-ink-2)', marginLeft: 6, fontSize: 10 }}>({short})</span>
           )}
         </span>
       );
@@ -271,8 +267,8 @@ const refundColumns: ColumnConfig<Refund>[] = [
       const r = row as Refund;
       return (
         <div style={{ fontSize: 12, lineHeight: 1.35 }}>
-          <div style={{ fontWeight: 500 }}>{r.jobAddress ?? <span style={{ color: '#94a3b8' }}>—</span>}</div>
-          <div style={{ color: '#94a3b8', fontFamily: 'ui-monospace, SF Mono, monospace', fontSize: 10 }}>
+          <div style={{ fontWeight: 500 }}>{r.jobAddress ?? <span style={{ color: 'var(--ds-ink-2)' }}>—</span>}</div>
+          <div style={{ color: 'var(--ds-ink-2)', fontFamily: 'ui-monospace, SF Mono, monospace', fontSize: 10 }}>
             {r.jobId?.slice(0, 10) ?? '—'}
           </div>
         </div>
@@ -287,10 +283,10 @@ const refundColumns: ColumnConfig<Refund>[] = [
     editable: false,
     renderCell: ({ row }) => {
       const r = row as Refund;
-      if (!r.jobTech && !r.jobLocation) return <span style={{ color: '#94a3b8' }}>—</span>;
+      if (!r.jobTech && !r.jobLocation) return <span style={{ color: 'var(--ds-ink-2)' }}>—</span>;
       return (
         <span style={{ fontSize: 12 }}>
-          {r.jobTech ?? '—'} {r.jobLocation ? <span style={{ color: '#94a3b8' }}>· {r.jobLocation}</span> : null}
+          {r.jobTech ?? '—'} {r.jobLocation ? <span style={{ color: 'var(--ds-ink-2)' }}>· {r.jobLocation}</span> : null}
         </span>
       );
     },

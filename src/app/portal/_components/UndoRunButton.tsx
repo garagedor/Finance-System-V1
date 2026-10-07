@@ -50,7 +50,7 @@ export default function UndoRunButton({
       >
         {busy ? "Undoing…" : "↩ Undo run"}
       </button>
-      {msg && <span className="small" style={{ color: "#94a3b8" }}>{msg}</span>}
+      {msg && <span className="small" style={{ color: "var(--ds-ink-2)" }}>{msg}</span>}
     </span>
   );
 }

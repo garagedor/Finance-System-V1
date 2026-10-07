@@ -95,7 +95,7 @@ export default async function EquipmentReportsPage({ searchParams }: { searchPar
             <table className="portal-table">
               <thead><tr><th>Order</th><th>AM</th><th className="right">Amount</th></tr></thead>
               <tbody>{r.approvedNotCharged.map((o) => (
-                <tr key={o._id}><td className="mono small"><Link href={`/portal/equipment/orders/${o._id}`} style={{ color: "#818cf8", textDecoration: "none" }}>{o.orderNumber}</Link></td><td>{o.areaManagerName}</td><td className="right money">{fmt$(o.amChargeTotal)}</td></tr>
+                <tr key={o._id}><td className="mono small"><Link href={`/portal/equipment/orders/${o._id}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{o.orderNumber}</Link></td><td>{o.areaManagerName}</td><td className="right money">{fmt$(o.amChargeTotal)}</td></tr>
               ))}</tbody>
             </table>
           )}
@@ -105,7 +105,7 @@ export default async function EquipmentReportsPage({ searchParams }: { searchPar
             <table className="portal-table">
               <thead><tr><th>Order</th><th>AM</th><th className="right">Amount</th></tr></thead>
               <tbody>{r.deliveredNotPosted.map((o) => (
-                <tr key={o._id}><td className="mono small"><Link href={`/portal/equipment/orders/${o._id}`} style={{ color: "#818cf8", textDecoration: "none" }}>{o.orderNumber}</Link></td><td>{o.areaManagerName}</td><td className="right money">{fmt$(o.amChargeTotal)}</td></tr>
+                <tr key={o._id}><td className="mono small"><Link href={`/portal/equipment/orders/${o._id}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{o.orderNumber}</Link></td><td>{o.areaManagerName}</td><td className="right money">{fmt$(o.amChargeTotal)}</td></tr>
               ))}</tbody>
             </table>
           )}

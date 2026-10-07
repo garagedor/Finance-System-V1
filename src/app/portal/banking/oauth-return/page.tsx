@@ -44,7 +44,7 @@ export default function OAuthReturnPage() {
         <div>
           If you see this page for more than 10 seconds without a Plaid window appearing,
           the link token expired. Go back to{" "}
-          <Link href="/portal/banking/connections" style={{ color: "#818cf8" }}>Connections</Link>{" "}
+          <Link href="/portal/banking/connections" style={{ color: "var(--ds-fin-2)" }}>Connections</Link>{" "}
           and start over.
         </div>
       </div>

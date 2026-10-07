@@ -46,7 +46,7 @@ export default function GenerateButton({ templateId, label }: { templateId?: str
         <span
           style={{
             fontSize: 12,
-            color: tone === "ok" ? "#10b981" : "#f87171",
+            color: tone === "ok" ? "var(--ds-ok-text)" : "var(--ds-crit-text)",
           }}
         >
           {msg}

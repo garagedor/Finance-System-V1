@@ -90,11 +90,11 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
   }
 
   if (loading) return <div className="portal-subtitle">Loading voices…</div>;
-  if (error && !data) return <div className="portal-card" style={{ padding: 18, color: "#fca5a5" }}>Couldn&rsquo;t load voice settings: {error}</div>;
+  if (error && !data) return <div className="portal-card" style={{ padding: 18, color: "var(--ds-crit-text)" }}>Couldn&rsquo;t load voice settings: {error}</div>;
   if (!data || !draft) return null;
 
   const active = PROVIDERS.find((p) => p.id === data.provider);
-  const statusColor = data.configured && data.healthy ? "#34d399" : data.configured ? "#f59e0b" : "#94a3b8";
+  const statusColor = data.configured && data.healthy ? "var(--ds-ok-text)" : data.configured ? "var(--ds-warn-text)" : "var(--ds-ink-2)";
   const statusText = !data.configured
     ? "Not configured — using the device fallback voice"
     : !data.healthy
@@ -105,7 +105,7 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {data.warnings && data.warnings.length > 0 && (
-        <div className="portal-card" style={{ padding: "10px 14px", borderColor: "rgba(245,158,11,0.35)", background: "rgba(245,158,11,0.08)", fontSize: 12.5, color: "#fcd9a3" }}>
+        <div className="portal-card" style={{ padding: "10px 14px", borderColor: "var(--ds-warn-line)", background: "var(--ds-warn-soft)", fontSize: 12.5, color: "var(--ds-warn-text)" }}>
           Some data couldn&rsquo;t load: {data.warnings.join("; ")}
         </div>
       )}
@@ -115,14 +115,14 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ width: 10, height: 10, borderRadius: "50%", background: statusColor, boxShadow: `0 0 8px ${statusColor}` }} />
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, color: "#e2e8f0" }}>
-              {active?.name ?? data.provider} <span style={{ color: "#64748b", fontWeight: 500, fontSize: 13 }}>· {statusText}</span>
+            <div style={{ fontWeight: 700, color: "var(--ds-ink)" }}>
+              {active?.name ?? data.provider} <span style={{ color: "var(--ds-ink-2)", fontWeight: 500, fontSize: 13 }}>· {statusText}</span>
             </div>
             <div className="portal-subtitle" style={{ marginTop: 2 }}>{active?.note}</div>
           </div>
         </div>
         {!data.configured && (
-          <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)", fontSize: 12.5, color: "#fcd9a3" }}>
+          <div style={{ marginTop: 12, padding: "10px 12px", borderRadius: 8, background: "var(--ds-warn-soft)", border: "1px solid var(--ds-warn-line)", fontSize: 12.5, color: "var(--ds-warn-text)" }}>
             To enable the premium voice, add <code className="mono">ELEVENLABS_API_KEY</code> to <code className="mono">.env.local</code>{" "}
             (and to Vercel on deploy) and restart the dev server. The key stays on the server — never in the browser. Until then the
             assistant uses the device voice.
@@ -132,7 +132,7 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
 
       {/* Voice picker */}
       <div className="portal-card" style={{ padding: "14px 16px" }}>
-        <div style={{ fontWeight: 700, color: "#e2e8f0", marginBottom: 4 }}>Assistant voice</div>
+        <div style={{ fontWeight: 700, color: "var(--ds-ink)", marginBottom: 4 }}>Assistant voice</div>
         <div className="portal-subtitle" style={{ marginBottom: 12 }}>
           Male voices suited to a calm, confident executive. Preview each, then select one.
         </div>
@@ -152,7 +152,7 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
                     alignItems: "center",
                     gap: 12,
                     padding: "11px 6px",
-                    borderTop: i === 0 ? "none" : "1px solid rgba(255,255,255,0.05)",
+                    borderTop: i === 0 ? "none" : "1px solid var(--ds-line)",
                   }}
                 >
                   <button
@@ -166,16 +166,16 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
                       borderRadius: "50%",
                       flexShrink: 0,
                       cursor: canManage ? "pointer" : "not-allowed",
-                      border: selected ? "5px solid #818cf8" : "2px solid rgba(255,255,255,0.3)",
+                      border: selected ? "5px solid var(--ds-info)" : "2px solid var(--ds-line-strong)",
                       background: "transparent",
                     }}
                   />
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "#e2e8f0" }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: "var(--ds-ink)" }}>
                       {v.name}
-                      {v.gender ? <span style={{ color: "#64748b", fontWeight: 500, fontSize: 11.5 }}> · {v.gender}</span> : null}
+                      {v.gender ? <span style={{ color: "var(--ds-ink-2)", fontWeight: 500, fontSize: 11.5 }}> · {v.gender}</span> : null}
                     </div>
-                    {v.description ? <div style={{ fontSize: 11.5, color: "#94a3b8", marginTop: 1 }}>{v.description}</div> : null}
+                    {v.description ? <div style={{ fontSize: 11.5, color: "var(--ds-ink-2)", marginTop: 1 }}>{v.description}</div> : null}
                   </div>
                   <VoicePreview voiceId={v.id} lang={previewLang} disabled={!data.configured} />
                 </div>
@@ -187,7 +187,7 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
 
       {/* Tuning */}
       <div className="portal-card" style={{ padding: "14px 16px", display: "flex", flexDirection: "column", gap: 16 }}>
-        <div style={{ fontWeight: 700, color: "#e2e8f0" }}>Delivery</div>
+        <div style={{ fontWeight: 700, color: "var(--ds-ink)" }}>Delivery</div>
 
         <Slider label="Speed" value={draft.speed} min={0.7} max={1.2} step={0.05} disabled={!canManage}
           onChange={(n) => patch({ speed: n })} fmt={(n) => `${n.toFixed(2)}×`} />
@@ -211,7 +211,7 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
         </Row>
 
         {draft.lang === "he" && (
-          <div style={{ fontSize: 12, color: "#94a3b8" }}>
+          <div style={{ fontSize: 12, color: "var(--ds-ink-2)" }}>
             Hebrew uses a multilingual voice. Preview it above before relying on it — mark it good only after it reads a real
             Hebrew line naturally.
           </div>
@@ -228,8 +228,8 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
           style={{ cursor: canManage ? "pointer" : "not-allowed" }}>
           Reset to recommended
         </button>
-        {saved && <span style={{ color: "#34d399", fontSize: 13 }}>Saved ✓</span>}
-        {error && data && <span style={{ color: "#fca5a5", fontSize: 13 }}>{error}</span>}
+        {saved && <span style={{ color: "var(--ds-ok-text)", fontSize: 13 }}>Saved ✓</span>}
+        {error && data && <span style={{ color: "var(--ds-crit-text)", fontSize: 13 }}>{error}</span>}
         {!canManage && <span className="portal-subtitle">You need the AI manage permission to change these.</span>}
       </div>
     </div>
@@ -239,7 +239,7 @@ export default function VoiceSettings({ canManage }: { canManage: boolean }) {
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-      <div style={{ flex: 1, fontSize: 13.5, color: "#cbd5e1" }}>{label}</div>
+      <div style={{ flex: 1, fontSize: 13.5, color: "var(--ds-ink)" }}>{label}</div>
       {children}
     </div>
   );
@@ -254,12 +254,12 @@ function Slider({
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-        <span style={{ fontSize: 13.5, color: "#cbd5e1" }}>{label}</span>
-        <span style={{ fontSize: 12.5, color: "#818cf8", fontFamily: "monospace" }}>{fmt(value)}</span>
+        <span style={{ fontSize: 13.5, color: "var(--ds-ink)" }}>{label}</span>
+        <span style={{ fontSize: 12.5, color: "var(--ds-info-text)", fontFamily: "monospace" }}>{fmt(value)}</span>
       </div>
       <input type="range" min={min} max={max} step={step} value={value} disabled={disabled}
-        onChange={(e) => onChange(parseFloat(e.target.value))} style={{ width: "100%", accentColor: "#818cf8" }} />
-      {hint ? <div style={{ fontSize: 11, color: "#64748b", marginTop: 2 }}>{hint}</div> : null}
+        onChange={(e) => onChange(parseFloat(e.target.value))} style={{ width: "100%", accentColor: "var(--ds-info)" }} />
+      {hint ? <div style={{ fontSize: 11, color: "var(--ds-ink-2)", marginTop: 2 }}>{hint}</div> : null}
     </div>
   );
 }
@@ -270,9 +270,9 @@ function Toggle({ on, onChange, disabled }: { on: boolean; onChange: (b: boolean
       style={{
         width: 42, height: 24, borderRadius: 999, border: "none", flexShrink: 0,
         cursor: disabled ? "not-allowed" : "pointer",
-        background: on ? "rgba(52,211,153,0.9)" : "rgba(255,255,255,0.14)", position: "relative", transition: "background 0.15s",
+        background: on ? "var(--ds-info)" : "var(--ds-line-strong)", position: "relative", transition: "background 0.15s",
       }}>
-      <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.15s" }} />
+      <span style={{ position: "absolute", top: 3, left: on ? 21 : 3, width: 18, height: 18, borderRadius: "50%", background: "var(--ds-on-info)", transition: "left 0.15s" }} />
     </button>
   );
 }

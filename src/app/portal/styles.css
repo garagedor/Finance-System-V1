@@ -1,3 +1,5 @@
+@import "../../styles/design-system.css";
+
 /* Finance Portal — shared styles.
  * Builds on the CRM's dark theme (globals.css). Adds finance-specific
  * patterns: KPI tiles, dense tables, money colors, status pills. */
@@ -5,8 +7,8 @@
 .portal-page {
   padding: 20px 24px 32px;
   min-height: 100vh;
-  background: #0a0f1c;
-  color: #f1f5f9;
+  background: var(--ds-bg);
+  color: var(--ds-ink);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -34,7 +36,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.22em;
-  color: #818cf8;
+  color: var(--ds-fin-2);
 }
 
 .portal-title {
@@ -42,14 +44,14 @@
   font-size: 24px;
   font-weight: 700;
   letter-spacing: -0.5px;
-  color: #f1f5f9;
+  color: var(--ds-ink);
   line-height: 1.15;
 }
 
 .portal-subtitle {
   margin: 4px 0 0;
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--ds-ink-2);
 }
 
 /* Section header (inside a card or between blocks) */
@@ -58,13 +60,13 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.14em;
-  color: #64748b;
+  color: var(--ds-ink-3);
 }
 
 /* ── Cards ── */
 .portal-card {
-  background: #111827;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--ds-surface-1);
+  border: 1px solid var(--ds-line);
   border-radius: 14px;
   padding: 20px;
 }
@@ -79,24 +81,24 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 18px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--ds-line);
 }
 
 .portal-card-head-title {
   font-size: 14px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--ds-ink);
 }
 
 .portal-card-head-sub {
   font-size: 11px;
-  color: #64748b;
+  color: var(--ds-ink-3);
 }
 
 /* ── KPI tiles ── */
 .portal-kpi {
-  background: #111827;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--ds-surface-1);
+  border: 1px solid var(--ds-line);
   border-radius: 14px;
   padding: 16px 18px;
   display: flex;
@@ -106,14 +108,14 @@
 }
 
 .portal-kpi:hover {
-  border-color: rgba(99, 102, 241, 0.25);
+  border-color: var(--ds-fin-line);
 }
 
 .portal-kpi-label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #64748b;
+  color: var(--ds-ink-3);
   font-weight: 500;
 }
 
@@ -121,24 +123,24 @@
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
-  color: #f1f5f9;
+  color: var(--ds-ink);
   font-variant-numeric: tabular-nums;
 }
 
 .portal-kpi-sub {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--ds-ink-2);
   margin-top: 2px;
 }
 
-.portal-kpi-trend-up   { color: #10b981; }
-.portal-kpi-trend-down { color: #ef4444; }
+.portal-kpi-trend-up   { color: var(--ds-ok); }
+.portal-kpi-trend-down { color: var(--ds-crit); }
 
 /* ── Money cells ── */
 .money       { font-variant-numeric: tabular-nums; }
-.money-pos   { color: #10b981; }
-.money-neg   { color: #ef4444; }
-.money-zero  { color: #64748b; }
+.money-pos   { color: var(--ds-ok); }
+.money-neg   { color: var(--ds-crit); }
+.money-zero  { color: var(--ds-ink-3); }
 .money-big   { font-size: 18px; font-weight: 600; }
 
 /* ── Status pills ── */
@@ -155,12 +157,18 @@
   border: 1px solid transparent;
 }
 
-.pill-paid    { background: rgba(16, 185, 129, 0.12); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
-.pill-unpaid  { background: rgba(239, 68, 68, 0.12);  color: #f87171; border-color: rgba(239, 68, 68, 0.3); }
-.pill-pending { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border-color: rgba(245, 158, 11, 0.3); }
-.pill-draft   { background: rgba(148, 163, 184, 0.12);color: #94a3b8; border-color: rgba(148, 163, 184, 0.3); }
-.pill-open    { background: rgba(6, 182, 212, 0.12);  color: #22d3ee; border-color: rgba(6, 182, 212, 0.3); }
-.pill-closed  { background: rgba(99, 102, 241, 0.12); color: #818cf8; border-color: rgba(99, 102, 241, 0.3); }
+.pill-paid    { background: var(--ds-ok-wash);      color: var(--ds-ok-text);      border-color: var(--ds-ok-line); }
+.pill-unpaid  { background: var(--ds-crit-wash);    color: var(--ds-crit-text);    border-color: var(--ds-crit-line); }
+.pill-pending { background: var(--ds-warn-wash);    color: var(--ds-warn-text);    border-color: var(--ds-warn-line); }
+/* Draft and Closed are both neutral, but they are not the same state, so they
+   are not the same chip. The difference is carried by treatment, not hue:
+     DRAFT  — dashed outline, no fill: provisional, still being worked on.
+     CLOSED — solid fill, no edge: settled, filed away, historical.
+   Both keep --ds-neutral-text, because the only dimmer ink available
+   (--ds-ink-3) drops the filled chip to 3.18:1, under AA. */
+.pill-draft   { background: transparent; color: var(--ds-neutral-text); border-color: var(--ds-neutral-line); border-style: dashed; }
+.pill-open    { background: var(--ds-info-wash);    color: var(--ds-info-text);    border-color: var(--ds-info-line); }
+.pill-closed  { background: var(--ds-neutral-wash); color: var(--ds-neutral-text); border-color: transparent; }
 
 /* ── Tables ── */
 .portal-table {
@@ -173,28 +181,28 @@
 .portal-table thead th {
   text-align: left;
   font-weight: 600;
-  color: #64748b;
+  color: var(--ds-ink-3);
   font-size: 10.5px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.02);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--ds-surface-2);
+  border-bottom: 1px solid var(--ds-line);
   white-space: nowrap;
 }
 
 .portal-table tbody td {
   padding: 11px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  color: #e2e8f0;
+  border-bottom: 1px solid var(--ds-line);
+  color: var(--ds-ink);
   font-variant-numeric: tabular-nums;
 }
 
-.portal-table tbody tr:hover { background: rgba(255, 255, 255, 0.02); }
+.portal-table tbody tr:hover { background: var(--ds-surface-2); }
 .portal-table tbody tr:last-child td { border-bottom: 0; }
 
 .portal-table .right { text-align: right; }
-.portal-table .muted { color: #64748b; font-size: 12px; }
+.portal-table .muted { color: var(--ds-ink-3); font-size: 12px; }
 .portal-table .small { font-size: 11.5px; }
 .portal-table .mono  { font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 11.5px; }
 
@@ -204,9 +212,9 @@
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.04);
-  color: #e2e8f0;
+  border: 1px solid var(--ds-line-strong);
+  background: var(--ds-surface-2);
+  color: var(--ds-ink);
   border-radius: 9px;
   font-size: 13px;
   font-weight: 500;
@@ -215,34 +223,34 @@
 }
 
 .portal-btn:hover {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.16);
+  background: var(--ds-surface-3);
+  border-color: var(--ds-line-strong);
 }
 
 .portal-btn-primary {
-  background: #6366f1;
-  border-color: #6366f1;
-  color: white;
+  background: var(--ds-fin);
+  border-color: var(--ds-fin);
+  color: var(--ds-on-fin);
 }
 
 .portal-btn-primary:hover {
-  background: #4f46e5;
-  border-color: #4f46e5;
+  background: var(--ds-fin-2);
+  border-color: var(--ds-fin-2);
 }
 
 .portal-btn-ghost {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.07);
+  border-color: var(--ds-line);
 }
 
 .portal-btn-danger {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #f87171;
+  background: var(--ds-crit-wash);
+  border-color: var(--ds-crit-line);
+  color: var(--ds-crit-text);
 }
 .portal-btn-danger:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: var(--ds-crit-wash-2);
+  border-color: var(--ds-crit-line-2);
 }
 
 .portal-btn:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -251,9 +259,9 @@
 .portal-input,
 .portal-select,
 .portal-textarea {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  background: var(--ds-surface-2);
+  border: 1px solid var(--ds-line-strong);
+  color: var(--ds-ink);
   padding: 8px 11px;
   border-radius: 9px;
   font-size: 13px;
@@ -264,8 +272,8 @@
 .portal-select:focus,
 .portal-textarea:focus {
   outline: none;
-  border-color: #6366f1;
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+  border-color: var(--ds-info);
+  box-shadow: var(--ds-focus);
 }
 
 .portal-textarea { min-height: 70px; resize: vertical; font-family: inherit; }
@@ -275,7 +283,7 @@
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #64748b;
+  color: var(--ds-ink-3);
   font-weight: 600;
   margin-bottom: 5px;
 }
@@ -308,9 +316,9 @@
     display: block;
     margin: 8px 12px;
     padding: 8px 10px;
-    border: 1px solid rgba(255,255,255,0.06);
+    border: 1px solid var(--ds-line);
     border-radius: 8px;
-    background: rgba(255,255,255,0.02);
+    background: var(--ds-surface-2);
   }
   .portal-table tbody td {
     display: flex;
@@ -322,7 +330,7 @@
   }
   .portal-table tbody td::before {
     content: attr(data-label);
-    color: #64748b;
+    color: var(--ds-ink-3);
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -339,17 +347,17 @@
 }
 
 /* ── Mini bar (proportion bar inside lists) ── */
-.portal-bar { height: 6px; background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden; }
-.portal-bar-fill { height: 100%; background: #6366f1; border-radius: 3px; }
-.portal-bar-fill.good { background: #10b981; }
-.portal-bar-fill.warn { background: #f59e0b; }
-.portal-bar-fill.bad  { background: #ef4444; }
+.portal-bar { height: 6px; background: var(--ds-surface-3); border-radius: 3px; overflow: hidden; }
+.portal-bar-fill { height: 100%; background: var(--ds-fin); border-radius: 3px; }
+.portal-bar-fill.good { background: var(--ds-ok); }
+.portal-bar-fill.warn { background: var(--ds-warn); }
+.portal-bar-fill.bad  { background: var(--ds-crit); }
 
 /* ── Empty / alert blocks ── */
 .portal-empty {
   text-align: center;
   padding: 36px 16px;
-  color: #64748b;
+  color: var(--ds-ink-3);
   font-size: 13px;
 }
 
@@ -361,15 +369,15 @@
   gap: 10px;
   align-items: flex-start;
 }
-.portal-alert-info  { background: rgba(99, 102, 241, 0.08); color: #c7d2fe; border: 1px solid rgba(99, 102, 241, 0.2); }
-.portal-alert-warn  { background: rgba(245, 158, 11, 0.08); color: #fcd34d; border: 1px solid rgba(245, 158, 11, 0.2); }
-.portal-alert-error { background: rgba(239, 68, 68, 0.08);  color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.2); }
-.portal-alert-good  { background: rgba(16, 185, 129, 0.08); color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.2); }
+.portal-alert-info  { background: var(--ds-info-soft); color: var(--ds-info-text); border: 1px solid var(--ds-info-line); }
+.portal-alert-warn  { background: var(--ds-warn-soft); color: var(--ds-warn-text); border: 1px solid var(--ds-warn-line); }
+.portal-alert-error { background: var(--ds-crit-soft); color: var(--ds-crit-text); border: 1px solid var(--ds-crit-line); }
+.portal-alert-good  { background: var(--ds-ok-soft);   color: var(--ds-ok-text);   border: 1px solid var(--ds-ok-line); }
 
 /* ── Toolbar (date pickers / filters above tables) ── */
 .portal-toolbar {
-  background: #111827;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--ds-surface-1);
+  border: 1px solid var(--ds-line);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -385,8 +393,8 @@
 .portal-range-pills {
   display: inline-flex;
   gap: 4px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--ds-surface-2);
+  border: 1px solid var(--ds-line);
   border-radius: 9px;
   padding: 3px;
 }
@@ -395,7 +403,7 @@
   padding: 5px 12px;
   border-radius: 6px;
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--ds-ink-2);
   cursor: pointer;
   font-weight: 500;
   border: 0;
@@ -403,10 +411,10 @@
 }
 
 .portal-range-pill.active {
-  background: rgba(99, 102, 241, 0.2);
-  color: #c7d2fe;
+  background: var(--ds-fin-wash-2);
+  color: var(--ds-fin-text);
 }
 
 .portal-range-pill:hover:not(.active) {
-  color: #e2e8f0;
+  color: var(--ds-ink);
 }

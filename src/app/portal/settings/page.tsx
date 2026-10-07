@@ -105,18 +105,18 @@ export default async function SettingsPage() {
       </CardShell>
 
       <CardShell title="Role access">
-        <div style={{ padding: 16, fontSize: 13, color: "#94a3b8" }}>
+        <div style={{ padding: 16, fontSize: 13, color: "var(--ds-ink-2)" }}>
           <p style={{ margin: "0 0 10px" }}>
             The Finance Portal is restricted to these roles:
           </p>
           <ul style={{ margin: 0, paddingLeft: 20, lineHeight: 1.8 }}>
-            <li><strong style={{ color: "#cbd5e1" }}>admin</strong> — full access</li>
-            <li><strong style={{ color: "#cbd5e1" }}>office</strong> — full access (office manager / staff)</li>
-            <li><strong style={{ color: "#cbd5e1" }}>bookkeeper</strong> — full access (new role)</li>
+            <li><strong style={{ color: "var(--ds-ink)" }}>admin</strong> — full access</li>
+            <li><strong style={{ color: "var(--ds-ink)" }}>office</strong> — full access (office manager / staff)</li>
+            <li><strong style={{ color: "var(--ds-ink)" }}>bookkeeper</strong> — full access (new role)</li>
           </ul>
-          <p style={{ marginTop: 12, fontSize: 12, color: "#64748b" }}>
+          <p style={{ marginTop: 12, fontSize: 12, color: "var(--ds-ink-2)" }}>
             Technicians, location-managers, and simple users do NOT have portal access. To grant
-            bookkeeper access, set <code style={{ color: "#cbd5e1", background: "rgba(255,255,255,0.05)", padding: "1px 6px", borderRadius: 4 }}>user.type = &quot;bookkeeper&quot;</code>{" "}
+            bookkeeper access, set <code style={{ color: "var(--ds-ink)", background: "var(--ds-surface-2)", padding: "1px 6px", borderRadius: 4 }}>user.type = &quot;bookkeeper&quot;</code>{" "}
             in the Users table.
           </p>
         </div>

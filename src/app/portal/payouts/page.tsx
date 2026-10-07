@@ -129,7 +129,7 @@ export default async function PayoutsPage({
                   {d.payouts.map((p) => (
                     <tr key={p._id}>
                       <td>
-                        <Link href={`/portal/payouts/${p._id}`} style={{ color: "#818cf8", textDecoration: "none", fontWeight: 600 }}>
+                        <Link href={`/portal/payouts/${p._id}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none", fontWeight: 600 }}>
                           {p.recipient_name}
                         </Link>
                       </td>
@@ -144,7 +144,7 @@ export default async function PayoutsPage({
                       <td><StatusPill status={p.status} /></td>
                       <td className="right money">{fmt$(p.gross)}</td>
                       <td className="right money money-neg">−{fmt$(p.deductions)}</td>
-                      <td className="right money" style={{ fontWeight: 700, color: p.net >= 0 ? "#10b981" : "#ef4444" }}>
+                      <td className="right money" style={{ fontWeight: 700, color: "var(--ds-ink)" }}>
                         {fmt$(p.net)}
                       </td>
                       <td className="right">

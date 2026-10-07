@@ -7,6 +7,7 @@ import { FiShield, FiPlus, FiSearch, FiX, FiLock } from 'react-icons/fi';
 import { useAuth } from '@/components/AuthShell';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
+import { SummaryStrip } from '@/components/ui';
 import { AdminTabs } from '../_components/AdminTabs';
 import './styles.css';
 
@@ -44,6 +45,10 @@ export default function AdminRolesPage() {
         }
     };
     useEffect(() => { load(); }, []);
+
+    /* Orientation layer, derived from `roles` already in state. */
+    const systemCount = roles.filter((r) => r.is_system).length;
+    const permissionTotal = roles.reduce((n, r) => n + (r.permissionCount ?? 0), 0);
 
     const visible = useMemo(() => {
         if (!search.trim()) return roles;
@@ -86,6 +91,17 @@ export default function AdminRolesPage() {
                 </header>
 
                 <AdminTabs />
+
+                {roles.length > 0 && (
+                    <SummaryStrip
+                        items={[
+                            { label: 'Roles', value: String(roles.length) },
+                            { label: 'System', value: String(systemCount), sub: 'built in, not editable' },
+                            { label: 'Custom', value: String(roles.length - systemCount) },
+                            { label: 'Permissions granted', value: String(permissionTotal), sub: 'across all roles' },
+                        ]}
+                    />
+                )}
 
                 <div className="adm-toolbar">
                     <div className="adm-search">

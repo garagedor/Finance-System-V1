@@ -211,7 +211,7 @@ export default function OrderBuilder({
         </div>
 
         {customOpen && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-end", padding: "10px 12px", marginBottom: 12, border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 10 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "flex-end", padding: "10px 12px", marginBottom: 12, border: "1px dashed var(--ds-line-strong)", borderRadius: 10 }}>
             <Field label="Name"><input className="portal-input" value={cName} onChange={(e) => setCName(e.target.value)} placeholder="One-off item" style={{ width: 180 }} /></Field>
             <Field label="Unit">
               <select className="portal-select" value={cUnit} onChange={(e) => setCUnit(e.target.value)}>
@@ -296,7 +296,7 @@ export default function OrderBuilder({
             </table>
           </div>
         )}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 20, padding: "14px 16px", borderTop: "1px solid rgba(255,255,255,0.08)", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 20, padding: "14px 16px", borderTop: "1px solid var(--ds-line)", justifyContent: "flex-end" }}>
           <Tote label="Items" value={String(totals.itemCount)} />
           {canSeeCost && <Tote label="Company cost" value={fmt$(totals.companyCostTotal)} muted />}
           <Tote label="AM charge total" value={fmt$(totals.amChargeTotal)} strong />
@@ -328,7 +328,7 @@ function Tote({ label, value, strong, muted }: { label: string; value: string; s
   return (
     <div style={{ textAlign: "right" }}>
       <div className="portal-label" style={{ opacity: muted ? 0.7 : 1 }}>{label}</div>
-      <div className="money" style={{ fontSize: strong ? 20 : 15, fontWeight: strong ? 800 : 600, color: muted ? "#94a3b8" : undefined }}>{value}</div>
+      <div className="money" style={{ fontSize: strong ? 20 : 15, fontWeight: strong ? 800 : 600, color: muted ? "var(--ds-ink-2)" : undefined }}>{value}</div>
     </div>
   );
 }

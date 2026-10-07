@@ -107,11 +107,11 @@ export default function PenaltyChargeModal({ ledgerId, ledgerName }: { ledgerId?
     <>
       <button className="portal-btn" onClick={() => setOpen(true)}>+ Penalty</button>
       {open && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 44, paddingBottom: 40, overflowY: "auto" }}
+        <div style={{ position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)", display: "flex", alignItems: "flex-start", justifyContent: "center", zIndex: 100, paddingTop: 44, paddingBottom: 40, overflowY: "auto" }}
           onClick={(e) => { if (e.target === e.currentTarget) close(); }}>
-          <div style={{ background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: 22, width: "min(760px, 96vw)" }} onClick={(e) => e.stopPropagation()}>
+          <div style={{ background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14, padding: 22, width: "min(760px, 96vw)" }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "#f1f5f9" }}>Penalties — charge {ledgerName ? `${ledgerName}'s` : "the AM's"} 50%</h2>
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ds-ink)" }}>Penalties — charge {ledgerName ? `${ledgerName}'s` : "the AM's"} 50%</h2>
               <button onClick={close} className="portal-btn portal-btn-ghost" style={{ padding: "4px 10px", fontSize: 12 }}>✕</button>
             </div>
 
@@ -128,7 +128,7 @@ export default function PenaltyChargeModal({ ledgerId, ledgerName }: { ledgerId?
               <div><label className="portal-label" style={{ fontSize: 11 }}>To</label><input type="date" className="portal-input" value={fEnd} onChange={(e) => setFEnd(e.target.value)} style={{ padding: "6px 8px" }} /></div>
             </div>
 
-            <div style={{ maxHeight: 320, overflowY: "auto", marginTop: 10, border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+            <div style={{ maxHeight: 320, overflowY: "auto", marginTop: 10, border: "1px solid var(--ds-line)", borderRadius: 8 }}>
               {rows.length === 0 ? (
                 <div className="muted small" style={{ padding: 14, textAlign: "center" }}>{loading ? "Searching…" : "No X-close penalties match — adjust the filters."}</div>
               ) : (
@@ -139,7 +139,7 @@ export default function PenaltyChargeModal({ ledgerId, ledgerName }: { ledgerId?
                   </tr></thead>
                   <tbody>
                     {rows.map((r) => (
-                      <tr key={r.id} style={{ cursor: "pointer", background: selected.includes(r.id) ? "rgba(129,140,248,0.08)" : undefined }} onClick={() => toggle(r.id)}>
+                      <tr key={r.id} style={{ cursor: "pointer", background: selected.includes(r.id) ? "var(--ds-neutral-wash)" : undefined }} onClick={() => toggle(r.id)}>
                         <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={selected.includes(r.id)} onChange={() => toggle(r.id)} /></td>
                         <td className="small mono">{r.date || "—"}</td>
                         <td className="small">{r.address || "—"}<div className="muted small">{r.location}</div></td>

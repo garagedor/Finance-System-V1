@@ -112,9 +112,9 @@ export default function PaymentMethodReportPage() {
           size="lg"
           icon={
             <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-              <circle cx="10" cy="10" r="8" stroke="#f87171" strokeWidth="1.5" />
-              <line x1="10" y1="6" x2="10" y2="10.5" stroke="#f87171" strokeWidth="1.5" strokeLinecap="round" />
-              <circle cx="10" cy="13" r="0.75" fill="#f87171" />
+              <circle cx="10" cy="10" r="8" stroke="var(--ds-crit)" strokeWidth="1.5" />
+              <line x1="10" y1="6" x2="10" y2="10.5" stroke="var(--ds-crit)" strokeWidth="1.5" strokeLinecap="round" />
+              <circle cx="10" cy="13" r="0.75" fill="var(--ds-crit)" />
             </svg>
           }
           title="Access Denied"
@@ -577,15 +577,13 @@ export default function PaymentMethodReportPage() {
 
 // ─── Subcomponents ──────────────────────────────────────────────────────────
 
-type Accent = 'indigo' | 'cyan' | 'emerald' | 'violet' | 'red' | 'amber';
+type Accent = 'indigo' | 'cyan' | 'emerald' | 'violet';
 
 const accents: Record<Accent, { bg: string; border: string; text: string; glow: string }> = {
   indigo:  { bg: 'rgba(99,102,241,0.10)',  border: 'rgba(99,102,241,0.25)',  text: '#a5b4fc', glow: 'rgba(99,102,241,0.12)' },
   cyan:    { bg: 'rgba(6,182,212,0.10)',   border: 'rgba(6,182,212,0.25)',   text: '#22d3ee', glow: 'rgba(6,182,212,0.10)'  },
   emerald: { bg: 'rgba(16,185,129,0.10)',  border: 'rgba(16,185,129,0.25)',  text: '#34d399', glow: 'rgba(16,185,129,0.10)' },
   violet:  { bg: 'rgba(139,92,246,0.10)',  border: 'rgba(139,92,246,0.25)',  text: '#c4b5fd', glow: 'rgba(139,92,246,0.10)' },
-  red:     { bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.25)',   text: '#f87171', glow: 'rgba(239,68,68,0.10)'  },
-  amber:   { bg: 'rgba(245,158,11,0.10)',  border: 'rgba(245,158,11,0.25)',  text: '#fbbf24', glow: 'rgba(245,158,11,0.10)' },
 };
 
 function PmrKpi({ label, value, icon, accent }: { label: string; value: string; icon: ReactNode; accent: Accent }) {
@@ -739,7 +737,7 @@ function StackPmrTooltip(props: StackPmrTooltipProps) {
           </div>
         ) : null
       ))}
-      <div className="pie-tooltip__row" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', marginTop: 4, paddingTop: 4 }}>
+      <div className="pie-tooltip__row" style={{ borderTop: '1px solid var(--ds-line-strong)', marginTop: 4, paddingTop: 4 }}>
         <span>Total</span><strong>{formatCurrency(total)}</strong>
       </div>
     </div>

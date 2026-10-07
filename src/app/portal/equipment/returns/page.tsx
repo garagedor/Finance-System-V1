@@ -6,6 +6,7 @@ import { fmt$, fmtDate } from "../../format";
 import { PageHeader, CardShell, Empty } from "../../_components/page-helpers";
 import { ReturnStatusPill } from "../_components/EquipmentStatusPill";
 import EquipmentTabs from "../_components/EquipmentTabs";
+import { SummaryStrip } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
@@ -23,10 +24,28 @@ export default async function EquipmentReturnsPage() {
   const rows = await coll<EquipmentReturn>(FINANCE_COLLECTIONS.equipmentReturn)
     .find({}).sort({ created_at: -1 }).limit(500).toArray();
 
+  /* Orientation layer — roll-ups of the same columns the table prints below,
+     over the rows already fetched. Credit is a plain total, carrying no tone:
+     a credit is a direction, not an outcome. */
+  const unitsReturned = rows.reduce((s, r) => s + r.items.reduce((n, it) => n + it.qtyReturned, 0), 0);
+  const creditTotal = rows.reduce((s, r) => s + (r.creditAmount ?? 0), 0);
+  const amCount = new Set(rows.map((r) => r.areaManagerName).filter(Boolean)).size;
+
   return (
     <div className="portal-page">
       <PageHeader kicker="Equipment" title="Equipment Returns" subtitle="Returns and credits against equipment orders." />
       <EquipmentTabs active="returns" />
+
+      {rows.length > 0 && (
+        <SummaryStrip
+          items={[
+            { label: "Returns", value: String(rows.length) },
+            { label: "Units returned", value: String(unitsReturned) },
+            { label: "Credit total", value: fmt$(creditTotal) },
+            { label: "Area managers", value: String(amCount) },
+          ]}
+        />
+      )}
       <CardShell title="Returns" subtitle={`${rows.length} return${rows.length === 1 ? "" : "s"}`}>
         {rows.length === 0 ? (
           <Empty message="No returns yet. Start one from an order's page." />
@@ -39,8 +58,8 @@ export default async function EquipmentReturnsPage() {
               <tbody>
                 {rows.map((r) => (
                   <tr key={r._id}>
-                    <td className="mono small"><Link href={`/portal/equipment/returns/${r._id}`} style={{ color: "#818cf8", textDecoration: "none" }}>{r.returnNumber}</Link></td>
-                    <td className="mono small"><Link href={`/portal/equipment/orders/${r.orderId}`} style={{ color: "#818cf8", textDecoration: "none" }}>{r.orderNumber}</Link></td>
+                    <td className="mono small"><Link href={`/portal/equipment/returns/${r._id}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{r.returnNumber}</Link></td>
+                    <td className="mono small"><Link href={`/portal/equipment/orders/${r.orderId}`} style={{ color: "var(--ds-fin-2)", textDecoration: "none" }}>{r.orderNumber}</Link></td>
                     <td>{r.areaManagerName}</td>
                     <td className="right small">{r.items.reduce((s, it) => s + it.qtyReturned, 0)}</td>
                     <td className="right money">{fmt$(r.creditAmount)}</td>

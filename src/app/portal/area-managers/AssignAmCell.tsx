@@ -54,7 +54,7 @@ export default function AssignAmCell({
         placeholder="— unassigned —"
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Enter" && dirty) save(); }}
-        style={{ padding: "4px 8px", fontSize: 12, width: 150, borderColor: current ? undefined : "rgba(248,113,113,0.5)" }}
+        style={{ padding: "4px 8px", fontSize: 12, width: 150, borderColor: current ? undefined : "var(--ds-warn-line)" }}
       />
       <datalist id={LIST_ID}>
         {options.map((o) => <option key={o} value={o} />)}
@@ -64,7 +64,7 @@ export default function AssignAmCell({
           {busy ? "…" : "Save"}
         </button>
       )}
-      {msg && <span className="small" style={{ color: msg === "Saved" ? "#34d399" : "#f87171" }}>{msg}</span>}
+      {msg && <span className="small" style={{ color: msg === "Saved" ? "var(--ds-ok-text)" : "var(--ds-crit-text)" }}>{msg}</span>}
     </span>
   );
 }

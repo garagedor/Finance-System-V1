@@ -563,23 +563,23 @@ export default function LiveAssistant() {
             flexDirection: "column",
             borderRadius: 16,
             overflow: "hidden",
-            background: "#0d1526",
-            border: "1px solid rgba(255,255,255,0.1)",
-            boxShadow: "0 24px 60px rgba(0,0,0,0.6)",
+            background: "var(--ds-surface-1)",
+            border: "1px solid var(--ds-line-strong)",
+            boxShadow: "var(--ds-elev-3)",
           }}
         >
           {/* Header */}
-          <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "12px 14px", borderBottom: "1px solid var(--ds-line)" }}>
             {orb === "speaking" ? (
               <Waveform color={color} reduceMotion={reduceMotion} />
             ) : (
               <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}` }} />
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13.5, fontWeight: 700, color: "#e2e8f0" }}>AI Executive</div>
-              <div style={{ fontSize: 11, color: "#64748b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: "var(--ds-ink)" }}>AI Executive</div>
+              <div style={{ fontSize: 11, color: "var(--ds-ink-2)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {statusText} · <span style={{ color: "#818cf8" }}>{voiceLabel}</span>{" "}
-                <Link href="/portal/ai/voice" style={{ color: "#64748b", textDecoration: "underline" }}>settings</Link>
+                <Link href="/portal/ai/voice" style={{ color: "var(--ds-ink-2)", textDecoration: "underline" }}>settings</Link>
               </div>
             </div>
             <button
@@ -623,9 +623,9 @@ export default function LiveAssistant() {
 
           {/* Proactive Morning Brief offer (once per day) */}
           {briefOffer && (
-            <div style={{ padding: "12px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "rgba(245,158,11,0.08)" }}>
+            <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--ds-line)", background: "rgba(245,158,11,0.08)" }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: "#fcd9a3", marginBottom: 4 }}>☀️ Good morning</div>
-              <div style={{ fontSize: 12.5, color: "#e2e8f0", lineHeight: 1.5, marginBottom: 9 }}>
+              <div style={{ fontSize: 12.5, color: "var(--ds-ink)", lineHeight: 1.5, marginBottom: 9 }}>
                 {briefOffer.headline}
                 {briefOffer.alertCount > 0 && (
                   <> · <b>{briefOffer.alertCount}</b> item{briefOffer.alertCount === 1 ? "" : "s"} flagged.</>
@@ -648,9 +648,9 @@ export default function LiveAssistant() {
           {/* Transcript */}
           <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
             {msgs.length === 0 && (
-              <div style={{ color: "#94a3b8", fontSize: 12.5, lineHeight: 1.7 }}>
+              <div style={{ color: "var(--ds-ink-2)", fontSize: 12.5, lineHeight: 1.7 }}>
                 Ask me anything about the business, out loud or by typing. I&apos;ll answer and show the evidence.
-                <div style={{ marginTop: 10, color: "#64748b", fontSize: 11.5 }}>
+                <div style={{ marginTop: 10, color: "var(--ds-ink-2)", fontSize: 11.5 }}>
                   Try: &ldquo;How much can I safely spend today?&rdquo;
                 </div>
               </div>
@@ -662,13 +662,13 @@ export default function LiveAssistant() {
                 </div>
               ) : (
                 <div key={i} style={{ alignSelf: "stretch", display: "flex", flexDirection: "column", gap: 8 }}>
-                  {m.text && <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: "#e2e8f0", whiteSpace: "pre-wrap" }}>{m.text}</p>}
+                  {m.text && <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.6, color: "var(--ds-ink)", whiteSpace: "pre-wrap" }}>{m.text}</p>}
                   {m.blocks && m.blocks.length > 0 && <AiBlocksLite blocks={m.blocks as never} />}
                 </div>
               ),
             )}
-            {orb === "thinking" && <div style={{ color: "#64748b", fontSize: 12 }}>Thinking…</div>}
-            {error && <div style={{ color: "#f87171", fontSize: 12 }}>{error}</div>}
+            {orb === "thinking" && <div style={{ color: "var(--ds-ink-2)", fontSize: 12 }}>Thinking…</div>}
+            {error && <div style={{ color: "var(--ds-crit-text)", fontSize: 12 }}>{error}</div>}
           </div>
 
           {/* Controls */}
@@ -677,7 +677,7 @@ export default function LiveAssistant() {
               e.preventDefault();
               submit(input);
             }}
-            style={{ display: "flex", gap: 7, padding: 11, borderTop: "1px solid rgba(255,255,255,0.08)", alignItems: "center" }}
+            style={{ display: "flex", gap: 7, padding: 11, borderTop: "1px solid var(--ds-line)", alignItems: "center" }}
           >
             {wakeState === "off" && (
               <button type="button" onClick={toggleMic} title="Voice input" style={{ ...iconBtn, background: orb === "listening" ? "rgba(52,211,153,0.25)" : "rgba(255,255,255,0.06)" }}>
@@ -685,7 +685,7 @@ export default function LiveAssistant() {
               </button>
             )}
             {(orb === "speaking" || orb === "thinking" || orb === "listening") && (
-              <button type="button" onClick={stopAll} title="Stop" style={{ ...iconBtn, background: "rgba(248,113,113,0.18)" }}>■</button>
+              <button type="button" onClick={stopAll} title="Stop" style={{ ...iconBtn, background: "var(--ds-crit-wash)" }}>■</button>
             )}
             <input className="portal-input" style={{ flex: 1 }} placeholder="Ask your executive team…" value={input} onChange={(e) => setInput(e.target.value)} />
             <button type="submit" className="portal-btn portal-btn-primary" disabled={!input.trim()}>Send</button>
@@ -734,7 +734,7 @@ export default function LiveAssistant() {
             fontSize: 15,
             lineHeight: 1.45,
             textAlign: "center",
-            boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+            boxShadow: "var(--ds-elev-3)",
             animation: reduceMotion ? undefined : "aiCaptionIn 0.25s ease",
           }}
         >
@@ -758,8 +758,8 @@ const iconBtn: React.CSSProperties = {
   borderRadius: 8,
   border: "none",
   cursor: "pointer",
-  background: "rgba(255,255,255,0.06)",
-  color: "#cbd5e1",
+  background: "var(--ds-surface-2)",
+  color: "var(--ds-ink)",
   fontSize: 13,
   display: "grid",
   placeItems: "center",

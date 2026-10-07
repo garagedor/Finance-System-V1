@@ -39,7 +39,7 @@ export default function DetectorToggle({ id, enabled }: { id: string; enabled: b
         borderRadius: 999,
         border: "none",
         cursor: busy ? "wait" : "pointer",
-        background: on ? "rgba(52,211,153,0.9)" : "rgba(255,255,255,0.14)",
+        background: on ? "var(--ds-info)" : "var(--ds-line-strong)",
         position: "relative",
         transition: "background 0.15s",
         flexShrink: 0,
@@ -53,7 +53,7 @@ export default function DetectorToggle({ id, enabled }: { id: string; enabled: b
           width: 18,
           height: 18,
           borderRadius: "50%",
-          background: "#fff",
+          background: "var(--ds-on-info)",
           transition: "left 0.15s",
         }}
       />

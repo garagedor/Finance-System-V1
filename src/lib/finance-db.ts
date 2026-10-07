@@ -144,84 +144,96 @@ export async function ensureFinanceIndexes(): Promise<void> {
   await connect();
   if (_indexesEnsured) return;
   const db = _db!;
-  await Promise.all([
-    db.collection(FINANCE_COLLECTIONS.income).createIndex({ date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.income).createIndex({ source: 1, date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.expense).createIndex({ date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.expense).createIndex({ category: 1, date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.expense).createIndex({ status: 1 }),
-    db.collection(FINANCE_COLLECTIONS.payout).createIndex({ recipient_id: 1, period_end: -1 }),
-    db.collection(FINANCE_COLLECTIONS.payout).createIndex({ status: 1 }),
-    db.collection(FINANCE_COLLECTIONS.debt).createIndex({ from_party_id: 1 }),
-    db.collection(FINANCE_COLLECTIONS.debt).createIndex({ to_party_id: 1 }),
-    db.collection(FINANCE_COLLECTIONS.debt).createIndex({ status: 1 }),
-    db.collection(FINANCE_COLLECTIONS.dispute).createIndex({ date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.dispute).createIndex({ job_id: 1 }),
-    db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ disputeId: 1 }, { unique: true }),
-    db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ matchStatus: 1, disputedAt: -1 }),
-    db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ invoiceNumber: 1 }),
-    db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ paymentId: 1 }, { unique: true }),
-    db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ matchStatus: 1, paymentDate: -1 }),
-    db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ invoiceNumber: 1 }),
-    db.collection(FINANCE_COLLECTIONS.scanpayWebhookLog).createIndex({ received_at: -1 }),
-    db.collection(FINANCE_COLLECTIONS.refund).createIndex({ date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.equipment).createIndex({ date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.bankTxn).createIndex({ posted_date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.settlement).createIndex({ settled_at: -1 }),
-    db.collection(FINANCE_COLLECTIONS.followUpComm).createIndex({ job_id: 1 }),
-    db.collection(FINANCE_COLLECTIONS.followUpComm).createIndex({ recipient_id: 1 }),
-    db.collection(FINANCE_COLLECTIONS.recurringExpense).createIndex({ active: 1, next_due_date: 1 }),
-    db.collection(FINANCE_COLLECTIONS.expense).createIndex({ recurring_id: 1 }, { sparse: true }),
-    db.collection(FINANCE_COLLECTIONS.recurringIncome).createIndex({ active: 1, next_due_date: 1 }),
-    db.collection(FINANCE_COLLECTIONS.income).createIndex({ recurring_id: 1 }, { sparse: true }),
-    // Plaid
-    db.collection(FINANCE_COLLECTIONS.plaidInstitution).createIndex({ item_id: 1 }, { unique: true }),
-    db.collection(FINANCE_COLLECTIONS.plaidInstitution).createIndex({ status: 1 }),
-    db.collection(FINANCE_COLLECTIONS.bankAccountSynced).createIndex({ account_id: 1 }, { unique: true }),
-    db.collection(FINANCE_COLLECTIONS.bankAccountSynced).createIndex({ item_id: 1 }),
-    db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ plaid_transaction_id: 1 }, { unique: true }),
-    db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ account_id: 1, date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ recon_status: 1, date: -1 }),
-    db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ group_id: 1 }, { sparse: true }),
-    db.collection(FINANCE_COLLECTIONS.expenseGroup).createIndex({ status: 1, created_at: -1 }),
-    // Equipment ordering
-    db.collection(FINANCE_COLLECTIONS.equipmentProduct).createIndex({ sku: 1 }),
-    db.collection(FINANCE_COLLECTIONS.equipmentProduct).createIndex({ active: 1, category: 1 }),
-    db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ orderNumber: 1 }, { unique: true }),
-    db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ status: 1, orderDate: -1 }),
-    db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ areaManagerName: 1, orderDate: -1 }),
-    db.collection(FINANCE_COLLECTIONS.equipmentReturn).createIndex({ orderId: 1 }),
-    // Hard duplicate-protection: at most one ledger entry per equipment order
-    // (partial index → only applies to entries that carry the field).
-    db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex(
-      { equipment_order_id: 1 },
-      { unique: true, partialFilterExpression: { equipment_order_id: { $type: "string" } } },
-    ),
-    // One credit ledger entry per equipment return (race-safe dedup).
-    db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex(
-      { equipment_return_id: 1 },
-      { unique: true, partialFilterExpression: { equipment_return_id: { $type: "string" } } },
-    ),
-    db.collection(FINANCE_COLLECTIONS.bankSyncLog).createIndex({ item_id: 1, started_at: -1 }),
-    db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ bank_txn_id: 1 }),
-    db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ matched_kind: 1, matched_id: 1 }),
-    // Ledger
-    db.collection(FINANCE_COLLECTIONS.ledger).createIndex({ role: 1, location: 1 }),
-    db.collection(FINANCE_COLLECTIONS.ledger).createIndex({ holder_name: 1 }),
-    db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ ledger_id: 1, date: 1, _id: 1 }),
-    db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ ledger_id: 1, created_at: 1 }),
-    // Tasks
-    db.collection(FINANCE_COLLECTIONS.task).createIndex({ status: 1, order: 1 }),
-    db.collection(FINANCE_COLLECTIONS.task).createIndex({ assignee_id: 1, status: 1 }),
-    db.collection(FINANCE_COLLECTIONS.task).createIndex({ due_date: 1 }, { sparse: true }),
-    // RBAC
-    db.collection(FINANCE_COLLECTIONS.role).createIndex({ key: 1 }, { unique: true, sparse: true }),
-    db.collection(FINANCE_COLLECTIONS.role).createIndex({ name: 1 }, { unique: true }),
-    db.collection(FINANCE_COLLECTIONS.auditLog).createIndex({ target_kind: 1, target_id: 1, changed_at: -1 }),
-    db.collection(FINANCE_COLLECTIONS.auditLog).createIndex({ changed_at: -1 }),
-    db.collection(FINANCE_COLLECTIONS.auditLog).createIndex({ changed_by: 1, changed_at: -1 }),
-  ]);
+  try {
+    await Promise.all([
+      db.collection(FINANCE_COLLECTIONS.income).createIndex({ date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.income).createIndex({ source: 1, date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.expense).createIndex({ date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.expense).createIndex({ category: 1, date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.expense).createIndex({ status: 1 }),
+      db.collection(FINANCE_COLLECTIONS.payout).createIndex({ recipient_id: 1, period_end: -1 }),
+      db.collection(FINANCE_COLLECTIONS.payout).createIndex({ status: 1 }),
+      db.collection(FINANCE_COLLECTIONS.debt).createIndex({ from_party_id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.debt).createIndex({ to_party_id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.debt).createIndex({ status: 1 }),
+      db.collection(FINANCE_COLLECTIONS.dispute).createIndex({ date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.dispute).createIndex({ job_id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ disputeId: 1 }, { unique: true }),
+      db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ matchStatus: 1, disputedAt: -1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayDispute).createIndex({ invoiceNumber: 1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ paymentId: 1 }, { unique: true }),
+      db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ matchStatus: 1, paymentDate: -1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ invoiceNumber: 1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayWebhookLog).createIndex({ received_at: -1 }),
+      db.collection(FINANCE_COLLECTIONS.refund).createIndex({ date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.equipment).createIndex({ date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.bankTxn).createIndex({ posted_date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.settlement).createIndex({ settled_at: -1 }),
+      db.collection(FINANCE_COLLECTIONS.followUpComm).createIndex({ job_id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.followUpComm).createIndex({ recipient_id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.recurringExpense).createIndex({ active: 1, next_due_date: 1 }),
+      db.collection(FINANCE_COLLECTIONS.expense).createIndex({ recurring_id: 1 }, { sparse: true }),
+      db.collection(FINANCE_COLLECTIONS.recurringIncome).createIndex({ active: 1, next_due_date: 1 }),
+      db.collection(FINANCE_COLLECTIONS.income).createIndex({ recurring_id: 1 }, { sparse: true }),
+      // Plaid
+      db.collection(FINANCE_COLLECTIONS.plaidInstitution).createIndex({ item_id: 1 }, { unique: true }),
+      db.collection(FINANCE_COLLECTIONS.plaidInstitution).createIndex({ status: 1 }),
+      db.collection(FINANCE_COLLECTIONS.bankAccountSynced).createIndex({ account_id: 1 }, { unique: true }),
+      db.collection(FINANCE_COLLECTIONS.bankAccountSynced).createIndex({ item_id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ plaid_transaction_id: 1 }, { unique: true }),
+      db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ account_id: 1, date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ recon_status: 1, date: -1 }),
+      db.collection(FINANCE_COLLECTIONS.bankTxnSynced).createIndex({ group_id: 1 }, { sparse: true }),
+      db.collection(FINANCE_COLLECTIONS.expenseGroup).createIndex({ status: 1, created_at: -1 }),
+      // Equipment ordering
+      db.collection(FINANCE_COLLECTIONS.equipmentProduct).createIndex({ sku: 1 }),
+      db.collection(FINANCE_COLLECTIONS.equipmentProduct).createIndex({ active: 1, category: 1 }),
+      db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ orderNumber: 1 }, { unique: true }),
+      db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ status: 1, orderDate: -1 }),
+      db.collection(FINANCE_COLLECTIONS.equipmentOrder).createIndex({ areaManagerName: 1, orderDate: -1 }),
+      db.collection(FINANCE_COLLECTIONS.equipmentReturn).createIndex({ orderId: 1 }),
+      // Hard duplicate-protection: at most one ledger entry per equipment order
+      // (partial index → only applies to entries that carry the field).
+      db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex(
+        { equipment_order_id: 1 },
+        { unique: true, partialFilterExpression: { equipment_order_id: { $type: "string" } } },
+      ),
+      // One credit ledger entry per equipment return (race-safe dedup).
+      db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex(
+        { equipment_return_id: 1 },
+        { unique: true, partialFilterExpression: { equipment_return_id: { $type: "string" } } },
+      ),
+      db.collection(FINANCE_COLLECTIONS.bankSyncLog).createIndex({ item_id: 1, started_at: -1 }),
+      db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ bank_txn_id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ matched_kind: 1, matched_id: 1 }),
+      // Ledger
+      db.collection(FINANCE_COLLECTIONS.ledger).createIndex({ role: 1, location: 1 }),
+      db.collection(FINANCE_COLLECTIONS.ledger).createIndex({ holder_name: 1 }),
+      db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ ledger_id: 1, date: 1, _id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ ledger_id: 1, created_at: 1 }),
+      // Tasks
+      db.collection(FINANCE_COLLECTIONS.task).createIndex({ status: 1, order: 1 }),
+      db.collection(FINANCE_COLLECTIONS.task).createIndex({ assignee_id: 1, status: 1 }),
+      db.collection(FINANCE_COLLECTIONS.task).createIndex({ due_date: 1 }, { sparse: true }),
+      // RBAC
+      db.collection(FINANCE_COLLECTIONS.role).createIndex({ key: 1 }, { unique: true, sparse: true }),
+      db.collection(FINANCE_COLLECTIONS.role).createIndex({ name: 1 }, { unique: true }),
+      db.collection(FINANCE_COLLECTIONS.auditLog).createIndex({ target_kind: 1, target_id: 1, changed_at: -1 }),
+      db.collection(FINANCE_COLLECTIONS.auditLog).createIndex({ changed_at: -1 }),
+      db.collection(FINANCE_COLLECTIONS.auditLog).createIndex({ changed_by: 1, changed_at: -1 }),
+    ]);
+  } catch (e) {
+    // MongoDB code 13 = Unauthorized. connect() runs above this block, so the
+    // only commands issued here are createIndexes — a 13 means the connected
+    // credential may read but not create indexes (the read-only Preview).
+    // Indexes are a query-planning concern, not a correctness one; the ten
+    // unique indexes above enforce constraints that a credential which cannot
+    // write is in no position to violate. Tolerate exactly this failure and
+    // continue; every other error propagates unchanged.
+    if ((e as { code?: number }).code !== 13) throw e;
+    console.warn("ensureFinanceIndexes: index creation skipped — credential is read-only");
+  }
   _indexesEnsured = true;
 }
 

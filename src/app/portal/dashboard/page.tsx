@@ -67,7 +67,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <h1 className="portal-title">Executive Dashboard</h1>
           <p className="portal-subtitle">
             Operational view for{" "}
-            <strong style={{ color: "#cbd5e1" }}>
+            <strong style={{ color: "var(--ds-ink)" }}>
               {range.from} → {range.to}
             </strong>{" "}
             · CRM jobs + portal entries
@@ -165,7 +165,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <section className="portal-card" style={{ padding: 0 }} id="ai-dispute-impact">
           <div className="portal-card-head">
             <div className="portal-card-head-title">Dispute &amp; Refund Impact · this period</div>
-            <Link href="/portal/disputes" className="portal-card-head-sub" style={{ color: "#818cf8" }}>
+            <Link href="/portal/disputes" className="portal-card-head-sub" style={{ color: "var(--ds-fin-2)" }}>
               All disputes →
             </Link>
           </div>
@@ -174,10 +174,10 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <div
             style={{
               display: "flex", flexWrap: "wrap", gap: 20, padding: "14px 18px",
-              borderBottom: "1px solid rgba(255,255,255,0.06)", alignItems: "baseline",
+              borderBottom: "1px solid var(--ds-line)", alignItems: "baseline",
             }}
           >
-            <span className="muted small">Net Profit <strong style={{ color: "#e2e8f0" }}>{fmt$(d.netProfit)}</strong></span>
+            <span className="muted small">Net Profit <strong style={{ color: "var(--ds-ink)" }}>{fmt$(d.netProfit)}</strong></span>
             <span className="muted small">
               Dispute loss (filed) <strong className="money-neg">−{fmt$(d.disputeFiledLoss)}</strong>
             </span>
@@ -271,7 +271,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               <div key={tbl.title} className="portal-card" style={{ padding: 0 }}>
                 <div className="portal-card-head">
                   <div className="portal-card-head-title">{tbl.title}</div>
-                  <Link href="/portal/disputes/scanpay" className="portal-card-head-sub" style={{ color: "#818cf8" }}>All →</Link>
+                  <Link href="/portal/disputes/scanpay" className="portal-card-head-sub" style={{ color: "var(--ds-fin-2)" }}>All →</Link>
                 </div>
                 <div style={{ padding: "12px 14px" }}>
                   {tbl.rows.length === 0 ? (
@@ -287,7 +287,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                         <div className="portal-bar" title={`${g.share > 0 ? Math.round((g.charged / g.share) * 100) : 0}% charged`}>
                           <div className="portal-bar-fill" style={{ width: `${g.share > 0 ? Math.round((g.charged / g.share) * 100) : 0}%` }} />
                         </div>
-                        <div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3 }}>
+                        <div style={{ fontSize: 10.5, color: "var(--ds-ink-2)", marginTop: 3 }}>
                           {g.count} disp · <span className="money-pos">charged {fmt$(g.charged)}</span> · <span className="money-neg">left {fmt$(g.toCharge)}</span>
                         </div>
                       </div>
@@ -317,7 +317,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
               <div key={tbl.title} className="portal-card" style={{ padding: 0 }}>
                 <div className="portal-card-head">
                   <div className="portal-card-head-title">{tbl.title}</div>
-                  <Link href="/portal/disputes/scanpay/refunds" className="portal-card-head-sub" style={{ color: "#818cf8" }}>All →</Link>
+                  <Link href="/portal/disputes/scanpay/refunds" className="portal-card-head-sub" style={{ color: "var(--ds-fin-2)" }}>All →</Link>
                 </div>
                 <div style={{ padding: "12px 14px" }}>
                   {tbl.rows.length === 0 ? (
@@ -332,7 +332,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                         <div className="portal-bar" title={`${g.share > 0 ? Math.round((g.charged / g.share) * 100) : 0}% charged`}>
                           <div className="portal-bar-fill" style={{ width: `${g.share > 0 ? Math.round((g.charged / g.share) * 100) : 0}%` }} />
                         </div>
-                        <div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3 }}>
+                        <div style={{ fontSize: 10.5, color: "var(--ds-ink-2)", marginTop: 3 }}>
                           {g.count} refund · <span className="money-pos">charged {fmt$(g.charged)}</span> · <span className="money-neg">left {fmt$(g.toCharge)}</span>
                         </div>
                       </div>
@@ -386,7 +386,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 <Link
                   href="/portal/banking/synced"
                   className="portal-card-head-sub"
-                  style={{ color: "#818cf8" }}
+                  style={{ color: "var(--ds-fin-2)" }}
                 >
                   All transactions →
                 </Link>
@@ -440,7 +440,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                         justifyContent: "space-between",
                         marginTop: 10,
                         fontSize: 10.5,
-                        color: "#64748b",
+                        color: "var(--ds-ink-2)",
                       }}
                     >
                       <span className="mono">{d.bankByDay[0]?.day}</span>
@@ -461,7 +461,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 <Link
                   href="/portal/banking/synced"
                   className="portal-card-head-sub"
-                  style={{ color: "#818cf8" }}
+                  style={{ color: "var(--ds-fin-2)" }}
                 >
                   All →
                 </Link>
@@ -527,7 +527,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                         style={{
                           flex: 1,
                           height: h,
-                          background: "linear-gradient(180deg, #818cf8, #6366f1)",
+                          background: "linear-gradient(180deg, var(--ds-fin-2), var(--ds-fin))",
                           borderRadius: 2,
                           minWidth: 4,
                         }}
@@ -535,7 +535,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     );
                   })}
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 10.5, color: "#64748b" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10, fontSize: 10.5, color: "var(--ds-ink-2)" }}>
                   <span className="mono">{d.byDay[0]?.day}</span>
                   <span className="mono">{d.byDay[d.byDay.length - 1]?.day}</span>
                 </div>
@@ -576,7 +576,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="portal-card" style={{ padding: 0 }}>
           <div className="portal-card-head">
             <div className="portal-card-head-title">Top Areas by Revenue</div>
-            <Link href="/portal/area-managers" className="portal-card-head-sub" style={{ color: "#818cf8" }}>
+            <Link href="/portal/area-managers" className="portal-card-head-sub" style={{ color: "var(--ds-fin-2)" }}>
               See all →
             </Link>
           </div>
@@ -595,7 +595,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     <div className="portal-bar">
                       <div className="portal-bar-fill" style={{ width: `${pct}%` }} />
                     </div>
-                    <div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3 }}>
+                    <div style={{ fontSize: 10.5, color: "var(--ds-ink-2)", marginTop: 3 }}>
                       {a.count} job(s)
                     </div>
                   </div>
@@ -608,7 +608,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="portal-card" style={{ padding: 0 }}>
           <div className="portal-card-head">
             <div className="portal-card-head-title">Expense Breakdown</div>
-            <Link href="/portal/expenses" className="portal-card-head-sub" style={{ color: "#818cf8" }}>
+            <Link href="/portal/expenses" className="portal-card-head-sub" style={{ color: "var(--ds-fin-2)" }}>
               See all →
             </Link>
           </div>
@@ -627,7 +627,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     <div className="portal-bar">
                       <div className="portal-bar-fill bad" style={{ width: `${pct}%` }} />
                     </div>
-                    <div style={{ fontSize: 10.5, color: "#64748b", marginTop: 3 }}>
+                    <div style={{ fontSize: 10.5, color: "var(--ds-ink-2)", marginTop: 3 }}>
                       {c.count} entries
                     </div>
                   </div>
@@ -640,7 +640,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="portal-card" style={{ padding: 0 }}>
           <div className="portal-card-head">
             <div className="portal-card-head-title">Account Balances</div>
-            <Link href="/portal/banking" className="portal-card-head-sub" style={{ color: "#818cf8" }}>
+            <Link href="/portal/banking" className="portal-card-head-sub" style={{ color: "var(--ds-fin-2)" }}>
               Banking →
             </Link>
           </div>
@@ -661,12 +661,12 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     justifyContent: "space-between",
                     alignItems: "center",
                     padding: "10px 4px",
-                    borderBottom: "1px solid rgba(255,255,255,0.04)",
+                    borderBottom: "1px solid var(--ds-line)",
                   }}
                 >
                   <div>
                     <div style={{ fontWeight: 500, fontSize: 13 }}>{a.label}</div>
-                    <div style={{ fontSize: 11, color: "#64748b" }}>
+                    <div style={{ fontSize: 11, color: "var(--ds-ink-2)" }}>
                       {a.bank_name ?? "—"} {a.last4 ? `· ${a.last4}` : ""}
                     </div>
                   </div>
@@ -718,7 +718,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         <div className="portal-card" style={{ padding: 0 }}>
           <div className="portal-card-head">
             <div className="portal-card-head-title">Upcoming Payouts</div>
-            <Link href="/portal/payouts" className="portal-card-head-sub" style={{ color: "#818cf8" }}>
+            <Link href="/portal/payouts" className="portal-card-head-sub" style={{ color: "var(--ds-fin-2)" }}>
               All →
             </Link>
           </div>
@@ -737,7 +737,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                 {d.pendingPayouts.map((p: PayoutRecord) => (
                   <tr key={p._id}>
                     <td>
-                      <Link href={`/portal/payouts/${p._id}`} style={{ color: "#cbd5e1" }}>
+                      <Link href={`/portal/payouts/${p._id}`} style={{ color: "var(--ds-ink)" }}>
                         {p.recipient_name}
                       </Link>
                       <div className="muted small">{p.recipient_role}</div>

@@ -18,7 +18,7 @@ export default async function EquipmentTabs({ active }: { active: string }) {
   const tabs = TABS.filter((t) => hasPermission(session, t.perm));
   if (tabs.length <= 1) return null;
   return (
-    <nav style={{ display: "flex", gap: 6, flexWrap: "wrap", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: 10, marginBottom: 4 }}>
+    <nav style={{ display: "flex", gap: 6, flexWrap: "wrap", borderBottom: "1px solid var(--ds-line)", paddingBottom: 10, marginBottom: 4 }}>
       {tabs.map((t) => (
         <Link
           key={t.key}

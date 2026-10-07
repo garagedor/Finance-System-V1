@@ -80,7 +80,7 @@ export default function PayoutProfileForm({ initial }: { initial?: PayoutProfile
       {open && (
         <div
           style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)",
+            position: "fixed", inset: 0, background: "var(--ds-scrim)", backdropFilter: "blur(4px)",
             display: "flex", alignItems: "flex-start", justifyContent: "center",
             zIndex: 100, paddingTop: 40, paddingBottom: 40, overflowY: "auto",
           }}
@@ -88,7 +88,7 @@ export default function PayoutProfileForm({ initial }: { initial?: PayoutProfile
         >
           <div
             style={{
-              background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14,
+              background: "var(--ds-surface-1)", border: "1px solid var(--ds-line)", borderRadius: 14,
               padding: 24, width: "min(760px, 95vw)",
             }}
             onClick={(e) => e.stopPropagation()}
@@ -120,7 +120,7 @@ export default function PayoutProfileForm({ initial }: { initial?: PayoutProfile
                 <textarea className="portal-textarea" value={description} onChange={(e) => setDescription(e.target.value)} />
               </div>
 
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 14, marginBottom: 12 }}>
+              <div style={{ borderTop: "1px solid var(--ds-line)", paddingTop: 14, marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div className="portal-section-label">Payout components</div>
                   <button type="button" className="portal-btn" style={{ padding: "4px 10px", fontSize: 12 }} onClick={addComp}>
@@ -155,7 +155,7 @@ export default function PayoutProfileForm({ initial }: { initial?: PayoutProfile
                     </div>
                   ))}
                 </div>
-                <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>
+                <div style={{ fontSize: 11, color: "var(--ds-ink-2)", marginTop: 6 }}>
                   Each component becomes a line item when a payout is created from this profile. Default amount/rate is just a starting value.
                 </div>
               </div>
