@@ -140,7 +140,9 @@ export const FIN_NAV: NavGroup[] = [
       // picker — was invisible while living one route away. portal/nav.ts, the
       // source of truth, lists only the inbox.
       { href: '/portal/disputes/inbox', label: 'Disputes & refunds', icon: FiAlertTriangle, requires: ['finance:disputes:view'] },
-      { href: '/portal/disputes/scanpay', label: 'ScanPay disputes', icon: FiShield, requires: ['finance:disputes:view'] },
+      // The ScanPay tables are the OLD screens the unified inbox replaced.
+      // They keep their routes (the inbox reuses their row-action components)
+      // but are no longer a separate destination. Owner decision, 2026-10-07.
       // Equipment is one entry whose in-page tabs cover orders / catalog /
       // returns / reports / finance. portal/nav.ts reveals it on ANY of four
       // permissions; listing one hid it from order-, catalog- and

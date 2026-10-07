@@ -2,7 +2,7 @@
 
 // Inbox filter bar. Uses the searchable FilterMultiSelect (same clean control as
 // the ledger/report filters) and navigates with the chosen params so the server
-// page filters. Adds a Status filter (new / matched / verified / posted /
+// page filters. No Status control: workflow state is the tab, not a filter —
 // ignored) on the Refunds & Disputes tabs.
 
 import { useState } from "react";
@@ -10,10 +10,9 @@ import { useRouter } from "next/navigation";
 import FilterMultiSelect from "../../_components/FilterMultiSelect";
 
 type Opts = { techs: string[]; providers: string[]; ams: string[] };
-type Init = { q: string; tech: string[]; provider: string[]; am: string[]; matched: string[]; status: string[]; from: string; to: string; min: string; max: string };
+type Init = { q: string; tech: string[]; provider: string[]; am: string[]; matched: string[]; from: string; to: string; min: string; max: string };
 
 const cap = (s: string) => (s ? s.charAt(0).toUpperCase() + s.slice(1) : s);
-const STATUS = ["New", "Matched", "Verified", "Posted", "Ignored"];
 const MATCH = ["Matched", "Unmatched"];
 const fieldWrap: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
 
@@ -26,7 +25,6 @@ export default function InboxFilters({ view, kind, initial, options, clearHref }
   const [provider, setProvider] = useState<string[]>(initial.provider);
   const [am, setAm] = useState<string[]>(initial.am);
   const [matched, setMatched] = useState<string[]>(initial.matched.map(cap));
-  const [status, setStatus] = useState<string[]>(initial.status.map(cap));
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [min, setMin] = useState(initial.min);
@@ -41,7 +39,6 @@ export default function InboxFilters({ view, kind, initial, options, clearHref }
     provider.forEach((x) => p.append("provider", x));
     am.forEach((x) => p.append("am", x));
     matched.forEach((x) => p.append("matched", x.toLowerCase()));
-    status.forEach((x) => p.append("status", x.toLowerCase()));
     if (from) p.set("from", from);
     if (to) p.set("to", to);
     if (min) p.set("min", min);
@@ -59,7 +56,6 @@ export default function InboxFilters({ view, kind, initial, options, clearHref }
       <FilterMultiSelect label="Provider" values={provider} onChange={setProvider} options={options.providers} />
       <FilterMultiSelect label="Area Manager" values={am} onChange={setAm} options={options.ams} />
       <FilterMultiSelect label="Match" values={matched} onChange={setMatched} options={MATCH} />
-      {(view === "refunds" || view === "disputes") && <FilterMultiSelect label="Status" values={status} onChange={setStatus} options={STATUS} />}
       <label style={fieldWrap}><span className="portal-label" style={{ fontSize: 11 }}>From</span><input type="date" className="portal-input" value={from} onChange={(e) => setFrom(e.target.value)} style={{ padding: "6px 8px" }} /></label>
       <label style={fieldWrap}><span className="portal-label" style={{ fontSize: 11 }}>To</span><input type="date" className="portal-input" value={to} onChange={(e) => setTo(e.target.value)} style={{ padding: "6px 8px" }} /></label>
       <label style={fieldWrap}><span className="portal-label" style={{ fontSize: 11 }}>Min $</span><input type="number" step="0.01" className="portal-input" value={min} onChange={(e) => setMin(e.target.value)} style={{ width: 84, padding: "6px 8px" }} /></label>

@@ -113,7 +113,7 @@ test("no Finance nav entry points at a route the source of truth dropped", () =>
   const truth = new Set(FINANCE_NAV.map((m) => m.href));
   const stale = FIN_NAV.flatMap((g) => g.items)
     .map((i) => i.href)
-    .filter((h) => !truth.has(h) && h !== "/portal/disputes/scanpay");
+    .filter((h) => !truth.has(h));
   assert.deepEqual(stale, [], `nav points at superseded screens: ${stale.join(", ")}`);
 });
 
