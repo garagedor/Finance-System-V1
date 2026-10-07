@@ -108,7 +108,7 @@ export default function EcosystemShell({
       <div className="sh-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />
 
       <aside className="sh-side" aria-label={`${PORTAL_LABEL[portal]} navigation`}>
-        <Link href="/home" className="sh-brand">
+        <Link href="/" className="sh-brand">
           <div className="sh-logo" aria-hidden="true">317</div>
           <div className="sh-brand-txt">
             <div className="sh-brand-n">317 Eco System</div>
@@ -116,7 +116,7 @@ export default function EcosystemShell({
           </div>
         </Link>
 
-        <Link href="/home" className="sh-switch" title="Switch portal">
+        <Link href="/" className="sh-switch" title="Switch portal">
           <span className="sh-switch-ico">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
                  stroke="currentColor" strokeWidth="2" aria-hidden="true">

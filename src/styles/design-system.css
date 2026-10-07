@@ -1,4 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+/* The font face is imported from app/globals.css, which loads on every route.
+   An @import here lands after Tailwind in the bundle and is dropped. */
 
 /* ═══════════════════════════════════════════════════════════════════════════
    LBS Design 360 — ecosystem design tokens  (v2)

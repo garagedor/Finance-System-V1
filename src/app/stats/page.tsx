@@ -418,8 +418,10 @@ export default function StatsPage() {
                 onClick={handleDownloadPdf}
                 disabled={pdfLoading || loading}
                 style={{
-                  background: 'rgba(16,185,129,0.12)', color: '#6ee7b7',
-                  border: '1px solid rgba(16,185,129,0.4)',
+                  // A download is an action, not a success state — shared
+                  // info, never the ok hue.
+                  background: 'var(--ds-info-wash)', color: 'var(--ds-info-text)',
+                  border: '1px solid var(--ds-info-line)',
                   borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700,
                   cursor: pdfLoading || loading ? 'default' : 'pointer', opacity: pdfLoading || loading ? 0.6 : 1,
                 }}

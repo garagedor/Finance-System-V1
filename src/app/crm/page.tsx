@@ -1,0 +1,703 @@
+'use client';
+
+/* The CRM dashboard. It lived at / until the 317 Eco System Gateway became the
+   root experience; this is the same implementation moved, not a second copy. */
+
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import dynamic from 'next/dynamic';
+// recharts loads lazily (browser-only, off the home page's initial bundle).
+const LocationBarChart = dynamic(() => import('../LocationBarChart'), { ssr: false, loading: () => null });
+import { FiBriefcase, FiTrendingUp, FiAlertTriangle, FiPackage, FiAward, FiCreditCard, FiDollarSign, FiRefreshCw } from 'react-icons/fi';
+import DateRangePicker from '@/components/DateRangePicker';
+import FiltersPanel, { FilterField } from '@/components/FiltersPanel';
+import EmptyState from '@/components/EmptyState';
+import { useAuth } from '@/components/AuthShell';
+import { formatCurrency } from '../utils/jobUtils';
+
+type DashboardData = {
+  jobsByLocation: Array<{ _id: string; count: number }>;
+  techStats: Array<{ tech: string; avgTicket: number; closedPct: number; count: number }>;
+  locationStats: Array<{ location: string; avgTicket: number; closedPct: number; count: number }>;
+  companyPenaltyLoss: Array<{ _id: string; totalPenaltyLoss: number; count?: number }>;
+  companyNetProfit: Array<{ _id: string; totalNetProfit: number; count?: number }>;
+  totalCompanyParts: Array<{ _id: string; totalParts: number; count?: number }>;
+  cardFeeProfit?: Array<{ _id: any; totalCardFeeProfit: number; count?: number }>;
+  /** Finance fee profit: 2.5% of totalPaidFinance (10% charged − 7.5% processor). */
+  financeFeeProfit?: Array<{ _id: any; totalFinanceFeeProfit: number; count?: number }>;
+  /** Company check fee profit: 5% of totalPaidCompanyCheck (10% charged − 5% bank). */
+  checkFeeProfit?: Array<{ _id: any; totalCheckFeeProfit: number; count?: number }>;
+  totalSales?: Array<{ _id: any; totalSales: number; count?: number }>;
+  /** Operational profit: totalSales − all payment fees − all parts (Closed only). */
+  totalProfit?: Array<{ _id: any; totalProfit: number; totalFees: number; count?: number }>;
+};
+
+export default function HomePage() {
+  const { user } = useAuth();
+
+  // Input State
+  const [startDate, setStartDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 7);
+    return d.toISOString().slice(0, 10);
+  });
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  // Applied State (Triggers Fetch)
+  const [appliedStart, setAppliedStart] = useState(startDate);
+  const [appliedEnd, setAppliedEnd] = useState(endDate);
+  const [filtersDirty, setFiltersDirty] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem('home-filters');
+    if (saved) {
+      try {
+        const { start, end } = JSON.parse(saved);
+        if (start) { setStartDate(start); setAppliedStart(start); }
+        if (end)   { setEndDate(end);     setAppliedEnd(end);     }
+      } catch (e) {
+        console.error('Failed to parse saved home filters', e);
+      }
+    }
+    setIsInitialized(true);
+  }, []);
+
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const lastFetchRef = useRef<string | null>(null);
+
+  // Admin/Location Manager Check
+  if (!user || (user.type !== 'admin' && user.type !== 'location-manager')) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center px-6">
+        <EmptyState
+          size="lg"
+          icon={
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+              <circle cx="10" cy="10" r="8" stroke="var(--ds-crit)" strokeWidth="1.5"/>
+              <line x1="10" y1="6" x2="10" y2="10.5" stroke="var(--ds-crit)" strokeWidth="1.5" strokeLinecap="round"/>
+              <circle cx="10" cy="13" r="0.75" fill="var(--ds-crit)"/>
+            </svg>
+          }
+          title="Access Denied"
+          message="Admin privileges required to view this page."
+        />
+      </div>
+    );
+  }
+
+  const fetchData = async () => {
+    const search = new URLSearchParams();
+    if (appliedStart) search.set('startDate', appliedStart);
+    if (appliedEnd)   search.set('endDate',   appliedEnd);
+    const fetchKey = search.toString();
+
+    if (lastFetchRef.current === fetchKey) return;
+    lastFetchRef.current = fetchKey;
+
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/home-stats?${fetchKey}`);
+      if (lastFetchRef.current !== fetchKey) return;
+
+      if (res.ok) {
+        const json = await res.json();
+        setData(json);
+        setFiltersDirty(false);
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats', error);
+    } finally {
+      if (lastFetchRef.current === fetchKey) {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isInitialized) fetchData();
+  }, [appliedStart, appliedEnd, isInitialized]);
+
+  const handleApply = () => {
+    setError(null);
+    setAppliedStart(startDate);
+    setAppliedEnd(endDate);
+    setFiltersDirty(false);
+
+    lastFetchRef.current = null;
+    fetchData();
+
+    sessionStorage.setItem('home-filters', JSON.stringify({
+      start: startDate, end: endDate,
+    }));
+  };
+
+  const handleDateChange = (start: string, end: string) => {
+    setStartDate(start);
+    setEndDate(end);
+    setFiltersDirty(true);
+    setError(null);
+  };
+
+  // Display-only date formatter
+  const fmtDate = (s: string) =>
+    s ? new Date(s + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—';
+
+  // ── Derived KPI sums (display-only, from existing data arrays) ──
+  const kpis = useMemo(() => {
+    if (!data) return null;
+    const totalJobs    = data.jobsByLocation.reduce((s, l) => s + (l.count || 0), 0);
+    const totalProfit  = data.companyNetProfit.reduce((s, l) => s + (l.totalNetProfit || 0), 0);
+    const totalPenalty = data.companyPenaltyLoss.reduce((s, l) => s + (l.totalPenaltyLoss || 0), 0);
+    const totalParts   = data.totalCompanyParts.reduce((s, l) => s + (l.totalParts || 0), 0);
+    const cardFeeProfit = (data.cardFeeProfit || []).reduce((s, r) => s + (r.totalCardFeeProfit || 0), 0);
+    const financeFeeProfit = (data.financeFeeProfit || []).reduce((s, r) => s + (r.totalFinanceFeeProfit || 0), 0);
+    const checkFeeProfit   = (data.checkFeeProfit   || []).reduce((s, r) => s + (r.totalCheckFeeProfit   || 0), 0);
+    const financeFeeJobs   = (data.financeFeeProfit || []).reduce((s, r) => s + (r.count || 0), 0);
+    const checkFeeJobs     = (data.checkFeeProfit   || []).reduce((s, r) => s + (r.count || 0), 0);
+    const totalSales   = (data.totalSales || []).reduce((s, r) => s + (r.totalSales || 0), 0);
+    const totalOpProfit = (data.totalProfit || []).reduce((s, r) => s + (r.totalProfit || 0), 0);
+    const totalFees     = (data.totalProfit || []).reduce((s, r) => s + (r.totalFees || 0), 0);
+    // Per-KPI underlying job counts (basis-of-calculation).
+    const profitJobs   = data.companyNetProfit.reduce((s, l) => s + (l.count || 0), 0);
+    const penaltyJobs  = data.companyPenaltyLoss.reduce((s, l) => s + (l.count || 0), 0);
+    const partsJobs    = data.totalCompanyParts.reduce((s, l) => s + (l.count || 0), 0);
+    const cardFeeJobs  = (data.cardFeeProfit || []).reduce((s, r) => s + (r.count || 0), 0);
+    const salesJobs    = (data.totalSales || []).reduce((s, r) => s + (r.count || 0), 0);
+    // Net Profit (locked 2026-06-01):
+    //   (Jobs Profit × 10%) − penalty loss + card fee profit + finance fee profit + check fee profit
+    // The 10% is the official company slice of the operational profit pool.
+    const netProfit = (totalOpProfit * 0.10) - totalPenalty + cardFeeProfit + financeFeeProfit + checkFeeProfit;
+    return { totalJobs, totalSales, totalProfit, totalOpProfit, totalFees, totalPenalty, totalParts, cardFeeProfit, financeFeeProfit, checkFeeProfit, financeFeeJobs, checkFeeJobs, netProfit, salesJobs, profitJobs, penaltyJobs, partsJobs, cardFeeJobs };
+  }, [data]);
+
+  // ── Initial skeleton ──
+  if (!data && loading && !appliedStart) {
+    return (
+      <div className="min-h-screen pb-16">
+        <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+          <div className="h-12 w-56 rounded-xl shimmer-bg" />
+          <div className="h-20 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-28 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
+            ))}
+          </div>
+          <div className="h-[316px] rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="h-72 rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shimmer-bg" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center px-6">
+        <EmptyState size="lg" title="No data loaded" message="Try refreshing or adjusting the date range." />
+      </div>
+    );
+  }
+
+  // ── Sorted leaderboards ──
+  const techAvgTicketCtx  = [...(data.techStats || [])].sort((a, b) => b.avgTicket - a.avgTicket);
+  const locAvgTicketCtx   = [...(data.locationStats || [])].sort((a, b) => b.avgTicket - a.avgTicket);
+  const techClosedPctCtx  = [...(data.techStats || [])].sort((a, b) => b.closedPct - a.closedPct);
+  const locClosedPctCtx   = [...(data.locationStats || [])].sort((a, b) => b.closedPct - a.closedPct);
+
+  // Per-location assigned-job counts, used by Company Financial cards to show
+  // "$X · N jobs" next to each location row.
+  const jobsByLocation: Record<string, number> = (data.jobsByLocation || []).reduce(
+    (acc, l) => ({ ...acc, [l._id]: l.count || 0 }),
+    {} as Record<string, number>
+  );
+
+  return (
+    <main className="relative min-h-screen pb-16">
+      {/* Refetch indicator */}
+      {loading && data && <div className="top-progress" />}
+
+      <div className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        {/* ── PAGE HEADER ── */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between animate-fade-up">
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--ds-crm-2)]">Overview</p>
+            <h1 className="text-3xl font-bold tracking-tight text-[var(--ds-ink)]">Dashboard</h1>
+            <p className="mt-1 text-sm text-[var(--ds-ink-2)]">
+              {fmtDate(appliedStart)} <span className="text-[var(--ds-ink-2)] mx-1">→</span> {fmtDate(appliedEnd)}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {loading && (
+              <div className="flex items-center gap-2 rounded-full border border-[var(--ds-crm-line)] bg-[var(--ds-crm)]/10 px-3 py-1 text-[11px] font-medium text-[var(--ds-crm-text)]">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--ds-crm-2)]" />
+                Updating
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              title="Hard refresh — reload the page from the server, bypassing the browser cache"
+              className="flex items-center gap-1.5 rounded-full border border-[var(--ds-line-strong)] bg-[var(--ds-surface-1)]/5 px-3 py-1 text-[11px] font-medium text-[var(--ds-ink)] hover:bg-[var(--ds-surface-1)]/10 hover:text-[var(--ds-ink)] transition-colors"
+            >
+              <FiRefreshCw size={12} />
+              Hard Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* ── STICKY FILTER BAR ── */}
+        <div
+          className="sticky top-0 z-30 -mx-4 px-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8 py-2"
+          style={{ background: 'var(--ds-scrim)', backdropFilter: 'blur(12px)' }}
+        >
+          <FiltersPanel
+            direction="horizontal"
+            loading={loading}
+            filtersDirty={filtersDirty}
+            onApply={handleApply}
+            error={error}
+          >
+            <FilterField label="Date Range">
+              <DateRangePicker
+                startDate={startDate}
+                endDate={endDate}
+                onChange={handleDateChange}
+              />
+            </FilterField>
+          </FiltersPanel>
+        </div>
+
+        {/* ── HERO KPI STRIP ── */}
+        {kpis && (
+          <>
+            {/* Headline metrics — large, side-by-side. */}
+            <section className="grid grid-cols-1 gap-4 md:grid-cols-3 stagger">
+              <FeatureKpiCard
+                label="Total Sales"
+                value={formatCurrency(kpis.totalSales)}
+                icon={<FiDollarSign size={22} />}
+                accent="emerald"
+                jobCount={kpis.salesJobs}
+              />
+              <FeatureKpiCard
+                label="Jobs Profit"
+                value={formatCurrency(kpis.totalOpProfit)}
+                icon={<FiTrendingUp size={22} />}
+                accent={kpis.totalOpProfit >= 0 ? 'emerald' : 'red'}
+                jobCount={kpis.profitJobs}
+              />
+              <FeatureKpiCard
+                label="Net Profit"
+                value={formatCurrency(kpis.netProfit)}
+                icon={<FiTrendingUp size={22} />}
+                accent={kpis.netProfit >= 0 ? 'emerald' : 'red'}
+                jobCount={kpis.profitJobs}
+              />
+            </section>
+
+            {/* Secondary KPI strip. */}
+            <section className="grid grid-cols-2 gap-4 lg:grid-cols-4 stagger">
+              <KpiCard
+                label="Total Jobs"
+                value={String(kpis.totalJobs)}
+                icon={<FiBriefcase size={16} />}
+                accent="indigo"
+              />
+              <KpiCard
+                label="Penalty Loss"
+                value={formatCurrency(kpis.totalPenalty)}
+                icon={<FiAlertTriangle size={16} />}
+                accent="amber"
+                jobCount={kpis.penaltyJobs}
+              />
+              <KpiCard
+                label="Parts Total"
+                value={formatCurrency(kpis.totalParts)}
+                icon={<FiPackage size={16} />}
+                accent="cyan"
+                jobCount={kpis.partsJobs}
+              />
+              <KpiCard
+                label="Card Fee Profit"
+                value={formatCurrency(kpis.cardFeeProfit)}
+                icon={<FiCreditCard size={16} />}
+                accent="violet"
+                jobCount={kpis.cardFeeJobs}
+              />
+              <KpiCard
+                label="Finance Fee Profit"
+                value={formatCurrency(kpis.financeFeeProfit)}
+                icon={<FiCreditCard size={16} />}
+                accent="violet"
+                jobCount={kpis.financeFeeJobs}
+              />
+              <KpiCard
+                label="Check Fee Profit"
+                value={formatCurrency(kpis.checkFeeProfit)}
+                icon={<FiCreditCard size={16} />}
+                accent="violet"
+                jobCount={kpis.checkFeeJobs}
+              />
+            </section>
+          </>
+        )}
+
+        {/* ── CHART ── */}
+        <section className="animate-fade-up">
+          <SectionHeading kicker="Distribution" title="Jobs by Location" />
+          <div className="overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+            <div className="h-[300px] px-4 py-5">
+              {data.jobsByLocation && data.jobsByLocation.length ? (
+                <LocationBarChart data={data.jobsByLocation} />
+              ) : (
+                <div className="flex h-full items-center justify-center">
+                  <EmptyState size="sm" title="No jobs found" message="Try adjusting your date range." />
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ── PERFORMANCE LEADERBOARDS ── */}
+        <section className="animate-fade-up" style={{ animationDelay: '60ms' }}>
+          <SectionHeading kicker="Performance" title="Tech & Location Metrics" />
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4 stagger">
+            <LeaderboardCard
+              title="Tech Average Ticket"
+              items={techAvgTicketCtx}
+              keyProp="tech"
+              valueProp="avgTicket"
+              formatValue={formatCurrency}
+              thresholds={{ red: 400, green: 600 }}
+            />
+            <LeaderboardCard
+              title="Location Avg Ticket"
+              items={locAvgTicketCtx}
+              keyProp="location"
+              valueProp="avgTicket"
+              formatValue={formatCurrency}
+              thresholds={{ red: 400, green: 600 }}
+            />
+            <LeaderboardCard
+              title="Tech Closed %"
+              items={techClosedPctCtx}
+              keyProp="tech"
+              valueProp="closedPct"
+              formatValue={(v) => `${Math.round(v)}%`}
+              thresholds={{ red: 45, green: 60 }}
+            />
+            <LeaderboardCard
+              title="Location Closed %"
+              items={locClosedPctCtx}
+              keyProp="location"
+              valueProp="closedPct"
+              formatValue={(v) => `${Math.round(v)}%`}
+              thresholds={{ red: 45, green: 60 }}
+            />
+          </div>
+        </section>
+
+        {/* ── FINANCIALS ── */}
+        <section className="animate-fade-up" style={{ animationDelay: '120ms' }}>
+          <SectionHeading kicker="Financial Summary" title="Company Financials" />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 stagger">
+            <FinancialCard
+              title="Penalty Loss"
+              subtitle="X-Close penalties"
+              items={data.companyPenaltyLoss || []}
+              valueProp="totalPenaltyLoss"
+              tone="red"
+              jobsByKey={jobsByLocation}
+            />
+            <FinancialCard
+              title="Net Profit"
+              subtitle="Closed jobs"
+              items={data.companyNetProfit || []}
+              valueProp="totalNetProfit"
+              tone="emerald"
+              jobsByKey={jobsByLocation}
+            />
+            <FinancialCard
+              title="Parts Total"
+              subtitle="All locations"
+              items={data.totalCompanyParts || []}
+              valueProp="totalParts"
+              tone="cyan"
+              jobsByKey={jobsByLocation}
+            />
+          </div>
+        </section>
+
+      </div>
+    </main>
+  );
+}
+
+/* ────────────── KPI CARD ────────────── */
+
+type Accent = 'indigo' | 'emerald' | 'red' | 'amber' | 'cyan' | 'violet';
+
+/* KPI cards share one restrained CRM accent. The accent prop is kept so call
+   sites and ordering are untouched, but a card's position no longer picks a
+   hue — positional decoration is not a categorical palette. */
+const KPI_ACCENT = {
+  ring: 'var(--ds-crm-line)',
+  glow: 'var(--ds-crm-wash)',
+  icon: 'var(--ds-crm-text)',
+  bg:   'var(--ds-crm-wash)',
+};
+const accentMap: Record<Accent, typeof KPI_ACCENT> = {
+  indigo: KPI_ACCENT, emerald: KPI_ACCENT, red: KPI_ACCENT,
+  amber:  KPI_ACCENT, cyan:    KPI_ACCENT, violet: KPI_ACCENT,
+};
+
+function FeatureKpiCard({
+  label, value, icon, accent, jobCount,
+}: { label: string; value: string; icon: React.ReactNode; accent: Accent; jobCount?: number }) {
+  const a = accentMap[accent];
+  return (
+    <div
+      className="hover-lift group relative overflow-hidden rounded-3xl border bg-[var(--ds-surface-1)] p-7 sm:p-8 shadow-[0_8px_32px_rgba(0,0,0,0.35)]"
+      style={{ borderColor: 'var(--ds-line)' }}
+    >
+      <div
+        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full opacity-70 transition-opacity group-hover:opacity-100"
+        style={{ background: `radial-gradient(circle, ${a.glow} 0%, transparent 70%)` }}
+      />
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--ds-ink-2)]">{label}</p>
+          <p className="mt-3 text-4xl sm:text-5xl font-bold tabular-nums tracking-tight text-[var(--ds-ink)]">{value}</p>
+          {typeof jobCount === 'number' && (
+            <p className="mt-2 text-xs tabular-nums text-[var(--ds-ink-2)]">
+              {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
+            </p>
+          )}
+        </div>
+        <div
+          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl"
+          style={{ background: a.bg, color: a.icon, border: `1px solid ${a.ring}` }}
+        >
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function KpiCard({
+  label, value, icon, accent, jobCount,
+}: { label: string; value: string; icon: React.ReactNode; accent: Accent; jobCount?: number }) {
+  const a = accentMap[accent];
+  return (
+    <div
+      className="hover-lift group relative overflow-hidden rounded-2xl border bg-[var(--ds-surface-1)] p-5 shadow-[0_4px_18px_rgba(0,0,0,0.3)]"
+      style={{ borderColor: 'var(--ds-line)' }}
+    >
+      <div
+        className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full opacity-60 transition-opacity group-hover:opacity-100"
+        style={{ background: `radial-gradient(circle, ${a.glow} 0%, transparent 70%)` }}
+      />
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--ds-ink-2)]">{label}</p>
+          <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-[var(--ds-ink)] truncate">{value}</p>
+          {typeof jobCount === 'number' && (
+            <p className="mt-0.5 text-[11px] tabular-nums text-[var(--ds-ink-2)]">
+              {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
+            </p>
+          )}
+        </div>
+        <div
+          className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl"
+          style={{ background: a.bg, color: a.icon, border: `1px solid ${a.ring}` }}
+        >
+          {icon}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ────────────── SECTION HEADING ────────────── */
+
+function SectionHeading({ kicker, title }: { kicker: string; title: string }) {
+  return (
+    <div className="mb-3 px-1">
+      <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[var(--ds-crm-2)]">{kicker}</p>
+      <h2 className="text-base font-bold text-[var(--ds-ink)]">{title}</h2>
+    </div>
+  );
+}
+
+/* ────────────── LEADERBOARD CARD ────────────── */
+
+function LeaderboardCard({
+  title, items, keyProp, valueProp, formatValue, thresholds,
+}: {
+  title: string;
+  items: any[];
+  keyProp: string;
+  valueProp: string;
+  formatValue: (v: number) => string | number;
+  thresholds?: { red: number; green: number };
+}) {
+  const maxValue = items.length ? Math.max(...items.map(i => i[valueProp] || 0), 1) : 1;
+
+  return (
+    <div className="hover-lift flex h-full flex-col overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+      <div className="border-b border-[var(--ds-line)] px-5 py-3.5">
+        <h3 className="text-sm font-bold tracking-tight text-[var(--ds-ink)]">{title}</h3>
+      </div>
+
+      {!items.length ? (
+        <div className="flex-1 flex items-center justify-center py-8">
+          <EmptyState size="sm" title="No data" />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-y-auto" style={{ maxHeight: 300 }}>
+          <ul className="py-1">
+            {items.map((item, idx) => {
+              const val = item[valueProp];
+              let tone: 'neutral' | 'good' | 'bad' = 'neutral';
+              if (thresholds) {
+                if (val < thresholds.red) tone = 'bad';
+                else if (val > thresholds.green) tone = 'good';
+              }
+              const widthPct = Math.max(2, Math.min(100, (val / maxValue) * 100));
+              const valueColor =
+                tone === 'good' ? 'text-[var(--ds-ok-text)]' :
+                tone === 'bad'  ? 'text-[var(--ds-crit-text)]' :
+                'text-[var(--ds-ink)]';
+              const barColor =
+                tone === 'good' ? 'var(--ds-ok-wash)' :
+                tone === 'bad'  ? 'var(--ds-crit-wash)' :
+                'var(--ds-neutral-wash)';
+              const isTopThree = idx < 3;
+
+              return (
+                <li key={idx} className="group relative px-4 py-2.5 transition-colors hover:bg-[var(--ds-crm)]/5">
+                  {/* Ranking bar bg */}
+                  <div
+                    className="absolute left-0 top-0 h-full transition-all duration-500"
+                    style={{ width: `${widthPct}%`, background: `linear-gradient(90deg, ${barColor}, transparent)` }}
+                  />
+                  <div className="relative flex items-center gap-3">
+                    {/* Rank badge */}
+                    <div
+                      className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-bold tabular-nums ${
+                        isTopThree
+                          ? 'text-[var(--ds-neutral-text)]'
+                          : 'text-[var(--ds-ink-2)]'
+                      }`}
+                      style={isTopThree ? {
+                        background: 'var(--ds-neutral-wash)',
+                        border: '1px solid var(--ds-neutral-line)',
+                      } : undefined}
+                    >
+                      {idx + 1}
+                    </div>
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--ds-ink)]">
+                      {item[keyProp]}
+                    </span>
+                    {typeof item.count === 'number' && (
+                      <span className="flex-shrink-0 text-[11px] font-medium tabular-nums text-[var(--ds-ink-2)]">
+                        {item.count} {item.count === 1 ? 'job' : 'jobs'}
+                      </span>
+                    )}
+                    <span className={`flex-shrink-0 text-[13px] font-bold tabular-nums ${valueColor}`}>
+                      {formatValue(val)}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ────────────── FINANCIAL CARD ────────────── */
+
+function FinancialCard({
+  title, subtitle, items, valueProp, tone, jobsByKey,
+}: {
+  title: string;
+  subtitle: string;
+  items: any[];
+  valueProp: string;
+  tone: 'emerald' | 'red' | 'cyan';
+  jobsByKey?: Record<string, number>;
+}) {
+  const total = items.reduce((s, item) => s + (item[valueProp] || 0), 0);
+  // Sort the per-location breakdown highest → lowest by the displayed value.
+  const sortedItems = [...items].sort((a, b) => (b[valueProp] || 0) - (a[valueProp] || 0));
+  const a = accentMap[tone];
+
+  return (
+    <div className="hover-lift overflow-hidden rounded-2xl border border-[var(--ds-line)] bg-[var(--ds-surface-1)] shadow-[0_4px_24px_rgba(0,0,0,0.3)]">
+      {/* Top section: total prominent */}
+      <div
+        className="relative px-5 py-5"
+        style={{ background: `linear-gradient(135deg, ${a.bg}, transparent)` }}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[var(--ds-ink-2)]">{title}</p>
+            <p className="mt-2 text-2xl font-bold tabular-nums tracking-tight text-[var(--ds-ink)]">
+              {formatCurrency(total)}
+            </p>
+            <p className="mt-0.5 text-[11px] text-[var(--ds-ink-2)]">{subtitle}</p>
+          </div>
+          <div
+            className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl"
+            style={{ background: a.bg, color: a.icon, border: `1px solid ${a.ring}` }}
+          >
+            <FiAward size={16} />
+          </div>
+        </div>
+      </div>
+
+      {/* Breakdown */}
+      <div className="border-t border-[var(--ds-line)]">
+        {!items.length ? (
+          <div className="py-6">
+            <EmptyState size="sm" title="No breakdown" />
+          </div>
+        ) : (
+          <ul className="overflow-y-auto" style={{ maxHeight: 200 }}>
+            {sortedItems.map((item, idx) => {
+              const jobCount = jobsByKey?.[item._id];
+              return (
+                <li
+                  key={idx}
+                  className="flex items-center justify-between gap-3 border-b border-[var(--ds-line)] px-5 py-2.5 last:border-0 transition-colors hover:bg-[var(--ds-crm)]/5"
+                >
+                  <span className="text-[13px] font-medium text-[var(--ds-ink)]">{item._id}</span>
+                  <div className="flex items-center gap-3">
+                    {typeof jobCount === 'number' && (
+                      <span className="text-[11px] font-medium tabular-nums text-[var(--ds-ink-2)]">
+                        {jobCount} {jobCount === 1 ? 'job' : 'jobs'}
+                      </span>
+                    )}
+                    <span className="text-[13px] font-semibold tabular-nums text-[var(--ds-ink)]">
+                      {formatCurrency(item[valueProp])}
+                    </span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,3 +1,6 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+/* Hoisted: @import must precede all rules. Inside design-system.css it sat
+   after Tailwind once bundled and was dropped, so Manrope never loaded. */
 @import "tailwindcss";
 @import "../styles/design-system.css";
 

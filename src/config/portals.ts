@@ -42,7 +42,7 @@ export const PORTALS: PortalDef[] = [
     key: 'crm',
     name: 'CRM',
     blurb: 'Dispatch, job records, technicians and customer history.',
-    href: '/',
+    href: '/crm',
     anyOf: ['crm:'],
     signals: ['Jobs today', 'Active techs', 'Open issues'],
   },
@@ -97,7 +97,7 @@ export function grantedPortals(
  *                 attention items and the business-wide summary.
  *   exactly 1   → that portal. A gateway with one open card and two locked
  *                 ones is a worse first impression than arriving at work;
- *                 /home stays reachable from the ecosystem mark.
+ *                 the gateway stays reachable from the ecosystem mark.
  *   none        → the gateway, which renders a proper "no access yet" state
  *                 rather than an empty dashboard.
  */
@@ -109,5 +109,5 @@ export function postLoginRoute(
   if (granted.length === 1) {
     return PORTALS.find((p) => p.key === granted[0])!.href;
   }
-  return '/home';
+  return '/';
 }

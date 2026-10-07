@@ -40,8 +40,12 @@ export const useAuth = () => {
 };
 
 /** Routes that render with NO chrome — printable documents, and the gateway,
- *  which is the ecosystem shell rather than a page inside a portal. */
-const BARE_ROUTES = ['/payout-statement', '/home'];
+ *  which is the ecosystem shell rather than a page inside a portal.
+ *
+ *  '/' is matched EXACTLY. These are prefix matches, and a prefix of '/'
+ *  matches every route in the application. */
+const BARE_PREFIXES = ['/payout-statement'];
+const BARE_EXACT = ['/'];
 
 export function AuthShell({ children }: { children: React.ReactNode; navLinks?: NavLink[] }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -90,7 +94,7 @@ export function AuthShell({ children }: { children: React.ReactNode; navLinks?: 
 
   if (!user) return <LoginPage onLogin={login} />;
 
-  if (BARE_ROUTES.some((r) => pathname?.startsWith(r))) {
+  if (BARE_EXACT.includes(pathname ?? '') || BARE_PREFIXES.some((r) => pathname?.startsWith(r))) {
     return <AuthContext.Provider value={{ user, login, logout }}>{children}</AuthContext.Provider>;
   }
 

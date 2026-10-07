@@ -418,7 +418,11 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                               style={{
                                 width: "100%",
                                 height: hIn,
-                                background: "#10b981",
+                                // Direction, not outcome. Money in is not a
+                                // success and money out is not a failure, so
+                                // these are two series in the Finance identity
+                                // and a neutral, never the ok/crit hues.
+                                background: "var(--ds-fin)",
                                 borderRadius: "2px 2px 0 0",
                               }}
                             />
@@ -426,7 +430,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                               style={{
                                 width: "100%",
                                 height: hOut,
-                                background: "#ef4444",
+                                background: "var(--ds-ink-3)",
                                 borderRadius: "0 0 2px 2px",
                               }}
                             />
@@ -445,8 +449,8 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     >
                       <span className="mono">{d.bankByDay[0]?.day}</span>
                       <span>
-                        <span style={{ color: "#10b981", marginRight: 12 }}>● In</span>
-                        <span style={{ color: "#ef4444" }}>● Out</span>
+                        <span style={{ color: "var(--ds-fin-text)", marginRight: 12 }}>● In</span>
+                        <span style={{ color: "var(--ds-ink-2)" }}>● Out</span>
                       </span>
                       <span className="mono">{d.bankByDay[d.bankByDay.length - 1]?.day}</span>
                     </div>

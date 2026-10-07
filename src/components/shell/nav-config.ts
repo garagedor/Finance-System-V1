@@ -42,7 +42,7 @@ export const CRM_NAV: NavGroup[] = [
   {
     label: 'Overview',
     items: [
-      { href: '/', label: 'Dashboard', icon: FiHome, requires: ['crm:home:view'] },
+      { href: '/crm', label: 'Dashboard', icon: FiHome, requires: ['crm:home:view'] },
     ],
   },
   {
