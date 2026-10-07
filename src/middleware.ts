@@ -70,9 +70,17 @@ function unverifiedSecondsLeft(token: string | undefined): number | null {
 }
 
 function handleWarehouse(request: NextRequest) {
+    // Build output is not gated. Redirecting a stylesheet to an API route
+    // produces a broken page rather than a clean re-entry: when a token lapses
+    // while a page is open, its next asset request would arrive as a 302 to
+    // JSON. These are the same files Warehouse already serves to anyone at its
+    // direct URL, which is explicitly not a security boundary. The session
+    // cookie is still stripped from them.
+    const isBuildAsset = request.nextUrl.pathname.startsWith(WAREHOUSE_PREFIX + '/_next/');
+
     const left = unverifiedSecondsLeft(request.cookies.get(WAREHOUSE_TOKEN_COOKIE)?.value);
 
-    if (left === null || left <= REFRESH_WHEN_SECONDS_LEFT) {
+    if (!isBuildAsset && (left === null || left <= REFRESH_WHEN_SECONDS_LEFT)) {
         // No loop is possible: the entry route sets a cookie before it
         // redirects here, and refuses outright when it cannot.
         const enter = new URL(ENTER_ROUTE, request.nextUrl.origin);

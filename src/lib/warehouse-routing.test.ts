@@ -183,6 +183,30 @@ test("a malformed wh_token grants nothing — it redirects to re-mint", async ()
   }
 });
 
+test("build assets are never redirected, whatever the token looks like", async () => {
+  // Found live: without this, a token lapsing mid-session turns the next
+  // stylesheet request into a 302 to an API route and the page breaks.
+  for (const cookies of [{}, { wh_token: await whToken(-10) }, { wh_token: "garbage" }]) {
+    const res = await run("/warehouse/_next/static/chunks/main.css", cookies);
+    assert.notEqual(res.status, 302, "a build asset must not be redirected");
+  }
+});
+
+test("…but build assets still have the CRM session cookie stripped", async () => {
+  const res = await run("/warehouse/_next/static/chunks/main.css", {
+    session: "crm-session-jwt-value",
+    wh_token: await whToken(900),
+  });
+  const forwarded = res.headers.get("x-middleware-request-cookie") ?? "";
+  assert.equal(/(^|;\s*)session=/.test(forwarded), false);
+  assert.equal(forwarded.includes("crm-session-jwt-value"), false);
+});
+
+test("a warehouse PAGE with a lapsed token is still redirected", async () => {
+  const res = await run("/warehouse/catalog", { wh_token: await whToken(-10) });
+  assert.equal(res.status, 302);
+});
+
 test("THE CRM SESSION COOKIE IS REMOVED FROM THE UPSTREAM REQUEST", async () => {
   const res = await run("/warehouse/catalog", {
     session: "crm-session-jwt-value",
