@@ -5,11 +5,17 @@
 //   { action: "ignore" } / { action: "reopen" }
 //
 // All money math stays in postDisputeCharge — this only submits inputs.
+//
+// A refund, like a dispute, may be charged to more than one party: "Posted"
+// means at least one slice has been charged, and the remaining targets stay
+// available. See lib/dispute-targets for the model.
 
 import { NextRequest, NextResponse } from "next/server";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { readPortalSession } from "@/lib/portal-auth";
 import { postDisputeCharge } from "@/lib/dispute-service";
+import { coverageForRecord } from "@/lib/dispute-coverage";
+import { canPost, TARGET_LABEL, type PostingTarget } from "@/lib/dispute-targets.ts";
 import { shareFromSnapshot } from "@/lib/scanpay/share";
 import type { ScanpayRefundRecord } from "@/types/scanpay";
 
@@ -27,6 +33,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   if (!rec) return NextResponse.json({ error: "ScanPay refund not found" }, { status: 404 });
 
   if (action === "ignore") {
+    // Refused once a slice is actually charged — see the dispute route for
+    // why: parking the item would leave live ledger entries behind a record
+    // that says nothing happened.
+    if (rec.postedRecordId) {
+      const cov = await coverageForRecord(rec.postedRecordId, "refund");
+      if (cov?.anyPosted) {
+        const posted = cov.targets.filter((t) => t.posted);
+        return NextResponse.json({
+          error: `This refund is already charged to ${posted.map((t) => t.label).join(", ")}. Reverse the ledger entr${posted.length === 1 ? "y" : "ies"} first — ignoring it here would leave the money on the ledger.`,
+        }, { status: 409 });
+      }
+    }
     await sc.updateOne({ _id: id }, { $set: { matchStatus: "ignored", updated_at: new Date().toISOString() } });
     return NextResponse.json({ ok: true, matchStatus: "ignored" });
   }
@@ -82,15 +100,32 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Enter the refunded amount (greater than 0)" }, { status: 400 });
   }
   const date = body.date ? String(body.date) : (rec.refundDate ?? new Date().toISOString().slice(0, 10));
-  if (rec.matchStatus === "posted") {
-    return NextResponse.json({ error: "This refund was already posted" }, { status: 409 });
+
+  // Which slice is being charged. Absent → the full AM figure, which the
+  // target model calls `combined`.
+  const party = (["technician", "area_manager", "provider", "combined"] as const).find((p) => p === body.party);
+  const target: PostingTarget = party ?? "combined";
+
+  // Already posted refuses only THIS target, not the item. Coverage is read
+  // from the ledger entries, so a slice charged from a ledger page counts.
+  if (rec.postedRecordId) {
+    const cov = await coverageForRecord(rec.postedRecordId, "refund");
+    if (cov) {
+      const verdict = canPost(cov, target);
+      if (!verdict.ok) {
+        return NextResponse.json({
+          error: verdict.error, code: verdict.code,
+          target, targetLabel: TARGET_LABEL[target], coverage: cov,
+        }, { status: 409 });
+      }
+    }
   }
 
-  // Optional ledger + party choice (same as adding the refund from inside a
-  // ledger). Omit both → default: full AM charge to the job's AM ledger.
-  const party = (["technician", "area_manager", "provider", "combined"] as const).find((p) => p === body.party);
   const result = await postDisputeCharge({
     type: "refund",
+    // Reuse the canonical record so a second target attaches to the SAME
+    // refund rather than creating a parallel one.
+    recordId: rec.postedRecordId ?? undefined,
     jobId,
     amount,
     date,
@@ -123,5 +158,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   return NextResponse.json({
     ok: true, matchStatus: "posted", recordId: result.recordId,
     ledgerEntryId: result.ledgerEntryId, areaManagerName: result.areaManagerName, snapshot: result.snapshot,
+    target: result.target, targetLabel: TARGET_LABEL[result.target],
+    postedAmount: result.postedAmount, coverage: result.coverage,
   });
 }

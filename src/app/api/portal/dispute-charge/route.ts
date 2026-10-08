@@ -2,6 +2,13 @@
 // calculation + ledger posting to the shared service (lib/dispute-service).
 // The UI never calculates — it submits inputs and (for preview) reads the
 // returned snapshot. dryRun=true resolves + computes without writing anything.
+//
+// When the charge names a collected ScanPay dispute, it attaches to THAT
+// dispute's canonical record rather than creating a parallel one, and flips
+// the inbox item to Posted. That is what makes the reverse workflow work:
+// charging a provider from the Provider Ledger page shows up in the Disputes
+// & Refunds Posted view as Provider = posted, because both ends are the same
+// record and coverage is read from the ledger entries.
 
 import { NextRequest, NextResponse } from "next/server";
 import { readPortalSession } from "@/lib/portal-auth";
@@ -9,6 +16,50 @@ import { postDisputeCharge } from "@/lib/dispute-service";
 import { postPenaltyBatch } from "@/lib/penalty-service";
 import { coll, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import type { ScanpayDisputeRecord } from "@/types/scanpay";
+import type { PostDisputeChargeResult } from "@/lib/dispute-service";
+
+/** The canonical record a collected ScanPay dispute is already posted under. */
+async function recordIdForScanpay(scanpayDisputeId: string): Promise<string | undefined> {
+  if (!scanpayDisputeId) return undefined;
+  const rec = await coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute)
+    .findOne({ _id: scanpayDisputeId } as never);
+  return rec?.postedRecordId ?? undefined;
+}
+
+/**
+ * Tie a ledger-side charge back to its inbox item.
+ *
+ * Without this the two ends drift: the ledger would hold a real provider
+ * charge while the inbox still showed the dispute as unposted, and a later
+ * inbox posting would create a SECOND canonical record for the same money.
+ * Best-effort — the ledger entry is already written and must not be undone
+ * because a cross-link failed.
+ */
+async function linkScanpayPosting(
+  scanpayDisputeId: string,
+  result: Extract<PostDisputeChargeResult, { ok: true }>,
+  jobId: string,
+): Promise<void> {
+  if (!scanpayDisputeId) return;
+  try {
+    await coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute).updateOne(
+      { _id: scanpayDisputeId } as never,
+      {
+        $set: {
+          // Advisory badge in the picker (pre-existing behaviour).
+          chargedAt: new Date().toISOString().slice(0, 10),
+          // Real money has been posted, so the item belongs in Posted — the
+          // remaining targets show there as work, not back in Disputes.
+          matchStatus: "posted",
+          matchedJobId: jobId,
+          postedRecordId: result.recordId,
+          ledgerEntryId: result.ledgerEntryId,
+          updated_at: new Date().toISOString(),
+        },
+      },
+    );
+  } catch { /* the ledger entry stands; the cross-link is advisory */ }
+}
 
 export async function POST(req: NextRequest) {
   const session = await readPortalSession();
@@ -62,16 +113,15 @@ export async function POST(req: NextRequest) {
     for (const it of items) {
       const r = await postDisputeCharge({
         type: bType, jobId: it.jobId, amount: it.amount, date: bDate, notes: bNotes,
+        // Attach to the dispute's existing canonical record when it has one,
+        // so this becomes a second TARGET on that dispute rather than a
+        // second dispute for the same money.
+        recordId: await recordIdForScanpay(it.scanpayDisputeId),
         ledgerId: bLedgerId, party: bParty, actor: session.name, dryRun: bDryRun,
       });
       results.push(r);
       if (r.ok && !bDryRun && it.scanpayDisputeId) {
-        try {
-          await coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute).updateOne(
-            { _id: it.scanpayDisputeId } as never,
-            { $set: { chargedAt: new Date().toISOString().slice(0, 10), chargedBy: session.name, updated_at: new Date().toISOString() } },
-          );
-        } catch { /* advisory flag */ }
+        await linkScanpayPosting(it.scanpayDisputeId, r, it.jobId);
       }
     }
     const okAll = results.every((r) => r.ok);
@@ -95,6 +145,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Choose which party's slice to charge (technician / area manager / provider)" }, { status: 400 });
   }
 
+  const scanpayDisputeId = body.scanpayDisputeId ? String(body.scanpayDisputeId) : "";
+
   const result = await postDisputeCharge({
     type,
     jobId,
@@ -104,7 +156,10 @@ export async function POST(req: NextRequest) {
     notes: body.notes ? String(body.notes) : undefined,
     customer_name: body.customer_name ? String(body.customer_name) : undefined,
     address: body.address ? String(body.address) : undefined,
-    recordId: body.recordId ? String(body.recordId) : undefined,
+    // An explicit recordId wins (editing an existing record); otherwise, a
+    // named ScanPay dispute attaches this charge to the record it is already
+    // posted under, making this an additional target on the same dispute.
+    recordId: body.recordId ? String(body.recordId) : await recordIdForScanpay(scanpayDisputeId),
     ledgerId,
     party,
     techId: body.techId ? String(body.techId) : undefined,
@@ -114,18 +169,10 @@ export async function POST(req: NextRequest) {
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
 
-  // If this charge came from a collected ScanPay dispute, flag it as charged so
-  // the picker can badge it (re-charge is still allowed). Best-effort — the
-  // ledger entry is already posted; a flag failure must not fail the request.
-  const scanpayDisputeId = body.scanpayDisputeId ? String(body.scanpayDisputeId) : "";
-  if (!result.dryRun && scanpayDisputeId) {
-    try {
-      await coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute).updateOne(
-        { _id: scanpayDisputeId } as never,
-        { $set: { chargedAt: new Date().toISOString().slice(0, 10), chargedBy: session.name, updated_at: new Date().toISOString() } },
-      );
-    } catch { /* flag is advisory; ledger entry stands */ }
-  }
+  // Tie the charge back to its inbox item: badge it in the picker, and move
+  // it to Posted with this target covered. Without the link the inbox would
+  // keep showing the dispute as unposted while the money sat on a ledger.
+  if (!result.dryRun) await linkScanpayPosting(scanpayDisputeId, result, jobId);
 
   return NextResponse.json(result);
 }

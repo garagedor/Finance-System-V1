@@ -204,6 +204,30 @@ export async function ensureFinanceIndexes(): Promise<void> {
         { equipment_return_id: 1 },
         { unique: true, partialFilterExpression: { equipment_return_id: { $type: "string" } } },
       ),
+      // At most ONE ledger entry per (dispute/refund, charged party). A
+      // dispute is settled with several parties — the AM's portion on their
+      // ledger, the provider's on theirs — so the key is the pair, not the
+      // record. The partial filter scopes it to entries that carry both,
+      // which leaves entries written before posted_party existed untouched;
+      // those are read as the combined posting they were, and the service
+      // stamps the field the next time it writes one.
+      db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex(
+        { dispute_id: 1, posted_party: 1 },
+        {
+          unique: true,
+          partialFilterExpression: {
+            dispute_id: { $type: "string" },
+            posted_party: { $type: "string" },
+          },
+        },
+      ),
+      // Coverage reads every entry for a record, and reversals by what they
+      // undo. Both are hot on the Posted tab.
+      db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex({ dispute_id: 1 }),
+      db.collection(FINANCE_COLLECTIONS.ledgerEntry).createIndex(
+        { reverses_id: 1 },
+        { sparse: true },
+      ),
       db.collection(FINANCE_COLLECTIONS.bankSyncLog).createIndex({ item_id: 1, started_at: -1 }),
       db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ bank_txn_id: 1 }),
       db.collection(FINANCE_COLLECTIONS.reconMatch).createIndex({ matched_kind: 1, matched_id: 1 }),

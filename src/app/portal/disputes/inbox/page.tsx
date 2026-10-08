@@ -7,15 +7,15 @@ import Link from "next/link";
 import { coll, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "@/lib/finance-db";
 import { enrichJobs, type JobEnrichment } from "@/lib/scanpay/enrich";
 import type { ScanpayDisputeRecord, ScanpayRefundRecord } from "@/types/scanpay";
-import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
 
-type PostedTo = { ledgerId: string; holder: string };
 import { fmt$, fmtDate } from "../../format";
 import { PageHeader, StatPill, CardShell, Empty } from "../../_components/page-helpers";
 import InboxFilters from "./InboxFilters";
 import ScanpayRowActions from "../scanpay/ScanpayRowActions";
+import PostingCoveragePanel from "../scanpay/PostingCoverage";
 import ScanpayRefundRowActions from "../scanpay/refunds/ScanpayRefundRowActions";
 import InboxLive from "./InboxLive";
+import { coverageForRecords, type RecordCoverage } from "@/lib/dispute-coverage";
 import {
   type InboxStage, STAGE_LABEL, STAGE_STATUSES,
   stageFilter, isMixedStage, parseStage,
@@ -53,19 +53,26 @@ async function load(view: InboxStage, kind: Kind, f: Filters) {
 
   const enrich = await enrichJobs([...refunds.map((r) => r.matchedJobId), ...disputes.map((d) => d.matchedJobId)]);
 
-  // Resolve which ledger each posted item landed on (via its ledger entry → ledger).
-  const postedTo: Record<string, PostedTo> = {};
-  const entryIds = [...refunds, ...disputes].map((x) => x.ledgerEntryId).filter((x): x is string => !!x);
-  if (entryIds.length) {
-    const les = await coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry).find({ _id: { $in: entryIds } }).toArray();
-    const entryToLedger = new Map(les.map((e) => [e._id, e.ledger_id]));
-    const lids = [...new Set(les.map((e) => e.ledger_id))];
-    const ls = lids.length ? await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger).find({ _id: { $in: lids } }).toArray() : [];
-    const holderById = new Map(ls.map((l) => [l._id, l.holder_name]));
-    for (const x of [...refunds, ...disputes]) {
-      const lid = x.ledgerEntryId ? entryToLedger.get(x.ledgerEntryId) : undefined;
-      if (lid) postedTo[x._id] = { ledgerId: lid, holder: holderById.get(lid) ?? "ledger" };
-    }
+  /* Posting coverage per item.
+     Was: follow the item's single ledgerEntryId to one ledger. That assumed
+     one posting per dispute, which is the assumption this whole change
+     removes — an item charged to the AM and the provider has two entries and
+     the old lookup would show only whichever one the scalar pointed at.
+     Now coverage is derived from every ledger entry carrying the canonical
+     record id, so a charge made from a ledger page counts the same as one
+     made here. */
+  const [disputeCoverage, refundCoverage] = await Promise.all([
+    coverageForRecords(disputes.map((d) => d.postedRecordId ?? ""), "dispute"),
+    coverageForRecords(refunds.map((r) => r.postedRecordId ?? ""), "refund"),
+  ]);
+  const coverage: Record<string, RecordCoverage> = {};
+  for (const d of disputes) {
+    const c = d.postedRecordId ? disputeCoverage.get(d.postedRecordId) : undefined;
+    if (c) coverage[d._id] = c;
+  }
+  for (const r of refunds) {
+    const c = r.postedRecordId ? refundCoverage.get(r.postedRecordId) : undefined;
+    if (c) coverage[r._id] = c;
   }
 
   // Filter option lists from all enriched rows (pre-filter), like the old inbox.
@@ -112,7 +119,7 @@ async function load(view: InboxStage, kind: Kind, f: Filters) {
   ]);
 
   return {
-    refunds: rRows, disputes: dRows, enrich, postedTo, options,
+    refunds: rRows, disputes: dRows, enrich, coverage, options,
     counts: {
       action: needsRefunds + needsDisputes,
       refunds: activeRefunds,
@@ -137,12 +144,32 @@ function Pill({ children, tone }: { children: React.ReactNode; tone?: "ok" | "wa
   return <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, borderRadius: 999, padding: "2px 9px", background: bg, color: fg }}>{children}</span>;
 }
 
-function PostedPill({ posted }: { posted?: PostedTo }) {
-  if (!posted) return null;
+/**
+ * Which parties this item has actually been charged to, and what is left.
+ *
+ * Replaces the old single "Posted → <holder> ledger" pill, which could only
+ * ever name one ledger. A dispute settled with both the Area Manager and the
+ * provider has two entries, and showing one of them was how a half-finished
+ * item looked finished.
+ */
+function Coverage({
+  coverage, endpoint, en,
+}: {
+  coverage?: RecordCoverage;
+  endpoint: string;
+  en?: JobEnrichment;
+}) {
+  if (!coverage) return null;
   return (
-    <Link href={`/portal/ledger/${posted.ledgerId}`} style={{ textDecoration: "none" }} title={`Open ${posted.holder}'s ledger`}>
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11.5, borderRadius: 999, padding: "2px 9px", background: "rgba(16,185,129,0.12)", color: "#34d399" }}>✓ Posted → {posted.holder} ledger ↗</span>
-    </Link>
+    <PostingCoveragePanel
+      coverage={coverage}
+      endpoint={endpoint}
+      names={{
+        areaManager: en?.areaManager ?? null,
+        technician: en?.tech ?? null,
+        provider: en?.provider ?? null,
+      }}
+    />
   );
 }
 
@@ -168,7 +195,7 @@ function Shares({ cs }: { cs?: ScanpayRefundRecord["computedShare"] }) {
 const cardStyle: React.CSSProperties = { background: "#111827", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, padding: "14px 16px" };
 const rowStyle: React.CSSProperties = { display: "grid", gridTemplateColumns: "1fr auto", gap: 14, alignItems: "start" };
 
-function RefundCard({ r, en, posted }: { r: ScanpayRefundRecord; en?: JobEnrichment; posted?: PostedTo }) {
+function RefundCard({ r, en, coverage }: { r: ScanpayRefundRecord; en?: JobEnrichment; coverage?: RecordCoverage }) {
   const isFull = r.refundAmount != null && r.refundAmount >= r.originalAmount - 0.005;
   const pct = r.refundAmount != null && r.originalAmount > 0 ? Math.round((r.refundAmount / r.originalAmount) * 100) : null;
   const flagged = (r.matchStatus === "new" || r.matchStatus === "matched");
@@ -178,7 +205,7 @@ function RefundCard({ r, en, posted }: { r: ScanpayRefundRecord; en?: JobEnrichm
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 15 }}>
             {en?.clientName || r.invoiceNumber || "Refund"} <Pill tone="accent">Refund</Pill>
-            {posted ? <> <PostedPill posted={posted} /></> : r.matchStatus === "posted" ? <> <Pill tone="ok">Posted</Pill></> : null}
+            {r.matchStatus === "posted" ? <> <Pill tone="ok">Posted</Pill></> : null}
             {r.matchStatus === "verified" && <> <Pill tone="ok">Verified</Pill></>}
             {r.matchStatus === "ignored" && <> <Pill tone="muted">Ignored</Pill></>}
           </div>
@@ -207,7 +234,11 @@ function RefundCard({ r, en, posted }: { r: ScanpayRefundRecord; en?: JobEnrichm
             <div className="small" style={{ color: "#f59e0b", fontWeight: 600 }}>Needs amount<div style={{ color: "#8b93a5", fontWeight: 500 }}>paid {fmt$(r.originalAmount)}</div></div>
           )}
           <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
-            <ScanpayRefundRowActions id={r._id} matchStatus={r.matchStatus} suggestedJobId={r.matchedJobId} suggestedLabel={r.candidates?.[0]?.address ?? null} originalAmount={r.originalAmount} paymentDate={r.paymentDate} chargedAt={r.chargedAt ?? null} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+              <Coverage coverage={coverage} en={en}
+                endpoint={`/api/portal/scanpay/refunds/${encodeURIComponent(r._id)}`} />
+              <ScanpayRefundRowActions id={r._id} matchStatus={r.matchStatus} suggestedJobId={r.matchedJobId} suggestedLabel={r.candidates?.[0]?.address ?? null} originalAmount={r.originalAmount} paymentDate={r.paymentDate} chargedAt={r.chargedAt ?? null} />
+            </div>
           </div>
         </div>
       </div>
@@ -215,7 +246,7 @@ function RefundCard({ r, en, posted }: { r: ScanpayRefundRecord; en?: JobEnrichm
   );
 }
 
-function DisputeCard({ d, en, posted }: { d: ScanpayDisputeRecord; en?: JobEnrichment; posted?: PostedTo }) {
+function DisputeCard({ d, en, coverage }: { d: ScanpayDisputeRecord; en?: JobEnrichment; coverage?: RecordCoverage }) {
   const flagged = (d.matchStatus === "new" || d.matchStatus === "matched");
   return (
     <div style={{ ...cardStyle, borderLeft: flagged ? "3px solid #f59e0b" : cardStyle.border as string }}>
@@ -224,7 +255,7 @@ function DisputeCard({ d, en, posted }: { d: ScanpayDisputeRecord; en?: JobEnric
           <div style={{ fontWeight: 600, fontSize: 15 }}>
             {d.customerName || en?.clientName || d.invoiceNumber || "Dispute"} <Pill tone="warn">Dispute</Pill>
             {d.outcome && <> <Pill tone={d.outcome === "won" ? "ok" : d.outcome === "lost" ? "warn" : "muted"}>{d.outcome}</Pill></>}
-            {posted ? <> <PostedPill posted={posted} /></> : d.matchStatus === "posted" ? <> <Pill tone="ok">Posted</Pill></> : null}
+            {d.matchStatus === "posted" ? <> <Pill tone="ok">Posted</Pill></> : null}
             {d.matchStatus === "verified" && <> <Pill tone="ok">Verified</Pill></>}
             {d.matchStatus === "ignored" && <> <Pill tone="muted">Ignored</Pill></>}
           </div>
@@ -245,7 +276,11 @@ function DisputeCard({ d, en, posted }: { d: ScanpayDisputeRecord; en?: JobEnric
           </div>
           <div className="money money-neg" style={{ fontSize: 20, fontWeight: 700 }}>−{fmt$(d.amount)}</div>
           <div style={{ marginTop: 10, display: "flex", justifyContent: "flex-end" }}>
-            <ScanpayRowActions id={d._id} matchStatus={d.matchStatus} suggestedJobId={d.matchedJobId} suggestedLabel={d.candidates?.[0]?.address ?? null} amount={d.amount} chargedAt={d.chargedAt ?? null} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+              <Coverage coverage={coverage} en={en}
+                endpoint={`/api/portal/scanpay/${encodeURIComponent(d._id)}`} />
+              <ScanpayRowActions id={d._id} matchStatus={d.matchStatus} suggestedJobId={d.matchedJobId} suggestedLabel={d.candidates?.[0]?.address ?? null} amount={d.amount} chargedAt={d.chargedAt ?? null} />
+            </div>
           </div>
         </div>
       </div>
@@ -275,8 +310,8 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   };
 
   const items: Array<{ kind: "r" | "d"; date: string; node: React.ReactNode }> = [
-    ...d.refunds.map((r) => ({ kind: "r" as const, date: r.paymentDate ?? "", node: <RefundCard key={`r-${r._id}`} r={r} en={r.matchedJobId ? d.enrich.get(r.matchedJobId) : undefined} posted={d.postedTo[r._id]} /> })),
-    ...d.disputes.map((x) => ({ kind: "d" as const, date: x.disputedAt ?? "", node: <DisputeCard key={`d-${x._id}`} d={x} en={x.matchedJobId ? d.enrich.get(x.matchedJobId) : undefined} posted={d.postedTo[x._id]} /> })),
+    ...d.refunds.map((r) => ({ kind: "r" as const, date: r.paymentDate ?? "", node: <RefundCard key={`r-${r._id}`} r={r} en={r.matchedJobId ? d.enrich.get(r.matchedJobId) : undefined} coverage={d.coverage[r._id]} /> })),
+    ...d.disputes.map((x) => ({ kind: "d" as const, date: x.disputedAt ?? "", node: <DisputeCard key={`d-${x._id}`} d={x} en={x.matchedJobId ? d.enrich.get(x.matchedJobId) : undefined} coverage={d.coverage[x._id]} /> })),
   ].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   const tab = (v: InboxStage, label: string, count: number) => (

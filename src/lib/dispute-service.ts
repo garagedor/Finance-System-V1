@@ -11,8 +11,17 @@ import "server-only";
 // to the AM's ledger (find-or-create) → stores the full snapshot → links the
 // record to the ledger entry → prevents duplicate charging (dedup by record id).
 //
-// Only the AM ledger is charged (the company settles with the AM). The provider,
-// company and per-technician figures are computed for the report/snapshot.
+// A dispute is NOT settled with one party. Each slice may be charged to a
+// different ledger — the AM's own portion to theirs, the provider's to theirs
+// — so a record may carry SEVERAL ledger entries, one per target. Uniqueness
+// is therefore (dispute_id, posted_party), never dispute_id alone: keying on
+// the record meant the second target found the first entry and OVERWROTE it,
+// silently moving the AM's charge onto the provider's ledger. The target
+// vocabulary, the eligibility rules and the overlap rules all live in
+// lib/dispute-targets; this file only writes what that module decides.
+//
+// The company figure is computed for the report and never posted: the company
+// holds no ledger it charges itself through.
 
 import { ObjectId, type Db } from "mongodb";
 import {
@@ -20,6 +29,10 @@ import {
 } from "@/lib/finance-db";
 import { getEffectivePct } from "@/lib/portal-tech-rates";
 import { computeDisputeCharge, type DisputeKind } from "@/lib/dispute-charge";
+import {
+  amountForTarget, canPost, resolveCoverage, targetOfEntry,
+  type PostedEntryView, type PostingCoverage, type PostingTarget,
+} from "@/lib/dispute-targets.ts";
 import type { JobRow, Location } from "@/types/job";
 import type { DisputeRecord, RefundRecord } from "@/types/finance";
 import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
@@ -86,8 +99,12 @@ export type PostDisputeChargeResult =
       areaManagerOwnPortion?: number;
       /** Technician whose % was used for the technician slice (party=technician). */
       chargedTechName?: string;
+      /** The target this call charged. `combined` when no party was named. */
+      target: PostingTarget;
+      /** Every target's state after this write — derived from the entries. */
+      coverage: PostingCoverage;
       created: boolean;      // true if a new record was created
-      reused: boolean;       // true if an existing ledger entry was updated (dedup)
+      reused: boolean;       // true if this target's existing entry was updated
       dryRun: boolean;
     };
 
@@ -188,14 +205,14 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     ledger = await findOrCreateAmLedger(amName, location, input.actor, dryRun);
   }
 
-  // Which slice posts to the ledger. With a chosen party (ledger flow) it is
-  // exactly that party's share from the dispute-shares formula; without one
-  // (Disputes module) it stays the full AM ledger charge (technician + AM own).
-  const postedAmount =
-    input.party === "technician" ? snapshot.technicianPortion
-    : input.party === "area_manager" ? snapshot.areaManagerOwnPortion
-    : input.party === "provider" ? snapshot.providerCharge
-    : snapshot.amLedgerCharge; // combined / no-party → tech + AM own
+  // Which slice posts to the ledger. The no-party path (Disputes module) has
+  // always charged the full AM figure, which IS the `combined` target — so it
+  // is named as such rather than left null, and the overlap rules apply to it
+  // like any other posting.
+  const target: PostingTarget = input.party ?? "combined";
+  // One definition of what each target is charged, shared with the UI that
+  // offers it, so the figure on the button is the figure that gets written.
+  const postedAmount = amountForTarget(snapshot, target);
   const partyLabel =
     input.party === "technician" ? `tech ${chargedTech || job.tech || ""}`.trim()
     : input.party === "area_manager" ? `AM ${amName}`.trim()
@@ -203,9 +220,63 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     : input.party === "combined" ? `AM ${amName} + tech ${job.tech ?? ""}`.trim()
     : `AM ${amName}`.trim();
 
-  // ── Dedup: one ledger entry per canonical record. Reuse it on re-run. ──
+  /* ── Dedup: one ledger entry per (record, target) ──────────────────────
+     Was one per record, which is why a second target could not be posted:
+     the lookup found the first entry and the write updated it in place, so
+     charging the provider MOVED the Area Manager's charge rather than adding
+     to it. Keying on the target as well makes the two independent.
+
+     Within one target the write stays idempotent — re-posting the same slice
+     (editing the amount, re-running after a timeout) updates that entry and
+     never creates a second. Across targets that overlap it is refused, since
+     no in-place update can fix charging the technician twice.             */
   const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
-  const existingEntry = await ec.findOne({ dispute_id: recordId });
+  const priorEntries = await ec.find({ dispute_id: recordId }).toArray();
+  const reversals = priorEntries.length
+    ? await ec.find(
+        { reverses_id: { $in: priorEntries.map((e) => e._id) } },
+        { projection: { reverses_id: 1 } },
+      ).toArray()
+    : [];
+  const reversedIds = reversals.map((r) => String(r.reverses_id)).filter(Boolean);
+
+  const asView = (e: LedgerEntryRecord): PostedEntryView => {
+    const nested = (e.charge_snapshot as Record<string, unknown> | null | undefined)?.["posted_party"];
+    return {
+      _id: e._id,
+      ledger_id: e.ledger_id,
+      posted_party: (e.posted_party ?? (typeof nested === "string" ? nested : null)) as PostingTarget | null,
+      amount: num(e.amount),
+      date: e.date ?? null,
+      created_at: e.created_at,
+    };
+  };
+
+  const coverageContext = {
+    hasProvider: !!job.provider,
+    hasAreaManager: !!amName || !!input.ledgerId,
+    hasTechnician: !!(chargedTech || job.tech),
+  };
+  const before = resolveCoverage({
+    snapshot,
+    entries: priorEntries.map(asView),
+    reversedEntryIds: reversedIds,
+    context: coverageContext,
+  });
+
+  // Refuse only what cannot be made safe by updating in place: a target that
+  // overlaps one already charged. `already_posted` for the SAME target is not
+  // a refusal here — that is the idempotent re-post path below.
+  const verdict = canPost(before, target);
+  if (!verdict.ok && verdict.code !== "already_posted") {
+    return { ok: false, error: verdict.error };
+  }
+
+  // This target's own live entry, if it has one. Reversed entries are left
+  // alone — a reversal is a correction on the record, and re-posting writes
+  // a new entry rather than resurrecting the one that was undone.
+  const existingEntry =
+    priorEntries.find((e) => targetOfEntry(asView(e)) === target && !reversedIds.includes(e._id)) ?? null;
   const ledgerEntryId = existingEntry?._id ?? newId("len");
   const now = new Date().toISOString();
   const date = input.date ?? today();
@@ -219,13 +290,18 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     job_ref: input.jobId,
     technician_id: input.party === "technician" ? (chargedTech || job.tech || null) : (job.tech ?? null),
     dispute_id: recordId,
+    // Top level so it can be indexed and queried: this is the other half of
+    // the dedup key, and lib/dispute-coverage reads it to decide which
+    // targets are already charged. It is still mirrored into the snapshot
+    // below for the entries written before the field existed.
+    posted_party: target,
     gross_amount: snapshot.disputeOrRefundAmount,
     // Record which party was charged + the posted amount alongside the full
     // snapshot, so the ledger can show the tech/AM split for ANY charge. Also
     // carry the address + customer so the ledger "view more" can show them.
     charge_snapshot: {
       ...(snapshot as unknown as Record<string, unknown>),
-      posted_party: input.party ?? null,
+      posted_party: target,
       posted_amount: postedAmount,
       address: input.address ?? job.address ?? null,
       customer_name: input.customer_name ?? job.clientName ?? null,
@@ -250,6 +326,10 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     area_manager_charge: snapshot.amLedgerCharge,
     technician_chargeback_info: snapshot.technicianPortion,
     area_manager_own_portion: snapshot.areaManagerOwnPortion,
+    // Legacy single link — the entry for the target just posted. A record can
+    // now have several, so this is no longer the whole story; the authority
+    // is lib/dispute-coverage, which reads the entries. Kept because it is
+    // written history, and nothing reads it to make a decision.
     ledger_entry_id: ledgerEntryId,
     charge_snapshot: snapshot as unknown as Record<string, unknown>,
   };
@@ -292,6 +372,26 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     }
   }
 
+  // Coverage as it stands once this write lands, derived the same way the
+  // read path derives it — projected rather than re-queried so a dry run can
+  // answer "what would the Posted tab show" without writing.
+  const after = resolveCoverage({
+    snapshot,
+    entries: [
+      ...priorEntries.filter((e) => e._id !== ledgerEntryId).map(asView),
+      {
+        _id: ledgerEntryId,
+        ledger_id: ledger._id,
+        posted_party: target,
+        amount: postedAmount,
+        date,
+        created_at: existingEntry?.created_at ?? now,
+      },
+    ],
+    reversedEntryIds: reversedIds.filter((id) => id !== ledgerEntryId),
+    context: coverageContext,
+  });
+
   return {
     ok: true,
     recordId,
@@ -306,6 +406,8 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     technicianPortion: snapshot.technicianPortion,
     areaManagerOwnPortion: snapshot.areaManagerOwnPortion,
     chargedTechName: input.party === "technician" ? (chargedTech || job.tech || undefined) : undefined,
+    target,
+    coverage: after,
     created,
     reused: !!existingEntry,
     dryRun,

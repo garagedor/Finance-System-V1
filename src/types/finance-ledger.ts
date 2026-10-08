@@ -147,10 +147,24 @@ export interface LedgerEntryRecord {
   // a finance_expense entry (we paid them; booked as expense). See lib/ledger-link.
   income_id?: string | null;
   expense_id?: string | null;
-  // Dispute/refund → AM ledger link + full calculation snapshot. Set by the
+  // Dispute/refund → ledger link + full calculation snapshot. Set by the
   // shared dispute service (lib/dispute-service). dispute_id is the canonical
-  // finance_dispute / finance_refund record id — also the dedup key.
+  // finance_dispute / finance_refund record id.
   dispute_id?: string | null;
+  /**
+   * Which party's slice this entry charged — the other half of the dedup key.
+   *
+   * A dispute is settled with more than one party: the Area Manager's portion
+   * may go to their ledger and the provider's to theirs, as two entries
+   * against the same dispute_id. So uniqueness is (dispute_id, posted_party),
+   * not dispute_id alone, and this has to be a top-level field to be indexed.
+   *
+   * It was previously written only inside charge_snapshot, which cannot be
+   * indexed and which lib/dispute-coverage therefore still reads as a
+   * fallback. Null on an entry written before the field existed; those all
+   * came from the no-party path, which charged the combined AM figure.
+   */
+  posted_party?: "combined" | "area_manager" | "technician" | "provider" | null;
   charge_snapshot?: Record<string, unknown> | null;
 
   // Equipment order → AM ledger link. equipment_order_id is the canonical
