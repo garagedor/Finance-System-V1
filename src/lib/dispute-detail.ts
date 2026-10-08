@@ -65,3 +65,60 @@ export function disputeDetail(snapshot: Record<string, unknown> | null | undefin
 
   return { address, customer, tech, lines };
 }
+
+/* ── PROVIDER-facing projection ──────────────────────────────────────────
+   A PROVIDER sees their own charge, never the company's internal split. This
+   is an allow-list, not a filter on the full breakdown above: it reads only
+   the fields named here, so a field added to the snapshot later cannot leak
+   into a PROVIDER report by default. Every figure is read from the stored
+   snapshot or the ledger entry itself — nothing is recalculated. */
+
+/** Ledger roles that belong to a PROVIDER. Role strings are free text in the
+ *  data ("provider", "Provider", "advertiser"), so they are normalised. */
+export function isProviderLedgerRole(role: string | null | undefined): boolean {
+  const r = String(role ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+  return r === "provider" || r === "advertiser";
+}
+
+export interface ProviderDisputeInput {
+  /** The PROVIDER's own job reference, when authorized for the report. */
+  address?: string | null;
+  /** The amount on the ledger entry itself — what actually hit the balance. */
+  ledgerAmount: number;
+}
+
+export function providerDisputeDetail(
+  snapshot: Record<string, unknown> | null | undefined,
+  input: ProviderDisputeInput,
+): DisputeDetail {
+  if (!snapshot) return { address: "", customer: "", tech: "", lines: [] };
+  const n = (k: string) => Number(snapshot[k]) || 0;
+  const str = (k: string) => (snapshot[k] == null ? "" : String(snapshot[k]));
+  const isRefund = str("type") === "refund";
+  const kind = isRefund ? "Refund" : "Dispute";
+  const classification = str("disputeClassification").toUpperCase();
+
+  const lines: DisputeLine[] = [
+    { label: kind, value: "", head: true },
+    ...(classification ? [{ label: `${kind} type`, value: classification }] : []),
+    { label: `${kind} amount`, value: money(n("disputeOrRefundAmount")) },
+    { label: "PROVIDER share", value: money(n("providerCharge")) },
+    { label: "PROVIDER charge", value: money(input.ledgerAmount), strong: true },
+  ];
+
+  return {
+    address: str("address") || (input.address ?? "") || "",
+    customer: str("customer_name"),
+    tech: "",
+    lines,
+  };
+}
+
+/** A dispute/refund ledger line's label for a PROVIDER. The stored description
+ *  names the charged party ("AM … + tech …"), which a PROVIDER must not see. */
+export function providerDisputeLabel(type: string, snapshot: Record<string, unknown> | null | undefined, jobRef?: string | null): string {
+  const kind = type === "refund" ? "Refund" : "Dispute";
+  const customer = snapshot?.["customer_name"] == null ? "" : String(snapshot["customer_name"]);
+  const who = customer || (jobRef ?? "");
+  return who ? `${kind} — ${who}` : kind;
+}

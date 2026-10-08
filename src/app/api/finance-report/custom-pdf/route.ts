@@ -1,6 +1,12 @@
 // Custom itemized report → PDF. Receives the hand-picked items (grouped by
 // category) and renders one grouped PDF with subtotals + a grand total. The
 // amounts were server-computed by /api/portal/custom-report/items at pick time.
+//
+// Ledger lines are the exception: they are rebuilt here from the database by
+// entry id, and any `detail` the browser sends is ignored. That is what keeps
+// a PROVIDER report PROVIDER-safe — if any picked line sits on a PROVIDER
+// ledger, every dispute/refund line in the PDF uses the PROVIDER projection,
+// so the internal cost-share split never reaches the file.
 
 import { NextRequest, NextResponse } from "next/server";
 import { renderToBuffer } from "@react-pdf/renderer";
@@ -11,6 +17,10 @@ import { readPortalSession } from "@/lib/portal-auth";
 import { CustomReportPdf, type CustomPdfGroup, type CustomPdfItem } from "@/components/pdf/CustomReportPdf";
 import { getReportFilenames } from "@/lib/report-filenames";
 import { buildReportFilename } from "@/lib/report-filename-format";
+import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
+import { ledgerLineItems } from "@/lib/custom-report";
+import { isProviderLedgerRole } from "@/lib/dispute-detail";
+import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
 
 export const runtime = "nodejs";
 
@@ -42,14 +52,45 @@ export async function POST(req: NextRequest) {
     const preparedFor = body.preparedFor ? String(body.preparedFor).trim() : null;
 
     const rawGroups = Array.isArray(body.groups) ? (body.groups as Array<Record<string, unknown>>) : [];
+    const rawItems = (g: Record<string, unknown>) => (Array.isArray(g.items) ? g.items as Array<Record<string, unknown>> : []);
+
+    // Ledger lines, re-read by id. A line that no longer exists is dropped
+    // rather than printed from what the browser remembered.
+    const lineIds = [...new Set(rawGroups.filter((g) => g.type === "ledgerLine").flatMap((g) => rawItems(g).map((it) => String(it.id ?? ""))).filter(Boolean))];
+    const rebuilt = new Map<string, CustomPdfItem>();
+    if (lineIds.length) {
+      await ensureFinanceIndexes();
+      const entries = await coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry).find({ _id: { $in: lineIds } }).toArray();
+      const ledgerIds = [...new Set(entries.map((e) => e.ledger_id))];
+      const ledgers = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger).find({ _id: { $in: ledgerIds } }).toArray();
+      const roleOf = new Map(ledgers.map((l) => [l._id, l.role]));
+      // One PROVIDER ledger makes the whole report PROVIDER-facing. A ledger
+      // that cannot be found counts as PROVIDER: ambiguity never exposes the split.
+      const providerSafe = ledgerIds.some((id) => !roleOf.has(id) || isProviderLedgerRole(roleOf.get(id)));
+      // A PROVIDER report cannot carry another party's ledger: even relabelled,
+      // the line amount IS that party's charge.
+      const others = ledgers.filter((l) => !isProviderLedgerRole(l.role));
+      if (providerSafe && others.length) {
+        return NextResponse.json({
+          error: `This report mixes a PROVIDER ledger with ${others.map((l) => `${l.holder_name} (${String(l.role).replace(/_/g, " ")})`).join(", ")}. A PROVIDER report can only include PROVIDER ledger lines — remove the others or make a separate report.`,
+        }, { status: 400 });
+      }
+      for (const row of await ledgerLineItems(entries, providerSafe)) {
+        rebuilt.set(row.id, { date: row.date, primary: row.primary, secondary: row.secondary, amount: row.amount, detail: row.detail ?? null });
+      }
+    }
+
     const groups: CustomPdfGroup[] = rawGroups.map((g) => {
-      const items: CustomPdfItem[] = (Array.isArray(g.items) ? g.items as Array<Record<string, unknown>> : []).map((it) => ({
-        date: String(it.date ?? ""),
-        primary: String(it.primary ?? ""),
-        secondary: String(it.secondary ?? ""),
-        amount: r2(Number(it.amount)),
-        detail: (it.detail && typeof it.detail === "object") ? (it.detail as CustomPdfItem["detail"]) : null,
-      }));
+      const items: CustomPdfItem[] = g.type === "ledgerLine"
+        ? rawItems(g).map((it) => rebuilt.get(String(it.id ?? ""))).filter((it): it is CustomPdfItem => !!it)
+        : rawItems(g).map((it) => ({
+            date: String(it.date ?? ""),
+            primary: String(it.primary ?? ""),
+            secondary: String(it.secondary ?? ""),
+            amount: r2(Number(it.amount)),
+            // Only ledger lines carry a breakdown, and those are rebuilt above.
+            detail: null,
+          }));
       const subtotal = r2(items.reduce((sum, it) => sum + it.amount, 0));
       return {
         type: String(g.type ?? "group"),

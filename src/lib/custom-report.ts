@@ -9,9 +9,12 @@ import { ObjectId } from "mongodb";
 import { getDb, coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { calcPaidSum, calcParts, calcJobProfit, calcTotalAfterFee, calcStandardShare, toNumber } from "@/app/api/utils/calculations";
 import { ensureJobMirrorsFresh } from "@/lib/job-mirror";
-import { disputeDetail, type DisputeDetail, type DisputePartsExtra } from "@/lib/dispute-detail";
+import {
+  disputeDetail, providerDisputeDetail, providerDisputeLabel, isProviderLedgerRole,
+  type DisputeDetail, type DisputePartsExtra,
+} from "@/lib/dispute-detail";
 import type { JobRow } from "@/types/job";
-import type { LedgerEntryRecord } from "@/types/finance-ledger";
+import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
 import type { PayoutRecord, ExpenseRecord, ManualIncomeRecord } from "@/types/finance";
 import type { ScanpayDisputeRecord } from "@/types/scanpay";
 
@@ -71,29 +74,11 @@ export async function listCustomItems(p: ListCustomItemsParams): Promise<CustomI
       .find({ ledger_id: p.ledgerId, date: { $gte: from, $lte: to } })
       .sort({ date: 1, _id: 1 }).limit(cap + 1).toArray();
     const truncated = rows.length > cap;
-    const slice = rows.slice(0, cap);
-    // Enrich dispute/refund lines with address + parts from the Job for the inline breakdown.
-    const jobRefs = [...new Set(slice.filter((e) => (e.type === "dispute" || e.type === "refund") && e.job_ref).map((e) => String(e.job_ref)))];
-    const extraByRef = new Map<string, DisputePartsExtra>();
-    if (jobRefs.length) {
-      const objIds = jobRefs.filter((r) => /^[0-9a-fA-F]{24}$/.test(r)).map((r) => new ObjectId(r));
-      const jobs = await db.collection("Job").find({ _id: { $in: [...jobRefs, ...objIds] } } as never).toArray();
-      const jmap = new Map(jobs.map((j) => [String((j as { _id?: unknown })._id), j as Record<string, unknown>]));
-      for (const ref of jobRefs) {
-        const j = jmap.get(ref);
-        if (j) extraByRef.set(ref, { address: (j.address as string) ?? null, techParts: Number(j.techParts) || 0, companyParts: Number(j.companyParts) || 0, lmParts: Number(j.lmParts) || 0 });
-      }
-    }
-    return {
-      type: p.type, amountLabel: "Amount", truncated,
-      items: slice.map((e) => {
-        const isDispute = (e.type === "dispute" || e.type === "refund") && !!e.charge_snapshot;
-        return {
-          id: e._id, date: e.date, primary: e.description ?? String(e.type), secondary: String(e.type), amount: round2(e.amount),
-          detail: isDispute ? disputeDetail(e.charge_snapshot as Record<string, unknown>, { ...(e.job_ref ? extraByRef.get(String(e.job_ref)) : {}), techName: (e.technician_id as string) || null }) : undefined,
-        };
-      }),
-    };
+    const ledger = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger).findOne({ _id: p.ledgerId });
+    // A PROVIDER ledger's lines are PROVIDER-facing. Unknown ledger → treat as
+    // PROVIDER too: never default to exposing the internal split.
+    const providerSafe = !ledger || isProviderLedgerRole(ledger.role);
+    return { type: p.type, amountLabel: "Amount", truncated, items: await ledgerLineItems(rows.slice(0, cap), providerSafe) };
   }
 
   if (p.type === "providerJob") {
@@ -185,4 +170,48 @@ export async function listCustomItems(p: ListCustomItemsParams): Promise<CustomI
     type: "income", amountLabel: "Amount", truncated,
     items: rows.slice(0, cap).map((r) => ({ id: r._id, date: r.date, primary: r.description || r.source, secondary: r.source, amount: round2(r.amount) })),
   };
+}
+
+/**
+ * Ledger entries → report items. Shared by the item picker and the PDF route,
+ * so the PDF is rebuilt from the database and never prints a breakdown the
+ * browser sent.
+ *
+ * `providerSafe` swaps the internal cost-share breakdown for the PROVIDER
+ * projection (lib/dispute-detail): the dispute, its type, the PROVIDER share
+ * and the amount actually on the ledger — and relabels the line, since the
+ * stored description names the other charged parties. Amounts always come
+ * from the entry itself.
+ */
+export async function ledgerLineItems(entries: LedgerEntryRecord[], providerSafe: boolean): Promise<CustomItem[]> {
+  const db = await getDb();
+  const isDisputeType = (e: LedgerEntryRecord) => e.type === "dispute" || e.type === "refund";
+  // Enrich dispute/refund lines with address + parts from the Job for the inline breakdown.
+  const jobRefs = [...new Set(entries.filter((e) => isDisputeType(e) && e.job_ref).map((e) => String(e.job_ref)))];
+  const extraByRef = new Map<string, DisputePartsExtra>();
+  if (jobRefs.length) {
+    const objIds = jobRefs.filter((r) => /^[0-9a-fA-F]{24}$/.test(r)).map((r) => new ObjectId(r));
+    const jobs = await db.collection("Job").find({ _id: { $in: [...jobRefs, ...objIds] } } as never).toArray();
+    const jmap = new Map(jobs.map((j) => [String((j as { _id?: unknown })._id), j as Record<string, unknown>]));
+    for (const ref of jobRefs) {
+      const j = jmap.get(ref);
+      if (j) extraByRef.set(ref, { address: (j.address as string) ?? null, techParts: Number(j.techParts) || 0, companyParts: Number(j.companyParts) || 0, lmParts: Number(j.lmParts) || 0 });
+    }
+  }
+  return entries.map((e) => {
+    const snapshot = (e.charge_snapshot ?? null) as Record<string, unknown> | null;
+    const extra = e.job_ref ? extraByRef.get(String(e.job_ref)) : undefined;
+    const amount = round2(e.amount);
+    if (providerSafe && isDisputeType(e)) {
+      return {
+        id: e._id, date: e.date, amount, secondary: String(e.type),
+        primary: providerDisputeLabel(String(e.type), snapshot, e.job_ref ? String(e.job_ref) : null),
+        detail: snapshot ? providerDisputeDetail(snapshot, { address: extra?.address ?? null, ledgerAmount: amount }) : undefined,
+      };
+    }
+    return {
+      id: e._id, date: e.date, primary: e.description ?? String(e.type), secondary: String(e.type), amount,
+      detail: isDisputeType(e) && snapshot ? disputeDetail(snapshot, { ...(extra ?? {}), techName: (e.technician_id as string) || null }) : undefined,
+    };
+  });
 }
