@@ -195,15 +195,16 @@ test("18. coverage matches siblings on job AND amount, not job alone", () => {
   // A job can legitimately carry two real disputes. Matching on the job
   // alone would block a genuine second charge; the amount is what makes it
   // one dispute written twice.
-  assert.match(COVERAGE, /chargedUnderSiblingRecords/);
-  const fn = COVERAGE.slice(COVERAGE.indexOf("export async function chargedUnderSiblingRecords"));
-  assert.match(fn.slice(0, 1800), /job_id: record\.job_id/);
-  assert.match(fn.slice(0, 1800), /_id: \{ \$ne: record\._id \}/);
-  assert.match(fn.slice(0, 1800), /\[amountField\]: record\.amount/);
+  assert.match(COVERAGE, /siblingAnalysisBatch/);
+  const fn = COVERAGE.slice(COVERAGE.indexOf("export async function siblingAnalysisBatch"));
+  // All three conditions, together: not itself, same job, same amount.
+  assert.match(fn, /String\(f\._id\) !== s\.recordId/);
+  assert.match(fn, /f\.job_id === s\.jobId/);
+  assert.match(fn, /\[amountField\]\) === s\.amount/);
 });
 
 test("19. a reversed sibling charge does not block", () => {
-  const fn = COVERAGE.slice(COVERAGE.indexOf("export async function chargedUnderSiblingRecords"));
+  const fn = COVERAGE.slice(COVERAGE.indexOf("export async function siblingAnalysisBatch"));
   assert.match(fn.slice(0, 2400), /reverses_id: \{ \$in:/);
   assert.match(fn.slice(0, 2400), /if \(reversed\.has\(e\._id\)\) continue;/);
 });
@@ -211,7 +212,7 @@ test("19. a reversed sibling charge does not block", () => {
 test("20. the guard is on the write path, not only where buttons are drawn", () => {
   // The UI deciding not to offer a button is not a control; a direct POST
   // has to be refused by the service.
-  assert.match(SERVICE, /chargedUnderSiblingRecords/);
+  assert.match(SERVICE, /siblingAnalysis\(/);
   assert.match(SERVICE, /chargedElsewhere,/);
 });
 
@@ -237,12 +238,62 @@ test("23. the list page resolves siblings in one pass, not per row", () => {
   // The Posted tab renders up to 300 rows and the cluster is in another
   // region. A per-row sibling lookup is ~900 round trips on the hottest
   // screen in the module.
-  assert.match(COVERAGE, /chargedUnderSiblingRecordsBatch/);
-  const list = COVERAGE.slice(COVERAGE.indexOf("export async function coverageForRecords"));
+  assert.match(COVERAGE, /siblingAnalysisBatch/);
+  const list = COVERAGE.slice(COVERAGE.indexOf("export async function coverageForInboxItems"));
   assert.equal(
-    /for \(const r of records\)[\s\S]{0,600}await chargedUnderSiblingRecords\(/.test(list),
+    /for \(const s of subjects\)[\s\S]{0,800}await siblingAnalysis\(/.test(list),
     false,
     "the per-record lookup is back inside the loop",
   );
-  assert.match(list, /chargedUnderSiblingRecordsBatch\(/);
+  assert.match(list, /siblingAnalysisBatch\(/);
+});
+
+/* ── 8. Historical evidence is enforced, not decorated ────────────────── */
+
+test("24. an unlinked item is checked too, not skipped", () => {
+  // The gap that left the 8 ambiguous items postable: coverage was only
+  // resolved when postedRecordId existed, and an item marked charged with
+  // no link is exactly the one that has no postedRecordId.
+  for (const [name, src] of [["dispute", DISPUTE_ROUTE], ["refund", REFUND_ROUTE]] as const) {
+    assert.match(src, /coverageForInboxItem\(\{/, `${name} route still only checks linked items`);
+    assert.match(src, /chargedAt: rec\.chargedAt \?\? null/, `${name} route does not pass the charged mark`);
+    assert.equal(
+      /if \(rec\.postedRecordId\) \{\s*const cov = await coverageForRecord\(rec\.postedRecordId, "(dispute|refund)"\);\s*if \(cov\) \{\s*const verdict/.test(src),
+      false,
+      `${name} route still gates the check on there being a link`,
+    );
+  }
+});
+
+test("25. the charged-mark rule is resolved from the job, so the API cannot be walked around", () => {
+  // /api/portal/dispute-charge takes a job, an amount and a ledger. It never
+  // sees the inbox item, so the rule has to be findable from the job — or a
+  // direct call posts the very charge the inbox refuses.
+  const fn = COVERAGE.slice(COVERAGE.indexOf("export async function siblingAnalysisBatch"));
+  assert.match(fn, /matchedJobId: \{ \$in: jobs \}/);
+  assert.match(fn, /chargedAt: \{ \$type: "string" \}/);
+  assert.match(fn, /postedRecordId: null/);
+  // And the service — which every write path goes through — applies it.
+  assert.match(SERVICE, /historicalEvidence: analysis\.historicalEvidence/);
+});
+
+test("26. the service refuses a review verdict rather than warning", () => {
+  // It tolerates exactly one refusal code, the idempotent re-post of the
+  // same target. Everything else, review included, stops the write.
+  assert.match(SERVICE, /verdict\.code !== "already_posted"/);
+  assert.match(SERVICE, /return \{ ok: false, error: verdict\.error \}/);
+});
+
+test("27. an ambiguous item says so on the row and offers nothing", () => {
+  const UI = strip(read("app", "portal", "disputes", "scanpay", "PostingCoverage.tsx"));
+  assert.match(UI, /Historical posting detected/);
+  assert.match(UI, /[Rr]eview required/);
+  // The Post controls are rendered from `available`, which the resolver
+  // turns off for every target while evidence is unresolved.
+  assert.match(UI, /coverage\.targets\.filter\(\(t\) => t\.available\)/);
+});
+
+test("28. the three states are exhaustive and only one of them is postable", () => {
+  assert.match(TARGETS, /export type TargetState = "POSTED" \| "UNPOSTED" \| "REVIEW_REQUIRED"/);
+  assert.match(TARGETS, /state === "UNPOSTED" && eligible/);
 });

@@ -15,7 +15,7 @@ import ScanpayRowActions from "../scanpay/ScanpayRowActions";
 import PostingCoveragePanel from "../scanpay/PostingCoverage";
 import ScanpayRefundRowActions from "../scanpay/refunds/ScanpayRefundRowActions";
 import InboxLive from "./InboxLive";
-import { coverageForRecords, type RecordCoverage } from "@/lib/dispute-coverage";
+import { coverageForInboxItems, type RecordCoverage } from "@/lib/dispute-coverage";
 import {
   type InboxStage, STAGE_LABEL, STAGE_STATUSES,
   stageFilter, isMixedStage, parseStage,
@@ -61,18 +61,23 @@ async function load(view: InboxStage, kind: Kind, f: Filters) {
      Now coverage is derived from every ledger entry carrying the canonical
      record id, so a charge made from a ledger page counts the same as one
      made here. */
+  const blankContext = { hasProvider: true, hasAreaManager: true, hasTechnician: true };
   const [disputeCoverage, refundCoverage] = await Promise.all([
-    coverageForRecords(disputes.map((d) => d.postedRecordId ?? ""), "dispute"),
-    coverageForRecords(refunds.map((r) => r.postedRecordId ?? ""), "refund"),
+    coverageForInboxItems(disputes.map((d) => ({
+      scanpayId: d._id, postedRecordId: d.postedRecordId ?? null, jobId: d.matchedJobId,
+      amount: d.amount, chargedAt: d.chargedAt ?? null, computedShare: d.computedShare,
+      context: blankContext,
+    })), "dispute"),
+    coverageForInboxItems(refunds.map((r) => ({
+      scanpayId: r._id, postedRecordId: r.postedRecordId ?? null, jobId: r.matchedJobId,
+      amount: r.refundAmount ?? r.originalAmount, chargedAt: r.chargedAt ?? null,
+      computedShare: r.computedShare, context: blankContext,
+    })), "refund"),
   ]);
   const coverage: Record<string, RecordCoverage> = {};
-  for (const d of disputes) {
-    const c = d.postedRecordId ? disputeCoverage.get(d.postedRecordId) : undefined;
-    if (c) coverage[d._id] = c;
-  }
-  for (const r of refunds) {
-    const c = r.postedRecordId ? refundCoverage.get(r.postedRecordId) : undefined;
-    if (c) coverage[r._id] = c;
+  for (const [id, c] of [...disputeCoverage, ...refundCoverage]) {
+    // An item with nothing posted and nothing to review has no panel to draw.
+    if (c.anyPosted || c.reviewRequired) coverage[id] = c;
   }
 
   // Filter option lists from all enriched rows (pre-filter), like the old inbox.

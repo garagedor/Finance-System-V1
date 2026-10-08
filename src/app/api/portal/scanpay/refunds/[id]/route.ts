@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { readPortalSession } from "@/lib/portal-auth";
 import { postDisputeCharge } from "@/lib/dispute-service";
-import { coverageForRecord } from "@/lib/dispute-coverage";
+import { coverageForInboxItem, coverageForRecord } from "@/lib/dispute-coverage";
 import { canPost, TARGET_LABEL, type PostingTarget } from "@/lib/dispute-targets.ts";
 import { shareFromSnapshot } from "@/lib/scanpay/share";
 import type { ScanpayRefundRecord } from "@/types/scanpay";
@@ -108,9 +108,26 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
 
   // Already posted refuses only THIS target, not the item. Coverage is read
   // from the ledger entries, so a slice charged from a ledger page counts.
-  if (rec.postedRecordId) {
-    const cov = await coverageForRecord(rec.postedRecordId, "refund");
-    if (cov) {
+  {
+    // Checked for every item, not only linked ones. An unlinked item marked
+    // charged is precisely the ambiguous historical case: something was
+    // charged, nothing says what, and offering to charge it again is how the
+    // same party gets billed twice.
+    const cov = await coverageForInboxItem({
+      postedRecordId: rec.postedRecordId ?? null,
+      kind: "refund",
+      computedShare: rec.computedShare,
+      scanpayId: rec._id,
+      jobId,
+      amount: Number(amount),
+      chargedAt: rec.chargedAt ?? null,
+      // Eligibility (does this job have a provider, is an AM assigned) is
+      // the service's to decide — it has the job. This check exists for the
+      // already-posted and under-review cases, so the parties are assumed
+      // present here and the service refuses on the real ones.
+      context: { hasProvider: true, hasAreaManager: true, hasTechnician: true },
+    });
+    {
       const verdict = canPost(cov, target);
       if (!verdict.ok) {
         return NextResponse.json({

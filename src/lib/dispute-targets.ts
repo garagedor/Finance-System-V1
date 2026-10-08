@@ -140,6 +140,38 @@ export function targetOfEntry(entry: PostedEntryView): PostingTarget {
 /* ── Eligibility ─────────────────────────────────────────────────────── */
 
 /** What the resolver needs to know beyond the money. */
+/**
+ * What is known about a target, for the purpose of deciding whether posting
+ * it is safe.
+ *
+ *   POSTED           a live ledger entry on THIS record charges it.
+ *   REVIEW_REQUIRED  something says it may already be charged — a sibling
+ *                    record, or an unresolved historical charge — and the
+ *                    system cannot prove otherwise. Never offered.
+ *   UNPOSTED         nothing suggests a charge.
+ *
+ * Uncertainty resolves to REVIEW_REQUIRED, not to UNPOSTED. Offering a
+ * button that might double-charge is the expensive mistake; refusing one
+ * that was safe costs a person two minutes with the ledger.
+ */
+export type TargetState = "POSTED" | "UNPOSTED" | "REVIEW_REQUIRED";
+
+/** Why an item is under review. Both kinds come from real production shapes. */
+export type HistoricalEvidenceKind =
+  /** The inbox item was marked charged, but no posting is linked to it. The
+   *  mark is set both by a real ledger charge and by the manual "Mark
+   *  charged" toggle, and the two are indistinguishable after the fact. */
+  | "charged_flag"
+  /** A separate record exists for the same job and amount with no live
+   *  ledger entry — a charge was attempted and either failed, was a dry run,
+   *  or was reversed in a way that left no trace. */
+  | "attempted_charge";
+
+export interface HistoricalEvidence {
+  kind: HistoricalEvidenceKind;
+  detail: string;
+}
+
 export interface CoverageContext {
   /** Job has a provider on it. Without one there is nobody to charge. */
   hasProvider: boolean;
@@ -163,6 +195,13 @@ export interface CoverageContext {
    * the two is a decision for a person, not an inference.
    */
   chargedElsewhere?: readonly { target: PostingTarget; recordId: string }[];
+  /**
+   * Evidence that money may already have moved for this item, with no way to
+   * tell which party. Unlike `chargedElsewhere` it names no target, so it
+   * puts EVERY target under review — the whole point is that we do not know
+   * which one was charged.
+   */
+  historicalEvidence?: readonly HistoricalEvidence[];
 }
 
 export interface TargetCoverage {
@@ -186,7 +225,12 @@ export interface TargetCoverage {
   /** Charged under a sibling record for the same job and amount. Blocks, but
    *  is not this record's own posting — see CoverageContext.chargedElsewhere. */
   chargedElsewhere: string | null;
-  /** Eligible, not posted, and nothing already covers it. */
+  /** POSTED / UNPOSTED / REVIEW_REQUIRED. */
+  state: TargetState;
+  /** Set when the state is REVIEW_REQUIRED: what a person has to go and check. */
+  reviewReason: string | null;
+  /** Eligible, UNPOSTED, and nothing already covers it. The only state in
+   *  which a Post control is ever rendered or a write ever accepted. */
   available: boolean;
 }
 
@@ -199,6 +243,11 @@ export interface PostingCoverage {
   remaining: PostingTarget[];
   /** Sum actually charged across live postings. */
   postedTotal: number;
+  /** Any target is under review, so the item needs a person before anything
+   *  further is charged. */
+  reviewRequired: boolean;
+  /** The unresolved historical evidence, verbatim, for the operator to read. */
+  evidence: readonly HistoricalEvidence[];
 }
 
 function eligibilityOf(
@@ -257,6 +306,13 @@ export function resolveCoverage(args: {
 
   const postedTargets = [...liveByTarget.keys()];
 
+  // Evidence names no party, so it clouds every target at once. That is the
+  // honest reading: the record says money may have moved and does not say
+  // for whom.
+  const evidence = args.context.historicalEvidence ?? [];
+  const evidenceReason = evidence.length === 0 ? null
+    : `${evidence.length === 1 ? "A historical charge was" : `${evidence.length} historical charges were`} recorded for this item that no posting accounts for (${evidence.map((e) => e.detail).join("; ")}). Check the ledger before charging anything further.`;
+
   const targets: TargetCoverage[] = POSTING_TARGETS.map((target) => {
     const amount = amountForTarget(args.snapshot, target);
     const { eligible, reason } = eligibilityOf(target, amount, args.context);
@@ -281,12 +337,22 @@ export function resolveCoverage(args: {
             ? `${TARGET_LABEL[sibling.target]} was already charged on a separate record for this job (${sibling.recordId}), from before one dispute could carry several postings. Check that record — charging again here would duplicate it.`
             : null;
 
+    // A live entry on this record is knowledge, so it outranks evidence: we
+    // know this target is charged and we know where.
+    const state: TargetState = own
+      ? "POSTED"
+      : (sibling || (evidenceReason && eligible)) ? "REVIEW_REQUIRED" : "UNPOSTED";
+    const reviewReason = state !== "REVIEW_REQUIRED" ? null
+      : sibling
+        ? `${TARGET_LABEL[sibling.target]} was already charged on record ${sibling.recordId} for this job and amount.`
+        : evidenceReason;
+
     return {
       target,
       label: TARGET_LABEL[target],
       amount,
       eligible,
-      reason: reason ?? blockedReason,
+      reason: reason ?? blockedReason ?? reviewReason,
       posted: !!own,
       ledgerId: own?.ledger_id ?? null,
       ledgerEntryId: own?._id ?? null,
@@ -295,7 +361,10 @@ export function resolveCoverage(args: {
       postedAmount: own ? own.amount : null,
       reversed: !own && reversedTargets.has(target),
       chargedElsewhere: sibling?.recordId ?? null,
-      available: eligible && !own && !coveringPost && !blocksSomethingPosted && !sibling,
+      state,
+      reviewReason,
+      available:
+        state === "UNPOSTED" && eligible && !own && !coveringPost && !blocksSomethingPosted,
     };
   });
 
@@ -304,6 +373,8 @@ export function resolveCoverage(args: {
     anyPosted: liveByTarget.size > 0,
     remaining: targets.filter((t) => t.available).map((t) => t.target),
     postedTotal: [...liveByTarget.values()].reduce((sum, e) => sum + e.amount, 0),
+    reviewRequired: targets.some((t) => t.state === "REVIEW_REQUIRED"),
+    evidence,
   };
 }
 
@@ -311,7 +382,12 @@ export function resolveCoverage(args: {
 
 export type PostRefusal =
   | { ok: true }
-  | { ok: false; code: "already_posted" | "covered" | "conflicts" | "not_eligible" | "charged_elsewhere"; error: string };
+  | {
+      ok: false;
+      code: "already_posted" | "covered" | "conflicts" | "not_eligible"
+          | "charged_elsewhere" | "review_required";
+      error: string;
+    };
 
 /**
  * May this target be posted right now?
@@ -337,6 +413,13 @@ export function canPost(coverage: PostingCoverage, target: PostingTarget): PostR
   if (!row.available) {
     if (row.chargedElsewhere) {
       return { ok: false, code: "charged_elsewhere", error: row.reason ?? `${TARGET_LABEL[target]} is already charged on another record.` };
+    }
+    if (row.state === "REVIEW_REQUIRED") {
+      return {
+        ok: false,
+        code: "review_required",
+        error: row.reviewReason ?? `${TARGET_LABEL[target]} needs review before it can be charged.`,
+      };
     }
     // Eligible and unposted, so the only thing left is an overlap.
     const covered = coverage.targets.some((t) => t.posted && t.target !== target && covers(t.target, target));

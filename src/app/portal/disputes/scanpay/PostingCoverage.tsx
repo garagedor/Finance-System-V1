@@ -77,8 +77,12 @@ export default function PostingCoveragePanel({
   // dropped, because "why is Provider not offered" has an answer and the
   // operator needs the record id to check it.
   const elsewhere = coverage.targets.filter((t) => t.chargedElsewhere && !t.posted);
+  // Historical charges that name no party. The whole item is under review
+  // and no Post control is rendered for any target.
+  const underReview = coverage.reviewRequired && coverage.evidence.length > 0;
 
-  if (posted.length === 0 && open.length === 0 && reversed.length === 0 && elsewhere.length === 0) return null;
+  if (posted.length === 0 && open.length === 0 && reversed.length === 0
+      && elsewhere.length === 0 && !underReview) return null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
@@ -102,6 +106,20 @@ export default function PostingCoveragePanel({
               ↩ {t.label} reversed
             </span>
           ))}
+        </div>
+      )}
+
+      {underReview && (
+        <div style={{ maxWidth: 420, textAlign: "right", borderRadius: 8, padding: "6px 10px",
+          background: "var(--ds-warn-soft)", color: "var(--ds-warn-text)", fontSize: 11.5 }}>
+          <strong>Historical posting detected · review required</strong>
+          <div style={{ marginTop: 3, opacity: 0.9 }}>
+            {coverage.evidence.map((e) => e.detail).join("; ")}.
+          </div>
+          <div style={{ marginTop: 3, opacity: 0.9 }}>
+            Nothing can be charged here until someone checks the ledger. If no money moved, clear the
+            charged mark on this item and the targets become available again.
+          </div>
         </div>
       )}
 

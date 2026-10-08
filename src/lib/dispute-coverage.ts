@@ -22,7 +22,8 @@ import type { ScanpayComputedShare } from "@/types/scanpay";
 import type { DisputeKind } from "@/lib/dispute-charge";
 import {
   resolveCoverage, targetOfEntry,
-  type CoverageContext, type PostedEntryView, type PostingCoverage, type PostingTarget,
+  type CoverageContext, type HistoricalEvidence, type PostedEntryView,
+  type PostingCoverage, type PostingTarget,
 } from "@/lib/dispute-targets.ts";
 
 /** The four slices, however they were obtained. */
@@ -60,79 +61,76 @@ export function slicesFromComputedShare(share: ScanpayComputedShare | null | und
 }
 
 /**
- * Parties charged under a DIFFERENT record for the same economic dispute.
+ * Everything a sibling record or a historical mark can tell us about whether
+ * this item has already been charged.
  *
- * Before one dispute could carry several postings, charging a second party
- * meant creating a second finance_dispute from a ledger page. Production
- * carries 24 jobs shaped that way — typically the Area Manager on the record
- * the inbox knows about and the provider on a sibling. Per-record coverage
- * cannot see the sibling, so the Posted tab would offer a provider charge
- * that already exists.
+ * Two shapes exist in production, both from before one dispute could carry
+ * several postings:
  *
- * Matched on job AND amount, because a job can legitimately carry two real
- * disputes; the same amount on the same job is what makes it one dispute
- * written twice. The result only ever blocks a target, never claims it as
- * this record's own posting — merging the two records is a person's call.
+ *   chargedElsewhere   a separate record for the same job and amount holds a
+ *                      LIVE ledger entry. We know that party is charged, and
+ *                      we know where. Blocks exactly that target.
+ *
+ *   historicalEvidence money may have moved and nothing says for whom:
+ *                      · an inbox item marked charged with no posting linked
+ *                        to it — the mark is written both by a real ledger
+ *                        charge and by the manual "Mark charged" toggle, and
+ *                        after the fact the two are identical;
+ *                      · a separate record for the same job and amount with
+ *                        no live entry — a charge was attempted and left a
+ *                        record but no money.
+ *                      Names no target, so it puts all of them under review.
+ *
+ * Matched on job AND amount: a job can legitimately carry two real disputes,
+ * and the same amount on the same job is what makes it one dispute written
+ * twice. Measured against production, these two rules put 12 of 426 matched
+ * items under review and leave 414 freely postable.
  */
-export async function chargedUnderSiblingRecords(
-  record: { _id: string; job_id?: string; amount: number },
-  kind: DisputeKind,
-): Promise<{ target: PostingTarget; recordId: string }[]> {
-  if (!record.job_id) return [];
+export interface SiblingAnalysis {
+  chargedElsewhere: { target: PostingTarget; recordId: string }[];
+  historicalEvidence: HistoricalEvidence[];
+}
 
-  const amountField = kind === "dispute" ? "amount_disputed" : "amount";
-  const siblings = kind === "dispute"
-    ? await coll<DisputeRecord>(FINANCE_COLLECTIONS.dispute)
-        .find({ job_id: record.job_id, _id: { $ne: record._id }, [amountField]: record.amount } as never)
-        .project({ _id: 1 }).toArray()
-    : await coll<RefundRecord>(FINANCE_COLLECTIONS.refund)
-        .find({ job_id: record.job_id, _id: { $ne: record._id }, [amountField]: record.amount } as never)
-        .project({ _id: 1 }).toArray();
-  if (siblings.length === 0) return [];
+const EMPTY_ANALYSIS: SiblingAnalysis = { chargedElsewhere: [], historicalEvidence: [] };
 
-  const ids = siblings.map((r) => String(r._id));
-  const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
-  const entries = await ec.find({ dispute_id: { $in: ids } }).toArray();
-  if (entries.length === 0) return [];
-
-  // A reversed sibling charge is not a charge, so it must not block.
-  const reversed = new Set(
-    (await ec.find({ reverses_id: { $in: entries.map((e) => e._id) } }, { projection: { reverses_id: 1 } }).toArray())
-      .map((r) => String(r.reverses_id)),
-  );
-
-  const out: { target: PostingTarget; recordId: string }[] = [];
-  for (const e of entries) {
-    if (reversed.has(e._id)) continue;
-    const nested = (e.charge_snapshot as Record<string, unknown> | null | undefined)?.["posted_party"];
-    out.push({
-      target: targetOfEntry({
-        _id: e._id, ledger_id: e.ledger_id, amount: num(e.amount),
-        posted_party: (e.posted_party ?? (typeof nested === "string" ? nested : null)) as PostingTarget | null,
-      }),
-      recordId: String(e.dispute_id),
-    });
-  }
-  return out;
+export interface AnalysisSubject {
+  /** The canonical record, when one exists. Excluded from its own siblings. */
+  recordId: string | null;
+  jobId: string | undefined;
+  amount: number;
+  /** The inbox item, when the caller has one — rule A needs it. */
+  scanpayId?: string | null;
+  chargedAt?: string | null;
+  hasLink?: boolean;
 }
 
 /**
- * The same question for a whole page of records, in a fixed number of
- * queries.
- *
- * The single-record version above is two round trips; calling it per row on
- * a 300-row Posted tab would be ~900, against a cluster in another region.
- * This resolves the whole set with three.
+ * Batched for a whole page. A per-row version of this would be ~900 round
+ * trips on a 300-row Posted tab against a cluster in another region; this is
+ * four queries regardless of the page size.
  */
-export async function chargedUnderSiblingRecordsBatch(
-  records: { _id: string; job_id?: string; amount: number }[],
+export async function siblingAnalysisBatch(
+  subjects: AnalysisSubject[],
   kind: DisputeKind,
-): Promise<Map<string, { target: PostingTarget; recordId: string }[]>> {
-  const out = new Map<string, { target: PostingTarget; recordId: string }[]>();
-  const jobs = [...new Set(records.map((r) => r.job_id).filter((j): j is string => !!j))];
+): Promise<Map<string, SiblingAnalysis>> {
+  const out = new Map<string, SiblingAnalysis>();
+  const key = (s: AnalysisSubject) => s.recordId ?? `sp:${s.scanpayId ?? ""}`;
+
+  // Rule A needs nothing but the subject itself.
+  for (const s of subjects) {
+    const evidence: HistoricalEvidence[] = [];
+    if (s.chargedAt && !s.hasLink) {
+      evidence.push({
+        kind: "charged_flag",
+        detail: `inbox item ${s.scanpayId ?? "(this item)"} was marked charged on ${String(s.chargedAt).slice(0, 10)} with no posting linked to it`,
+      });
+    }
+    if (evidence.length) out.set(key(s), { chargedElsewhere: [], historicalEvidence: evidence });
+  }
+
+  const jobs = [...new Set(subjects.map((s) => s.jobId).filter((j): j is string => !!j))];
   if (jobs.length === 0) return out;
 
-  // Every record on any of these jobs, including the ones passed in.
   const amountField = kind === "dispute" ? "amount_disputed" : "amount";
   const family = kind === "dispute"
     ? await coll<DisputeRecord>(FINANCE_COLLECTIONS.dispute)
@@ -145,37 +143,86 @@ export async function chargedUnderSiblingRecordsBatch(
 
   const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
   const entries = await ec.find({ dispute_id: { $in: family.map((f) => String(f._id)) } }).toArray();
-  if (entries.length === 0) return out;
+  const reversed = entries.length
+    ? new Set(
+        (await ec.find({ reverses_id: { $in: entries.map((e) => e._id) } }, { projection: { reverses_id: 1 } }).toArray())
+          .map((r) => String(r.reverses_id)),
+      )
+    : new Set<string>();
 
-  const reversed = new Set(
-    (await ec.find({ reverses_id: { $in: entries.map((e) => e._id) } }, { projection: { reverses_id: 1 } }).toArray())
-      .map((r) => String(r.reverses_id)),
-  );
+  /* Rule A, job-wide: any inbox item for this job and amount that is marked
+     charged and has no posting linked to it. The subject-level check above
+     covers the inbox posting its own item; this covers a charge arriving
+     from a ledger page or a direct API call, where the service has a job and
+     an amount and no idea which inbox item they belong to. Deliberately NOT
+     excluding the subject — an item that is itself marked charged and
+     unlinked is exactly the case that must be refused. */
+  const spColl = kind === "dispute" ? FINANCE_COLLECTIONS.scanpayDispute : FINANCE_COLLECTIONS.scanpayRefund;
+  const spAmountField = kind === "dispute" ? "amount" : "refundAmount";
+  const chargedUnlinked = await coll<Record<string, unknown>>(spColl)
+    .find({ matchedJobId: { $in: jobs }, chargedAt: { $type: "string" }, postedRecordId: null } as never)
+    .project({ _id: 1, matchedJobId: 1, chargedAt: 1, [spAmountField]: 1 })
+    .toArray();
 
-  const targetByRecord = new Map<string, PostingTarget>();
+  const liveTargetByRecord = new Map<string, PostingTarget>();
   for (const e of entries) {
     if (reversed.has(e._id)) continue;
     const nested = (e.charge_snapshot as Record<string, unknown> | null | undefined)?.["posted_party"];
-    targetByRecord.set(String(e.dispute_id), targetOfEntry({
+    liveTargetByRecord.set(String(e.dispute_id), targetOfEntry({
       _id: e._id, ledger_id: e.ledger_id, amount: num(e.amount),
       posted_party: (e.posted_party ?? (typeof nested === "string" ? nested : null)) as PostingTarget | null,
     }));
   }
 
-  // Same job AND same amount is what makes two records one dispute written
-  // twice; a job can legitimately carry two genuinely different disputes.
-  for (const r of records) {
-    if (!r.job_id) continue;
+  for (const s of subjects) {
+    if (!s.jobId) continue;
+
+    for (const sp of chargedUnlinked) {
+      if (sp["matchedJobId"] !== s.jobId) continue;
+      if (num(sp[spAmountField]) !== s.amount) continue;
+      const k2 = key(s);
+      const prior2 = out.get(k2) ?? { chargedElsewhere: [], historicalEvidence: [] };
+      const detail = `inbox item ${String(sp["_id"])} was marked charged on ${String(sp["chargedAt"]).slice(0, 10)} with no posting linked to it`;
+      if (!prior2.historicalEvidence.some((e) => e.detail === detail)) {
+        prior2.historicalEvidence.push({ kind: "charged_flag", detail });
+      }
+      out.set(k2, prior2);
+    }
+
     const sibs = family.filter((f) =>
-      String(f._id) !== r._id &&
-      f.job_id === r.job_id &&
-      num((f as Record<string, unknown>)[amountField]) === r.amount);
-    const charged = sibs
-      .map((sib) => ({ target: targetByRecord.get(String(sib._id)), recordId: String(sib._id) }))
-      .filter((x): x is { target: PostingTarget; recordId: string } => !!x.target);
-    if (charged.length > 0) out.set(r._id, charged);
+      String(f._id) !== s.recordId &&
+      f.job_id === s.jobId &&
+      num((f as Record<string, unknown>)[amountField]) === s.amount);
+    if (sibs.length === 0) continue;
+
+    const k = key(s);
+    const prior = out.get(k) ?? { chargedElsewhere: [], historicalEvidence: [] };
+    for (const sib of sibs) {
+      const target = liveTargetByRecord.get(String(sib._id));
+      if (target) {
+        prior.chargedElsewhere.push({ target, recordId: String(sib._id) });
+      } else {
+        // A record with no live entry is an attempted charge. It may have
+        // failed, been a dry run, or been reversed without a trace — none of
+        // which can be told apart from here.
+        prior.historicalEvidence.push({
+          kind: "attempted_charge",
+          detail: `record ${String(sib._id)} exists for this job and amount with no live ledger entry`,
+        });
+      }
+    }
+    out.set(k, prior);
   }
   return out;
+}
+
+/** One subject. Prefer the batch form on anything that renders a list. */
+export async function siblingAnalysis(
+  subject: AnalysisSubject,
+  kind: DisputeKind,
+): Promise<SiblingAnalysis> {
+  const m = await siblingAnalysisBatch([subject], kind);
+  return m.get(subject.recordId ?? `sp:${subject.scanpayId ?? ""}`) ?? EMPTY_ANALYSIS;
 }
 
 export interface RecordCoverage extends PostingCoverage {
@@ -242,9 +289,9 @@ export async function coverageForRecord(
     ? num((record as DisputeRecord).amount_disputed)
     : num((record as RefundRecord).amount);
 
-  const [{ entries, reversedIds }, chargedElsewhere] = await Promise.all([
+  const [{ entries, reversedIds }, analysis] = await Promise.all([
     entriesFor(recordId),
-    chargedUnderSiblingRecords({ _id: recordId, job_id: record.job_id, amount }, kind),
+    siblingAnalysis({ recordId, jobId: record.job_id, amount, hasLink: true }, kind),
   ]);
 
   return {
@@ -254,7 +301,11 @@ export async function coverageForRecord(
       snapshot: slicesFromSnapshot(record.charge_snapshot),
       entries,
       reversedEntryIds: reversedIds,
-      context: { ...contextFromRecord(record), chargedElsewhere },
+      context: {
+        ...contextFromRecord(record),
+        chargedElsewhere: analysis.chargedElsewhere,
+        historicalEvidence: analysis.historicalEvidence,
+      },
     }),
   };
 }
@@ -282,6 +333,11 @@ export async function coverageForInboxItem(args: {
   computedShare: ScanpayComputedShare | null | undefined;
   /** Fallback context for an item that has not been posted yet. */
   context: CoverageContext;
+  /** Needed to look for historical charges on an item with no link yet. */
+  scanpayId?: string | null;
+  jobId?: string | null;
+  amount?: number;
+  chargedAt?: string | null;
 }): Promise<RecordCoverage> {
   if (args.postedRecordId) {
     const found = await coverageForRecord(args.postedRecordId, args.kind);
@@ -290,35 +346,75 @@ export async function coverageForInboxItem(args: {
     // through rather than failing the page; nothing is posted if nothing is
     // there to have posted it.
   }
+
+  // An unlinked item is exactly where the historical marks live: charged at
+  // some point, nothing to show for it. Returning empty coverage here — as
+  // this used to — is what would offer a Post button on one.
+  const analysis = await siblingAnalysis({
+    recordId: null,
+    scanpayId: args.scanpayId ?? null,
+    jobId: args.jobId ?? undefined,
+    amount: args.amount ?? 0,
+    chargedAt: args.chargedAt ?? null,
+    hasLink: !!args.postedRecordId,
+  }, args.kind);
+
   return {
     recordId: args.postedRecordId,
     kind: args.kind,
     ...resolveCoverage({
       snapshot: slicesFromComputedShare(args.computedShare),
       entries: [],
-      context: args.context,
+      context: {
+        ...args.context,
+        chargedElsewhere: analysis.chargedElsewhere,
+        historicalEvidence: analysis.historicalEvidence,
+      },
     }),
   };
 }
 
-/** Coverage for many inbox items at once, for a list page. */
-export async function coverageForRecords(
-  ids: readonly string[],
+/* ── One page of inbox items, linked or not ──────────────────────────── */
+
+export interface InboxSubject {
+  scanpayId: string;
+  postedRecordId: string | null;
+  jobId: string | null;
+  amount: number;
+  chargedAt: string | null;
+  computedShare: ScanpayComputedShare | null | undefined;
+  context: CoverageContext;
+}
+
+/**
+ * Coverage for a whole inbox page, keyed by ScanPay id.
+ *
+ * Linked and unlinked items go through the same call on purpose. An unlinked
+ * item that was marked charged is the ambiguous historical case, and
+ * resolving only the linked ones — as the page did — is what left it with no
+ * coverage, no banner, and a Post button.
+ *
+ * Four queries for the records, four for the analysis, however many rows.
+ */
+export async function coverageForInboxItems(
+  subjects: InboxSubject[],
   kind: DisputeKind,
 ): Promise<Map<string, RecordCoverage>> {
   const out = new Map<string, RecordCoverage>();
-  const unique = [...new Set(ids.filter(Boolean))];
-  if (unique.length === 0) return out;
+  if (subjects.length === 0) return out;
 
-  const records = kind === "dispute"
-    ? await coll<DisputeRecord>(FINANCE_COLLECTIONS.dispute).find({ _id: { $in: unique } }).toArray()
-    : await coll<RefundRecord>(FINANCE_COLLECTIONS.refund).find({ _id: { $in: unique } }).toArray();
-  if (records.length === 0) return out;
+  const linkedIds = subjects.map((s) => s.postedRecordId).filter((x): x is string => !!x);
+  const records = linkedIds.length
+    ? (kind === "dispute"
+        ? await coll<DisputeRecord>(FINANCE_COLLECTIONS.dispute).find({ _id: { $in: linkedIds } }).toArray()
+        : await coll<RefundRecord>(FINANCE_COLLECTIONS.refund).find({ _id: { $in: linkedIds } }).toArray())
+    : [];
+  const recordById = new Map(records.map((r) => [r._id, r]));
 
   const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
-  const recordIds = records.map((r) => r._id);
-  const allEntries = await ec.find({ dispute_id: { $in: recordIds } }).toArray();
-
+  const allEntries = records.length
+    ? await ec.find({ dispute_id: { $in: records.map((r) => r._id) } }).toArray()
+    : [];
   const [reversals, ledgers] = await Promise.all([
     allEntries.length
       ? ec.find({ reverses_id: { $in: allEntries.map((e) => e._id) } }, { projection: { reverses_id: 1 } }).toArray()
@@ -331,11 +427,12 @@ export async function coverageForRecords(
   const byLedger = new Map(ledgers.map((l) => [l._id, l]));
   const reversedIds = reversals.map((r) => String(r.reverses_id)).filter(Boolean);
 
-  const byRecord = new Map<string, PostedEntryView[]>();
+  const entriesByRecord = new Map<string, PostedEntryView[]>();
   for (const e of allEntries) {
     const l = byLedger.get(e.ledger_id);
     const nested = (e.charge_snapshot as Record<string, unknown> | null | undefined)?.["posted_party"];
-    const view: PostedEntryView = {
+    const key = String(e.dispute_id);
+    entriesByRecord.set(key, [...(entriesByRecord.get(key) ?? []), {
       _id: e._id,
       ledger_id: e.ledger_id,
       posted_party: (e.posted_party ?? (typeof nested === "string" ? nested : null)) as PostingTarget | null,
@@ -344,32 +441,38 @@ export async function coverageForRecords(
       created_at: e.created_at,
       ledger_name: l ? `${l.holder_name}${l.location ? ` · ${l.location}` : ""}` : null,
       ledger_role: l?.role ?? null,
-    };
-    const key = String(e.dispute_id);
-    byRecord.set(key, [...(byRecord.get(key) ?? []), view]);
+    }]);
   }
 
-  const amountOf = (r: DisputeRecord | RefundRecord) =>
-    kind === "dispute" ? num((r as DisputeRecord).amount_disputed) : num((r as RefundRecord).amount);
-
-  // Resolved for the whole page at once — a per-row lookup here is an N+1 on
-  // the hottest screen in the module.
-  const siblings = await chargedUnderSiblingRecordsBatch(
-    records.map((r) => ({ _id: r._id, job_id: r.job_id, amount: amountOf(r) })),
+  const analysis = await siblingAnalysisBatch(
+    subjects.map((s) => ({
+      recordId: s.postedRecordId,
+      scanpayId: s.scanpayId,
+      jobId: s.jobId ?? undefined,
+      amount: s.amount,
+      chargedAt: s.chargedAt,
+      hasLink: !!s.postedRecordId,
+    })),
     kind,
   );
 
-  for (const r of records) {
-    out.set(r._id, {
-      recordId: r._id,
+  for (const s of subjects) {
+    const record = s.postedRecordId ? recordById.get(s.postedRecordId) : undefined;
+    const a = analysis.get(s.postedRecordId ?? `sp:${s.scanpayId}`)
+      ?? { chargedElsewhere: [], historicalEvidence: [] };
+    out.set(s.scanpayId, {
+      recordId: s.postedRecordId,
       kind,
       ...resolveCoverage({
-        snapshot: slicesFromSnapshot(r.charge_snapshot),
-        entries: byRecord.get(r._id) ?? [],
+        // A linked record's own snapshot is the authority; an unlinked item
+        // only has the dry run stored at verify time.
+        snapshot: record ? slicesFromSnapshot(record.charge_snapshot) : slicesFromComputedShare(s.computedShare),
+        entries: s.postedRecordId ? (entriesByRecord.get(s.postedRecordId) ?? []) : [],
         reversedEntryIds: reversedIds,
         context: {
-          ...contextFromRecord(r),
-          chargedElsewhere: siblings.get(r._id) ?? [],
+          ...(record ? contextFromRecord(record) : s.context),
+          chargedElsewhere: a.chargedElsewhere,
+          historicalEvidence: a.historicalEvidence,
         },
       }),
     });

@@ -418,3 +418,138 @@ test("the production shape: AM here, provider on a sibling", () => {
   assert.equal(row(c, "provider").available, false, "and the provider is already charged elsewhere");
   assert.deepEqual(c.remaining, ["technician"], "only the genuinely uncharged slice is offered");
 });
+
+/* ── Historical evidence: POSTED / UNPOSTED / REVIEW_REQUIRED ────────────
+   Production carries items marked charged with no posting linked to them.
+   The mark is written both by a real ledger charge and by the manual "Mark
+   charged" toggle, and after the fact the two are identical — so the only
+   honest answer is "we do not know", and the only safe one is to refuse.  */
+
+const chargedFlag = (detail = "inbox item DS-1 was marked charged on 2026-09-27 with no posting linked to it") =>
+  ({ kind: "charged_flag" as const, detail });
+const attempted = (detail = "record disp_x exists for this job and amount with no live ledger entry") =>
+  ({ kind: "attempted_charge" as const, detail });
+
+test("chargedAt with no linked posting blocks every target", () => {
+  const c = resolveCoverage({
+    snapshot: SNAP, entries: [],
+    context: { ...FULL_CTX, historicalEvidence: [chargedFlag()] },
+  });
+  assert.equal(c.reviewRequired, true);
+  assert.deepEqual(c.remaining, [], "nothing may be posted while this is unresolved");
+  for (const t of POSTING_TARGETS) {
+    assert.equal(row(c, t).state, "REVIEW_REQUIRED", `${t} should be under review`);
+    const v = canPost(c, t);
+    assert.equal(v.ok, false);
+    assert.equal(v.ok === false && v.code, "review_required");
+  }
+});
+
+test("an attempted charge with no live entry blocks every target too", () => {
+  const c = resolveCoverage({
+    snapshot: SNAP, entries: [],
+    context: { ...FULL_CTX, historicalEvidence: [attempted()] },
+  });
+  assert.equal(c.reviewRequired, true);
+  assert.deepEqual(c.remaining, []);
+});
+
+test("the review reason names what to go and look at", () => {
+  const c = resolveCoverage({
+    snapshot: SNAP, entries: [],
+    context: { ...FULL_CTX, historicalEvidence: [chargedFlag("inbox item DS-1785301316-182 was marked charged on 2026-09-27 with no posting linked to it")] },
+  });
+  assert.match(row(c, "provider").reviewReason ?? "", /DS-1785301316-182/);
+  assert.deepEqual(c.evidence.map((e) => e.kind), ["charged_flag"]);
+});
+
+test("an exact linked posting reads POSTED, not under review", () => {
+  // Knowledge beats suspicion: we know this target is charged and where.
+  const c = resolveCoverage({
+    snapshot: SNAP, entries: [entry("area_manager")],
+    context: { ...FULL_CTX, historicalEvidence: [chargedFlag()] },
+  });
+  assert.equal(row(c, "area_manager").state, "POSTED");
+  assert.equal(row(c, "area_manager").ledgerEntryId, "len_area_manager");
+  assert.equal(canPost(c, "area_manager").ok === false && canPost(c, "area_manager").code, "already_posted");
+  // …while everything it does not account for stays under review.
+  assert.equal(row(c, "provider").state, "REVIEW_REQUIRED");
+});
+
+test("nothing posted and no evidence reads UNPOSTED", () => {
+  const c = cover([]);
+  for (const t of POSTING_TARGETS) assert.equal(row(c, t).state, "UNPOSTED");
+  assert.equal(c.reviewRequired, false);
+  assert.deepEqual(c.evidence, []);
+});
+
+test("an ineligible target is UNPOSTED, not under review", () => {
+  // It is not posted and nothing suggests it was; it simply cannot be
+  // charged. Calling that "review required" would send people looking for a
+  // posting that never existed.
+  const c = cover([], [], { ...FULL_CTX, hasProvider: false });
+  assert.equal(row(c, "provider").state, "UNPOSTED");
+  assert.equal(row(c, "provider").available, false);
+  assert.equal(c.reviewRequired, false);
+});
+
+test("a sibling charge is REVIEW_REQUIRED, never POSTED", () => {
+  // The false-merge guard. Two records on one job with the same amount may
+  // be one dispute written twice — or two real disputes from different
+  // sources. Blocking is right either way; claiming this record carries the
+  // sibling's charge is wrong in the second case and would make the Posted
+  // tab lie about which entry to reverse.
+  const c = resolveCoverage({
+    snapshot: SNAP, entries: [],
+    context: { ...FULL_CTX, chargedElsewhere: [sibling("provider", "disp_other_source")] },
+  });
+  assert.equal(row(c, "provider").state, "REVIEW_REQUIRED");
+  assert.equal(row(c, "provider").posted, false, "it is not posted HERE");
+  assert.equal(row(c, "provider").ledgerEntryId, null, "and this record has no entry to show");
+  assert.equal(c.anyPosted, false);
+  assert.equal(c.postedTotal, 0, "a sibling's money is not counted as this record's");
+});
+
+test("a reversal reopens only the target it reversed", () => {
+  const am = entry("area_manager");
+  const pv = entry("provider");
+  const c = cover([am, pv], [pv._id]);
+  assert.equal(row(c, "provider").state, "UNPOSTED", "reversed, so chargeable again");
+  assert.equal(row(c, "provider").available, true);
+  assert.equal(row(c, "area_manager").state, "POSTED", "untouched by the other's reversal");
+  assert.equal(canPost(c, "area_manager").ok, false);
+});
+
+test("evidence does not resurrect a reversed posting", () => {
+  // A reversed charge plus an unresolved mark is still "someone must look".
+  const pv = entry("provider");
+  const c = resolveCoverage({
+    snapshot: SNAP, entries: [pv], reversedEntryIds: [pv._id],
+    context: { ...FULL_CTX, historicalEvidence: [chargedFlag()] },
+  });
+  assert.equal(row(c, "provider").posted, false);
+  assert.equal(row(c, "provider").reversed, true);
+  assert.equal(row(c, "provider").state, "REVIEW_REQUIRED");
+  assert.equal(row(c, "provider").available, false);
+});
+
+test("available is the only gate, and it agrees with canPost everywhere", () => {
+  // The UI renders a control from `available`; the server refuses from
+  // `canPost`. If they ever disagree, a button appears that cannot work.
+  const worlds = [
+    { entries: [] as PostedEntryView[], ctx: FULL_CTX },
+    { entries: [entry("area_manager")], ctx: FULL_CTX },
+    { entries: [entry("combined")], ctx: FULL_CTX },
+    { entries: [], ctx: { ...FULL_CTX, historicalEvidence: [chargedFlag()] } },
+    { entries: [], ctx: { ...FULL_CTX, chargedElsewhere: [sibling("provider")] } },
+    { entries: [], ctx: { ...FULL_CTX, hasProvider: false } },
+    { entries: [entry("provider")], ctx: { ...FULL_CTX, historicalEvidence: [attempted()] } },
+  ];
+  for (const w of worlds) {
+    const c = resolveCoverage({ snapshot: SNAP, entries: w.entries, context: w.ctx });
+    for (const t of POSTING_TARGETS) {
+      assert.equal(canPost(c, t).ok, row(c, t).available,
+        `${t} disagrees: available=${row(c, t).available} canPost=${canPost(c, t).ok}`);
+    }
+  }
+});
