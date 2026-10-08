@@ -294,6 +294,10 @@ export interface DisputeRecord {
   area_manager_own_portion?: number;     // AM charge − technician info
   ledger_entry_id?: string;              // the posted finance_ledger_entry
   charge_snapshot?: Record<string, unknown>;
+  // Set when a person confirmed this record left no money on any ledger, so it
+  // stops putting its job under review (lib/dispute-coverage).
+  released_at?: string;
+  released_by?: string;
   created_at: string;
   created_by?: string;
 }
@@ -321,6 +325,8 @@ export interface RefundRecord {
   area_manager_own_portion?: number;
   ledger_entry_id?: string;
   charge_snapshot?: Record<string, unknown>;
+  released_at?: string;           // see DisputeRecord.released_at
+  released_by?: string;
   created_at: string;
   created_by?: string;
 }

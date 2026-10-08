@@ -297,3 +297,39 @@ test("28. the three states are exhaustive and only one of them is postable", () 
   assert.match(TARGETS, /export type TargetState = "POSTED" \| "UNPOSTED" \| "REVIEW_REQUIRED"/);
   assert.match(TARGETS, /state === "UNPOSTED" && eligible/);
 });
+
+/* ── Releasing a leftover record ─────────────────────────────────────── */
+
+const RELEASE_ROUTE = strip(read("app", "api", "portal", "disputes", "release", "route.ts"));
+
+test("29. a released leftover record no longer puts its job under review", () => {
+  const fn = COVERAGE.slice(COVERAGE.indexOf("export async function siblingAnalysisBatch"));
+  // The flag has to be fetched for both kinds, or it is always undefined.
+  assert.equal((fn.match(/released_at: 1/g) ?? []).length, 2);
+  assert.match(fn, /else if \(!\(sib as Record<string, unknown>\)\["released_at"\]\)/);
+  // ...and only the no-entry branch skips it: a released record that later
+  // holds a live entry still blocks that target as charged elsewhere.
+  assert.ok(fn.indexOf("chargedElsewhere.push") < fn.indexOf(`["released_at"]`));
+});
+
+test("30. attempted_charge evidence names the record to release", () => {
+  assert.match(COVERAGE, /kind: "attempted_charge",[\s\S]{0,200}recordId: String\(sib\._id\),\s*recordKind: kind/);
+});
+
+test("31. release is refused while the record still holds a live entry", () => {
+  assert.match(RELEASE_ROUTE, /readPortalSession\(\)/);
+  assert.match(RELEASE_ROUTE, /reverses_id: \{ \$in: entries\.map/);
+  assert.match(RELEASE_ROUTE, /if \(live\.length > 0\)[\s\S]{0,400}status: 409/);
+  // It marks, audits, and never deletes.
+  assert.match(RELEASE_ROUTE, /released_at: new Date\(\)\.toISOString\(\), released_by: session\.name/);
+  assert.match(RELEASE_ROUTE, /await audit\(/);
+  assert.doesNotMatch(RELEASE_ROUTE, /delete(One|Many)/);
+});
+
+test("32. the review banner offers the release only for a leftover record", () => {
+  const UI = strip(read("app", "portal", "disputes", "scanpay", "PostingCoverage.tsx"));
+  assert.match(UI, /e\.kind === "attempted_charge" && e\.recordId && e\.recordKind/);
+  assert.match(UI, /\/api\/portal\/disputes\/release/);
+  // The charged-mark advice is shown only when that is the evidence.
+  assert.match(UI, /e\.kind === "charged_flag"\) &&\s*" If no money moved, clear the charged mark/);
+});

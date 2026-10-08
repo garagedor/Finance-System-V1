@@ -170,6 +170,10 @@ export type HistoricalEvidenceKind =
 export interface HistoricalEvidence {
   kind: HistoricalEvidenceKind;
   detail: string;
+  /** attempted_charge only: the record to check, and to release once a person
+   *  has confirmed no money moved. */
+  recordId?: string;
+  recordKind?: "dispute" | "refund";
 }
 
 export interface CoverageContext {

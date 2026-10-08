@@ -135,10 +135,10 @@ export async function siblingAnalysisBatch(
   const family = kind === "dispute"
     ? await coll<DisputeRecord>(FINANCE_COLLECTIONS.dispute)
         .find({ job_id: { $in: jobs } } as never)
-        .project({ _id: 1, job_id: 1, [amountField]: 1 }).toArray()
+        .project({ _id: 1, job_id: 1, [amountField]: 1, released_at: 1 }).toArray()
     : await coll<RefundRecord>(FINANCE_COLLECTIONS.refund)
         .find({ job_id: { $in: jobs } } as never)
-        .project({ _id: 1, job_id: 1, [amountField]: 1 }).toArray();
+        .project({ _id: 1, job_id: 1, [amountField]: 1, released_at: 1 }).toArray();
   if (family.length === 0) return out;
 
   const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
@@ -201,13 +201,18 @@ export async function siblingAnalysisBatch(
       const target = liveTargetByRecord.get(String(sib._id));
       if (target) {
         prior.chargedElsewhere.push({ target, recordId: String(sib._id) });
-      } else {
+      } else if (!(sib as Record<string, unknown>)["released_at"]) {
         // A record with no live entry is an attempted charge. It may have
-        // failed, been a dry run, or been reversed without a trace — none of
-        // which can be told apart from here.
+        // failed, been a dry run, or had its entry deleted from the ledger —
+        // none of which can be told apart from here. A person who has checked
+        // can release it (api/portal/disputes/release), and then it no longer
+        // counts. A released record that later gains a live entry is caught
+        // by the branch above, so release never hides a real charge.
         prior.historicalEvidence.push({
           kind: "attempted_charge",
           detail: `record ${String(sib._id)} exists for this job and amount with no live ledger entry`,
+          recordId: String(sib._id),
+          recordKind: kind,
         });
       }
     }

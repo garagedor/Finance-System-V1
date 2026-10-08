@@ -117,9 +117,15 @@ export default function PostingCoveragePanel({
             {coverage.evidence.map((e) => e.detail).join("; ")}.
           </div>
           <div style={{ marginTop: 3, opacity: 0.9 }}>
-            Nothing can be charged here until someone checks the ledger. If no money moved, clear the
-            charged mark on this item and the targets become available again.
+            Nothing can be charged here until someone checks the ledger.
+            {coverage.evidence.some((e) => e.kind === "charged_flag") &&
+              " If no money moved, clear the charged mark on this item and the targets become available again."}
+            {coverage.evidence.some((e) => e.kind === "attempted_charge") &&
+              " If the leftover record left no money on any ledger, release it below and the targets become available again."}
           </div>
+          {coverage.evidence
+            .filter((e) => e.kind === "attempted_charge" && e.recordId && e.recordKind)
+            .map((e) => <ReleaseRecordButton key={e.recordId} recordId={e.recordId!} kind={e.recordKind!} />)}
         </div>
       )}
 
@@ -143,6 +149,42 @@ export default function PostingCoveragePanel({
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Release a leftover record that holds no live ledger entry. The server
+ *  refuses if one exists, so a wrong click cannot hide a real charge. */
+function ReleaseRecordButton({ recordId, kind }: { recordId: string; kind: "dispute" | "refund" }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function release() {
+    if (!window.confirm(
+      `Release record ${recordId}?\n\nOnly do this if you checked the ledgers and no money was charged for it ` +
+      `(for example, its entry was deleted). The record is kept; it just stops blocking new postings for this job.`,
+    )) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch("/api/portal/disputes/release", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recordId, kind }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      router.refresh();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Failed to release");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ marginTop: 6 }}>
+      <button className="portal-btn" style={{ padding: "3px 9px", fontSize: 11 }} onClick={release} disabled={busy}>
+        {busy ? "Releasing…" : `No money moved — release ${recordId}`}
+      </button>
+      {err && <div style={{ marginTop: 4, color: "var(--ds-crit-text)" }}>{err}</div>}
     </div>
   );
 }
