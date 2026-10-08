@@ -21,7 +21,7 @@ import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
 import type { ScanpayComputedShare } from "@/types/scanpay";
 import type { DisputeKind } from "@/lib/dispute-charge";
 import {
-  resolveCoverage,
+  resolveCoverage, targetOfEntry,
   type CoverageContext, type PostedEntryView, type PostingCoverage, type PostingTarget,
 } from "@/lib/dispute-targets.ts";
 
@@ -57,6 +57,125 @@ export function slicesFromComputedShare(share: ScanpayComputedShare | null | und
     providerCharge: num(share?.providerCharge),
     amLedgerCharge: num(share?.amLedgerCharge),
   };
+}
+
+/**
+ * Parties charged under a DIFFERENT record for the same economic dispute.
+ *
+ * Before one dispute could carry several postings, charging a second party
+ * meant creating a second finance_dispute from a ledger page. Production
+ * carries 24 jobs shaped that way — typically the Area Manager on the record
+ * the inbox knows about and the provider on a sibling. Per-record coverage
+ * cannot see the sibling, so the Posted tab would offer a provider charge
+ * that already exists.
+ *
+ * Matched on job AND amount, because a job can legitimately carry two real
+ * disputes; the same amount on the same job is what makes it one dispute
+ * written twice. The result only ever blocks a target, never claims it as
+ * this record's own posting — merging the two records is a person's call.
+ */
+export async function chargedUnderSiblingRecords(
+  record: { _id: string; job_id?: string; amount: number },
+  kind: DisputeKind,
+): Promise<{ target: PostingTarget; recordId: string }[]> {
+  if (!record.job_id) return [];
+
+  const amountField = kind === "dispute" ? "amount_disputed" : "amount";
+  const siblings = kind === "dispute"
+    ? await coll<DisputeRecord>(FINANCE_COLLECTIONS.dispute)
+        .find({ job_id: record.job_id, _id: { $ne: record._id }, [amountField]: record.amount } as never)
+        .project({ _id: 1 }).toArray()
+    : await coll<RefundRecord>(FINANCE_COLLECTIONS.refund)
+        .find({ job_id: record.job_id, _id: { $ne: record._id }, [amountField]: record.amount } as never)
+        .project({ _id: 1 }).toArray();
+  if (siblings.length === 0) return [];
+
+  const ids = siblings.map((r) => String(r._id));
+  const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
+  const entries = await ec.find({ dispute_id: { $in: ids } }).toArray();
+  if (entries.length === 0) return [];
+
+  // A reversed sibling charge is not a charge, so it must not block.
+  const reversed = new Set(
+    (await ec.find({ reverses_id: { $in: entries.map((e) => e._id) } }, { projection: { reverses_id: 1 } }).toArray())
+      .map((r) => String(r.reverses_id)),
+  );
+
+  const out: { target: PostingTarget; recordId: string }[] = [];
+  for (const e of entries) {
+    if (reversed.has(e._id)) continue;
+    const nested = (e.charge_snapshot as Record<string, unknown> | null | undefined)?.["posted_party"];
+    out.push({
+      target: targetOfEntry({
+        _id: e._id, ledger_id: e.ledger_id, amount: num(e.amount),
+        posted_party: (e.posted_party ?? (typeof nested === "string" ? nested : null)) as PostingTarget | null,
+      }),
+      recordId: String(e.dispute_id),
+    });
+  }
+  return out;
+}
+
+/**
+ * The same question for a whole page of records, in a fixed number of
+ * queries.
+ *
+ * The single-record version above is two round trips; calling it per row on
+ * a 300-row Posted tab would be ~900, against a cluster in another region.
+ * This resolves the whole set with three.
+ */
+export async function chargedUnderSiblingRecordsBatch(
+  records: { _id: string; job_id?: string; amount: number }[],
+  kind: DisputeKind,
+): Promise<Map<string, { target: PostingTarget; recordId: string }[]>> {
+  const out = new Map<string, { target: PostingTarget; recordId: string }[]>();
+  const jobs = [...new Set(records.map((r) => r.job_id).filter((j): j is string => !!j))];
+  if (jobs.length === 0) return out;
+
+  // Every record on any of these jobs, including the ones passed in.
+  const amountField = kind === "dispute" ? "amount_disputed" : "amount";
+  const family = kind === "dispute"
+    ? await coll<DisputeRecord>(FINANCE_COLLECTIONS.dispute)
+        .find({ job_id: { $in: jobs } } as never)
+        .project({ _id: 1, job_id: 1, [amountField]: 1 }).toArray()
+    : await coll<RefundRecord>(FINANCE_COLLECTIONS.refund)
+        .find({ job_id: { $in: jobs } } as never)
+        .project({ _id: 1, job_id: 1, [amountField]: 1 }).toArray();
+  if (family.length === 0) return out;
+
+  const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
+  const entries = await ec.find({ dispute_id: { $in: family.map((f) => String(f._id)) } }).toArray();
+  if (entries.length === 0) return out;
+
+  const reversed = new Set(
+    (await ec.find({ reverses_id: { $in: entries.map((e) => e._id) } }, { projection: { reverses_id: 1 } }).toArray())
+      .map((r) => String(r.reverses_id)),
+  );
+
+  const targetByRecord = new Map<string, PostingTarget>();
+  for (const e of entries) {
+    if (reversed.has(e._id)) continue;
+    const nested = (e.charge_snapshot as Record<string, unknown> | null | undefined)?.["posted_party"];
+    targetByRecord.set(String(e.dispute_id), targetOfEntry({
+      _id: e._id, ledger_id: e.ledger_id, amount: num(e.amount),
+      posted_party: (e.posted_party ?? (typeof nested === "string" ? nested : null)) as PostingTarget | null,
+    }));
+  }
+
+  // Same job AND same amount is what makes two records one dispute written
+  // twice; a job can legitimately carry two genuinely different disputes.
+  for (const r of records) {
+    if (!r.job_id) continue;
+    const sibs = family.filter((f) =>
+      String(f._id) !== r._id &&
+      f.job_id === r.job_id &&
+      num((f as Record<string, unknown>)[amountField]) === r.amount);
+    const charged = sibs
+      .map((sib) => ({ target: targetByRecord.get(String(sib._id)), recordId: String(sib._id) }))
+      .filter((x): x is { target: PostingTarget; recordId: string } => !!x.target);
+    if (charged.length > 0) out.set(r._id, charged);
+  }
+  return out;
 }
 
 export interface RecordCoverage extends PostingCoverage {
@@ -119,7 +238,14 @@ export async function coverageForRecord(
     : await coll<RefundRecord>(FINANCE_COLLECTIONS.refund).findOne({ _id: recordId });
   if (!record) return null;
 
-  const { entries, reversedIds } = await entriesFor(recordId);
+  const amount = kind === "dispute"
+    ? num((record as DisputeRecord).amount_disputed)
+    : num((record as RefundRecord).amount);
+
+  const [{ entries, reversedIds }, chargedElsewhere] = await Promise.all([
+    entriesFor(recordId),
+    chargedUnderSiblingRecords({ _id: recordId, job_id: record.job_id, amount }, kind),
+  ]);
 
   return {
     recordId,
@@ -128,7 +254,7 @@ export async function coverageForRecord(
       snapshot: slicesFromSnapshot(record.charge_snapshot),
       entries,
       reversedEntryIds: reversedIds,
-      context: contextFromRecord(record),
+      context: { ...contextFromRecord(record), chargedElsewhere },
     }),
   };
 }
@@ -223,6 +349,16 @@ export async function coverageForRecords(
     byRecord.set(key, [...(byRecord.get(key) ?? []), view]);
   }
 
+  const amountOf = (r: DisputeRecord | RefundRecord) =>
+    kind === "dispute" ? num((r as DisputeRecord).amount_disputed) : num((r as RefundRecord).amount);
+
+  // Resolved for the whole page at once — a per-row lookup here is an N+1 on
+  // the hottest screen in the module.
+  const siblings = await chargedUnderSiblingRecordsBatch(
+    records.map((r) => ({ _id: r._id, job_id: r.job_id, amount: amountOf(r) })),
+    kind,
+  );
+
   for (const r of records) {
     out.set(r._id, {
       recordId: r._id,
@@ -231,7 +367,10 @@ export async function coverageForRecords(
         snapshot: slicesFromSnapshot(r.charge_snapshot),
         entries: byRecord.get(r._id) ?? [],
         reversedEntryIds: reversedIds,
-        context: contextFromRecord(r),
+        context: {
+          ...contextFromRecord(r),
+          chargedElsewhere: siblings.get(r._id) ?? [],
+        },
       }),
     });
   }

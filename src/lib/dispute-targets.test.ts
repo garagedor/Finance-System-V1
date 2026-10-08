@@ -333,3 +333,88 @@ test("re-posting after a reversal shows the newest live entry", () => {
   assert.equal(row(c, "provider").ledgerEntryId, "len_v2");
   assert.equal(row(c, "provider").ledgerId, "ldg_new");
 });
+
+/* ── Charged under a sibling record ──────────────────────────────────────
+   Before one dispute could hold several postings, charging a second party
+   meant creating a second finance_dispute from a ledger page. Production
+   carries 24 jobs shaped that way — typically the Area Manager on the record
+   the inbox knows about and the provider on a sibling, same job, same
+   amount. Per-record coverage cannot see the sibling, so without this guard
+   the Posted tab would offer a provider charge that already exists. Measured
+   at 17 live items before the guard was added.                            */
+
+const sibling = (target: PostingTarget, recordId = "disp_sibling") => ({ target, recordId });
+
+test("a party charged on a sibling record is not offered again", () => {
+  const c = resolveCoverage({
+    snapshot: SNAP,
+    entries: [entry("area_manager")],
+    context: { ...FULL_CTX, chargedElsewhere: [sibling("provider")] },
+  });
+  assert.equal(row(c, "provider").available, false, "the provider is already charged, on another record");
+  assert.equal(row(c, "provider").chargedElsewhere, "disp_sibling");
+  assert.match(row(c, "provider").reason ?? "", /separate record/i);
+});
+
+test("the sibling is never claimed as this record's own posting", () => {
+  // Overstating it would be the opposite error: the Posted tab would show a
+  // charge this record does not carry, and reversing it from here would miss.
+  const c = resolveCoverage({
+    snapshot: SNAP, entries: [],
+    context: { ...FULL_CTX, chargedElsewhere: [sibling("provider")] },
+  });
+  assert.equal(row(c, "provider").posted, false);
+  assert.equal(row(c, "provider").ledgerEntryId, null);
+  assert.equal(c.anyPosted, false, "nothing is posted on THIS record");
+});
+
+test("the write path refuses it with a code of its own", () => {
+  const c = resolveCoverage({
+    snapshot: SNAP, entries: [],
+    context: { ...FULL_CTX, chargedElsewhere: [sibling("provider", "disp_mukeobq2ky6sbstz")] },
+  });
+  const v = canPost(c, "provider");
+  assert.equal(v.ok, false);
+  assert.equal(v.ok === false && v.code, "charged_elsewhere");
+  assert.match(v.ok === false ? v.error : "", /disp_mukeobq2ky6sbstz/,
+    "the refusal must name the record to go and look at");
+});
+
+test("a sibling blocks the overlapping targets too, in both directions", () => {
+  // A sibling that charged `combined` already covered the technician and the
+  // Area Manager; a sibling that charged the technician makes `combined`
+  // unsafe, because combined contains it.
+  const viaCombined = resolveCoverage({
+    snapshot: SNAP, entries: [],
+    context: { ...FULL_CTX, chargedElsewhere: [sibling("combined")] },
+  });
+  for (const t of ["area_manager", "technician", "combined"] as const) {
+    assert.equal(row(viaCombined, t).available, false, `${t} is inside the sibling's combined charge`);
+  }
+  assert.equal(row(viaCombined, "provider").available, true);
+
+  const viaTech = resolveCoverage({
+    snapshot: SNAP, entries: [],
+    context: { ...FULL_CTX, chargedElsewhere: [sibling("technician")] },
+  });
+  assert.equal(row(viaTech, "combined").available, false, "combined would charge the technician twice");
+  assert.equal(row(viaTech, "area_manager").available, true, "the other half is untouched");
+});
+
+test("no sibling means nothing is blocked", () => {
+  const c = resolveCoverage({ snapshot: SNAP, entries: [], context: { ...FULL_CTX, chargedElsewhere: [] } });
+  assert.deepEqual(c.remaining.sort(), ["area_manager", "combined", "provider", "technician"]);
+  for (const t of POSTING_TARGETS) assert.equal(row(c, t).chargedElsewhere, null);
+});
+
+test("the production shape: AM here, provider on a sibling", () => {
+  // Exactly the 17 items the audit found, as the resolver sees them.
+  const c = resolveCoverage({
+    snapshot: SNAP,
+    entries: [entry(null, { _id: "len_legacy_am" })].map((e) => ({ ...e, posted_party: "area_manager" as const })),
+    context: { ...FULL_CTX, chargedElsewhere: [sibling("provider", "disp_mukeobq2ky6sbstz")] },
+  });
+  assert.equal(row(c, "area_manager").posted, true, "this record carries the AM charge");
+  assert.equal(row(c, "provider").available, false, "and the provider is already charged elsewhere");
+  assert.deepEqual(c.remaining, ["technician"], "only the genuinely uncharged slice is offered");
+});

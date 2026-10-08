@@ -33,6 +33,7 @@ import {
   amountForTarget, canPost, resolveCoverage, targetOfEntry,
   type PostedEntryView, type PostingCoverage, type PostingTarget,
 } from "@/lib/dispute-targets.ts";
+import { chargedUnderSiblingRecords } from "@/lib/dispute-coverage";
 import type { JobRow, Location } from "@/types/job";
 import type { DisputeRecord, RefundRecord } from "@/types/finance";
 import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
@@ -252,10 +253,20 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     };
   };
 
+  // Parties already charged under a SEPARATE record for the same job and
+  // amount. Production carries pairs like that from before one dispute could
+  // hold several postings, and per-record coverage cannot see them — so this
+  // is checked on the write path too, not only where the buttons are drawn.
+  const chargedElsewhere = await chargedUnderSiblingRecords(
+    { _id: recordId, job_id: input.jobId, amount: num(input.amount) },
+    input.type,
+  );
+
   const coverageContext = {
     hasProvider: !!job.provider,
     hasAreaManager: !!amName || !!input.ledgerId,
     hasTechnician: !!(chargedTech || job.tech),
+    chargedElsewhere,
   };
   const before = resolveCoverage({
     snapshot,

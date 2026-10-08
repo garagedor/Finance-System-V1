@@ -188,3 +188,61 @@ test("17. every target the service accepts is in the canonical list", () => {
   }
   assert.equal(POSTING_TARGETS.length, 4);
 });
+
+/* ── 7. The sibling-record guard ──────────────────────────────────────── */
+
+test("18. coverage matches siblings on job AND amount, not job alone", () => {
+  // A job can legitimately carry two real disputes. Matching on the job
+  // alone would block a genuine second charge; the amount is what makes it
+  // one dispute written twice.
+  assert.match(COVERAGE, /chargedUnderSiblingRecords/);
+  const fn = COVERAGE.slice(COVERAGE.indexOf("export async function chargedUnderSiblingRecords"));
+  assert.match(fn.slice(0, 1800), /job_id: record\.job_id/);
+  assert.match(fn.slice(0, 1800), /_id: \{ \$ne: record\._id \}/);
+  assert.match(fn.slice(0, 1800), /\[amountField\]: record\.amount/);
+});
+
+test("19. a reversed sibling charge does not block", () => {
+  const fn = COVERAGE.slice(COVERAGE.indexOf("export async function chargedUnderSiblingRecords"));
+  assert.match(fn.slice(0, 2400), /reverses_id: \{ \$in:/);
+  assert.match(fn.slice(0, 2400), /if \(reversed\.has\(e\._id\)\) continue;/);
+});
+
+test("20. the guard is on the write path, not only where buttons are drawn", () => {
+  // The UI deciding not to offer a button is not a control; a direct POST
+  // has to be refused by the service.
+  assert.match(SERVICE, /chargedUnderSiblingRecords/);
+  assert.match(SERVICE, /chargedElsewhere,/);
+});
+
+test("21. both coverage entry points apply it", () => {
+  // The detail read and the list read must agree, or the Posted tab offers a
+  // button the row behind it would refuse.
+  const occurrences = (COVERAGE.match(/chargedElsewhere/g) ?? []).length;
+  assert.ok(occurrences >= 3, `the guard is wired in ${occurrences} place(s); both readers need it`);
+});
+
+test("22. a sibling charge is never reported as this record's own posting", () => {
+  // Overstating it would show a charge the record does not carry, and
+  // reversing from here would miss.
+  assert.match(TARGETS, /chargedElsewhere: sibling\?\.recordId \?\? null/);
+  assert.equal(
+    /posted: !!own \|\| !!sibling/.test(TARGETS),
+    false,
+    "a sibling must not count as posted — only as blocking",
+  );
+});
+
+test("23. the list page resolves siblings in one pass, not per row", () => {
+  // The Posted tab renders up to 300 rows and the cluster is in another
+  // region. A per-row sibling lookup is ~900 round trips on the hottest
+  // screen in the module.
+  assert.match(COVERAGE, /chargedUnderSiblingRecordsBatch/);
+  const list = COVERAGE.slice(COVERAGE.indexOf("export async function coverageForRecords"));
+  assert.equal(
+    /for \(const r of records\)[\s\S]{0,600}await chargedUnderSiblingRecords\(/.test(list),
+    false,
+    "the per-record lookup is back inside the loop",
+  );
+  assert.match(list, /chargedUnderSiblingRecordsBatch\(/);
+});

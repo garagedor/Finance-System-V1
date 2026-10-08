@@ -147,6 +147,22 @@ export interface CoverageContext {
   hasAreaManager: boolean;
   /** The job names a technician. */
   hasTechnician: boolean;
+  /**
+   * Targets already charged under a DIFFERENT canonical record for what
+   * looks like the same economic dispute.
+   *
+   * Before multi-target posting existed, charging a second party meant
+   * creating a second finance_dispute from a ledger page — so production
+   * carries pairs like "AM on disp_A, provider on disp_B" for one job and
+   * one amount. Coverage is per record and cannot see the sibling, so
+   * without this the Posted tab would cheerfully offer a provider charge
+   * that already exists.
+   *
+   * It only ever BLOCKS. The sibling is not claimed as this record's own
+   * posting, because it is not: it belongs to another record, and merging
+   * the two is a decision for a person, not an inference.
+   */
+  chargedElsewhere?: readonly { target: PostingTarget; recordId: string }[];
 }
 
 export interface TargetCoverage {
@@ -167,6 +183,9 @@ export interface TargetCoverage {
   postedAmount: number | null;
   /** Posted, then reversed. Not charged any more, so it may be posted again. */
   reversed: boolean;
+  /** Charged under a sibling record for the same job and amount. Blocks, but
+   *  is not this record's own posting — see CoverageContext.chargedElsewhere. */
+  chargedElsewhere: string | null;
   /** Eligible, not posted, and nothing already covers it. */
   available: boolean;
 }
@@ -248,12 +267,19 @@ export function resolveCoverage(args: {
     const coveringPost = postedTargets.find((p) => p !== target && covers(p, target)) ?? null;
     const blocksSomethingPosted = postedTargets.find((p) => p !== target && covers(target, p)) ?? null;
 
+    // A sibling record charging this party counts as charged for the purpose
+    // of refusing, never for the purpose of claiming it was posted here.
+    const sibling = (args.context.chargedElsewhere ?? [])
+      .find((c) => covers(c.target, target) || covers(target, c.target)) ?? null;
+
     const blockedReason =
       coveringPost
         ? `Already charged as part of the ${TARGET_LABEL[coveringPost]} posting.`
         : blocksSomethingPosted
           ? `${TARGET_LABEL[blocksSomethingPosted]} is already posted on its own; posting this would charge it twice.`
-          : null;
+          : sibling
+            ? `${TARGET_LABEL[sibling.target]} was already charged on a separate record for this job (${sibling.recordId}), from before one dispute could carry several postings. Check that record — charging again here would duplicate it.`
+            : null;
 
     return {
       target,
@@ -268,7 +294,8 @@ export function resolveCoverage(args: {
       postedAt: own?.date ?? own?.created_at ?? null,
       postedAmount: own ? own.amount : null,
       reversed: !own && reversedTargets.has(target),
-      available: eligible && !own && !coveringPost && !blocksSomethingPosted,
+      chargedElsewhere: sibling?.recordId ?? null,
+      available: eligible && !own && !coveringPost && !blocksSomethingPosted && !sibling,
     };
   });
 
@@ -284,7 +311,7 @@ export function resolveCoverage(args: {
 
 export type PostRefusal =
   | { ok: true }
-  | { ok: false; code: "already_posted" | "covered" | "conflicts" | "not_eligible"; error: string };
+  | { ok: false; code: "already_posted" | "covered" | "conflicts" | "not_eligible" | "charged_elsewhere"; error: string };
 
 /**
  * May this target be posted right now?
@@ -308,6 +335,9 @@ export function canPost(coverage: PostingCoverage, target: PostingTarget): PostR
     return { ok: false, code: "not_eligible", error: row.reason ?? `${TARGET_LABEL[target]} cannot be charged here.` };
   }
   if (!row.available) {
+    if (row.chargedElsewhere) {
+      return { ok: false, code: "charged_elsewhere", error: row.reason ?? `${TARGET_LABEL[target]} is already charged on another record.` };
+    }
     // Eligible and unposted, so the only thing left is an overlap.
     const covered = coverage.targets.some((t) => t.posted && t.target !== target && covers(t.target, target));
     return {

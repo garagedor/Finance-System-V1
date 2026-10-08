@@ -72,8 +72,13 @@ export default function PostingCoveragePanel({
   // A target that is neither posted nor available is noise on a row unless it
   // was reversed, which is a thing somebody needs to see.
   const reversed = coverage.targets.filter((t) => t.reversed);
+  // Charged under a separate record for the same job and amount — from before
+  // one dispute could hold several postings. Shown rather than silently
+  // dropped, because "why is Provider not offered" has an answer and the
+  // operator needs the record id to check it.
+  const elsewhere = coverage.targets.filter((t) => t.chargedElsewhere && !t.posted);
 
-  if (posted.length === 0 && open.length === 0 && reversed.length === 0) return null;
+  if (posted.length === 0 && open.length === 0 && reversed.length === 0 && elsewhere.length === 0) return null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
@@ -95,6 +100,18 @@ export default function PostingCoveragePanel({
               style={{ borderRadius: 999, padding: "2px 9px", fontSize: 11.5,
                 background: "var(--ds-warn-soft)", color: "var(--ds-warn-text)" }}>
               ↩ {t.label} reversed
+            </span>
+          ))}
+        </div>
+      )}
+
+      {elsewhere.length > 0 && (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {elsewhere.map((t) => (
+            <span key={t.target} className="small" title={t.reason ?? undefined}
+              style={{ borderRadius: 999, padding: "2px 9px", fontSize: 11.5,
+                background: "var(--ds-warn-soft)", color: "var(--ds-warn-text)" }}>
+              ⚠ {t.label} already charged on {t.chargedElsewhere}
             </span>
           ))}
         </div>
