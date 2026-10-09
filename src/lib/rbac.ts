@@ -14,6 +14,7 @@ import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, getDb } from "./financ
 import { ensureRbacReady } from "./rbac-seed";
 import { userIdFilter } from "./user-id";
 import { jwtSecret } from "./jwt-secret";
+import { packPermissions, unpackPermissions, MAX_PACKED_PERMISSION_BYTES } from "./session-permissions";
 
 // Resolved lazily and never defaulted — see lib/jwt-secret.ts. A missing
 // secret throws on first use rather than silently substituting a known string.
@@ -47,6 +48,9 @@ interface JwtClaims {
   type?: UserType;
   role_id?: string;
   permissions?: Permission[];
+  /** Compact form of `permissions` (lib/session-permissions). Tokens signed
+   *  since the cookie-size fix carry this instead of the array. */
+  perms?: string;
   active?: boolean;
   session_version?: number;
   warehouse_agent?: boolean;
@@ -63,8 +67,12 @@ export async function readSession(): Promise<RbacSession | null> {
     if (!claims.name) return null;
     const type = (claims.type ?? "simple") as UserType;
 
-    // Permissions in JWT → done. Otherwise legacy token: compute from DB.
-    let permissions = Array.isArray(claims.permissions) ? claims.permissions : undefined;
+    // Permissions in JWT → done: the compact form, or the array older tokens
+    // carry. Neither → compute from DB (legacy tokens, and tokens whose
+    // permissions were too large to fit in a cookie).
+    let permissions = typeof claims.perms === "string"
+      ? (unpackPermissions(claims.perms) as Permission[])
+      : Array.isArray(claims.permissions) ? claims.permissions : undefined;
     if (!permissions) {
       permissions = await computeEffectivePermissions({
         type,
@@ -197,12 +205,16 @@ export async function signSessionToken(args: {
   warehouse_agent?: boolean;
   expiresIn?: string;
 }): Promise<string> {
+  // Packed, because the plain array outgrew the browser's 4096-byte cookie
+  // limit and the cookie was silently dropped (login loop). Past the cap the
+  // permissions are left out and readSession resolves them from the DB.
+  const perms = packPermissions(args.permissions);
   return new SignJWT({
     _id: args._id,
     name: args.name,
     type: args.type,
     role_id: args.role_id,
-    permissions: args.permissions,
+    ...(perms.length <= MAX_PACKED_PERMISSION_BYTES ? { perms } : {}),
     active: args.active,
     session_version: args.session_version ?? 0,
     warehouse_agent: args.warehouse_agent === true,
