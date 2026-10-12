@@ -18,7 +18,7 @@ import { CustomReportPdf, type CustomPdfGroup, type CustomPdfItem } from "@/comp
 import { getReportFilenames } from "@/lib/report-filenames";
 import { buildReportFilename } from "@/lib/report-filename-format";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
-import { ledgerLineItems } from "@/lib/custom-report";
+import { ledgerLineItems, amDisputeEntries } from "@/lib/custom-report";
 import { isProviderLedgerRole } from "@/lib/dispute-detail";
 import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
 
@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     // rather than printed from what the browser remembered.
     const lineIds = [...new Set(rawGroups.filter((g) => g.type === "ledgerLine").flatMap((g) => rawItems(g).map((it) => String(it.id ?? ""))).filter(Boolean))];
     const rebuilt = new Map<string, CustomPdfItem>();
+    let reportProviderSafe = false;
     if (lineIds.length) {
       await ensureFinanceIndexes();
       const entries = await coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry).find({ _id: { $in: lineIds } }).toArray();
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
       // One PROVIDER ledger makes the whole report PROVIDER-facing. A ledger
       // that cannot be found counts as PROVIDER: ambiguity never exposes the split.
       const providerSafe = ledgerIds.some((id) => !roleOf.has(id) || isProviderLedgerRole(roleOf.get(id)));
+      reportProviderSafe = providerSafe;
       // A PROVIDER report cannot carry another party's ledger: even relabelled,
       // the line amount IS that party's charge.
       const others = ledgers.filter((l) => !isProviderLedgerRole(l.role));
@@ -80,9 +82,31 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Area Manager dispute charges (`entry:<id>` in the Disputes & Refunds
+    // group) are rebuilt the same way, with their breakdown. Only live
+    // charges on AM ledgers come back — anything else is dropped.
+    const ENTRY = "entry:";
+    const amIds = [...new Set(rawGroups.filter((g) => g.type === "disputeRefund").flatMap((g) => rawItems(g).map((it) => String(it.id ?? ""))).filter((id) => id.startsWith(ENTRY)).map((id) => id.slice(ENTRY.length)))];
+    if (amIds.length) {
+      await ensureFinanceIndexes();
+      const amEntries = await amDisputeEntries(null, { ids: amIds });
+      if (amEntries.length && reportProviderSafe) {
+        return NextResponse.json({ error: "This report has PROVIDER ledger lines and Area Manager dispute charges. Make a separate report for each." }, { status: 400 });
+      }
+      for (const row of await ledgerLineItems(amEntries, false)) {
+        rebuilt.set(`${ENTRY}${row.id}`, { date: row.date, primary: row.primary, secondary: row.secondary, amount: row.amount, detail: row.detail ?? null });
+      }
+    }
+
     const groups: CustomPdfGroup[] = rawGroups.map((g) => {
       const items: CustomPdfItem[] = g.type === "ledgerLine"
         ? rawItems(g).map((it) => rebuilt.get(String(it.id ?? ""))).filter((it): it is CustomPdfItem => !!it)
+        : g.type === "disputeRefund" && rawItems(g).some((it) => String(it.id ?? "").startsWith(ENTRY))
+        ? rawItems(g).map((it) => {
+            const id = String(it.id ?? "");
+            if (id.startsWith(ENTRY)) return rebuilt.get(id);
+            return { date: String(it.date ?? ""), primary: String(it.primary ?? ""), secondary: String(it.secondary ?? ""), amount: r2(Number(it.amount)), detail: null };
+          }).filter((it): it is CustomPdfItem => !!it)
         : rawItems(g).map((it) => ({
             date: String(it.date ?? ""),
             primary: String(it.primary ?? ""),

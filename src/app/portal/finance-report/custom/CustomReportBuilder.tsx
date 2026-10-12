@@ -12,7 +12,7 @@ import type { CustomItemType } from "@/lib/custom-report";
 import type { DisputeDetail } from "@/lib/dispute-detail";
 
 type Item = { id: string; date: string; primary: string; secondary: string; amount: number; detail?: DisputeDetail | null };
-type Scope = "ledger" | "providerish" | "none";
+type Scope = "ledger" | "providerish" | "areaManager" | "none";
 type Category = { type: CustomItemType; label: string; scope: Scope };
 
 const CATEGORIES: Category[] = [
@@ -20,10 +20,11 @@ const CATEGORIES: Category[] = [
   { type: "providerJob", label: "Provider jobs", scope: "providerish" },
   { type: "payout", label: "Payouts", scope: "none" },
   { type: "penalty", label: "Penalties", scope: "providerish" },
-  { type: "disputeRefund", label: "Disputes & Refunds", scope: "none" },
+  { type: "disputeRefund", label: "Disputes & Refunds", scope: "areaManager" },
   { type: "expense", label: "Expenses", scope: "none" },
   { type: "income", label: "Income", scope: "none" },
 ];
+const isAmRole = (r: string) => r.toLowerCase().replace(/[\s_-]+/g, "") === "areamanager";
 const LABEL: Record<string, string> = Object.fromEntries(CATEGORIES.map((c) => [c.type, c.label]));
 
 const money = (n: number) => {
@@ -47,6 +48,9 @@ export default function CustomReportBuilder() {
 
   // Scope inputs
   const [ledgerId, setLedgerId] = useState("");
+  // Disputes & Refunds: optional Area Manager — lists the charges on their
+  // ledger with the same breakdown as the ledger page.
+  const [amLedgerId, setAmLedgerId] = useState("");
   const [ledgers, setLedgers] = useState<Array<{ _id: string; holder_name: string; role: string; location: string }>>([]);
   const [providers, setProviders] = useState<string[]>([]);
   const [techs, setTechs] = useState<string[]>([]);
@@ -90,6 +94,7 @@ export default function CustomReportBuilder() {
     try {
       const p = new URLSearchParams({ type: cat, from, to });
       if (scope === "ledger") p.set("ledgerId", ledgerId);
+      if (scope === "areaManager" && amLedgerId) p.set("ledgerId", amLedgerId);
       if (scope === "providerish") {
         if (providers.length) p.set("providers", providers.join(","));
         if (techs.length) p.set("techs", techs.join(","));
@@ -102,7 +107,7 @@ export default function CustomReportBuilder() {
       setAmountLabel(j.amountLabel || "Amount");
       setTruncated(!!j.truncated);
     } catch (e) { setItems([]); setErr(e instanceof Error ? e.message : "Failed to load items"); } finally { setLoadingItems(false); }
-  }, [cat, from, to, scope, ledgerId, providers, techs, locs]);
+  }, [cat, from, to, scope, ledgerId, amLedgerId, providers, techs, locs]);
 
   useEffect(() => { const t = setTimeout(loadItems, 250); return () => clearTimeout(t); }, [loadItems]);
 
@@ -199,6 +204,16 @@ export default function CustomReportBuilder() {
                 <option value="">Select a ledger…</option>
                 {ledgers.map((l) => <option key={l._id} value={l._id}>{l.holder_name}{l.role ? ` · ${l.role.replace(/_/g, " ")}` : ""}{l.location ? ` · ${l.location}` : ""}</option>)}
               </select>
+            </div>
+          )}
+          {scope === "areaManager" && (
+            <div style={{ marginTop: 10 }}>
+              <label className="portal-label">Area Manager</label>
+              <select className="portal-input" value={amLedgerId} onChange={(e) => setAmLedgerId(e.target.value)}>
+                <option value="">All disputes &amp; refunds (ScanPay amounts)</option>
+                {ledgers.filter((l) => isAmRole(l.role)).map((l) => <option key={l._id} value={l._id}>{l.holder_name}{l.location ? ` · ${l.location}` : ""}</option>)}
+              </select>
+              {amLedgerId && <div className="muted small" style={{ marginTop: 4 }}>Charges on this Area Manager&apos;s ledger, with the cost-share breakdown.</div>}
             </div>
           )}
           {scope === "providerish" && (

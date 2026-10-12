@@ -166,6 +166,16 @@ export interface LedgerEntryRecord {
    */
   posted_party?: "combined" | "area_manager" | "technician" | "provider" | null;
   charge_snapshot?: Record<string, unknown> | null;
+  /** Each move of this dispute/refund charge to another AM's ledger, oldest
+   *  first (lib/dispute-transfer). The amount never changes on a transfer. */
+  transfers?: Array<{
+    from_ledger_id: string;
+    from_holder_name: string;
+    to_ledger_id: string;
+    to_holder_name: string;
+    at: string;
+    by: string;
+  }>;
 
   // Equipment order → AM ledger link. equipment_order_id is the canonical
   // EquipmentOrder._id and the dedup key (one ledger entry per order, enforced

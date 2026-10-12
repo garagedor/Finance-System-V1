@@ -13,6 +13,7 @@ import {
   disputeDetail, providerDisputeDetail, providerDisputeLabel, isProviderLedgerRole,
   type DisputeDetail, type DisputePartsExtra,
 } from "@/lib/dispute-detail";
+import { isAmLedgerRole } from "@/lib/dispute-transfer";
 import type { JobRow } from "@/types/job";
 import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
 import type { PayoutRecord, ExpenseRecord, ManualIncomeRecord } from "@/types/finance";
@@ -131,6 +132,18 @@ export async function listCustomItems(p: ListCustomItemsParams): Promise<CustomI
     };
   }
 
+  if (p.type === "disputeRefund" && p.ledgerId) {
+    // One Area Manager: the charges actually on their ledger, each with the
+    // same cost-share breakdown the ledger page shows. Ids are `entry:<id>`
+    // so the PDF rebuilds them from the database like ledger lines.
+    const ledger = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger).findOne({ _id: p.ledgerId });
+    if (!ledger || !isAmLedgerRole(ledger.role)) return { type: p.type, amountLabel: "AM charge", items: [], truncated: false };
+    const rows = await amDisputeEntries([p.ledgerId], { from, to });
+    const truncated = rows.length > cap;
+    const items = await ledgerLineItems(rows.slice(0, cap), false);
+    return { type: p.type, amountLabel: "AM charge", truncated, items: items.map((it) => ({ ...it, id: `entry:${it.id}` })) };
+  }
+
   if (p.type === "disputeRefund") {
     const [disputes, refunds] = await Promise.all([
       coll<ScanpayDisputeRecord>(FINANCE_COLLECTIONS.scanpayDispute).find({ matchStatus: { $in: ["verified", "posted"] } } as never).sort({ disputedAt: -1 }).limit(cap).toArray(),
@@ -170,6 +183,32 @@ export async function listCustomItems(p: ListCustomItemsParams): Promise<CustomI
     type: "income", amountLabel: "Amount", truncated,
     items: rows.slice(0, cap).map((r) => ({ id: r._id, date: r.date, primary: r.description || r.source, secondary: r.source, amount: round2(r.amount) })),
   };
+}
+
+/**
+ * Live dispute/refund charges on Area Manager ledgers — by ledger + period
+ * for the picker, or by entry id for the PDF. Reversed charges are left out,
+ * and anything not on an AM ledger is dropped, so an id from the browser can
+ * never pull another party's ledger line into this group.
+ */
+export async function amDisputeEntries(
+  ledgerIds: string[] | null,
+  q: { from: string; to: string } | { ids: string[] },
+): Promise<LedgerEntryRecord[]> {
+  const ec = coll<LedgerEntryRecord>(FINANCE_COLLECTIONS.ledgerEntry);
+  const filter: Record<string, unknown> = { type: { $in: ["dispute", "refund"] }, reverses_id: null };
+  if ("ids" in q) filter._id = { $in: q.ids };
+  else filter.date = { $gte: q.from, $lte: q.to };
+  if (ledgerIds) filter.ledger_id = { $in: ledgerIds };
+  const rows = await ec.find(filter as never).sort({ date: 1, _id: 1 }).limit(2000).toArray();
+  if (!rows.length) return [];
+  const ledgers = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger).find({ _id: { $in: [...new Set(rows.map((e) => e.ledger_id))] } }).toArray();
+  const am = new Set(ledgers.filter((l) => isAmLedgerRole(l.role)).map((l) => l._id));
+  const reversed = new Set(
+    (await ec.find({ reverses_id: { $in: rows.map((e) => e._id) } }, { projection: { reverses_id: 1 } }).toArray())
+      .map((r) => String(r.reverses_id)),
+  );
+  return rows.filter((e) => am.has(e.ledger_id) && !reversed.has(e._id));
 }
 
 /**

@@ -16,6 +16,8 @@ import DisputeBreakdown from "./DisputeBreakdown";
 import AddDisputeRefundModal from "./AddDisputeRefundModal";
 import RecordPaymentModal from "./RecordPaymentModal";
 import ReverseEntryButton from "./ReverseEntryButton";
+import TransferEntryButton from "./TransferEntryButton";
+import { isAmLedgerRole } from "@/lib/dispute-transfer";
 import DeleteEntryButton from "./DeleteEntryButton";
 import DeleteLedgerButton from "./DeleteLedgerButton";
 
@@ -131,6 +133,7 @@ export default async function LedgerDetailPage({
   }
 
   const { ledger } = d;
+  const isAmLedger = isAmLedgerRole(ledger.role);
   const entryFields: FieldDef[] = [
     { name: "date", label: "Date", kind: "date", width: "half", required: true,
       defaultValue: new Date().toISOString().slice(0, 10) },
@@ -264,6 +267,11 @@ export default async function LedgerDetailPage({
                           )}%
                         </div>
                       )}
+                    {e.transfers?.length ? (
+                      <div className="muted small">
+                        ⇄ Transferred from {e.transfers[e.transfers.length - 1].from_holder_name} on {fmtDate(e.transfers[e.transfers.length - 1].at.slice(0, 10))}
+                      </div>
+                    ) : null}
                     {(e.type === "dispute" || e.type === "refund") && e.charge_snapshot && (
                       <DisputeBreakdown snapshot={e.charge_snapshot} extra={d.enrich[e._id]} />
                     )}
@@ -300,6 +308,9 @@ export default async function LedgerDetailPage({
                           initial={e as unknown as Record<string, unknown>}
                           triggerLabel="Edit"
                         />
+                      )}
+                      {isAmLedger && e.dispute_id && (e.type === "dispute" || e.type === "refund") && !isReversal && !isReversed && (
+                        <TransferEntryButton ledgerId={ledger._id} entryId={e._id} />
                       )}
                       {!isReversal && !isReversed && (
                         <ReverseEntryButton ledgerId={ledger._id} entryId={e._id} />
