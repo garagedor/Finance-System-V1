@@ -17,12 +17,12 @@ import DisputeChargeModal from "../../_components/DisputeChargeModal";
 import PenaltyChargeModal from "./PenaltyChargeModal";
 
 export default function AddDisputeRefundModal(
-  { ledgerId, ledgerName }: { ledgerId?: string; defaultTech?: string; ledgerName?: string },
+  { ledgerId, ledgerName, ledgerRole }: { ledgerId?: string; defaultTech?: string; ledgerName?: string; ledgerRole?: string },
 ) {
   return (
     <span style={{ display: "inline-flex", gap: 6 }}>
-      <DisputeChargeModal type="dispute" triggerLabel="+ Dispute" ledgerId={ledgerId} ledgerName={ledgerName} />
-      <DisputeChargeModal type="refund" triggerLabel="+ Refund" ledgerId={ledgerId} ledgerName={ledgerName} />
+      <DisputeChargeModal type="dispute" triggerLabel="+ Dispute" ledgerId={ledgerId} ledgerName={ledgerName} ledgerRole={ledgerRole} />
+      <DisputeChargeModal type="refund" triggerLabel="+ Refund" ledgerId={ledgerId} ledgerName={ledgerName} ledgerRole={ledgerRole} />
       <PenaltyChargeModal ledgerId={ledgerId} ledgerName={ledgerName} />
     </span>
   );

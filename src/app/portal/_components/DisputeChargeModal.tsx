@@ -34,7 +34,11 @@ type Snap = {
 const money = (n: number) => `$${(Math.round((Number(n) || 0) * 100) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const today = () => new Date().toISOString().slice(0, 10);
 
-const PARTIES = [["technician", "Technician"], ["area_manager", "Area Manager"], ["provider", "Provider"], ["combined", "AM + Technician"]] as const;
+// No "Area Manager" (own share only) choice: on an AM's ledger it charged the
+// technician's part to nobody, and the server now refuses it there. The AM
+// ledger takes AM + Technician; nothing is posted to technician ledgers.
+const PARTIES = [["combined", "AM + Technician"], ["provider", "Provider"], ["technician", "Technician"]] as const;
+const isAmRole = (r?: string) => String(r ?? "").toLowerCase().replace(/[\s_-]+/g, "") === "areamanager";
 
 export default function DisputeChargeModal({
   type,
@@ -42,6 +46,7 @@ export default function DisputeChargeModal({
   primary,
   ledgerId,
   ledgerName,
+  ledgerRole,
 }: {
   type: "dispute" | "refund";
   triggerLabel?: string;
@@ -50,6 +55,8 @@ export default function DisputeChargeModal({
   ledgerId?: string;
   /** Display-only name of that ledger, for the "posts to …" label. */
   ledgerName?: string;
+  /** That ledger's role — an AM ledger preselects "AM + Technician". */
+  ledgerRole?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -70,7 +77,8 @@ export default function DisputeChargeModal({
   // Ledger flow: the set of collected disputes ticked for a bulk charge.
   const [selected, setSelected] = useState<string[]>([]);
   // Ledger flow: the ONE party applied to every ticked dispute.
-  const [party, setParty] = useState<"" | "technician" | "area_manager" | "provider" | "combined">("");
+  const defaultParty = isAmRole(ledgerRole) ? "combined" : "";
+  const [party, setParty] = useState<"" | "technician" | "provider" | "combined">(defaultParty);
   // Disputes-module flow: single job + typed amount + live preview.
   const [job, setJob] = useState<Job | null>(null);
   const [amount, setAmount] = useState("");
@@ -164,7 +172,7 @@ export default function DisputeChargeModal({
   }, [open, job, amount, type, ledgerId]);
 
   function reset() {
-    setJob(null); setQ(""); setJobs([]); setDisputes([]); setSelected([]); setParty("");
+    setJob(null); setQ(""); setJobs([]); setDisputes([]); setSelected([]); setParty(defaultParty);
     setAmount(""); setNotes(""); setDate(today());
     setFProvider([]); setFLocation([]); setFTech([]); setFAM([]); setFStart(""); setFEnd("");
     setPreview(null); setPreviewErr(null); setErr(null);

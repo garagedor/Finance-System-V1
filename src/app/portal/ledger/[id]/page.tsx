@@ -162,6 +162,7 @@ export default async function LedgerDetailPage({
               defaultMode={ledger.role === "technician" ? "tech" : ledger.role.toLowerCase() === "provider" ? "provider" : "location"}
             />
             <AddDisputeRefundModal
+              ledgerRole={ledger.role}
               ledgerId={ledger._id}
               ledgerName={ledger.holder_name}
               defaultTech={ledger.role === "technician" ? ledger.holder_name : ""}

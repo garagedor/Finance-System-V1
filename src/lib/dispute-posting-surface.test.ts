@@ -290,7 +290,7 @@ test("27. an ambiguous item says so on the row and offers nothing", () => {
   assert.match(UI, /[Rr]eview required/);
   // The Post controls are rendered from `available`, which the resolver
   // turns off for every target while evidence is unresolved.
-  assert.match(UI, /coverage\.targets\.filter\(\(t\) => t\.available\)/);
+  assert.match(UI, /coverage\.targets\.filter\(\(t\) => t\.available && t\.target !== "area_manager"\)/);
 });
 
 test("28. the three states are exhaustive and only one of them is postable", () => {
@@ -332,4 +332,37 @@ test("32. the review banner offers the release only for a leftover record", () =
   assert.match(UI, /\/api\/portal\/disputes\/release/);
   // The charged-mark advice is shown only when that is the evidence.
   assert.match(UI, /e\.kind === "charged_flag"\) &&\s*" If no money moved, clear the charged mark/);
+});
+
+/* ── Ledger choice + AM ledger slice (2026-10-12) ─────────────────────── */
+
+test("33. a dispute never creates a ledger", () => {
+  const post = SERVICE.slice(SERVICE.indexOf("export async function postDisputeCharge"));
+  assert.doesNotMatch(post, /findOrCreateAmLedger\(/);
+  assert.match(post, /const found = await findAmLedger\(amName\)/);
+  const find = SERVICE.slice(SERVICE.indexOf("export async function findAmLedger"), SERVICE.indexOf("export async function findOrCreateAmLedger"));
+  assert.doesNotMatch(find, /insertOne/);
+  // A miss on a real write is refused, not papered over with a new ledger.
+  assert.match(post, /else if \(dryRun\)[\s\S]{0,300}else \{\s*return \{\s*ok: false,/);
+});
+
+test("34. an explicitly chosen ledger is used as-is", () => {
+  assert.match(SERVICE, /if \(input\.ledgerId\) \{\s*const found = await coll<LedgerRecord>\(FINANCE_COLLECTIONS\.ledger\)\.findOne\(\{ _id: input\.ledgerId \}\)/);
+});
+
+test("35. an AM ledger is charged AM + Technician, never the AM share alone", () => {
+  assert.match(SERVICE, /if \(target === "area_manager" && isAmRole\(ledger\.role\)\) \{\s*return \{\s*ok: false,/);
+  // Both spellings of the role are an AM ledger.
+  assert.match(SERVICE, /const isAmRole = \(r: unknown\) => normRole\(r\) === "areamanager"/);
+});
+
+test("36. no screen offers the AM-own-share slice", () => {
+  const MODAL = strip(read("app", "portal", "_components", "DisputeChargeModal.tsx"));
+  const DIALOG = strip(read("app", "portal", "disputes", "scanpay", "PostToLedgerDialog.tsx"));
+  const PARTIES = (src: string) => src.slice(src.indexOf("const PARTIES"), src.indexOf("\n", src.indexOf("const PARTIES")));
+  assert.doesNotMatch(PARTIES(MODAL), /area_manager/);
+  assert.doesNotMatch(PARTIES(DIALOG), /area_manager/);
+  // On an AM ledger the right slice is preselected.
+  assert.match(MODAL, /const defaultParty = isAmRole\(ledgerRole\) \? "combined" : ""/);
+  assert.match(strip(read("app", "portal", "ledger", "[id]", "page.tsx")), /ledgerRole=\{ledger\.role\}/);
 });

@@ -115,8 +115,37 @@ async function loadJob(db: Db, jobId: string): Promise<JobRow | null> {
   return db.collection<JobRow>("Job").findOne({ $or: or } as never);
 }
 
+const normRole = (r: unknown) => String(r ?? "").toLowerCase().replace(/[\s_-]+/g, "");
+const isAmRole = (r: unknown) => normRole(r) === "areamanager";
+
+/**
+ * Find an EXISTING Area Manager ledger by name. Never creates one.
+ *
+ * Disputes used to find-or-create here, matching Location.areaManagerName
+ * against holder_name and role "area_manager" exactly. Names rarely match
+ * ("Or" vs "Or Hemo", "Benaim" vs "Dor Banaim") and hand-made ledgers can
+ * carry role "Area Manager", so a dispute quietly spawned a second ledger
+ * for the same person and the charge landed there. Now a miss is an error
+ * that tells the user to pick the ledger.
+ */
+export async function findAmLedger(amName: string): Promise<LedgerRecord | null> {
+  const name = (amName ?? "").trim().replace(/\s+/g, " ");
+  if (!name) return null;
+  const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/ /g, "\\s+");
+  const candidates = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger)
+    .find({ holder_name: { $regex: `^\\s*${esc}\\s*$`, $options: "i" } })
+    .toArray();
+  const am = candidates.filter((l) => isAmRole(l.role));
+  // Prefer an active ledger; with several, the oldest is the original one.
+  am.sort((a, b) =>
+    (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1)
+    || String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+  return am[0] ?? null;
+}
+
 /** Find the Area Manager's ledger, creating it if missing. Exported so other
- *  finance services (e.g. equipment ordering) post to the SAME AM ledger. */
+ *  finance services (e.g. equipment ordering) post to the SAME AM ledger.
+ *  Disputes no longer use this — see findAmLedger. */
 export async function findOrCreateAmLedger(amName: string, location: string, actor: string, dryRun: boolean) {
   const lc = coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger);
   const name = (amName ?? "").trim();
@@ -203,7 +232,17 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
     if (!found) return { ok: false, error: `Ledger not found: ${input.ledgerId}` };
     ledger = found;
   } else {
-    ledger = await findOrCreateAmLedger(amName, location, input.actor, dryRun);
+    const found = await findAmLedger(amName);
+    if (found) ledger = found;
+    else if (dryRun) {
+      // Preview / sync only: compute against a stand-in, write nothing.
+      ledger = { _id: "", holder_name: amName, role: "area_manager", location, status: "active", created_at: "" };
+    } else {
+      return {
+        ok: false,
+        error: `No Area Manager ledger named "${amName}" exists, so this was not posted (ledgers are never created automatically). Choose the Area Manager's ledger explicitly when posting.`,
+      };
+    }
   }
 
   // Which slice posts to the ledger. The no-party path (Disputes module) has
@@ -211,6 +250,18 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
   // is named as such rather than left null, and the overlap rules apply to it
   // like any other posting.
   const target: PostingTarget = input.party ?? "combined";
+
+  // On an Area Manager's ledger the charge is the AM ledger total: the AM's
+  // own share AND the technician's, which the AM recovers from the tech
+  // (owner rule 2026-10-12 — nothing is posted to technician ledgers). The
+  // `area_manager` slice alone left the technician's part charged to nobody;
+  // every AM-ledger posting until 2026-10-12 was that slice by mistake.
+  if (target === "area_manager" && isAmRole(ledger.role)) {
+    return {
+      ok: false,
+      error: "On an Area Manager's ledger post \"AM + Technician\" — the AM's own share alone leaves the technician's part uncharged.",
+    };
+  }
   // One definition of what each target is charged, shared with the UI that
   // offers it, so the figure on the button is the figure that gets written.
   const postedAmount = amountForTarget(snapshot, target);

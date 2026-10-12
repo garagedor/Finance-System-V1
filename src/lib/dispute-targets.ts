@@ -40,7 +40,7 @@ export type PostingTarget = (typeof POSTING_TARGETS)[number];
 
 export const TARGET_LABEL: Record<PostingTarget, string> = {
   combined: "AM + Technician",
-  area_manager: "Area Manager",
+  area_manager: "AM own share only",
   technician: "Technician",
   provider: "Provider",
 };

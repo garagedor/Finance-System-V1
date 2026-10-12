@@ -68,7 +68,9 @@ export default function PostingCoveragePanel({
   compact?: boolean;
 }) {
   const posted = coverage.targets.filter((t) => t.posted);
-  const open = coverage.targets.filter((t) => t.available);
+  // "AM own share only" is never offered: the AM ledger takes AM + Technician,
+  // and the server refuses the own-share slice on an AM ledger.
+  const open = coverage.targets.filter((t) => t.available && t.target !== "area_manager");
   // A target that is neither posted nor available is noise on a row unless it
   // was reversed, which is a thing somebody needs to see.
   const reversed = coverage.targets.filter((t) => t.reversed);

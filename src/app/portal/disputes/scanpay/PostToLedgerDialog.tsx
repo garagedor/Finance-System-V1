@@ -11,7 +11,8 @@ import { useRouter } from "next/navigation";
 
 type Ledger = { _id: string; holder_name: string; role: string; location: string };
 type Party = "combined" | "technician" | "area_manager" | "provider";
-const PARTIES: [Party, string][] = [["combined", "AM + Technician"], ["technician", "Technician"], ["area_manager", "Area Manager"], ["provider", "Provider"]];
+// No "Area Manager" (own share only): see DisputeChargeModal.
+const PARTIES: [Party, string][] = [["combined", "AM + Technician"], ["provider", "Provider"], ["technician", "Technician"]];
 const roleLabel = (r: string) => r === "area_manager" ? "Area Manager" : r === "technician" ? "Technician" : r.replace(/_/g, " ");
 
 export default function PostToLedgerDialog({ endpoint, label = "Post → ledger" }: { endpoint: string; label?: string }) {
