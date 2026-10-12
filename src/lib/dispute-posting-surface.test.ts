@@ -342,6 +342,8 @@ test("33. a dispute never creates a ledger", () => {
   assert.match(post, /const found = await findAmLedger\(amName\)/);
   const find = SERVICE.slice(SERVICE.indexOf("export async function findAmLedger"), SERVICE.indexOf("export async function findOrCreateAmLedger"));
   assert.doesNotMatch(find, /insertOne/);
+  // An archived (merged-away) ledger is never a target.
+  assert.match(find, /isAmRole\(l\.role\) && l\.status === "active"/);
   // A miss on a real write is refused, not papered over with a new ledger.
   assert.match(post, /else if \(dryRun\)[\s\S]{0,300}else \{\s*return \{\s*ok: false,/);
 });

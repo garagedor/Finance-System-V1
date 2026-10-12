@@ -135,11 +135,10 @@ export async function findAmLedger(amName: string): Promise<LedgerRecord | null>
   const candidates = await coll<LedgerRecord>(FINANCE_COLLECTIONS.ledger)
     .find({ holder_name: { $regex: `^\\s*${esc}\\s*$`, $options: "i" } })
     .toArray();
-  const am = candidates.filter((l) => isAmRole(l.role));
-  // Prefer an active ledger; with several, the oldest is the original one.
-  am.sort((a, b) =>
-    (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1)
-    || String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
+  // Active only: an archived ledger (e.g. a duplicate merged away) must never
+  // receive a new charge. With several, the oldest is the original one.
+  const am = candidates.filter((l) => isAmRole(l.role) && l.status === "active");
+  am.sort((a, b) => String(a.created_at ?? "").localeCompare(String(b.created_at ?? "")));
   return am[0] ?? null;
 }
 
