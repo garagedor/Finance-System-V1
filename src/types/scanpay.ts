@@ -133,8 +133,11 @@ export interface ScanpayRefundRaw {
 }
 
 export interface ScanpayRefundRecord {
-  _id: string;             // == payment id (dedup key)
+  _id: string;             // == payment id (dedup key); the invoice id for source "invoice"
   paymentId: string;
+  /** How it was found: the refunded-payments list, or a REFUNDED invoice
+   *  (partial refunds — lib/scanpay/invoice-refunds). Absent on older rows = payment. */
+  source?: "payment" | "invoice";
   invoiceId: string;
   invoiceNumber: string;
   originalAmount: number;      // what the customer originally paid

@@ -1,6 +1,7 @@
 import "server-only";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
-import { fetchScanpayRefunds, parseAmount, parseScanpayDate } from "./client";
+import { fetchScanpayRefunds, fetchRefundedInvoices, parseAmount, parseScanpayDate } from "./client";
+import { invoiceToRefundRaw } from "./invoice-refunds";
 import { matchRefund } from "./match";
 import { postDisputeCharge } from "@/lib/dispute-service";
 import { shareFromSnapshot } from "./share";
@@ -54,7 +55,7 @@ export async function syncScanpayRefunds(): Promise<ScanpayRefundSyncSummary> {
   for (const raw of list) {
     const res = await upsertScanpayRefund(raw);
     if (res.action === "created") summary.created++;
-    else summary.updated++;
+    else if (res.action !== "skipped") summary.updated++;
     if (res.action === "preserved") summary.preserved++;
     if (res.matched === "invoice") summary.matchedByInvoice++;
     else if (res.matched === "none") summary.unmatched++;
@@ -93,12 +94,26 @@ export async function syncNewScanpayRefunds(): Promise<{ fetched: number; create
 // Shared by the full sync and the webhook receiver.
 export async function upsertScanpayRefund(
   raw: ScanpayRefundRaw,
-): Promise<{ action: "created" | "updated" | "preserved"; matched: "invoice" | "none" | "preserved" }> {
+  source: "payment" | "invoice" = "payment",
+): Promise<{ action: "created" | "updated" | "preserved" | "skipped"; matched: "invoice" | "none" | "preserved" }> {
   await ensureFinanceIndexes();
   const c = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
   const now = new Date().toISOString();
   const c0 = core(raw, now);
   const existing = await c.findOne({ _id: raw.id });
+
+  // One refund, two ways in: the refunded PAYMENT, or a REFUNDED invoice
+  // (partial refunds). Never let the same invoice land twice. An invoice is
+  // skipped when anything for it exists; a payment is skipped only when the
+  // invoice route got there first — two payments on one invoice can each be
+  // refunded in full, and each is its own refund.
+  if (!existing && raw.invoiceNumber) {
+    const sameInvoice = await c.findOne(
+      source === "invoice" ? { invoiceNumber: raw.invoiceNumber } : { invoiceNumber: raw.invoiceNumber, source: "invoice" },
+      { projection: { _id: 1 } },
+    );
+    if (sameInvoice) return { action: "skipped", matched: "preserved" };
+  }
 
   if (existing && (existing.matchStatus === "posted" || existing.matchStatus === "ignored" || existing.matchStatus === "verified" || existing.matchMethod === "manual")) {
     await c.updateOne({ _id: raw.id }, { $set: { ...c0 } });
@@ -127,9 +142,28 @@ export async function upsertScanpayRefund(
   };
 
   if (!existing) {
-    await c.insertOne({ _id: raw.id, ...c0, refundAmount: null, refundDate: null, ...matchFields, postedRecordId: null, ledgerEntryId: null, synced_at: now });
+    await c.insertOne({ _id: raw.id, ...c0, source, refundAmount: null, refundDate: null, ...matchFields, postedRecordId: null, ledgerEntryId: null, synced_at: now });
     return { action: "created", matched };
   }
   await c.updateOne({ _id: raw.id }, { $set: { ...c0, ...matchFields } });
   return { action: "updated", matched };
+}
+
+// Partial refunds: REFUNDED invoices that the payments list never shows (see
+// ./invoice-refunds). Adds the new ones to the inbox through the same upsert —
+// same matching, same share preview, same human confirm. Existing rows are left
+// exactly as they are.
+export async function syncRefundedInvoices(opts: { sinceDays: number; budgetMs: number }): Promise<{
+  pages: number; found: number; created: number; skipped: number; complete: boolean;
+}> {
+  const since = new Date(Date.now() - opts.sinceDays * 86_400_000).toISOString();
+  const scan = await fetchRefundedInvoices({ since, deadline: Date.now() + opts.budgetMs });
+  const c = coll<ScanpayRefundRecord>(FINANCE_COLLECTIONS.scanpayRefund);
+  let created = 0, skipped = 0;
+  for (const inv of scan.invoices) {
+    if (await c.findOne({ _id: inv.id }, { projection: { _id: 1 } })) { skipped++; continue; }
+    const res = await upsertScanpayRefund(invoiceToRefundRaw(inv), "invoice");
+    if (res.action === "created") created++; else skipped++;
+  }
+  return { pages: scan.pages, found: scan.invoices.length, created, skipped, complete: scan.complete };
 }

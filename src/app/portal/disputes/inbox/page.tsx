@@ -221,6 +221,7 @@ function RefundCard({ r, en, coverage }: { r: ScanpayRefundRecord; en?: JobEnric
             <Pill>AM · {AM(en)}</Pill>
             {en?.jobStatus && <Pill tone={/closed|x close/i.test(en.jobStatus) ? "ok" : "warn"}>{en.jobStatus}</Pill>}
             {/partial/i.test(r.raw?.status ?? "") && <Pill tone="warn">partial refund</Pill>}
+            {r.source === "invoice" && <Pill tone="warn">refund on invoice · check amount in ScanPay</Pill>}
             {!r.matchedJobId && <Pill tone="warn">pick a job</Pill>}
           </div>
           <Shares cs={r.computedShare} />

@@ -7,12 +7,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { scanpayConfigured } from "@/lib/scanpay/client";
 import { syncNewScanpayDisputes } from "@/lib/scanpay/sync";
-import { syncNewScanpayRefunds } from "@/lib/scanpay/refund-sync";
+import { syncNewScanpayRefunds, syncRefundedInvoices } from "@/lib/scanpay/refund-sync";
 import { resyncJobMirrors } from "@/lib/job-mirror";
 import { alertReportDrift } from "@/lib/report-drift";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -45,7 +45,16 @@ export async function GET(req: NextRequest) {
       syncNewScanpayDisputes(),
       syncNewScanpayRefunds(),
     ]);
-    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, drift, disputes, refunds });
+    // Partial refunds only show on the invoice. Daily, after the rest, paced and
+    // time-boxed (lib/scanpay/client fetchRefundedInvoices). Never on inbox
+    // load — that sync runs every time the page opens.
+    let invoiceRefunds: unknown = null;
+    try {
+      invoiceRefunds = await syncRefundedInvoices({ sinceDays: 120, budgetMs: 200_000 });
+    } catch (e) {
+      invoiceRefunds = { error: e instanceof Error ? e.message : "invoice refund scan failed" };
+    }
+    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, drift, disputes, refunds, invoiceRefunds });
   } catch (e) {
     return NextResponse.json({ ok: false, mirrors, drift, error: e instanceof Error ? e.message : "sync failed" }, { status: 200 });
   }
