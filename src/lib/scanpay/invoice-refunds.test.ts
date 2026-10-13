@@ -61,3 +61,10 @@ test("I5. the same invoice never lands twice", () => {
   assert.match(SYNC, /source === "invoice" \? \{ invoiceNumber: raw\.invoiceNumber \} : \{ invoiceNumber: raw\.invoiceNumber, source: "invoice" \}/);
   assert.match(SYNC, /insertOne\(\{ _id: raw\.id, \.\.\.c0, source,/);
 });
+
+test("I6. invoice-found refunds are re-matched on every inbox sync, from the stored raw", () => {
+  const SYNC = read("lib", "scanpay", "refund-sync.ts");
+  const full = SYNC.slice(SYNC.indexOf("export async function syncScanpayRefunds"), SYNC.indexOf("export async function syncNewScanpayRefunds"));
+  assert.match(full, /source: "invoice", matchStatus: \{ \$in: \["new", "matched"\] \}/);
+  assert.match(full, /upsertScanpayRefund\(rec\.raw, "invoice"\)/);
+});

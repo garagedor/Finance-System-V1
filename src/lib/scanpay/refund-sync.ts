@@ -61,6 +61,18 @@ export async function syncScanpayRefunds(): Promise<ScanpayRefundSyncSummary> {
     else if (res.matched === "none") summary.unmatched++;
   }
 
+  // Refunds found on an INVOICE aren't in the payments list above, so they'd
+  // never be re-matched (e.g. after a job gets its invoice number). Re-run
+  // the match from their stored raw — no ScanPay call. Rows a person has
+  // already decided on are preserved inside the upsert, as always.
+  const fromInvoices = await c.find({ source: "invoice", matchStatus: { $in: ["new", "matched"] } } as never).toArray();
+  for (const rec of fromInvoices) {
+    const res = await upsertScanpayRefund(rec.raw, "invoice");
+    if (res.action === "updated") summary.updated++;
+    if (res.matched === "invoice") summary.matchedByInvoice++;
+    else if (res.matched === "none") summary.unmatched++;
+  }
+
   return summary;
 }
 
