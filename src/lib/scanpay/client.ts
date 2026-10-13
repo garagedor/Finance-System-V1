@@ -114,11 +114,15 @@ export async function fetchRefundedInvoices(opts: {
   since: string;            // ISO; stop paging once invoices are older than this
   deadline?: number;        // epoch ms; stop (complete=false) when passed
   delayMs?: number;         // pause between requests
+  pageSize?: number;        // invoices per request (`limit`; ScanPay's default is 10)
   onPage?: (team: number, page: number, oldest: string) => void;
 }): Promise<RefundedInvoiceScan> {
   const keys = scanpayKeys();
   if (!keys.length) throw new Error("No SCANPAY_API_KEY configured");
-  const delay = opts.delayMs ?? 250;
+  const delay = opts.delayMs ?? 500;
+  // 500 a page: the whole history is ~45 requests rather than ~2,200 at the
+  // default 10, which is what makes a daily 120-day look-back affordable.
+  const limit = opts.pageSize ?? 500;
   const out: RefundedInvoiceScan = { invoices: [], pages: 0, complete: true };
   for (const [i, key] of keys.entries()) {
     for (let page = 0; ; page++) {
@@ -126,7 +130,7 @@ export async function fetchRefundedInvoices(opts: {
       let res: Response | null = null;
       for (let attempt = 0; attempt < 3; attempt++) {
         if (attempt) await new Promise((r) => setTimeout(r, 5000 * attempt)); // back off, never hammer
-        res = await fetch(`${BASE}/connect/v1/invoices?page=${page}`, {
+        res = await fetch(`${BASE}/connect/v1/invoices?page=${page}&limit=${limit}`, {
           headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
           cache: "no-store",
         });

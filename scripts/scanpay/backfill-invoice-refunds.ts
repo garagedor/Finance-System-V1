@@ -55,8 +55,8 @@ if (undoFile) {
   const { fetchRefundedInvoices } = await import("../../src/lib/scanpay/client.ts");
   const scan = await fetchRefundedInvoices({
     since: "2000-01-01T00:00:00Z",
-    delayMs: 400,
-    onPage: (team, page, oldest) => { if (page % 25 === 0) console.log(`team ${team} page ${page} · back to ${oldest.slice(0, 10)}`); },
+    delayMs: 1000,
+    onPage: (team, page, oldest) => { if (page % 5 === 0) console.log(`team ${team} page ${page} · back to ${oldest.slice(0, 10)}`); },
   });
   const client = new MongoClient(process.env.MONGODB_URI!); await client.connect();
   const rows = await client.db(DB_NAME).collection("finance_scanpay_refund").find({}, { projection: { invoiceNumber: 1 } }).toArray();

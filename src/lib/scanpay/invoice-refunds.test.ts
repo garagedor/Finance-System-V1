@@ -39,6 +39,7 @@ test("I3. the invoice scan is one request at a time, paced, time-boxed", () => {
   const fn = CLIENT.slice(CLIENT.indexOf("export async function fetchRefundedInvoices"), CLIENT.indexOf("export function parseAmount"));
   assert.equal(/Promise\.all/.test(fn), false, "parallel requests get the IP blocked by ScanPay");
   assert.match(fn, /setTimeout\(r, delay\)/);
+  assert.match(fn, /invoices\?page=\$\{page\}&limit=\$\{limit\}/);
   assert.match(fn, /opts\.deadline && Date\.now\(\) > opts\.deadline/);
 });
 
