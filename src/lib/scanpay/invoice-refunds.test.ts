@@ -59,7 +59,7 @@ test("I5. the same invoice never lands twice", () => {
   // invoice route: skip if anything exists for the invoice number;
   // payment route: skip only if the invoice route got there first.
   assert.match(SYNC, /source === "invoice" \? \{ invoiceNumber: raw\.invoiceNumber \} : \{ invoiceNumber: raw\.invoiceNumber, source: "invoice" \}/);
-  assert.match(SYNC, /insertOne\(\{ _id: raw\.id, \.\.\.c0, source,/);
+  assert.match(SYNC, /insertOne\(\{ _id: raw\.id, \.\.\.c0, \.\.\.\(customer \?\? \{\}\), source,/);
 });
 
 test("I6. invoice-found refunds are re-matched on every inbox sync, from the stored raw", () => {
@@ -67,4 +67,18 @@ test("I6. invoice-found refunds are re-matched on every inbox sync, from the sto
   const full = SYNC.slice(SYNC.indexOf("export async function syncScanpayRefunds"), SYNC.indexOf("export async function syncNewScanpayRefunds"));
   assert.match(full, /source: "invoice", matchStatus: \{ \$in: \["new", "matched"\] \}/);
   assert.match(full, /upsertScanpayRefund\(rec\.raw, "invoice"\)/);
+});
+
+test("I7. refund cards show and search the ScanPay customer", () => {
+  const PAGE = read("app", "portal", "disputes", "inbox", "page.tsx");
+  assert.match(PAGE, /r\.customerName \|\| en\?\.clientName \|\| r\.invoiceNumber/);
+  assert.match(PAGE, /\[r\.candidates\?\.\[0\]\?\.address, r\.customerName, r\.customerPhone, r\.createdBy\]/);
+  assert.match(PAGE, /<CopyInvoiceButton value=\{r\.invoiceNumber\} \/>/);
+});
+
+test("I8. the customer lookup runs once, when a refund is first inserted", () => {
+  const SYNC = read("lib", "scanpay", "refund-sync.ts");
+  assert.equal((SYNC.match(/refundCustomer\(/g) ?? []).length, 1, "never on every inbox-load sync");
+  const at = SYNC.indexOf("refundCustomer(raw.invoiceId)");
+  assert.ok(at > SYNC.indexOf("if (!existing) {", SYNC.indexOf("const { candidates, best }")), "inside the insert branch");
 });

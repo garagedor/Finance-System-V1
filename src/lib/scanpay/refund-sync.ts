@@ -2,6 +2,7 @@ import "server-only";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { fetchScanpayRefunds, fetchRefundedInvoices, parseAmount, parseScanpayDate } from "./client";
 import { invoiceToRefundRaw } from "./invoice-refunds";
+import { refundCustomer } from "./refund-customer";
 import { matchRefund } from "./match";
 import { postDisputeCharge } from "@/lib/dispute-service";
 import { shareFromSnapshot } from "./share";
@@ -154,7 +155,9 @@ export async function upsertScanpayRefund(
   };
 
   if (!existing) {
-    await c.insertOne({ _id: raw.id, ...c0, source, refundAmount: null, refundDate: null, ...matchFields, postedRecordId: null, ledgerEntryId: null, synced_at: now });
+    // Who the customer is — one invoice lookup, once, when the refund arrives.
+    const customer = await refundCustomer(raw.invoiceId);
+    await c.insertOne({ _id: raw.id, ...c0, ...(customer ?? {}), source, refundAmount: null, refundDate: null, ...matchFields, postedRecordId: null, ledgerEntryId: null, synced_at: now });
     return { action: "created", matched };
   }
   await c.updateOne({ _id: raw.id }, { $set: { ...c0, ...matchFields } });

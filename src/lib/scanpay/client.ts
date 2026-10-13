@@ -152,6 +152,25 @@ export async function fetchRefundedInvoices(opts: {
   return out;
 }
 
+// One invoice in full (customer, payments). Invoice ids are per team, so each
+// team token is tried in turn; null if none of them has it.
+export interface ScanpayInvoiceDetail {
+  id: string;
+  invoiceNumber: string;
+  memberId?: string;
+  customer?: { name?: string; phoneNumber?: string; email?: string };
+}
+export async function fetchScanpayInvoice(invoiceId: string): Promise<ScanpayInvoiceDetail | null> {
+  for (const key of scanpayKeys()) {
+    const res = await fetch(`${BASE}/connect/v1/invoices/${encodeURIComponent(invoiceId)}`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (res.ok) return ((await res.json()) as { data?: ScanpayInvoiceDetail }).data ?? null;
+  }
+  return null;
+}
+
 // ── Pure parsing helpers (safe to import anywhere) ──────────────────────────
 
 export function parseAmount(raw: string): number {

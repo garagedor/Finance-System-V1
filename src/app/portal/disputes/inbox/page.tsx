@@ -15,6 +15,7 @@ import ScanpayRowActions from "../scanpay/ScanpayRowActions";
 import PostingCoveragePanel from "../scanpay/PostingCoverage";
 import ScanpayRefundRowActions from "../scanpay/refunds/ScanpayRefundRowActions";
 import InboxLive from "./InboxLive";
+import CopyInvoiceButton from "./CopyInvoiceButton";
 import { coverageForInboxItems, type RecordCoverage } from "@/lib/dispute-coverage";
 import {
   type InboxStage, STAGE_LABEL, STAGE_STATUSES,
@@ -104,8 +105,8 @@ async function load(view: InboxStage, kind: Kind, f: Filters) {
     if (maxN != null && amt > maxN) return false;
     return true;
   };
-  const rRows = refunds.filter((r) => pass(r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, !!r.matchedJobId, (r.paymentDate ?? "").slice(0, 10), r.originalAmount, matchHay(r.invoiceNumber, r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, r.candidates?.[0]?.address)));
-  const dRows = disputes.filter((d) => pass(d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, !!d.matchedJobId, (d.disputedAt ?? "").slice(0, 10), d.amount, matchHay(d.invoiceNumber, d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, `${d.customerName} ${d.reason}`)));
+  const rRows = refunds.filter((r) => pass(r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, !!r.matchedJobId, (r.paymentDate ?? "").slice(0, 10), r.originalAmount, matchHay(r.invoiceNumber, r.matchedJobId ? enrich.get(r.matchedJobId) : undefined, [r.candidates?.[0]?.address, r.customerName, r.customerPhone, r.createdBy].filter(Boolean).join(" "))));
+  const dRows = disputes.filter((d) => pass(d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, !!d.matchedJobId, (d.disputedAt ?? "").slice(0, 10), d.amount, matchHay(d.invoiceNumber, d.matchedJobId ? enrich.get(d.matchedJobId) : undefined, `${d.customerName} ${d.customerPhone ?? ""} ${d.reason}`)));
 
   // Counts come from STAGE_STATUSES — the same table the row queries are built
   // from — so a tab's number and its contents cannot disagree.
@@ -209,12 +210,17 @@ function RefundCard({ r, en, coverage }: { r: ScanpayRefundRecord; en?: JobEnric
       <div style={rowStyle}>
         <div style={{ minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 15 }}>
-            {en?.clientName || r.invoiceNumber || "Refund"} <Pill tone="accent">Refund</Pill>
+            {r.customerName || en?.clientName || r.invoiceNumber || "Refund"} <Pill tone="accent">Refund</Pill>
             {r.matchStatus === "posted" ? <> <Pill tone="ok">Posted</Pill></> : null}
             {r.matchStatus === "verified" && <> <Pill tone="ok">Verified</Pill></>}
             {r.matchStatus === "ignored" && <> <Pill tone="muted">Ignored</Pill></>}
           </div>
-          <div className="muted small mono" style={{ marginTop: 2 }}>{r.invoiceNumber || "no invoice"} · {r.paymentMethod} · {en?.address ? en.address.slice(0, 40) : (r.matchedJobId ? "no address" : "no match")}</div>
+          <div className="muted small mono" style={{ marginTop: 2 }}>{r.invoiceNumber || "no invoice"}{r.invoiceNumber ? <CopyInvoiceButton value={r.invoiceNumber} /> : null} · {r.paymentMethod} · {en?.address ? en.address.slice(0, 40) : (r.matchedJobId ? "no address" : "no match")}</div>
+          {(r.customerPhone || r.createdBy) && (
+            <div className="muted small" style={{ marginTop: 2 }}>
+              ScanPay: {[r.customerPhone, r.createdBy ? `by ${r.createdBy}` : null].filter(Boolean).join(" · ")}
+            </div>
+          )}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 9 }}>
             <Pill>Tech · {en?.tech ?? "—"}</Pill>
             <Pill>Provider · {en?.provider ?? "—"}</Pill>

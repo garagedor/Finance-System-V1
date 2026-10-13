@@ -138,6 +138,13 @@ export interface ScanpayRefundRecord {
   /** How it was found: the refunded-payments list, or a REFUNDED invoice
    *  (partial refunds — lib/scanpay/invoice-refunds). Absent on older rows = payment. */
   source?: "payment" | "invoice";
+  /** From the ScanPay invoice (refund rows carry no customer of their own):
+   *  shown on the inbox card and searchable, so a person can find the job.
+   *  Filled at sync (lib/scanpay/refund-customer) or from a dashboard export. */
+  customerName?: string | null;
+  customerPhone?: string | null;
+  /** ScanPay user who created the invoice — normally the technician. */
+  createdBy?: string | null;
   invoiceId: string;
   invoiceNumber: string;
   originalAmount: number;      // what the customer originally paid
