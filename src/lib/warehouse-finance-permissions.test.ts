@@ -178,6 +178,15 @@ test("E2. Warehouse refuses finance to an agent before it looks at the permissio
   assert.ok(permCheck > -1, "requireFinance must also check the permission");
   assert.ok(accountCheck < permCheck,
     "the account-type refusal must come first, so a mis-issued permission is never reached");
+
+  // The runtime proof lives where it can actually run: an agent session
+  // carrying BOTH finance permissions calls createExpense and is refused.
+  // Named here so deleting it there breaks the build here.
+  const spec = readWarehouse("lib/domain/finance/service.test.ts");
+  assert.ok(spec.includes("an agent is refused even holding the finance permission"),
+    "the Warehouse repo must keep its runtime test for this");
+  assert.ok(spec.includes('sessionWith(["wh:finance:view", "wh:finance:edit"], { accountType: "warehouse_agent" })'),
+    "…and it must still be the case of an agent holding both permissions");
 });
 
 test("E3. no finance navigation is serialised for an agent", () => {
