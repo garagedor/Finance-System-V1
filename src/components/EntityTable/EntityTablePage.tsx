@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type MutableRefObject, type ReactNode } from 'react';
-import { FiPlus, FiTrash2, FiChevronDown, FiChevronUp, FiEdit2, FiX, FiSearch, FiSliders, FiColumns, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiPlus, FiTrash2, FiChevronDown, FiChevronUp, FiEdit2, FiX, FiSearch, FiSliders, FiColumns, FiChevronLeft, FiChevronRight, FiChevronsLeft, FiChevronsRight } from 'react-icons/fi';
 import dynamic from 'next/dynamic';
 // Lazy-load the row-edit modal — only pulled in when a user opens it. Cast keeps
 // the generic component type at the call site through next/dynamic.
@@ -16,7 +16,7 @@ import DateRangePicker from '@/components/DateRangePicker';
 import EmptyState from '@/components/EmptyState';
 import type { AuthUser } from '@/types/user';
 import type { ColumnConfig } from '@/app/utils/jobUtils';
-import { PAGE_SIZE, formatCurrency, getRowId, normalizeApprovals } from '@/app/utils/jobUtils';
+import { formatCurrency, getRowId, normalizeApprovals } from '@/app/utils/jobUtils';
 import { Snackbar } from '@/components/Snackbar';
 import { useAuth } from '@/components/AuthShell';
 import { GenericTableData, EntityTablePageProps, EntityFilterRule, FilterOperator } from './types';
@@ -622,7 +622,7 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
                         )}
                     </div>
                     <div className="status-right">
-                        {!data.filterMode && data.totalPages > 0 && (
+                        {data.totalPages > 0 && (
                             <span className="status-pages">
                                 Page <strong>{data.page}</strong> of <strong>{data.totalPages}</strong>
                             </span>
@@ -786,33 +786,42 @@ export default function EntityTablePage<T, D extends GenericTableData<T>>({
 
                 {/* ── Compact Pagination ── */}
                 <div className="pagination-bar">
-                    {!data.filterMode ? (
-                        <>
-                            <button
-                                className="page-arrow"
-                                onClick={() => canPrev && data.setPage((p: number) => p - 1)}
-                                disabled={!canPrev || data.loading}
-                                aria-label="Previous page"
-                            >
-                                <FiChevronLeft size={14} />
-                            </button>
-                            <span className="page-indicator">
-                                Page <strong>{data.page}</strong> of <strong>{data.totalPages}</strong>
-                            </span>
-                            <button
-                                className="page-arrow"
-                                onClick={() => canNext && data.setPage((p: number) => p + 1)}
-                                disabled={!canNext || data.loading}
-                                aria-label="Next page"
-                            >
-                                <FiChevronRight size={14} />
-                            </button>
-                        </>
-                    ) : (
-                        <span className="page-indicator">
-                            Filtered view {data.limitedToFirst50 ? `· first ${PAGE_SIZE} rows` : ''}
-                        </span>
-                    )}
+                    <button
+                        className="page-arrow"
+                        onClick={() => canPrev && data.setPage(1)}
+                        disabled={!canPrev || data.loading}
+                        aria-label="First page"
+                    >
+                        <FiChevronsLeft size={14} />
+                    </button>
+                    <button
+                        className="page-arrow"
+                        onClick={() => canPrev && data.setPage((p: number) => p - 1)}
+                        disabled={!canPrev || data.loading}
+                        aria-label="Previous page"
+                    >
+                        <FiChevronLeft size={14} />
+                    </button>
+                    <span className="page-indicator">
+                        Page <strong>{data.page}</strong> of <strong>{data.totalPages}</strong>
+                        {data.filterMode && <> · {data.total.toLocaleString()} matches</>}
+                    </span>
+                    <button
+                        className="page-arrow"
+                        onClick={() => canNext && data.setPage((p: number) => p + 1)}
+                        disabled={!canNext || data.loading}
+                        aria-label="Next page"
+                    >
+                        <FiChevronRight size={14} />
+                    </button>
+                    <button
+                        className="page-arrow"
+                        onClick={() => canNext && data.setPage(data.totalPages)}
+                        disabled={!canNext || data.loading}
+                        aria-label="Last page"
+                    >
+                        <FiChevronsRight size={14} />
+                    </button>
                 </div>
             </div>
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient, Db, Collection, ObjectId } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import { canonicalStatus } from "@/lib/status-canonical";
+import { combineFilterParts, isRangeOperator, type FilterPart } from "@/lib/filter-combine";
 import type { JobRow } from '../../../types/job';
 
 const DB_NAME = 'ag';
@@ -147,11 +148,10 @@ export async function GET(req: NextRequest) {
                 console.error('Failed to parse filters query param', err);
             }
         }
-        const hasFilters = parsedFilters.some(
-            (f) => (f?.field ?? '') !== '' && f?.value !== undefined && f?.value !== null && f?.value !== ''
-        );
         const isSearching = search.length >= 2;
-        const limitFirst50 = limitFirst50Param || hasFilters || isSearching;
+        // Filtered and searched results page like everything else; only an
+        // explicit limitFirst50=true caps them at the first 50.
+        const limitFirst50 = limitFirst50Param;
         const fetchAll = searchParams.get('fetchAll') === 'true';
         const sortableFields = new Set([
             'tech',
@@ -188,7 +188,9 @@ export async function GET(req: NextRequest) {
         const { collection } = await connectToDatabase();
 
         const filterQuery: Record<string, any> = {};
-        const filterConditions: Record<string, any>[] = [];
+        // Search always narrows; filter rules combine per combineFilterParts.
+        const searchConditions: Record<string, any>[] = [];
+        const filterParts: FilterPart[] = [];
         const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         if (startDate || endDate) {
             const range: any = {};
@@ -203,7 +205,6 @@ export async function GET(req: NextRequest) {
             filterQuery.tech = tech;
         }
 
-        const logicOp = (searchParams.get('filterLogic') ?? 'AND') === 'OR' ? '$or' : '$and';
 
         // Global Search Logic
         if (isSearching) {
@@ -211,7 +212,7 @@ export async function GET(req: NextRequest) {
             const searchableFields = [
                 'tech', 'status', 'address', 'location', 'provider', 'clientName', 'clientPhoneNumber', 'notes', '_id'
             ];
-            filterConditions.push({
+            searchConditions.push({
                 $or: searchableFields.map(field => ({ [field]: searchRegex }))
             });
         }
@@ -223,6 +224,7 @@ export async function GET(req: NextRequest) {
             if (converted === undefined) return;
 
             let condition: any = null;
+            let isRange = false;
             const operator = (rule as any).operator ?? 'contains';
 
             // Numeric fields: legacy Mongo data is mixed-type — some rows
@@ -234,12 +236,16 @@ export async function GET(req: NextRequest) {
             // perfectly valid "Paid Company Check > 0 AND LM Parts > 0".
             if (numberFields.has(field as keyof JobRow)) {
                 const mongoOp = ['gt', 'lt', 'gte', 'lte'].includes(operator) ? `$${operator}` : '$eq';
-                filterConditions.push({
-                    $expr: {
-                        [mongoOp]: [
-                            { $convert: { input: `$${field}`, to: 'double', onError: 0, onNull: 0 } },
-                            converted,
-                        ],
+                filterParts.push({
+                    field,
+                    range: isRangeOperator(operator),
+                    condition: {
+                        $expr: {
+                            [mongoOp]: [
+                                { $convert: { input: `$${field}`, to: 'double', onError: 0, onNull: 0 } },
+                                converted,
+                            ],
+                        },
                     },
                 });
                 return;
@@ -266,6 +272,7 @@ export async function GET(req: NextRequest) {
                         rangeCondition.$lte = dateRangeObj.end;
                     }
                     condition = rangeCondition;
+                    isRange = true;
                 } else if (converted === '') {
                     condition = { $in: ['', null] };
                 } else {
@@ -309,6 +316,7 @@ export async function GET(req: NextRequest) {
                 condition = { $eq: converted };
             } else if (['gt', 'lt', 'gte', 'lte'].includes(operator)) {
                 condition = { [`$${operator}`]: converted };
+                isRange = true;
             } else {
                 // Default fallback
                 if (!numberFields.has(field as keyof JobRow) && !booleanFields.has(field as keyof JobRow)) {
@@ -320,9 +328,14 @@ export async function GET(req: NextRequest) {
             }
 
             if (condition) {
-                filterConditions.push({ [field]: condition });
+                filterParts.push({ field, range: isRange, condition: { [field]: condition } });
             }
         });
+
+        const filterConditions: Record<string, any>[] = [
+            ...searchConditions,
+            ...combineFilterParts(filterParts, searchParams.get('filterLogic')),
+        ];
 
 
         if (fetchAll) {
@@ -386,7 +399,7 @@ export async function GET(req: NextRequest) {
 
         const matchQuery: any = { ...filterQuery };
         if (filterConditions.length > 0) {
-            matchQuery[logicOp] = filterConditions;
+            matchQuery.$and = filterConditions;
         }
 
         const pageSizeToUse = limitFirst50 ? 50 : safePageSize;

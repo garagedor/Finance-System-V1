@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Collection, Db, MongoClient, ObjectId, type Document } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import { normalizeDate } from '@/app/utils/jobUtils';
+import { combineFilterParts, isRangeOperator, type FilterPart } from "@/lib/filter-combine";
 
 const DB_NAME = 'ag';
 
@@ -137,11 +138,10 @@ export function createCrudHandlers<T extends Document>(options: CrudOptions<T>) 
           console.error(`Failed to parse filters for ${collectionName}`, err);
         }
       }
-      const hasFilters = parsedFilters.some(
-        (f) => (f?.field ?? '') !== '' && f?.value !== undefined && f?.value !== null && f?.value !== ''
-      );
       const isSearching = search.length >= 2;
-      const limitFirst50 = limitFirst50Param || hasFilters || isSearching;
+      // Filtered and searched results page like everything else; only an
+      // explicit limitFirst50=true caps them at the first 50.
+      const limitFirst50 = limitFirst50Param;
       const applySort = sortBy && sortable.has(sortBy);
 
       const safePage = Number.isNaN(page) || page < 1 ? 1 : page;
@@ -149,7 +149,9 @@ export function createCrudHandlers<T extends Document>(options: CrudOptions<T>) 
 
       const { collection } = await connectToDatabase<T>(collectionName);
 
-      const filterConditions: Record<string, any>[] = [];
+      // Search always narrows; filter rules combine per combineFilterParts.
+      const searchConditions: Record<string, any>[] = [];
+      const filterParts: FilterPart[] = [];
       const escapeRegex = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const { numberFields = [], booleanFields = [], dateFields = [] } = options;
 
@@ -165,7 +167,7 @@ export function createCrudHandlers<T extends Document>(options: CrudOptions<T>) 
         // Always include _id for search if it's not explicitly in searchableFields
         const searchTargets = Array.from(new Set([...searchableFields.map(f => String(f)), '_id']));
 
-        filterConditions.push({
+        searchConditions.push({
           $or: searchTargets.map(field => ({ [field]: searchRegex }))
         });
       }
@@ -183,7 +185,7 @@ export function createCrudHandlers<T extends Document>(options: CrudOptions<T>) 
             const rangeCondition: Record<string, string> = {};
             if (range.start) rangeCondition.$gte = range.start;
             if (range.end) rangeCondition.$lte = range.end;
-            filterConditions.push({ [field]: rangeCondition });
+            filterParts.push({ field, range: true, condition: { [field]: rangeCondition } });
             return;
           }
         }
@@ -200,12 +202,16 @@ export function createCrudHandlers<T extends Document>(options: CrudOptions<T>) 
         // Without this, "lmParts > 0" silently misses string-typed rows.
         if (numberFields.includes(field as keyof T)) {
           const mongoOp = ['gt', 'lt', 'gte', 'lte'].includes(operator) ? `$${operator}` : '$eq';
-          filterConditions.push({
-            $expr: {
-              [mongoOp]: [
-                { $convert: { input: `$${field}`, to: 'double', onError: 0, onNull: 0 } },
-                converted,
-              ],
+          filterParts.push({
+            field,
+            range: isRangeOperator(operator),
+            condition: {
+              $expr: {
+                [mongoOp]: [
+                  { $convert: { input: `$${field}`, to: 'double', onError: 0, onNull: 0 } },
+                  converted,
+                ],
+              },
             },
           });
           return;
@@ -236,15 +242,12 @@ export function createCrudHandlers<T extends Document>(options: CrudOptions<T>) 
         }
 
         if (condition) {
-          filterConditions.push({ [field]: condition });
+          filterParts.push({ field, range: isRangeOperator(operator), condition: { [field]: condition } });
         }
       });
 
-      const logicOp = filterLogic === 'OR' ? '$or' : '$and';
-      const matchQuery: any =
-        filterConditions.length > 0
-          ? { [logicOp]: filterConditions }
-          : {};
+      const filterConditions = [...searchConditions, ...combineFilterParts(filterParts, filterLogic)];
+      const matchQuery: any = filterConditions.length > 0 ? { $and: filterConditions } : {};
 
       const total = await collection.countDocuments(matchQuery);
       const pageSizeToUse = limitFirst50 ? 50 : safePageSize;

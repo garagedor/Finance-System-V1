@@ -210,7 +210,7 @@ export function EntityTableFilters<T>({
                                 type="button"
                                 className={logic === 'AND' ? 'active' : ''}
                                 onClick={() => setLogic('AND')}
-                                title="Match ALL conditions"
+                                title="Different fields must all match; several values of the same field add up"
                             >
                                 AND
                             </button>

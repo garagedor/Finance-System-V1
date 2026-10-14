@@ -96,7 +96,7 @@ export const useEntityData = <T extends { _id?: string }>(
       const filtering = (filtersToApply?.length ?? 0) > 0;
 
       const fetchParams = {
-        page: filtering || search.length >= 2 ? '1' : String(pageToLoad),
+        page: String(pageToLoad),
         pageSize: PAGE_SIZE,
         sortBy,
         sortDir,
@@ -113,7 +113,7 @@ export const useEntityData = <T extends { _id?: string }>(
       try {
         setLoading(true);
         const params = new URLSearchParams({
-          page: filtering || search.length >= 2 ? '1' : String(pageToLoad),
+          page: String(pageToLoad),
           pageSize: String(PAGE_SIZE),
         });
         if (sortBy) {
@@ -123,11 +123,9 @@ export const useEntityData = <T extends { _id?: string }>(
         if (filtering) {
           params.set('filters', JSON.stringify(filtersToApply));
           params.set('filterLogic', logicToApply);
-          params.set('limitFirst50', 'true');
         }
         if (search.length >= 2) {
           params.set('search', search);
-          params.set('limitFirst50', 'true');
         }
         const res = await fetch(`${options.endpoint}?${params.toString()}`);
         const data = await res.json();
@@ -141,7 +139,7 @@ export const useEntityData = <T extends { _id?: string }>(
         setRowData(combined);
         const baseTotal = data.total ?? normalizedRows.length;
         setTotal(baseTotal + tempRows.length);
-        setLimitedToFirst50(Boolean(data.limited) || ((filtering || search.length >= 2) && normalizedRows.length >= PAGE_SIZE));
+        setLimitedToFirst50(Boolean(data.limited));
         setFilterMode(filtering || search.length >= 2);
       } catch (err) {
         console.error('Failed to load data', err);
