@@ -40,8 +40,9 @@ test("isWarehousePermission means canonical membership, not a prefix", () => {
   assert.equal(isWarehousePermission("crm:jobs:view"), false);
 });
 
-test("the locked set is still exactly 20", () => {
-  assert.equal(WAREHOUSE_PERMISSIONS.length, 20);
+test("the locked set is still exactly 22", () => {
+  // 20 + the two Warehouse Finance permissions. See warehouse-roles.test.ts.
+  assert.equal(WAREHOUSE_PERMISSIONS.length, 22);
 });
 
 /* ── Entitlement (the gateway rule) ───────────────────────────────────── */

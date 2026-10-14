@@ -247,6 +247,20 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDef> = [
   wh("wh:inventory:adjust", "inventory", "adjust",  "Adjust stock & change condition", "Appends a correcting movement; never edits history."),
   wh("wh:putaway:move",     "putaway",   "move",    "Move stock out of receiving"),
 
+  // Warehouse Finance is the landed-cost side of the warehouse: what an order
+  // cost once freight, duty and handling are allocated across its lines. It is
+  // a different thing from the Finance Portal above, which is the company's
+  // books — a holder of one is not thereby a holder of the other.
+  //
+  // Internal by construction. Warehouse's own `requireFinance` refuses any
+  // identity whose account type is not `employee`, before it looks at the
+  // permission at all, so a supplier agent handed one of these by a
+  // misconfigured role still cannot read a cost.
+  wh("wh:finance:view",     "finance",   "view",    "Warehouse Finance — View",
+     "Landed costs, expenses and profitability inside Warehouse. Not the Finance Portal."),
+  wh("wh:finance:edit",     "finance",   "edit",    "Warehouse Finance — Edit",
+     "Record and allocate warehouse costs. Does not imply View; grant both."),
+
   wh("wh:admin",            "admin",     "admin",   "Warehouse administrator", "Implies every other warehouse permission, inside Warehouse only."),
 ] as const;
 

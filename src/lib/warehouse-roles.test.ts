@@ -43,8 +43,13 @@ test("every permission is canonical and real — no invented keys", () => {
   }
 });
 
-test("the locked set is untouched at 20", () => {
-  assert.equal(WAREHOUSE_PERMISSIONS.length, 20);
+test("the locked set is untouched at 22", () => {
+  // 20 at Phase 1 approval; 22 since Warehouse Finance was approved, which
+  // added wh:finance:view and wh:finance:edit and nothing else. The number is
+  // pinned rather than derived on purpose: widening the vocabulary that the
+  // Warehouse verifier trusts is a decision, and it should fail here until
+  // somebody makes it.
+  assert.equal(WAREHOUSE_PERMISSIONS.length, 22);
 });
 
 /* ── The rules the approval locked ───────────────────────────────────── */
