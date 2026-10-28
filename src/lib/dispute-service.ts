@@ -37,6 +37,7 @@ import { siblingAnalysis } from "@/lib/dispute-coverage";
 import type { JobRow, Location } from "@/types/job";
 import type { DisputeRecord, RefundRecord } from "@/types/finance";
 import type { LedgerEntryRecord, LedgerRecord } from "@/types/finance-ledger";
+import { techPctOn } from '@/lib/tech-rate';
 
 const num = (v: unknown): number => {
   if (v == null || v === "") return 0;
@@ -202,7 +203,7 @@ export async function postDisputeCharge(input: PostDisputeChargeInput): Promise<
   const chargedTech = (input.party === "technician" && input.techId?.trim())
     ? input.techId.trim()
     : (job.tech ?? "");
-  const technicianPercent = await getEffectivePct(chargedTech);
+  const technicianPercent = await getEffectivePct(chargedTech, job.date);
   const providerDoc = job.provider
     ? await db.collection("Provider").findOne({ _id: job.provider } as never)
     : null;

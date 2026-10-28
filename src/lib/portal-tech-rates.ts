@@ -7,6 +7,7 @@
 
 import { coll, getDb, FINANCE_COLLECTIONS, ensureFinanceIndexes } from "./finance-db";
 import type { TechnicianRateRecord, TechRateView } from "@/types/finance-ledger";
+import { techPctOn } from '@/lib/tech-rate';
 
 function toNum(v: unknown): number {
   const n = typeof v === "string" ? parseFloat(v) : typeof v === "number" ? v : NaN;
@@ -41,12 +42,13 @@ export async function getTechRates(): Promise<TechRateView[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-/** Effective dispute/refund % (0–100) for one technician by name. */
-export async function getEffectivePct(techName: string): Promise<number> {
+/** Effective dispute/refund % (0–100) for one technician by name, at the
+ *  rate in force on `jobDate` (see lib/tech-rate). */
+export async function getEffectivePct(techName: string, jobDate?: string): Promise<number> {
   if (!techName) return 0;
   const ov = await coll<TechnicianRateRecord>(FINANCE_COLLECTIONS.techRate).findOne({ _id: techName });
   if (ov && Number.isFinite(Number(ov.dispute_pct))) return Number(ov.dispute_pct);
   const db = await getDb();
   const t = await db.collection("Technician").findOne({ _id: techName } as Record<string, unknown>);
-  return toNum((t as { profitPercent?: unknown } | null)?.profitPercent);
+  return techPctOn(t as { profitPercent?: unknown; pastRates?: unknown } | null, jobDate);
 }

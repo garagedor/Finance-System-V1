@@ -25,6 +25,7 @@ import {
 import { TechReportPdf } from '../../../../components/pdf/TechReportPdf';
 import { LocationReportPdf } from '../../../../components/pdf/LocationReportPdf';
 import type { PdfReportData, PdfReportStats, PdfRow, PdfTotals } from '../../../../components/pdf/types';
+import { techPctOn } from '@/lib/tech-rate';
 
 // ── Logo loader (cached after first read) ─────────────────────────────────
 // We read public/lbs-logo.png at request time, base64-encode it, and pass
@@ -94,7 +95,7 @@ const buildRowsAndTotals = (
     jobs.forEach((job: any) => {
         const techId = job.tech || '';
         const techDoc = techId ? techMap.get(techId) : undefined;
-        const techPct = techDoc?.profitPercent ?? 0;
+        const techPct = techPctOn(techDoc, job.date);
 
         const calc = calcJobBalances(job, techPct, locationPct);
         const shareAmount = mode === 'location' ? calc.locationShare : calc.techShare;
@@ -259,7 +260,7 @@ export async function GET(req: NextRequest) {
             if (status) statusMap.set(status, (statusMap.get(status) || 0) + 1);
 
             const techDoc = job.tech ? techMap.get(job.tech) : undefined;
-            const techPct = techDoc?.profitPercent ?? 0;
+            const techPct = techPctOn(techDoc, job.date);
             const calc = calcJobBalances(job, techPct, locationPct);
             const profit = toNumber(calc.totalProfit);
 

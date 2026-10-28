@@ -51,7 +51,9 @@ export type Location = {
 
 export type Technician = {
     _id: string;
+    /** Current rate. Earlier rates live in pastRates (see lib/tech-rate). */
     profitPercent: number;
+    pastRates?: Array<{ until: string; percent: number | string }>;
     location: string;
 };
 

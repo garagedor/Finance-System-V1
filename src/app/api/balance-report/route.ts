@@ -10,6 +10,7 @@ import {
   toNumber,
 } from '../utils/calculations';
 import { canonicalStatus } from '@/lib/status-canonical';
+import { techPctOn } from '@/lib/tech-rate';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -113,7 +114,7 @@ export async function computeBalanceReport(opts: {
       const jobId = (job as any)._id?.toString() || '';
       const techId = job.tech || '';
       const techDoc = techId ? techMap.get(techId) : undefined;
-      const techPct = techDoc?.profitPercent ?? 0;
+      const techPct = techPctOn(techDoc, job.date);
 
       // Single source of truth: every per-job number goes through
       // calcJobBalances so Tech Report and Location Report can't drift.
@@ -262,7 +263,7 @@ export async function computeBalanceReport(opts: {
     if (mode === 'location') {
       rows.forEach((r) => {
         const base = toNumber(r.totalProfit || 0);
-        const techPct = r.tech && techMap.get(r.tech)?.profitPercent ? toNumber(techMap.get(r.tech)!.profitPercent) : 0;
+        const techPct = r.tech ? techPctOn(techMap.get(r.tech), r.date) : 0;
         locationShare += calcStandardShare(base, locationPct);
         techShare += calcStandardShare(base, techPct);
       });

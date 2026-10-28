@@ -17,6 +17,7 @@ import {
   toNumber,
 } from '../utils/calculations';
 import { computeDisputeCharge } from '@/lib/dispute-charge';
+import { techPctOn } from '@/lib/tech-rate';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -132,7 +133,7 @@ const computeBasicFinancials = (job: JobRow) => {
 // Full financials for dispute and refund reports (includes tech-specific calculations)
 const computeDisputeRefundFinancials = (job: JobRow, techMap: Map<string, Technician>, locationMap: Map<string, any>) => {
   const techDoc = job.tech ? techMap.get(job.tech) : undefined;
-  const techProfitPercent = techDoc?.profitPercent ?? 0;
+  const techProfitPercent = techPctOn(techDoc, job.date);
 
   const locationDoc = job.location ? locationMap.get(job.location) : undefined;
   const managerProfitPercent = locationDoc?.managerProfitPercent ?? 0;

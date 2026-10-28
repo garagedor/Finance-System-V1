@@ -11,6 +11,7 @@ import {
   calcPaymentFee,
   toNumber,
 } from '../utils/calculations';
+import { techPctOn } from '@/lib/tech-rate';
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -135,7 +136,7 @@ export async function GET(req: NextRequest) {
       // View 1 — closed jobs, original Company↔Tech balance
       if (status === 'closed' && techId) {
         const techDoc = techMap.get(techId);
-        const techPct = techDoc?.profitPercent ?? 0;
+        const techPct = techPctOn(techDoc, job.date);
         const shareAmount = calcStandardShare(totalProfit, techPct);
         const balance = calcFinalBalance(shareAmount, toNumber(job.techParts), toNumber(job.techPaidCash));
 
