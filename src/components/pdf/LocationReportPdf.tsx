@@ -116,7 +116,8 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
     </View>
 );
 
-export function LocationReportPdf({ data }: { data: PdfReportData }) {
+/** The report's pages, without a <Document>, so several reports can share one PDF. */
+export function LocationReportPages({ data }: { data: PdfReportData }) {
     const { techName, locationName, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
     const statusSlices = stats.statusStats.map((st, i) => ({
         label: st.key,
@@ -136,11 +137,7 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
     } as const;
 
     return (
-        <Document
-            title={`Location Report — ${locationName} — ${techName}`}
-            subject="317 Garage Door — Location Balance Report"
-            author="317 Garage Door"
-        >
+        <>
             {/* ════════════════════════════════════════════════════════════
                 PAGE 1 — DASHBOARD SUMMARY (mirrors CRM /balance-report)
                 ════════════════════════════════════════════════════════════ */}
@@ -206,6 +203,18 @@ export function LocationReportPdf({ data }: { data: PdfReportData }) {
 
                 <ReportFooter generatedAt={generatedAt} />
             </Page>
+        </>
+    );
+}
+
+export function LocationReportPdf({ data }: { data: PdfReportData }) {
+    return (
+        <Document
+            title={`Location Report — ${data.locationName} — ${data.techName}`}
+            subject="317 Garage Door — Location Balance Report"
+            author="317 Garage Door"
+        >
+            <LocationReportPages data={data} />
         </Document>
     );
 }

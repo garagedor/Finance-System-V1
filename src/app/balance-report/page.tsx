@@ -10,6 +10,7 @@ import MultiSelect from '@/components/MultiSelect';
 import DateRangePicker from '@/components/DateRangePicker';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import EmptyState from '@/components/EmptyState';
+import MultiTechReports from './MultiTechReports';
 import { SummaryStrip, AlertCard } from '@/components/ui';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { FiBriefcase, FiTrendingUp, FiCheckCircle, FiPercent, FiChevronDown, FiDownload, FiEye, FiX } from 'react-icons/fi';
@@ -315,6 +316,10 @@ export default function BalanceReportPage() {
   const [startDate, setStartDate] = useState(defaultStartDate);
   const [endDate, setEndDate] = useState(defaultEndDate);
   const [techFilter, setTechFilter] = useState('');
+  // Several technicians can be picked; techFilter / appliedTech stay the
+  // first one so the single-tech report below works exactly as before.
+  const [techFilters, setTechFilters] = useState<string[]>([]);
+  const [appliedTechs, setAppliedTechs] = useState<string[]>([]);
   const [appliedStart, setAppliedStart] = useState(defaultStartDate);
   const [appliedEnd, setAppliedEnd] = useState(defaultEndDate);
   const [appliedTech, setAppliedTech] = useState('');
@@ -469,7 +474,7 @@ export default function BalanceReportPage() {
     const saved = sessionStorage.getItem('balance-report-filters');
     if (saved) {
       try {
-        const { start, end, tech, mode: savedMode } = JSON.parse(saved);
+        const { start, end, tech, techs, mode: savedMode } = JSON.parse(saved);
         if (start) {
           setStartDate(start);
           setAppliedStart(start);
@@ -478,9 +483,12 @@ export default function BalanceReportPage() {
           setEndDate(end);
           setAppliedEnd(end);
         }
-        if (tech) {
-          setTechFilter(tech);
-          setAppliedTech(tech);
+        const savedTechs: string[] = Array.isArray(techs) && techs.length ? techs : tech ? [tech] : [];
+        if (savedTechs.length) {
+          setTechFilter(savedTechs[0]);
+          setAppliedTech(savedTechs[0]);
+          setTechFilters(savedTechs);
+          setAppliedTechs(savedTechs);
         }
         if (savedMode) {
           setMode(savedMode);
@@ -517,6 +525,8 @@ export default function BalanceReportPage() {
         const firstTech = techs[0]?._id ?? '';
         setTechFilter(firstTech);
         setAppliedTech(firstTech);
+        setTechFilters(firstTech ? [firstTech] : []);
+        setAppliedTechs(firstTech ? [firstTech] : []);
       }
     };
     fetchLookups();
@@ -656,6 +666,7 @@ export default function BalanceReportPage() {
     setAppliedStart(startDate);
     setAppliedEnd(endDate);
     setAppliedTech(techFilter);
+    setAppliedTechs(techFilters);
     setFiltersDirty(false);
 
     // Force fetch for refresh icon (case where nothing changed)
@@ -667,6 +678,7 @@ export default function BalanceReportPage() {
       start: startDate,
       end: endDate,
       tech: techFilter,
+      techs: techFilters,
       mode
     }));
   };
@@ -681,6 +693,19 @@ export default function BalanceReportPage() {
   // Title still defers to the report mode so the report's primary subject
   // reads first; the OTHER context is exposed as a chip below.
   const titleSubject = mode === 'tech' ? techNameForHeader : locationNameForHeader;
+  const isMulti = appliedTechs.length > 1;
+  const locationOfTech = (tech: string) => lookups.techs.find((t) => t._id === tech)?.location || '';
+  // Open one technician's full report from the multi view.
+  const openSingleTech = (tech: string) => {
+    setTechFilter(tech);
+    setTechFilters([tech]);
+    setAppliedTech(tech);
+    setAppliedTechs([tech]);
+    setFiltersDirty(false);
+    sessionStorage.setItem('balance-report-filters', JSON.stringify({
+      start: appliedStart, end: appliedEnd, tech, techs: [tech], mode,
+    }));
+  };
 
   const [pdfLoading, setPdfLoading] = useState(false);
   // Editable download-filename pattern (managed in Portal → Settings). Falls
@@ -699,8 +724,9 @@ export default function BalanceReportPage() {
   // freed (~one PDF can be several hundred KB).
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
-  const pdfFilename = () =>
-    buildReportFilename(filenamePattern, {
+  const pdfFilename = () => isMulti
+    ? `${mode === 'tech' ? 'Tech' : 'Location'}_Reports_${appliedTechs.length}_technicians_${appliedStart}_to_${appliedEnd}.pdf`
+    : buildReportFilename(filenamePattern, {
       mode: mode === 'tech' ? 'Tech' : 'Location',
       subject: titleSubject,
       tech: techNameForHeader,
@@ -718,9 +744,10 @@ export default function BalanceReportPage() {
     const params = new URLSearchParams({
       startDate: appliedStart,
       endDate: appliedEnd,
-      tech: appliedTech,
       mode,
     });
+    // Several technicians → one PDF with each technician's report in turn.
+    for (const t of isMulti ? appliedTechs : [appliedTech]) params.append('tech', t);
     const res = await fetch(`/api/balance-report/pdf?${params.toString()}`);
     if (!res.ok) throw new Error(`PDF request failed: ${res.status}`);
     return await res.blob();
@@ -813,28 +840,37 @@ export default function BalanceReportPage() {
         <header className="bp-header animate-fade-up">
           <div className="bp-header-left">
             <p className="bp-kicker">{mode === 'tech' ? 'Tech Report' : 'Location Report'}</p>
-            <h1 className="bp-title">{titleSubject || '—'}</h1>
+            <h1 className="bp-title">{isMulti ? `${appliedTechs.length} technicians` : (titleSubject || '—')}</h1>
             {/* Always surface BOTH Location and Technician chips. The
                 report is filtered by a single tech, so the reader needs
                 to see whose numbers they're looking at and which
                 location the tech belongs to — same for either mode. */}
             <div className="bp-meta">
-              <span className="bp-meta-chip">
-                <span className="bp-meta-chip-label">Location</span>
-                <strong>{locationNameForHeader || '—'}</strong>
-              </span>
-              <span className="bp-meta-chip">
-                <span className="bp-meta-chip-label">Technician</span>
-                <strong>{techNameForHeader || '—'}</strong>
-              </span>
+              {isMulti ? (
+                <span className="bp-meta-chip">
+                  <span className="bp-meta-chip-label">Technicians</span>
+                  <strong>{appliedTechs.join(', ')}</strong>
+                </span>
+              ) : (<>
+                <span className="bp-meta-chip">
+                  <span className="bp-meta-chip-label">Location</span>
+                  <strong>{locationNameForHeader || '—'}</strong>
+                </span>
+                <span className="bp-meta-chip">
+                  <span className="bp-meta-chip-label">Technician</span>
+                  <strong>{techNameForHeader || '—'}</strong>
+                </span>
+              </>)}
               <span className="bp-meta-chip">
                 <span className="bp-meta-chip-label">Range</span>
                 <strong>{fmtDateChip(appliedStart)} → {fmtDateChip(appliedEnd)}</strong>
               </span>
-              <span className="bp-meta-chip">
-                <span className="bp-meta-chip-label">Applied</span>
-                <strong>{appliedPct}%</strong>
-              </span>
+              {!isMulti && (
+                <span className="bp-meta-chip">
+                  <span className="bp-meta-chip-label">Applied</span>
+                  <strong>{appliedPct}%</strong>
+                </span>
+              )}
             </div>
           </div>
           <div className="bp-header-right no-print" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -842,7 +878,7 @@ export default function BalanceReportPage() {
               type="button"
               className="bp-pdf-btn"
               onClick={handlePreviewPdf}
-              disabled={loading || pdfLoading || closedRows.length === 0 || !appliedTech}
+              disabled={loading || pdfLoading || (!isMulti && closedRows.length === 0) || !appliedTech}
               title="Preview the official PDF in a modal before downloading"
               style={{ background: 'var(--ds-surface-2)', color: 'var(--ds-ink-2)', borderColor: 'var(--ds-line-strong)' }}
             >
@@ -853,7 +889,7 @@ export default function BalanceReportPage() {
               type="button"
               className="bp-pdf-btn"
               onClick={handleDownloadPdf}
-              disabled={loading || pdfLoading || closedRows.length === 0 || !appliedTech}
+              disabled={loading || pdfLoading || (!isMulti && closedRows.length === 0) || !appliedTech}
               title="Download the official PDF report (rendered server-side; includes every row and column)"
             >
               <FiDownload size={14} />
@@ -861,8 +897,8 @@ export default function BalanceReportPage() {
             </button>
             <div className="bp-rows-badge">
               <span className="bp-rows-dot" />
-              <strong className="bp-rows-num">{closedRows.length}</strong>
-              <span className="bp-rows-label">Closed Jobs</span>
+              <strong className="bp-rows-num">{isMulti ? appliedTechs.length : closedRows.length}</strong>
+              <span className="bp-rows-label">{isMulti ? 'Technicians' : 'Closed Jobs'}</span>
             </div>
           </div>
         </header>
@@ -873,7 +909,7 @@ export default function BalanceReportPage() {
             no new calculation, no change to how any number is derived. What
             changed is only WHERE the balance appears: it used to sit inside
             the snapshot list beside the pie chart, below the KPI strip. */}
-        {closedRows.length > 0 && (
+        {!isMulti && closedRows.length > 0 && (
           <section className="bp-position no-print">
             <SummaryStrip
               items={[
@@ -940,12 +976,12 @@ export default function BalanceReportPage() {
           </FilterField>
           <FilterField label="Tech">
             <MultiSelect
-              single
               options={lookups.techs
-                .filter((t) => activeTechs.includes(t._id))
+                .filter((t) => activeTechs.includes(t._id) || techFilters.includes(t._id))
                 .map((t) => t._id)}
-              selected={techFilter ? [techFilter] : []}
+              selected={techFilters}
               onChange={(vals) => {
+                setTechFilters(vals);
                 setTechFilter(vals[0] ?? '');
                 setFiltersDirty(true);
               }}
@@ -953,6 +989,16 @@ export default function BalanceReportPage() {
           </FilterField>
         </FiltersPanel>
 
+        {isMulti ? (
+          <MultiTechReports
+            techs={appliedTechs}
+            start={appliedStart}
+            end={appliedEnd}
+            mode={mode}
+            locationOf={locationOfTech}
+            onOpen={openSingleTech}
+          />
+        ) : (<>
         {/* ── KPI Strip ── */}
         <div className="bp-kpi-wrap">
           <div className="bp-kpi-controls" ref={kpiMenuRef}>
@@ -1286,6 +1332,7 @@ export default function BalanceReportPage() {
             </table>
           </div>
         </div>
+        </>)}
 
       </div>
 

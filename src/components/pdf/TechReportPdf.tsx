@@ -117,7 +117,8 @@ const TotalsRow = ({ totals }: { totals: PdfTotals }) => (
     </View>
 );
 
-export function TechReportPdf({ data }: { data: PdfReportData }) {
+/** The report's pages, without a <Document>, so several reports can share one PDF. */
+export function TechReportPages({ data }: { data: PdfReportData }) {
     const { techName, locationName, startDate, endDate, appliedPct, rows, totals, stats, generatedAt, logoSrc } = data;
     const statusSlices = stats.statusStats.map((st, i) => ({
         label: st.key,
@@ -137,11 +138,7 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
     } as const;
 
     return (
-        <Document
-            title={`Tech Report — ${techName}`}
-            subject="317 Garage Door — Tech Balance Report"
-            author="317 Garage Door"
-        >
+        <>
             {/* ════════════════════════════════════════════════════════════
                 PAGE 1 — DASHBOARD SUMMARY (mirrors CRM /balance-report)
                 KPI strip across the top, then a mid-row with the status
@@ -211,6 +208,18 @@ export function TechReportPdf({ data }: { data: PdfReportData }) {
 
                 <ReportFooter generatedAt={generatedAt} />
             </Page>
+        </>
+    );
+}
+
+export function TechReportPdf({ data }: { data: PdfReportData }) {
+    return (
+        <Document
+            title={`Tech Report — ${data.techName}`}
+            subject="317 Garage Door — Tech Balance Report"
+            author="317 Garage Door"
+        >
+            <TechReportPages data={data} />
         </Document>
     );
 }

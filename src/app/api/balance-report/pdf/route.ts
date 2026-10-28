@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MongoClient } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
-import { renderToBuffer } from '@react-pdf/renderer';
+import { Document, renderToBuffer } from '@react-pdf/renderer';
 import { createElement } from 'react';
 import { readFile } from 'fs/promises';
 import path from 'path';
@@ -22,8 +22,8 @@ import {
     calcJobBalances,
     toNumber,
 } from '../../utils/calculations';
-import { TechReportPdf } from '../../../../components/pdf/TechReportPdf';
-import { LocationReportPdf } from '../../../../components/pdf/LocationReportPdf';
+import { TechReportPdf, TechReportPages } from '../../../../components/pdf/TechReportPdf';
+import { LocationReportPdf, LocationReportPages } from '../../../../components/pdf/LocationReportPdf';
 import type { PdfReportData, PdfReportStats, PdfRow, PdfTotals } from '../../../../components/pdf/types';
 import { techPctOn } from '@/lib/tech-rate';
 
@@ -57,6 +57,8 @@ async function loadLogoDataUrl(): Promise<string | null> {
 // Force Node runtime — @react-pdf/renderer requires Node APIs that aren't
 // available in Edge. PDFs aren't latency-sensitive enough to justify Edge.
 export const runtime = 'nodejs';
+// Several technicians in one PDF can take a while to render.
+export const maxDuration = 120;
 
 const DB_NAME = 'ag';
 const JOB_COLLECTION = 'Job';
@@ -182,140 +184,169 @@ const buildRowsAndTotals = (
 const safeFilename = (s: string): string =>
     String(s || 'Report').replace(/[^A-Za-z0-9_\- ]/g, '').replace(/\s+/g, '_').slice(0, 60) || 'Report';
 
+/** Everything one technician's report needs — same pipeline as the screen. */
+async function buildReportData(
+    techFilter: string,
+    startDate: string,
+    endDate: string,
+    mode: Mode,
+): Promise<PdfReportData> {
+    const client = await getClient();
+    const db = client.db(DB_NAME);
+    const jobCol = db.collection<JobRow>(JOB_COLLECTION);
+    const techCol = db.collection<Technician>(TECH_COLLECTION);
+    const locationCol = db.collection<Location>(LOCATION_COLLECTION);
+    const userCol = db.collection<User>(USER_COLLECTION);
+
+    // ── Lookup maps ────────────────────────────────────────────────
+    const techDocs = await techCol.find({}).toArray();
+    const techMap = new Map<string, Technician>();
+    techDocs.forEach((t: any) => {
+        const key = t._id?.toString() || '';
+        techMap.set(key, { ...(t as Technician), _id: key });
+    });
+
+    const userDocs = await userCol.find({}).toArray();
+    const userRoleMap = new Map<string, string>();
+    userDocs.forEach((u: any) => {
+        if (u.name) userRoleMap.set(u.name, u.type || 'simple');
+    });
+
+    const techForLocation = techMap.get(techFilter);
+    const locationId = techForLocation?.location || '';
+    const locationDoc = locationId
+        ? await locationCol.findOne({ _id: locationId as any })
+        : null;
+    const locationPct = (locationDoc as any)?.managerProfitPercent ?? 0;
+    const appliedPct = mode === 'location'
+        ? locationPct
+        : (techForLocation?.profitPercent ?? 0);
+
+    // ── Fetch jobs (same filter as the on-screen report) ───────────
+    const match: Record<string, any> = { tech: techFilter };
+    if (startDate || endDate) {
+        match.date = {};
+        if (startDate) match.date.$gte = startDate;
+        if (endDate) match.date.$lte = endDate;
+    }
+    const allJobs = await jobCol
+        .aggregate([{ $match: match }, { $sort: { date: -1, _id: -1 } }])
+        .toArray();
+
+    // ── Closed-job table data (powers the detail table + totals) ──
+    const closedJobs = allJobs.filter((j: any) => (j.status || '') === 'Closed');
+    const { rows, totals } = buildRowsAndTotals(closedJobs, techMap, locationPct, mode, userRoleMap);
+
+    // ── Range-wide stats (matches the dashboard's `totals` block) ──
+    // Computed across EVERY job in range (not just Closed) so the KPI
+    // strip shows Assigned, Avg Ticket, Job Profit, Avg Closed Job in
+    // the same numbers the user sees on screen. Per-job calc reuses
+    // calcJobBalances so the math can't drift between views.
+    let assignedJobs = 0;
+    let jobProfitSum = 0;       // Σ totalProfit across non-X-close jobs
+    let closedCount = 0;
+    let closedProfitSum = 0;
+    const statusMap = new Map<string, number>();
+
+    allJobs.forEach((job: any) => {
+        assignedJobs += 1;
+        const status = String(job.status || '').trim();
+        if (status) statusMap.set(status, (statusMap.get(status) || 0) + 1);
+
+        const techDoc = job.tech ? techMap.get(job.tech) : undefined;
+        const techPct = techPctOn(techDoc, job.date);
+        const calc = calcJobBalances(job, techPct, locationPct);
+        const profit = toNumber(calc.totalProfit);
+
+        if (status !== 'X close') jobProfitSum += profit;
+        if (status === 'Closed') {
+            closedCount += 1;
+            closedProfitSum += profit;
+        }
+    });
+
+    const stats: PdfReportStats = {
+        assignedJobs,
+        jobProfit: jobProfitSum,
+        avgTicket: assignedJobs > 0 ? jobProfitSum / assignedJobs : 0,
+        avgClosedJob: closedCount > 0 ? closedProfitSum / closedCount : 0,
+        // Sort statuses by count desc so the legend reads like the
+        // dashboard's pie tooltip — biggest slice first.
+        statusStats: Array.from(statusMap.entries())
+            .map(([key, count]) => ({ key, count }))
+            .sort((a, b) => b.count - a.count),
+    };
+
+    // Always surface both names so the brand header can label the
+    // report with full context ("Location: Milwaukee · Technician:
+    // Ben Zaken") regardless of which mode is active.
+    const techName = techFilter;
+    const locationName = locationId || '—';
+    const subject = mode === 'tech' ? techName : locationName;
+
+    const logoSrc = await loadLogoDataUrl();
+
+    const reportData: PdfReportData = {
+        mode,
+        subject,
+        techName,
+        locationName,
+        startDate,
+        endDate,
+        appliedPct: toNumber(appliedPct),
+        rows,
+        totals,
+        stats,
+        generatedAt: new Date().toISOString(),
+        logoSrc,
+    };
+    return reportData;
+}
+
 export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const startDate = searchParams.get('startDate') || '';
         const endDate = searchParams.get('endDate') || '';
-        const techFilter = searchParams.get('tech') || '';
+        // One or several technicians (?tech=A&tech=B). Several → one PDF
+        // holding each technician's full report, one after another.
+        const techs = Array.from(new Set(searchParams.getAll('tech').map((t) => t.trim()).filter(Boolean)));
         const mode = (searchParams.get('mode') as Mode) || 'tech';
 
-        if (!techFilter) {
+        if (techs.length === 0) {
             // The on-screen Balance Report enforces this too — without a
             // tech (which carries the location pointer), no report can be
             // built. Return 400 instead of an empty PDF.
             return NextResponse.json({ error: 'tech parameter is required' }, { status: 400 });
         }
-
-        const client = await getClient();
-        const db = client.db(DB_NAME);
-        const jobCol = db.collection<JobRow>(JOB_COLLECTION);
-        const techCol = db.collection<Technician>(TECH_COLLECTION);
-        const locationCol = db.collection<Location>(LOCATION_COLLECTION);
-        const userCol = db.collection<User>(USER_COLLECTION);
-
-        // ── Lookup maps ────────────────────────────────────────────────
-        const techDocs = await techCol.find({}).toArray();
-        const techMap = new Map<string, Technician>();
-        techDocs.forEach((t: any) => {
-            const key = t._id?.toString() || '';
-            techMap.set(key, { ...(t as Technician), _id: key });
-        });
-
-        const userDocs = await userCol.find({}).toArray();
-        const userRoleMap = new Map<string, string>();
-        userDocs.forEach((u: any) => {
-            if (u.name) userRoleMap.set(u.name, u.type || 'simple');
-        });
-
-        const techForLocation = techMap.get(techFilter);
-        const locationId = techForLocation?.location || '';
-        const locationDoc = locationId
-            ? await locationCol.findOne({ _id: locationId as any })
-            : null;
-        const locationPct = (locationDoc as any)?.managerProfitPercent ?? 0;
-        const appliedPct = mode === 'location'
-            ? locationPct
-            : (techForLocation?.profitPercent ?? 0);
-
-        // ── Fetch jobs (same filter as the on-screen report) ───────────
-        const match: Record<string, any> = { tech: techFilter };
-        if (startDate || endDate) {
-            match.date = {};
-            if (startDate) match.date.$gte = startDate;
-            if (endDate) match.date.$lte = endDate;
+        if (techs.length > 60) {
+            return NextResponse.json({ error: 'Too many technicians (max 60)' }, { status: 400 });
         }
-        const allJobs = await jobCol
-            .aggregate([{ $match: match }, { $sort: { date: -1, _id: -1 } }])
-            .toArray();
 
-        // ── Closed-job table data (powers the detail table + totals) ──
-        const closedJobs = allJobs.filter((j: any) => (j.status || '') === 'Closed');
-        const { rows, totals } = buildRowsAndTotals(closedJobs, techMap, locationPct, mode, userRoleMap);
+        const reports: PdfReportData[] = [];
+        for (const tech of techs) reports.push(await buildReportData(tech, startDate, endDate, mode));
 
-        // ── Range-wide stats (matches the dashboard's `totals` block) ──
-        // Computed across EVERY job in range (not just Closed) so the KPI
-        // strip shows Assigned, Avg Ticket, Job Profit, Avg Closed Job in
-        // the same numbers the user sees on screen. Per-job calc reuses
-        // calcJobBalances so the math can't drift between views.
-        let assignedJobs = 0;
-        let jobProfitSum = 0;       // Σ totalProfit across non-X-close jobs
-        let closedCount = 0;
-        let closedProfitSum = 0;
-        const statusMap = new Map<string, number>();
-
-        allJobs.forEach((job: any) => {
-            assignedJobs += 1;
-            const status = String(job.status || '').trim();
-            if (status) statusMap.set(status, (statusMap.get(status) || 0) + 1);
-
-            const techDoc = job.tech ? techMap.get(job.tech) : undefined;
-            const techPct = techPctOn(techDoc, job.date);
-            const calc = calcJobBalances(job, techPct, locationPct);
-            const profit = toNumber(calc.totalProfit);
-
-            if (status !== 'X close') jobProfitSum += profit;
-            if (status === 'Closed') {
-                closedCount += 1;
-                closedProfitSum += profit;
-            }
-        });
-
-        const stats: PdfReportStats = {
-            assignedJobs,
-            jobProfit: jobProfitSum,
-            avgTicket: assignedJobs > 0 ? jobProfitSum / assignedJobs : 0,
-            avgClosedJob: closedCount > 0 ? closedProfitSum / closedCount : 0,
-            // Sort statuses by count desc so the legend reads like the
-            // dashboard's pie tooltip — biggest slice first.
-            statusStats: Array.from(statusMap.entries())
-                .map(([key, count]) => ({ key, count }))
-                .sort((a, b) => b.count - a.count),
-        };
-
-        // Always surface both names so the brand header can label the
-        // report with full context ("Location: Milwaukee · Technician:
-        // Ben Zaken") regardless of which mode is active.
-        const techName = techFilter;
-        const locationName = locationId || '—';
-        const subject = mode === 'tech' ? techName : locationName;
-
-        const logoSrc = await loadLogoDataUrl();
-
-        const reportData: PdfReportData = {
-            mode,
-            subject,
-            techName,
-            locationName,
-            startDate,
-            endDate,
-            appliedPct: toNumber(appliedPct),
-            rows,
-            totals,
-            stats,
-            generatedAt: new Date().toISOString(),
-            logoSrc,
-        };
-
-        const element = mode === 'location'
-            ? createElement(LocationReportPdf, { data: reportData })
-            : createElement(TechReportPdf, { data: reportData });
+        const Pages = mode === 'location' ? LocationReportPages : TechReportPages;
+        const element = reports.length === 1
+            ? (mode === 'location'
+                ? createElement(LocationReportPdf, { data: reports[0] })
+                : createElement(TechReportPdf, { data: reports[0] }))
+            : createElement(
+                Document,
+                {
+                    title: `${mode === 'tech' ? 'Tech' : 'Location'} Reports — ${reports.length} technicians`,
+                    author: '317 Garage Door',
+                },
+                ...reports.map((data) => createElement(Pages, { key: data.techName, data })),
+            );
 
         const pdfBuffer = await renderToBuffer(element as any);
 
         const modeLabel = mode === 'tech' ? 'Tech' : 'Location';
         // Filename carries both contexts so a stack of PDFs is browsable.
-        const filename = `${modeLabel}_Report_${safeFilename(locationName)}_${safeFilename(techName)}_${startDate}_to_${endDate}.pdf`;
+        const filename = reports.length === 1
+            ? `${modeLabel}_Report_${safeFilename(reports[0].locationName)}_${safeFilename(reports[0].techName)}_${startDate}_to_${endDate}.pdf`
+            : `${modeLabel}_Reports_${reports.length}_technicians_${startDate}_to_${endDate}.pdf`;
 
         return new NextResponse(new Uint8Array(pdfBuffer), {
             status: 200,

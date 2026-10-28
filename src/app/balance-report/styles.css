@@ -1129,3 +1129,13 @@
 
 /* ── Design 360 S3: position block above the filters ────────────────────── */
 .bp-position { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px; }
+
+/* ── Several technicians at once (MultiTechReports) ── */
+.bp-multi { display: flex; flex-direction: column; gap: 16px; }
+.bp-multi-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.bp-multi-table th,
+.bp-multi-table td { padding: 8px 10px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--ds-line); }
+.bp-multi-table th { color: var(--ds-ink-2); font-weight: 600; background: var(--ds-surface-2); }
+.bp-multi-table tfoot td { font-weight: 700; border-top: 2px solid var(--ds-line-strong); }
+.bp-multi-link { background: none; border: 0; padding: 0; color: var(--ds-info-text); font-weight: 600; cursor: pointer; text-decoration: underline; }
+button.bp-pill.bp-multi-link { padding: 4px 10px; }
