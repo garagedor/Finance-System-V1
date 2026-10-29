@@ -1,0 +1,330 @@
+"use client";
+
+// 317 Live Arena · Admin Control Center. Weeks, templates, owner settings and
+// the audit log. Every action calls /api/arena/admin/*, which re-checks the
+// permission and, for owner actions, the owner's account.
+
+import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import type { ArenaRules } from "@/lib/arena/types";
+import type { CompetitionDoc, SettingsDoc, TemplateDoc, AuditDoc } from "@/lib/arena/config-store";
+import type { Readiness } from "@/lib/arena/review";
+import RulesEditor from "./RulesEditor";
+import { api, dollars, nextMonday, STATUS_LABEL, statusPill, weekLabel, when } from "./arena-ui";
+
+interface Overview {
+  me: { userId: string; name: string; isOwner: boolean; mayInitialise: boolean; canEditRules: boolean; canReview: boolean };
+  settings: SettingsDoc | null;
+  competitions: CompetitionDoc[];
+  templates: TemplateDoc[];
+  readiness: Readiness;
+  userNames: Record<string, string>;
+  seedRules: ArenaRules;
+}
+type Tab = "weeks" | "templates" | "settings" | "audit";
+type Editing =
+  | { kind: "week"; id: string; rules: ArenaRules; amend: boolean }
+  | { kind: "template"; templateId: string; name: string; rules: ArenaRules; isNew: boolean };
+
+export default function ArenaConsole() {
+  const [data, setData] = useState<Overview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("weeks");
+  const [editing, setEditing] = useState<Editing | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try { setData(await api<Overview>("/api/arena/admin/overview")); setError(null); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const who = (id: string | null | undefined) => (id ? data?.userNames[id] || id : "—");
+  const done = async (msg: string) => { setEditing(null); setNotice(msg); await load(); };
+
+  if (error && !data) return <div className="portal-alert portal-alert-error" role="alert">{error}</div>;
+  if (!data) return <div className="muted">Loading…</div>;
+
+  if (!data.settings) {
+    return (
+      <div className="portal-card" style={{ maxWidth: 620 }}>
+        <h2 style={{ marginTop: 0, fontSize: 17 }}>The Arena isn&apos;t set up yet</h2>
+        {data.me.mayInitialise ? (
+          <>
+            <p>Set up creates the owner settings: a $1,500 weekly budget ceiling, and you as the only approver. You can change both later.</p>
+            <button className="portal-btn portal-btn-primary" onClick={async () => {
+              try { await api("/api/arena/admin/settings", { method: "POST" }); await done("Arena settings created."); }
+              catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+            }}>Set up the Arena</button>
+          </>
+        ) : (
+          <p className="muted">Only the owner account can set it up.</p>
+        )}
+        {error && <div className="portal-alert portal-alert-error" role="alert" style={{ marginTop: 10 }}>{error}</div>}
+      </div>
+    );
+  }
+
+  if (editing) {
+    if (editing.kind === "week") {
+      return (
+        <RulesEditor
+          initial={editing.rules}
+          title={`${editing.amend ? "Change the active week" : "Rules"} · week of ${weekLabel(editing.id.replace("arena_", ""))}`}
+          saveLabel={editing.amend ? "Change rules and notify technicians" : "Save as a new version"}
+          needsReason={editing.amend}
+          extra={editing.amend ? <div className="portal-alert portal-alert-warn">This week is running. A change creates a new rule version, is logged with your reason, and shows technicians a notice.</div> : undefined}
+          onCancel={() => setEditing(null)}
+          onSave={async (rules, reason) => {
+            if (editing.amend) await api(`/api/arena/admin/competitions/${editing.id}/action`, { method: "POST", body: { action: "amend", rules, reason } });
+            else await api(`/api/arena/admin/competitions/${editing.id}`, { method: "PUT", body: { rules } });
+            await done("Rules saved as a new version.");
+          }}
+        />
+      );
+    }
+    return (
+      <RulesEditor
+        initial={editing.rules}
+        title={editing.isNew ? "New template" : `Template · ${editing.name}`}
+        saveLabel="Save template"
+        extra={editing.isNew ? (
+          <div className="portal-grid-2">
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span className="portal-label">Template name</span>
+              <input className="portal-input" value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span className="portal-label">Short id (lowercase, hyphens)</span>
+              <input className="portal-input" value={editing.templateId} onChange={(e) => setEditing({ ...editing, templateId: e.target.value })} />
+            </label>
+          </div>
+        ) : undefined}
+        onCancel={() => setEditing(null)}
+        onSave={async (rules) => {
+          await api("/api/arena/admin/templates", { method: "POST", body: { templateId: editing.templateId, name: editing.name, rules } });
+          await done("Template saved.");
+        }}
+      />
+    );
+  }
+
+  const r = data.readiness;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div className={`portal-alert ${r.launchReady ? "portal-alert-good" : "portal-alert-warn"}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <span>
+          {r.launchReady
+            ? "Data review: nothing open. Launch gate G2 is clear."
+            : `Data review: ${r.launchBlocking} case(s) still open or waiting for the owner. Launch stays blocked until they are resolved.`}
+        </span>
+        <Link className="portal-btn" href="/portal/arena/review">Open the review queue</Link>
+      </div>
+      {notice && <div className="portal-alert portal-alert-info" role="status">{notice}</div>}
+      {error && <div className="portal-alert portal-alert-error" role="alert">{error}</div>}
+
+      <div className="portal-range-pills" role="tablist" aria-label="Arena sections">
+        {([["weeks", "Weeks"], ["templates", "Templates"], ["settings", "Owner settings"], ["audit", "Audit log"]] as const).map(([k, label]) => (
+          <button key={k} role="tab" aria-selected={tab === k} className={`portal-range-pill${tab === k ? " active" : ""}`} onClick={() => setTab(k)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === "weeks" && <Weeks data={data} who={who} setError={setError} onEdit={setEditing} done={done} />}
+      {tab === "templates" && (
+        <div className="portal-card" style={{ padding: 0, overflow: "hidden" }}>
+          <table className="portal-table">
+            <thead><tr><th>Template</th><th>Version</th><th>Prizes</th><th>Gates</th><th>Saved</th><th /></tr></thead>
+            <tbody>
+              {data.templates.map((t) => (
+                <tr key={t._id}>
+                  <td><b>{t.name}</b><div className="muted small">{t.templateId}</div></td>
+                  <td>v{t.version}</td>
+                  <td>{t.rules.prizes.positionsCents.map(dollars).join(" / ")}{t.rules.mostImproved.enabled ? ` + MI ${dollars(t.rules.mostImproved.amountCents)}` : ""}</td>
+                  <td>{t.rules.eligibility.minQualifyingJobs} jobs · {dollars(t.rules.eligibility.minAvgTicketCents)} · {(t.rules.eligibility.minClosingRateBp / 100).toFixed(0)}%</td>
+                  <td>{who(t.by)}<div className="muted small">{when(t.at)}</div></td>
+                  <td>{data.me.canEditRules && <button className="portal-btn" onClick={() => setEditing({ kind: "template", templateId: t.templateId, name: t.name, rules: t.rules, isNew: false })}>Edit</button>}</td>
+                </tr>
+              ))}
+              {data.templates.length === 0 && <tr><td colSpan={6} className="muted">No templates yet.</td></tr>}
+            </tbody>
+          </table>
+          {data.me.canEditRules && (
+            <div style={{ padding: 12 }}>
+              <button className="portal-btn" onClick={() => setEditing({ kind: "template", templateId: data.templates.length ? "" : "standard", name: data.templates.length ? "" : "Standard Week", rules: structuredClone(data.seedRules), isNew: true })}>
+                New template from the approved standard rules
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+      {tab === "settings" && <Settings data={data} who={who} done={done} />}
+      {tab === "audit" && <Audit who={who} />}
+    </div>
+  );
+}
+
+function Weeks({ data, who, setError, onEdit, done }: {
+  data: Overview; who: (id: string) => string; setError: (e: string | null) => void;
+  onEdit: (e: Editing) => void; done: (msg: string) => Promise<void>;
+}) {
+  const [weekStart, setWeekStart] = useState(nextMonday());
+  const [source, setSource] = useState<string>(data.templates[0]?.templateId ?? "");
+  const run = async (fn: () => Promise<unknown>, msg: string) => {
+    try { await fn(); await done(msg); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+  const act = (id: string, action: string, needsReason: boolean) => run(async () => {
+    let reason: string | undefined;
+    if (needsReason) {
+      reason = window.prompt(`Reason for ${action === "cancel" ? "cancelling" : "suspending"} this week`) ?? "";
+      if (!reason.trim()) throw new Error("A reason is required");
+    }
+    await api(`/api/arena/admin/competitions/${id}/action`, { method: "POST", body: { action, reason } });
+  }, `Week ${action === "activate" ? "started" : action === "schedule" ? "scheduled" : action === "suspend" ? "suspended" : "cancelled"}.`);
+  const openRules = async (c: CompetitionDoc, amend: boolean) => {
+    try {
+      const d = await api<{ ruleVersion: { rules: ArenaRules } }>(`/api/arena/admin/competitions/${c._id}`);
+      onEdit({ kind: "week", id: c._id, rules: d.ruleVersion.rules, amend });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      {data.me.canEditRules && (
+        <div className="portal-card" style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span className="portal-label">Week starting (Monday)</span>
+            <input className="portal-input" type="date" value={weekStart} onChange={(e) => setWeekStart(e.target.value)} />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span className="portal-label">Start from</span>
+            <select className="portal-select" value={source} onChange={(e) => setSource(e.target.value)}>
+              {data.templates.map((t) => <option key={t.templateId} value={t.templateId}>Template: {t.name}</option>)}
+              <option value="__previous">A copy of the week before</option>
+            </select>
+          </label>
+          <button className="portal-btn portal-btn-primary" disabled={!source} onClick={() => run(
+            () => api("/api/arena/admin/competitions", { method: "POST", body: { weekStart, from: source === "__previous" ? { copyPreviousWeek: true } : { template: source } } }),
+            `Draft created for the week of ${weekLabel(weekStart)}.`,
+          )}>Create week</button>
+          {data.templates.length === 0 && <span className="muted small">Save a template first.</span>}
+        </div>
+      )}
+      <div className="portal-card" style={{ padding: 0, overflow: "hidden" }}>
+        <table className="portal-table">
+          <thead><tr><th>Week</th><th>Status</th><th>Rules</th><th>Created</th><th>Actions</th></tr></thead>
+          <tbody>
+            {data.competitions.map((c) => {
+              const owner = data.me.isOwner, edit = data.me.canEditRules;
+              return (
+                <tr key={c._id}>
+                  <td><b>{weekLabel(c.weekStart)}</b><div className="muted small">{c.weekStart}</div></td>
+                  <td><span className={statusPill(c.status)}>{STATUS_LABEL[c.status] ?? c.status}</span></td>
+                  <td>v{c.ruleVersionN}{c.lockedAt && <div className="muted small">locked {when(c.lockedAt)}</div>}</td>
+                  <td>{who(c.createdBy)}<div className="muted small">{when(c.createdAt)}</div></td>
+                  <td>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {edit && (c.status === "draft" || c.status === "scheduled") && <button className="portal-btn" onClick={() => openRules(c, false)}>Edit rules</button>}
+                      {edit && c.status === "draft" && <button className="portal-btn" onClick={() => act(c._id, "schedule", false)}>Schedule</button>}
+                      {edit && owner && c.status === "scheduled" && <button className="portal-btn portal-btn-primary" onClick={() => act(c._id, "activate", false)}>Start week</button>}
+                      {edit && owner && (c.status === "active" || c.status === "suspended") && <button className="portal-btn" onClick={() => openRules(c, true)}>Change rules</button>}
+                      {edit && owner && c.status === "active" && <button className="portal-btn" onClick={() => act(c._id, "suspend", true)}>Suspend</button>}
+                      {edit && (c.status === "draft" || c.status === "scheduled" || (owner && c.status !== "approved" && c.status !== "cancelled")) &&
+                        <button className="portal-btn portal-btn-danger" onClick={() => act(c._id, "cancel", true)}>Cancel</button>}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {data.competitions.length === 0 && <tr><td colSpan={5} className="muted">No weeks yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted small" style={{ margin: 0 }}>Admins prepare and schedule weeks. Only the owner starts, changes, suspends or cancels a running week, and only the owner approves results.</p>
+    </div>
+  );
+}
+
+function Settings({ data, who, done }: { data: Overview; who: (id: string) => string; done: (msg: string) => Promise<void> }) {
+  const s = data.settings!;
+  const [ceiling, setCeiling] = useState(String(s.budgetCeilingCents / 100));
+  const [approvers, setApprovers] = useState(s.approverUserIds.join(", "));
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <div className="portal-card" style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 720 }}>
+      <table className="portal-table">
+        <tbody>
+          <tr><th>Owner</th><td>{who(s.ownerUserId)}</td></tr>
+          <tr><th>Weekly budget ceiling</th><td>{dollars(s.budgetCeilingCents)}</td></tr>
+          <tr><th>Can approve results</th><td>{s.approverUserIds.map(who).join(", ")}</td></tr>
+          <tr><th>Version</th><td>v{s.version} · {who(s.by)} · {when(s.at)}{s.reason !== "initial" && ` · “${s.reason}”`}</td></tr>
+        </tbody>
+      </table>
+      {data.me.isOwner ? (
+        <>
+          <div className="portal-grid-2">
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span className="portal-label">Weekly budget ceiling ($)</span>
+              <input className="portal-input" type="number" step="0.01" value={ceiling} onChange={(e) => setCeiling(e.target.value)} />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <span className="portal-label">Approver account ids (comma-separated)</span>
+              <input className="portal-input" value={approvers} onChange={(e) => setApprovers(e.target.value)} />
+            </label>
+          </div>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span className="portal-label">Reason</span>
+            <input className="portal-input" value={reason} onChange={(e) => setReason(e.target.value)} />
+          </label>
+          {err && <div className="portal-alert portal-alert-error" role="alert">{err}</div>}
+          <div>
+            <button className="portal-btn portal-btn-primary" disabled={!reason.trim()} onClick={async () => {
+              try {
+                await api("/api/arena/admin/settings", { method: "PUT", body: {
+                  budgetCeilingCents: Math.round(Number(ceiling) * 100),
+                  approverUserIds: approvers.split(",").map((x) => x.trim()).filter(Boolean),
+                  reason,
+                } });
+                await done("Owner settings saved as a new version.");
+              } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+            }}>Save owner settings</button>
+          </div>
+        </>
+      ) : (
+        <p className="muted small" style={{ margin: 0 }}>Only the owner can change the budget ceiling or who approves results.</p>
+      )}
+    </div>
+  );
+}
+
+function Audit({ who }: { who: (id: string) => string }) {
+  const [rows, setRows] = useState<AuditDoc[]>([]);
+  const [more, setMore] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const page = useCallback(async (before?: string) => {
+    try {
+      const q = new URLSearchParams({ limit: "50", ...(before ? { before } : {}) });
+      const d = await api<{ rows: AuditDoc[] }>(`/api/arena/admin/audit?${q}`);
+      setRows((cur) => (before ? [...cur, ...d.rows] : d.rows));
+      setMore(d.rows.length === 50);
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  }, []);
+  useEffect(() => { void page(); }, [page]);
+  return (
+    <div className="portal-card" style={{ padding: 0, overflow: "hidden" }}>
+      {err && <div className="portal-alert portal-alert-error" role="alert">{err}</div>}
+      <div style={{ overflowX: "auto" }}>
+        <table className="portal-table">
+          <thead><tr><th>When</th><th>What</th><th>Item</th><th>Who</th><th>Reason</th></tr></thead>
+          <tbody>
+            {rows.map((a) => (
+              <tr key={a._id}><td style={{ whiteSpace: "nowrap" }}>{when(a.at)}</td><td>{a.action}</td><td className="small">{a.target}</td><td>{who(a.by)}</td><td>{a.reason ?? "—"}</td></tr>
+            ))}
+            {rows.length === 0 && <tr><td colSpan={5} className="muted">Nothing recorded yet.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {more && rows.length > 0 && <div style={{ padding: 12 }}><button className="portal-btn" onClick={() => page(rows[rows.length - 1].at)}>Show older</button></div>}
+    </div>
+  );
+}

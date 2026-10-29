@@ -68,7 +68,7 @@ test("budget: lowering the ceiling blocks scheduling/activating a competition th
   await updateSettings(ctx, { budgetCeilingCents: 100_000 }, OWNER, "tighter budget");
   await assert.rejects(scheduleCompetition(ctx, "arena_2026-11-02", ADMIN), /exceeds the owner's ceiling/);
   setNow("2026-11-02T05:00:00Z");
-  await assert.rejects(activateCompetition(ctx, "arena_2026-11-02", ADMIN), ArenaStateError);
+  await assert.rejects(activateCompetition(ctx, "arena_2026-11-02", OWNER), ArenaStateError);
 });
 
 test("versions: editing a draft creates a new version and keeps the old one", async () => {
@@ -107,9 +107,10 @@ test("active competition: normal edits refused; locked rule version unchanged", 
   await createCompetition(ctx, "2026-11-02", { template: "standard" }, ADMIN);
   await scheduleCompetition(ctx, "arena_2026-11-02", ADMIN);
   setNow("2026-11-02T04:59:59Z"); // Sunday 23:59:59 EST — too early
-  await assert.rejects(activateCompetition(ctx, "arena_2026-11-02", ADMIN), /before Monday/);
+  await assert.rejects(activateCompetition(ctx, "arena_2026-11-02", OWNER), /before Monday/);
   setNow("2026-11-02T05:00:00Z"); // Monday 00:00 EST
-  await activateCompetition(ctx, "arena_2026-11-02", ADMIN);
+  await assert.rejects(activateCompetition(ctx, "arena_2026-11-02", ADMIN), ArenaAuthorizationError); // admins prepare, the owner starts
+  await activateCompetition(ctx, "arena_2026-11-02", OWNER);
   const before = JSON.stringify(store.ruleVersions.docs);
   const r = cloneRules(SEED_STANDARD_WEEK);
   r.eligibility.minQualifyingJobs = 5;
@@ -122,7 +123,7 @@ test("amendment: owner + reason only, new version, participant notice, audit row
   await createCompetition(ctx, "2026-11-02", { template: "standard" }, ADMIN);
   await scheduleCompetition(ctx, "arena_2026-11-02", ADMIN);
   setNow("2026-11-02T05:00:00Z");
-  await activateCompetition(ctx, "arena_2026-11-02", ADMIN);
+  await activateCompetition(ctx, "arena_2026-11-02", OWNER);
   const r = cloneRules(SEED_STANDARD_WEEK);
   r.eligibility.minQualifyingJobs = 8;
   await assert.rejects(amendActiveRules(ctx, "arena_2026-11-02", r, ADMIN, "storm week"), ArenaAuthorizationError);
@@ -142,7 +143,7 @@ test("suspend/cancel: owner-only once started; approved competitions can never c
   await createCompetition(ctx, "2026-11-02", { template: "standard" }, ADMIN);
   await scheduleCompetition(ctx, "arena_2026-11-02", ADMIN);
   setNow("2026-11-02T05:00:00Z");
-  await activateCompetition(ctx, "arena_2026-11-02", ADMIN);
+  await activateCompetition(ctx, "arena_2026-11-02", OWNER);
   await assert.rejects(suspendCompetition(ctx, "arena_2026-11-02", ADMIN, "x"), ArenaAuthorizationError);
   await suspendCompetition(ctx, "arena_2026-11-02", OWNER, "data outage");
   assert.equal(store.notices.docs.length, 1);

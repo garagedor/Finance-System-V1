@@ -221,7 +221,9 @@ test("F. CRM, Finance Portal and System permissions are untouched", () => {
   assert.equal(byModule("crm"), 20);
   assert.equal(byModule("finance"), 72);
   assert.equal(byModule("wh"), 22);
-  assert.equal(PERMISSION_CATALOG.length, 128);
+  // 317 Live Arena (feature/live-arena) adds its own module of exactly three.
+  assert.equal(byModule("arena"), 3);
+  assert.equal(PERMISSION_CATALOG.length, 131);
 });
 
 test("F2. nothing is granted to anybody by cataloguing them", () => {

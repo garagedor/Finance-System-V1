@@ -12,7 +12,7 @@
 
 import type { ComponentType } from 'react';
 import {
-  FiGrid, FiCpu, FiBarChart2, FiDollarSign, FiFileText, FiCreditCard,
+  FiAward, FiGrid, FiCpu, FiBarChart2, FiDollarSign, FiFileText, FiCreditCard,
   FiCheckSquare, FiHome, FiUsers, FiTrendingUp, FiTrendingDown, FiSend,
   FiBriefcase, FiMapPin, FiPackage, FiArchive, FiSettings, FiShield,
   FiUpload, FiLock, FiPieChart, FiTruck, FiClipboard, FiBox, FiLayers,
@@ -114,6 +114,7 @@ export const FIN_NAV: NavGroup[] = [
       { href: '/portal/dashboard', label: 'Dashboard', icon: FiPieChart, requires: ['finance:dashboard:view'] },
       { href: '/portal/ai', label: 'AI Workspace', icon: FiCpu, requires: ['system:ai:view'] },
       { href: '/portal/tasks', label: 'Task board', icon: FiCheckSquare, requires: ['finance:tasks:view'] },
+      { href: '/portal/arena', label: '317 Live Arena', icon: FiAward, requires: ['arena:console:view'] },
     ],
   },
   {

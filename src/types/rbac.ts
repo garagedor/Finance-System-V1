@@ -42,7 +42,7 @@ export interface PermissionDef {
   /** Stable key — never change once shipped (would break stored role data). */
   key: Permission;
   /** Top-level grouping shown as a section header in the matrix UI. */
-  module: "system" | "crm" | "finance" | "wh";
+  module: "system" | "crm" | "finance" | "wh" | "arena";
   /** Sub-grouping inside a module. Same `section` rows are clustered. */
   section: string;
   /** The action verb. */
@@ -219,6 +219,15 @@ export const PERMISSION_CATALOG: ReadonlyArray<PermissionDef> = [
   p("finance", "tasks", "edit", "Edit / move tasks"),
   p("finance", "tasks", "delete", "Delete tasks"),
 
+  // ── 317 Live Arena ────────────────────────────────────────────────────
+  // Admin Control Center only. No seeded role is given these; grant them
+  // additively (extra_permissions). Activating, amending, suspending, budget
+  // ceiling, approver list and owner confirmations are tied to the owner's
+  // account in the Arena settings, never to a permission an admin can hold.
+  p("arena", "console", "view", "View the Arena Control Center", "Competitions, rules, previews, review queue and audit, read-only."),
+  p("arena", "rules", "edit", "Edit Arena drafts and templates", "Create competitions, edit draft rules, save templates, schedule weeks."),
+  p("arena", "review", "edit", "Work the Arena review queue", "Scan CRM weeks and decide review cases. Some decisions still need the owner."),
+
   // ── Warehouse ─────────────────────────────────────────────────────────
   // Mirrors lbs-warehouse exactly. Holding one of these is what makes a user
   // entitled to the warehouse module; none grants anything in CRM or Finance,
@@ -277,6 +286,7 @@ export const MODULE_LABEL: Record<PermissionDef["module"], string> = {
   crm: "CRM",
   finance: "Finance Portal",
   wh: "Warehouse",
+  arena: "317 Live Arena",
 };
 
 /**

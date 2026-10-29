@@ -25,6 +25,7 @@ import {
   FiLock,
   FiCpu,
   FiCheckSquare,
+  FiAward,
 } from "react-icons/fi";
 import type { ComponentType } from "react";
 import type { Permission } from "@/types/rbac";
@@ -69,6 +70,16 @@ export const FINANCE_NAV: FinanceModule[] = [
     icon: FiCheckSquare,
     group: "work",
     requires: "finance:tasks:view",
+  },
+  // 317 Live Arena · Admin Control Center
+  {
+    href: "/portal/arena",
+    label: "317 Live Arena",
+    section: "Team",
+    title: "317 Live Arena",
+    icon: FiAward,
+    group: "work",
+    requires: "arena:console:view",
   },
   // Money in & out
   {

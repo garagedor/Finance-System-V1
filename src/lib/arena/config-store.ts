@@ -315,11 +315,14 @@ export async function scheduleCompetition(ctx: StoreContext, id: string, by: str
 }
 
 /**
- * Lock the rules and start the competition. Allowed from Monday 00:00 of the
- * competition week (competition timezone). Re-validates against the current
- * budget ceiling.
+ * Lock the rules and start the competition. Owner only (Phase 2 plan §6:
+ * admins prepare weeks, the owner starts them). Allowed from Monday 00:00 of
+ * the competition week (competition timezone). Re-validates against the
+ * current budget ceiling.
  */
 export async function activateCompetition(ctx: StoreContext, id: string, by: string): Promise<void> {
+  const s = await currentSettings(ctx);
+  if (by !== s.ownerUserId) throw new ArenaAuthorizationError("only the owner can start a competition");
   const c = await getCompetition(ctx, id);
   if (c.status !== "scheduled") throw new ArenaStateError(`only a scheduled competition can start (is ${c.status})`);
   const rv = (await ctx.store.ruleVersions.findOne({ _id: c.ruleVersionId }))!;
