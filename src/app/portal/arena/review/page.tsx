@@ -1,3 +1,4 @@
+import "../arena-admin.css";
 import { readSession, hasPermission } from "@/lib/rbac";
 import { BackLink, PageHeader } from "../../_components/page-helpers";
 import ReviewQueue from "./ReviewQueue";
@@ -8,7 +9,7 @@ export default async function ArenaReviewPage() {
   const session = await readSession();
   const allowed = hasPermission(session, "arena:console:view");
   return (
-    <div className="portal-page">
+    <div className="portal-page arena-admin">
       <BackLink href="/portal/arena" label="Arena Control Center" />
       <PageHeader
         kicker="317 Live Arena"

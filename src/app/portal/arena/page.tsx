@@ -1,3 +1,4 @@
+import "./arena-admin.css";
 import { readSession, hasPermission } from "@/lib/rbac";
 import { PageHeader } from "../_components/page-helpers";
 import ArenaConsole from "./ArenaConsole";
@@ -9,7 +10,7 @@ export default async function ArenaPage() {
   const session = await readSession();
   const allowed = hasPermission(session, "arena:console:view");
   return (
-    <div className="portal-page">
+    <div className="portal-page arena-admin">
       <PageHeader
         kicker="317 Live Arena"
         title="Admin Control Center"

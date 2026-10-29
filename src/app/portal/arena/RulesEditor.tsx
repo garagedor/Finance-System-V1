@@ -27,7 +27,8 @@ function Num({ label, value, onChange, step = "1", suffix, prefix, hint }: {
       <span className="portal-label">{label}</span>
       <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
         {prefix && <span className="muted">{prefix}</span>}
-        <input className="portal-input" type="number" step={step} value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%" }} />
+        <input className="portal-input" type="number" step={step} value={value} onChange={(e) => onChange(e.target.value)} style={{ width: "100%" }}
+          aria-label={label} />
         {suffix && <span className="muted">{suffix}</span>}
       </span>
       {hint && <span className="muted small">{hint}</span>}

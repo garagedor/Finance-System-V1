@@ -92,7 +92,7 @@ export default function ReviewQueue() {
             return (
               <div key={k} className="portal-kpi">
                 <div className="portal-kpi-label">{KIND_LABEL[k]}</div>
-                <div className="portal-kpi-value">{c.open + c.pendingOwner} open</div>
+                <div className="portal-kpi-value">{c.open + c.pendingOwner} unresolved</div>
                 <div className="portal-kpi-sub">
                   {c.pendingOwner} waiting for the owner · {c.resolved} resolved
                   {k === "duplicate_group" && c.likelyOpen ? ` · ${c.likelyOpen} likely duplicates open` : ""}
@@ -102,11 +102,16 @@ export default function ReviewQueue() {
           })}
         </div>
       )}
-      {ready && (
-        <div className={`portal-alert ${ready.launchReady ? "portal-alert-good" : "portal-alert-warn"}`}>
-          {ready.launchReady ? "Nothing left to review. Launch gate G2 is clear." : `${ready.launchBlocking} case(s) block launch until they are resolved.`}
-        </div>
-      )}
+      {ready && (() => {
+        const scanned = Object.values(ready.byKind).reduce((n, k) => n + k.open + k.pendingOwner + k.resolved, 0);
+        return (
+          <div className={`portal-alert ${ready.launchReady && scanned > 0 ? "portal-alert-good" : "portal-alert-warn"}`}>
+            {scanned === 0 ? "No scan has run yet, so launch gate G2 can't be judged. Scan the CRM weeks first."
+              : ready.launchReady ? "Every case is resolved. Launch gate G2 is clear."
+              : `${ready.launchBlocking} case(s) block launch until they are resolved.`}
+          </div>
+        );
+      })()}
 
       <div className="portal-toolbar" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>

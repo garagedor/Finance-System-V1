@@ -1,0 +1,21 @@
+/* Arena admin screens only. The global `input` rule stretches every input to
+   full width, checkboxes and radios included; these pages use plain checks. */
+.arena-admin .muted { color: var(--ds-ink-3); }
+.arena-admin .small { font-size: 12px; line-height: 1.45; }
+.arena-admin p.muted, .arena-admin span.muted { font-size: 12px; line-height: 1.45; }
+.arena-admin input[type="checkbox"],
+.arena-admin input[type="radio"] {
+  width: auto;
+  padding: 0;
+  margin: 0;
+  flex: none;
+  accent-color: var(--ds-accent, #2bb673);
+  cursor: pointer;
+}
+.arena-admin label:has(> input[type="checkbox"]),
+.arena-admin label:has(> input[type="radio"]) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}

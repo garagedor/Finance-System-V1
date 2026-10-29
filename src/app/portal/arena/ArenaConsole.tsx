@@ -110,13 +110,16 @@ export default function ArenaConsole() {
   }
 
   const r = data.readiness;
+  const scanned = Object.values(r.byKind).reduce((n, k) => n + k.open + k.pendingOwner + k.resolved, 0);
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-      <div className={`portal-alert ${r.launchReady ? "portal-alert-good" : "portal-alert-warn"}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+      <div className={`portal-alert ${r.launchReady && scanned > 0 ? "portal-alert-good" : "portal-alert-warn"}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
         <span>
-          {r.launchReady
-            ? "Data review: nothing open. Launch gate G2 is clear."
-            : `Data review: ${r.launchBlocking} case(s) still open or waiting for the owner. Launch stays blocked until they are resolved.`}
+          {scanned === 0
+            ? "Data review: no scan has run yet. Launch gate G2 can't be judged until the CRM weeks are scanned."
+            : r.launchReady
+              ? "Data review: every case is resolved. Launch gate G2 is clear."
+              : `Data review: ${r.launchBlocking} case(s) still open or waiting for the owner. Launch stays blocked until they are resolved.`}
         </span>
         <Link className="portal-btn" href="/portal/arena/review">Open the review queue</Link>
       </div>
