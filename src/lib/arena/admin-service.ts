@@ -142,8 +142,8 @@ async function runEngine(ctx: ArenaContexts, rules: ArenaRules, hash: string, we
     overrides: decisions.overrides,
     displayNames: decisions.displayNames,
   });
-  // Preview (no lookup): performance only — every account `unverified`, which
-  // never moves a prize. Freeze/review/approval/live pass a real lookup.
+  // No lookup: performance only — every account `unverified`, which never
+  // moves a prize. Preview/live/freeze/review/approval all pass a real lookup.
   const accounts = accountsFor ? await accountsFor(competitors.competitors.map((c) => c.id)) : {};
   const r = computeCompetition({
     rules,
@@ -167,7 +167,9 @@ export async function computeWeek(
 
 export async function previewRules(ctx: ArenaContexts, rules: ArenaRules, weekStart: string): Promise<PreviewSummary> {
   if (!isMonday(weekStart)) throw new Error("preview week must start on a Monday");
-  const { r, competitors, jobs } = await runEngine(ctx, rules, rulesHash(rules), weekStart);
+  // Account eligibility as in the live phase (best effort, last known on failure),
+  // so the preview pays the same people the live/review result would.
+  const { r, competitors, jobs } = await runEngine(ctx, rules, rulesHash(rules), weekStart, (ids) => ctx.lifecycle.checkAccounts(ids, "live"));
   const winners = r.results.filter((x) => x.prizePosition !== null).sort((a, b) => a.prizePosition! - b.prizePosition!);
   const lastScore = winners.length ? winners[winners.length - 1].score : Infinity;
   const mi = r.results.find((x) => x.wonMostImproved);
