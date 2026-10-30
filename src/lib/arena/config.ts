@@ -8,6 +8,7 @@
  */
 import { createHash } from "node:crypto";
 import type { ArenaRules, ArenaSettings, TieBreakKey } from "./types";
+import { SCORING_METHODOLOGIES } from "./types";
 import { isValidTimezone } from "./week";
 
 export const TIE_BREAK_KEYS: readonly TieBreakKey[] = ["closingRate", "avgTicket", "qualifyingJobs", "closedJobs"];
@@ -34,6 +35,21 @@ export const SEED_STANDARD_WEEK: ArenaRules = {
   tieBreak: ["closingRate", "avgTicket", "qualifyingJobs"],
   review: { approvalOpensDaysAfterWeekEnd: 1, approvalOpensLocalTime: "12:00" },
   display: { showPotentialPrize: true, showIneligibleMetrics: true, showPodium: true, refreshSeconds: 30 },
+};
+
+/**
+ * "Balanced Performance" template (owner-approved 2026-10-30): the Standard Week
+ * with the BALANCED_PERFORMANCE_V1 methodology. Scoring targets 50% / $500, cap
+ * 1.5 (score 0–150). Eligibility minimums are identical to the Standard Week —
+ * they are not part of the methodology change.
+ */
+export const SEED_BALANCED_PERFORMANCE: ArenaRules = {
+  ...SEED_STANDARD_WEEK,
+  scoring: {
+    methodology: "BALANCED_PERFORMANCE_V1",
+    closingRate: { ...SEED_STANDARD_WEEK.scoring.closingRate },
+    avgTicket: { ...SEED_STANDARD_WEEK.scoring.avgTicket },
+  },
 };
 
 export const SEED_SETTINGS_BUDGET_CEILING_CENTS = 150_000;
@@ -80,7 +96,11 @@ export function validateRules(
     if (!isNum(c.weight) || c.weight < 0) p.push(`${name} weight must be ≥ 0`);
     if (!isNum(c.cap) || c.cap < 1) p.push(`${name} cap must be ≥ 1`);
   }
-  if (rules.scoring.closingRate.weight + rules.scoring.avgTicket.weight <= 0) p.push("at least one scoring weight must be > 0");
+  const m = rules.scoring.methodology;
+  if (m !== undefined && !SCORING_METHODOLOGIES.includes(m)) p.push(`unknown scoring methodology "${String(m)}"`);
+  // Weights are part of WEIGHTED_V0 only; BALANCED_PERFORMANCE_V1 ignores them.
+  if ((m ?? "WEIGHTED_V0") === "WEIGHTED_V0" && rules.scoring.closingRate.weight + rules.scoring.avgTicket.weight <= 0)
+    p.push("at least one scoring weight must be > 0");
   if (!isInt(rules.scoring.closingRate.targetBp) || rules.scoring.closingRate.targetBp <= 0 || rules.scoring.closingRate.targetBp > 10_000)
     p.push("Closing Rate target must be between 0.01% and 100%");
   if (!isInt(rules.scoring.avgTicket.targetCents) || rules.scoring.avgTicket.targetCents <= 0)

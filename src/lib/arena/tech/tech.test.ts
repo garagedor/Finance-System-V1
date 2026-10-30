@@ -318,7 +318,7 @@ const CONTRACT_KEYS = new Set([
   "apiVersion", "serverTime", "competitor", "competition", "rules", "standing", "award", "notices",
   "id", "displayName", "location", "weekStart", "weekEnd", "phase", "endsAt", "reviewOpensAt", "dataAsOf",
   "timezone", "minQualifyingJobs", "minAvgTicketCents", "minClosingRateBp", "closingRateWeight", "avgTicketWeight",
-  "closingRateTargetBp", "avgTicketTargetCents", "cap", "prizesCents", "mostImprovedCents", "showPotentialPrize", "refreshSeconds",
+  "closingRateTargetBp", "avgTicketTargetCents", "cap", "capC", "capA", "methodology", "closingScore", "avgScore", "limitingMetric", "prizesCents", "mostImprovedCents", "showPotentialPrize", "refreshSeconds",
   "rank", "score", "eligible", "gates", "jobs", "avgTicket", "closingRate", "met", "actual", "required", "closingRateBp",
   "avgTicketCents", "assignedJobs", "closedJobs", "qualifyingJobs", "closingIndex", "avgIndex", "potentialPrizeCents",
   "nextSteps", "kind", "text", "amount", "pointsToNextRank", "mostImproved", "baselineScore", "improvement", "validWeeks",

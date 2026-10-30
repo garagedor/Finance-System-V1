@@ -5,6 +5,7 @@
  * data or anything added to internal types later can never leak by accident.
  */
 import type { ArenaRules } from "../types";
+import { methodologyOf, SCORE_SCALE } from "../engine";
 import type { ApprovedStanding, ResultDoc } from "../lifecycle";
 import type {
   CompetitionPhase, GateView, HistoryResponse, LeaderboardRow, MyStanding, RulesView,
@@ -17,6 +18,14 @@ const bp = (rate: number) => Math.round(rate * BP);
 const cents = (dollars: number) => Math.round(dollars * CENTS);
 const money = (c: number) => `$${(c / CENTS).toLocaleString("en-US", { minimumFractionDigits: c % CENTS ? 2 : 0, maximumFractionDigits: 2 })}`;
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const pctText = (bpv: number) => `${(bpv / CENTS).toFixed(bpv % CENTS ? 1 : 0)}%`;
+
+/** Normalized metric scores of a standing (older records: derived from the indices). */
+export const metricScores = (s: ApprovedStanding) => ({
+  closingScore: s.closingScore ?? SCORE_SCALE * s.closingIndex,
+  avgScore: s.avgScore ?? SCORE_SCALE * s.avgIndex,
+  limitingMetric: s.limitingMetric ?? null,
+});
 
 /** May this standing hold a prize? (records from before the account rule: the gates alone) */
 export const prizeEligibleOf = (s: ApprovedStanding) => s.prizeEligible ?? s.eligible;
@@ -26,16 +35,20 @@ const accountExcluded = (s: ApprovedStanding) => s.eligible && !prizeEligibleOf(
 
 export function rulesView(rules: ArenaRules): RulesView {
   const s = rules.scoring;
+  const v1 = methodologyOf(rules) === "BALANCED_PERFORMANCE_V1";
   return {
+    methodology: methodologyOf(rules),
     timezone: rules.timezone,
     minQualifyingJobs: rules.eligibility.minQualifyingJobs,
     minAvgTicketCents: rules.eligibility.minAvgTicketCents,
     minClosingRateBp: rules.eligibility.minClosingRateBp,
-    closingRateWeight: r2(s.closingRate.weight / (s.closingRate.weight + s.avgTicket.weight)),
-    avgTicketWeight: r2(s.avgTicket.weight / (s.closingRate.weight + s.avgTicket.weight)),
+    closingRateWeight: v1 ? null : r2(s.closingRate.weight / (s.closingRate.weight + s.avgTicket.weight)),
+    avgTicketWeight: v1 ? null : r2(s.avgTicket.weight / (s.closingRate.weight + s.avgTicket.weight)),
     closingRateTargetBp: s.closingRate.targetBp,
     avgTicketTargetCents: s.avgTicket.targetCents,
     cap: Math.min(s.closingRate.cap, s.avgTicket.cap),
+    capC: s.closingRate.cap,
+    capA: s.avgTicket.cap,
     prizesCents: [...rules.prizes.positionsCents],
     mostImprovedCents: rules.mostImproved.enabled ? rules.mostImproved.amountCents : null,
     showPotentialPrize: rules.display.showPotentialPrize,
@@ -77,6 +90,9 @@ export function leaderboardRows(
         displayName: s.displayName,
         location: s.location,
         score: r2(s.score),
+        closingScore: show ? r2(metricScores(s).closingScore) : null,
+        avgScore: show ? r2(metricScores(s).avgScore) : null,
+        limitingMetric: show ? metricScores(s).limitingMetric : null,
         eligible: pe,
         gatesMet: { jobs: s.gates.jobs, avgTicket: s.gates.avgTicket, closingRate: s.gates.closingRate },
         closingRateBp: show ? bp(s.closingRate) : null,
@@ -134,6 +150,24 @@ export function myStanding(
   const pointsToNextRank = above ? r2(Math.max(0, above.score - s.score)) : null;
   if (above && pointsToNextRank !== null && phase === "live")
     nextSteps.push({ kind: "rank", amount: pointsToNextRank, text: `${pointsToNextRank} points to pass #${above.rank}` });
+  // BALANCED_PERFORMANCE_V1: the score only rises with the LIMITING metric —
+  // say exactly how far it has to go (to pass the next rank, else to the target).
+  if (methodologyOf(rules) === "BALANCED_PERFORMANCE_V1" && me && s.assignedJobs > 0) {
+    const goal = above && phase === "live" ? { score: above.score, why: `to pass #${above.rank}` } : s.score < 100 ? { score: 100, why: "to reach the 100-point target" } : null;
+    const sc = rules.scoring;
+    const ms = metricScores(s);
+    if (goal) {
+      const need = goal.score / 100;
+      if (ms.closingScore < goal.score && need <= sc.closingRate.cap) {
+        const target = Math.ceil(need * sc.closingRate.targetBp);
+        nextSteps.push({ kind: "raise_score", amount: Math.max(0, target - crBp), text: `Raise your closing rate to ${pctText(target)} (now ${pctText(crBp)}) ${goal.why}` });
+      }
+      if (ms.avgScore < goal.score && need <= sc.avgTicket.cap) {
+        const target = Math.ceil(need * sc.avgTicket.targetCents);
+        nextSteps.push({ kind: "raise_score", amount: Math.max(0, target - avgCents), text: `Raise your AVG TICKET to ${money(target)} (now ${money(avgCents)}) ${goal.why}` });
+      }
+    }
+  }
   const pe = me ? prizeEligibleOf(s) : false;
   const potential = pe && (s.prizePosition !== null || s.wonMostImproved) ? shownPrize(s, rules, phase) : 0;
   return {
@@ -148,6 +182,9 @@ export function myStanding(
     qualifyingJobs: s.qualifyingJobs,
     closingIndex: r2(s.closingIndex),
     avgIndex: r2(s.avgIndex),
+    closingScore: r2(metricScores(s).closingScore),
+    avgScore: r2(metricScores(s).avgScore),
+    limitingMetric: me ? metricScores(s).limitingMetric : null,
     potentialPrizeCents: potential,
     nextSteps,
     pointsToNextRank,

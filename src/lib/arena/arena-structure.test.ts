@@ -20,7 +20,7 @@ test("no business constants outside the seed template (config.ts)", () => {
   const seedValues = /(?<![\w.])(10|400|40000|40_000|4000|4_000|0\.4|40|60|50|0\.5|5000|5_000|500|50000|50_000|1\.5|1500|150000|150_000|450|300|200|150|100|250|25000|25_000)(?![\w.])/;
   const allowed: Record<string, RegExp[]> = {
     // unit conversions, not business rules
-    "engine.ts": [/const BP = 10_000/, /const MICRO_PER_CENT = 10_000/, /const MICRO = 1_000_000/, /\/ 100\b/],
+    "engine.ts": [/const SCORE_SCALE = 100;/, /const BP = 10_000/, /const MICRO_PER_CENT = 10_000/, /const MICRO = 1_000_000/, /\/ 100\b/],
     "week.ts": [/\* 60_000/, /h \* 60 \+ m/, /86_400_000/, /slice\(0, 10\)/], // ISO date formatting
     "job-source.ts": [/slice\(-10\)/], // US phone digits, for duplicate grouping
     "review.ts": [/2 to 40 characters/], // display-name length, not a competition rule

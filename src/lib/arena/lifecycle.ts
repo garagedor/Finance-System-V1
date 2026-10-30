@@ -21,6 +21,7 @@
 import { createHash } from "node:crypto";
 import type { AccountInput, AccountState, CompetitionResult, CompetitorResult } from "./types";
 import { accountApprovalProblems, accountBlockers, type AccountMode } from "./accounts";
+import { SCORE_SCALE } from "./engine";
 import type { ArenaEvent, CompetitionPhase } from "./tech-api-contract";
 import {
   ArenaAuthorizationError,
@@ -69,6 +70,10 @@ export interface ApprovedStanding {
   qualifyingJobs: number;
   closingIndex: number;
   avgIndex: number;
+  /** Absent on records made before scoring methodologies (derive 100 × index). */
+  closingScore?: number;
+  avgScore?: number;
+  limitingMetric?: "closingRate" | "avgTicket" | "both" | null;
   prizePosition: number | null;
   prizeCents: number;
   wonMostImproved: boolean;
@@ -470,6 +475,7 @@ export function toStanding(r: CompetitorResult): ApprovedStanding {
     gates: { jobs: r.gates.jobs.met, avgTicket: r.gates.avgTicket.met, closingRate: r.gates.closingRate.met },
     closingRate: r.closingRate, avgTicket: r.avgTicket, assignedJobs: r.assignedJobs, closedJobs: r.closedJobs,
     qualifyingJobs: r.qualifyingJobs, closingIndex: r.closingIndex, avgIndex: r.avgIndex,
+    closingScore: r.closingScore ?? SCORE_SCALE * r.closingIndex, avgScore: r.avgScore ?? SCORE_SCALE * r.avgIndex, limitingMetric: r.limitingMetric ?? null,
     prizePosition: r.prizePosition, prizeCents: r.prizeCents, wonMostImproved: r.wonMostImproved, mostImproved: r.mostImproved,
   };
 }

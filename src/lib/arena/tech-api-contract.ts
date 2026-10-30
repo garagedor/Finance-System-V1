@@ -44,16 +44,25 @@ export type CompetitionPhase =
 
 export interface GateView { met: boolean; actual: number; required: number }
 
+/** Scoring methodology (versioned). WEIGHTED_V0 = weighted sum; BALANCED_PERFORMANCE_V1 = min(C, A). */
+export type ScoringMethodologyView = "WEIGHTED_V0" | "BALANCED_PERFORMANCE_V1";
+/** BALANCED_PERFORMANCE_V1: which normalized metric score sets the final score. */
+export type LimitingMetricView = "closingRate" | "avgTicket" | "both";
+
 export interface RulesView {
+  /** ADDED (additive, apiVersion 1): absent from older servers = WEIGHTED_V0. */
+  methodology: ScoringMethodologyView;
   timezone: string;
   minQualifyingJobs: number;
   minAvgTicketCents: number;
   minClosingRateBp: number;
-  closingRateWeight: number;   // e.g. 0.6
-  avgTicketWeight: number;     // e.g. 0.4
+  closingRateWeight: number | null;   // e.g. 0.6; null under BALANCED_PERFORMANCE_V1 (weights unused)
+  avgTicketWeight: number | null;     // e.g. 0.4; null under BALANCED_PERFORMANCE_V1
   closingRateTargetBp: number;
   avgTicketTargetCents: number;
   cap: number;                 // index cap shown to technicians (both caps when equal)
+  capC: number;                // closing-rate cap (× target); score cap = 100 × capC
+  capA: number;                // AVG ticket cap (× target)
   prizesCents: number[];       // best first
   mostImprovedCents: number | null;
   showPotentialPrize: boolean;
@@ -66,6 +75,12 @@ export interface LeaderboardRow {
   displayName: string;
   location: string;
   score: number;
+  /** 100 × min(CR / target, cap) and 100 × min(AVG / target, cap), rounded to 2 dp;
+   *  null whenever this row's metrics are hidden. */
+  closingScore: number | null;
+  avgScore: number | null;
+  /** BALANCED_PERFORMANCE_V1 only (null otherwise, or when metrics are hidden). */
+  limitingMetric: LimitingMetricView | null;
   eligible: boolean;
   gatesMet: { jobs: boolean; avgTicket: boolean; closingRate: boolean };
   /** Shown only when rules.display.showIneligibleMetrics or the row is eligible. */
@@ -89,9 +104,13 @@ export interface MyStanding {
   qualifyingJobs: number;
   closingIndex: number;
   avgIndex: number;
+  /** 100 × closingIndex, 100 × avgIndex (2 dp). Under BALANCED_PERFORMANCE_V1 score = min of the two. */
+  closingScore: number;
+  avgScore: number;
+  limitingMetric: LimitingMetricView | null;
   potentialPrizeCents: number;  // 0 unless eligible and in a prize position
   /** Plain-language next steps, computed server-side (e.g. "2 more qualifying jobs"). */
-  nextSteps: { kind: "jobs" | "closes" | "avg_ticket" | "rank"; text: string; amount: number }[];
+  nextSteps: { kind: "jobs" | "closes" | "avg_ticket" | "rank" | "raise_score"; text: string; amount: number }[];
   pointsToNextRank: number | null;
   mostImproved: { baselineScore: number; improvement: number; validWeeks: number } | null;
 }

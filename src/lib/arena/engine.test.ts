@@ -409,3 +409,147 @@ test("account eligibility is input only: the engine is a pure function of it", (
     r2.results.map((x) => [x.competitorId, x.prizeCents, x.account]),
   );
 });
+
+// ── BALANCED_PERFORMANCE_V1 (non-compensatory) ─────────────────────────────
+import { compareRanking } from "./engine.ts";
+import { SEED_BALANCED_PERFORMANCE } from "./config.ts";
+
+/** rules: V1, targets 50% / $500, cap 1.5, minimums low so everyone is eligible unless stated. */
+function v1(over: (r: ArenaRules) => void = () => {}) {
+  const r = cloneRules(SEED_BALANCED_PERFORMANCE);
+  r.eligibility = { minQualifyingJobs: 0, minAvgTicketCents: 0, minClosingRateBp: 0 };
+  over(r);
+  return r;
+}
+/** n jobs with `closed` Closed (profit each) and the rest Estimate (profit 0) → exact CR and AVG. */
+function person(name: string, n: number, closed: number, profitEach: number) {
+  return [...many(closed, name, "Closed", profitEach), ...many(n - closed, name, "Estimate", 0)];
+}
+
+test("V1: both metrics at target → 100", () => {
+  // 10 jobs, 5 closed → CR 50%; profit 5 × 1000 / 10 = $500 AVG
+  const r = run(person("Ann", 10, 5, 1000), ["Ann"], v1());
+  assert.equal(row(r, "Ann").score, 100);
+  assert.equal(row(r, "Ann").limitingMetric, "both");
+});
+
+test("V1: both at 150% → 150 (the cap)", () => {
+  const r = run(person("Ann", 20, 15, 1000), ["Ann"], v1()); // CR 75%, AVG $750
+  assert.equal(row(r, "Ann").closingScore, 150);
+  assert.equal(row(r, "Ann").avgScore, 150);
+  assert.equal(row(r, "Ann").score, 150);
+});
+
+test("V1: 90% and 150% → 90 (the lower one), limiting = that metric", () => {
+  // CR 45% (90%), AVG $750 (150%): 20 jobs, 9 closed, profit 15000 → 9 × 1666.67
+  const r = run(person("Ann", 20, 9, 15000 / 9), ["Ann"], v1());
+  assert.ok(Math.abs(row(r, "Ann").score - 90) < 1e-9);
+  assert.equal(row(r, "Ann").limitingMetric, "closingRate");
+  assert.ok(Math.abs(row(r, "Ann").avgScore - 150) < 1e-9);
+});
+
+test("V1: raising only the stronger metric does not change the score", () => {
+  const a = run(person("Ann", 20, 9, 1000), ["Ann"], v1()); // CR 45% → C 90; AVG 9000/20=450 → A 90
+  const b = run(person("Ann", 20, 9, 1100), ["Ann"], v1()); // AVG 495 → A 99; C still 90
+  assert.ok(Math.abs(row(a, "Ann").score - 90) < 1e-9);
+  assert.equal(row(b, "Ann").score, row(a, "Ann").score);
+  assert.equal(row(b, "Ann").limitingMetric, "closingRate");
+});
+
+test("V1: either metric 0 → 0", () => {
+  assert.equal(row(run(person("Ann", 10, 0, 0), ["Ann"], v1()), "Ann").score, 0); // no closes
+  assert.equal(row(run(person("Ann", 10, 5, 0), ["Ann"], v1()), "Ann").score, 0); // closes with $0 profit
+});
+
+test("V1: cap is configurable per metric (CAP_C, CAP_A)", () => {
+  const r = run(person("Ann", 10, 10, 2000), ["Ann"], v1((x) => { x.scoring.closingRate.cap = 1.2; x.scoring.avgTicket.cap = 1.3; }));
+  assert.equal(row(r, "Ann").closingScore, 120);
+  assert.equal(row(r, "Ann").avgScore, 130);
+  assert.equal(row(r, "Ann").score, 120);
+});
+
+test("V1: weights are ignored", () => {
+  const a = run(person("Ann", 20, 9, 1000), ["Ann"], v1());
+  const b = run(person("Ann", 20, 9, 1000), ["Ann"], v1((x) => { x.scoring.closingRate.weight = 1; x.scoring.avgTicket.weight = 99; }));
+  assert.equal(row(a, "Ann").score, row(b, "Ann").score);
+});
+
+test("V1: ranking uses UNROUNDED final scores (equal when rounded to 2 dp)", () => {
+  const jobsA = person("Ann", 13, 6, 2000);          // CR 6/13 → C 92.307692…
+  const jobsB = person("Bo", 100_000, 46_153, 2000);  // CR 0.46153 → C 92.306
+  const r = run([...jobsA, ...jobsB], ["Ann", "Bo"], v1());
+  const r2 = (x: number) => Math.round(x * 100) / 100;
+  assert.equal(r2(row(r, "Ann").score), r2(row(r, "Bo").score), "same when displayed");
+  assert.ok(row(r, "Ann").score > row(r, "Bo").score);
+  assert.equal(row(r, "Ann").rank, 1, "the unrounded value decides (not the larger job count)");
+});
+
+test("V1 tie-break 1: equal final → higher max(C, A) wins", () => {
+  // both C = 100 (CR 50%); Ann AVG $600 (A 120), Bo AVG $550 (A 110) — final min = 100 for both
+  const r = run([...person("Ann", 10, 5, 1200), ...person("Bo", 10, 5, 1100)], ["Ann", "Bo"], v1());
+  assert.equal(row(r, "Ann").score, row(r, "Bo").score);
+  assert.deepEqual([row(r, "Ann").rank, row(r, "Bo").rank], [1, 2]);
+});
+
+test("V1 tie-break 2: equal final and equal max → more officially assigned jobs wins", () => {
+  const r = run([...person("Ann", 10, 5, 1000), ...person("Bo", 20, 10, 1000)], ["Ann", "Bo"], v1());
+  assert.equal(row(r, "Ann").score, row(r, "Bo").score);
+  assert.deepEqual([row(r, "Bo").rank, row(r, "Ann").rank], [1, 2]);
+});
+
+test("V1 tie-break 3: everything equal → canonical competitor id", () => {
+  const r = run([...person("Bo", 10, 5, 1000), ...person("Ann", 10, 5, 1000)], ["Bo", "Ann"], v1());
+  assert.deepEqual([row(r, "Ann").rank, row(r, "Bo").rank], [1, 2]); // "u_Ann" < "u_Bo"
+});
+
+test("V1: the configured tieBreak has no effect", () => {
+  const a = v1((x) => { x.tieBreak = ["closedJobs"]; });
+  const b = v1((x) => { x.tieBreak = ["qualifyingJobs", "avgTicket"]; });
+  const jobs = [...person("Ann", 10, 5, 1200), ...person("Bo", 20, 10, 1000), ...person("Cy", 10, 5, 1000)];
+  const ra = run(jobs, ["Ann", "Bo", "Cy"], a), rb = run(jobs, ["Ann", "Bo", "Cy"], b);
+  assert.deepEqual(ra.results.map((x) => x.competitorId), rb.results.map((x) => x.competitorId));
+  assert.ok(compareRanking(a)(row(ra, "Bo"), row(ra, "Cy")) < 0);
+});
+
+test("V1: prizes go to eligible competitors in order; ineligible high scorers never displace them", () => {
+  const rules = v1((x) => { x.eligibility.minQualifyingJobs = 10; x.prizes.positionsCents = [30_000, 20_000]; x.prizes.budgetCents = 75_000; });
+  const jobs = [...person("Ed", 4, 3, 3000), ...person("Ann", 10, 5, 1000), ...person("Bo", 10, 4, 1000), ...person("Cy", 10, 3, 1000)];
+  const r = run(jobs, ["Ed", "Ann", "Bo", "Cy"], rules);
+  assert.equal(row(r, "Ed").rank, 1);
+  assert.equal(row(r, "Ed").eligible, false);
+  assert.equal(row(r, "Ed").prizeCents, 0);
+  assert.deepEqual([row(r, "Ann").prizePosition, row(r, "Bo").prizePosition, row(r, "Cy").prizePosition], [1, 2, null]);
+});
+
+test("WEIGHTED_V0 unchanged: no methodology field ≡ explicit WEIGHTED_V0 ≡ the original formula; hash of old rules unchanged", () => {
+  const jobs = [...person("Ann", 20, 9, 1000), ...person("Bo", 10, 5, 1200)];
+  const legacy = cloneRules(SEED_STANDARD_WEEK);
+  assert.equal("methodology" in legacy.scoring, false);
+  const explicit = cloneRules(SEED_STANDARD_WEEK);
+  explicit.scoring.methodology = "WEIGHTED_V0";
+  const a = run(jobs, ["Ann", "Bo"], legacy), b = run(jobs, ["Ann", "Bo"], explicit);
+  assert.deepEqual(a.results.map((x) => [x.competitorId, x.rank, x.score]), b.results.map((x) => [x.competitorId, x.rank, x.score]));
+  const ann = row(a, "Ann");
+  assert.equal(ann.score, 60 * Math.min(0.45 / 0.5, 1.5) + 40 * Math.min(450 / 500, 1.5));
+  assert.equal(ann.limitingMetric, null);
+  assert.equal(rulesHash(legacy), rulesHash(JSON.parse(JSON.stringify(SEED_STANDARD_WEEK))));
+});
+
+test("config: methodology validated; V1 accepts zero weights, V0 does not", () => {
+  const ctx = { knownStatuses: SEED_STANDARD_WEEK.qualifying.statuses, ceilingCents: 150_000 };
+  const r = v1((x) => { x.scoring.closingRate.weight = 0; x.scoring.avgTicket.weight = 0; });
+  assert.deepEqual(validateRules(r, ctx), []);
+  const r0 = cloneRules(SEED_STANDARD_WEEK);
+  r0.scoring.closingRate.weight = 0; r0.scoring.avgTicket.weight = 0;
+  assert.match(validateRules(r0, ctx).join(), /weight/);
+  const bad = v1((x) => { (x.scoring as { methodology: string }).methodology = "MAGIC"; });
+  assert.match(validateRules(bad, ctx).join(), /unknown scoring methodology/);
+  const capLow = v1((x) => { x.scoring.avgTicket.cap = 0.9; });
+  assert.match(validateRules(capLow, ctx).join(), /cap must be ≥ 1/);
+});
+
+test("Balanced Performance seed keeps the Standard Week eligibility minimums exactly", () => {
+  assert.deepEqual(SEED_BALANCED_PERFORMANCE.eligibility, SEED_STANDARD_WEEK.eligibility);
+  assert.deepEqual(SEED_BALANCED_PERFORMANCE.participants, SEED_STANDARD_WEEK.participants);
+  assert.equal(SEED_BALANCED_PERFORMANCE.scoring.methodology, "BALANCED_PERFORMANCE_V1");
+});

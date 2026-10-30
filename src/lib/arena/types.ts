@@ -9,6 +9,9 @@
  * rates in integer basis points, so every threshold comparison is exact.
  */
 
+export type ScoringMethodology = "WEIGHTED_V0" | "BALANCED_PERFORMANCE_V1";
+export const SCORING_METHODOLOGIES: readonly ScoringMethodology[] = ["WEIGHTED_V0", "BALANCED_PERFORMANCE_V1"];
+
 /** Tie-break keys an admin may order. Score is always the primary key and the
  *  competitor id is always the final stable key — neither is configurable. */
 export type TieBreakKey = "closingRate" | "avgTicket" | "qualifyingJobs" | "closedJobs";
@@ -24,6 +27,15 @@ export interface ArenaRules {
     minClosingRateBp: number;
   };
   scoring: {
+    /**
+     * Versioned scoring methodology. ABSENT = "WEIGHTED_V0" (every rule version
+     * written before the field existed, reproducible bit-for-bit).
+     *   WEIGHTED_V0             score = Σ weight × min(actual / target, cap)
+     *   BALANCED_PERFORMANCE_V1 C = 100 × min(CR / CR target, cap C),
+     *                           A = 100 × min(AVG / AVG target, cap A),
+     *                           score = min(C, A); weights and tieBreak unused.
+     */
+    methodology?: ScoringMethodology;
     closingRate: { weight: number; targetBp: number; cap: number };
     avgTicket: { weight: number; targetCents: number; cap: number };
   };
@@ -176,6 +188,8 @@ export interface Gate {
   required: number;
 }
 
+export type LimitingMetric = "closingRate" | "avgTicket" | "both";
+
 export interface CompetitorResult {
   competitorId: string;
   displayName: string;
@@ -193,6 +207,11 @@ export interface CompetitorResult {
   closingIndex: number;
   avgIndex: number;
   score: number;
+  /** 100 × closingIndex and 100 × avgIndex (unrounded normalized metric scores). */
+  closingScore: number;
+  avgScore: number;
+  /** BALANCED_PERFORMANCE_V1: the metric that sets the score (lower one); null under WEIGHTED_V0. */
+  limitingMetric: LimitingMetric | null;
   gates: { jobs: Gate; avgTicket: Gate; closingRate: Gate };
   /** All three performance gates met (unchanged by the account rule). */
   eligible: boolean;

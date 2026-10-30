@@ -25,6 +25,8 @@ import type {
   CompetitorResult,
   DuplicateGroup,
   JobExclusion,
+  LimitingMetric,
+  ScoringMethodology,
   TieBreakKey,
 } from "./types";
 import { inWeek, previousWeekStarts } from "./week";
@@ -32,6 +34,8 @@ import { inWeek, previousWeekStarts } from "./week";
 const BP = 10_000; // basis points per 1.0
 const MICRO_PER_CENT = 10_000; // micro-dollars per cent
 const MICRO = 1_000_000; // micro-dollars per dollar
+/** Points a metric scores exactly at its target (the methodology's scale, not a business rule). */
+export const SCORE_SCALE = 100;
 
 /** Per-job profit in exact integer micro-dollars. */
 export const toMicro = (dollars: number) => Math.round(dollars * MICRO);
@@ -74,17 +78,32 @@ export function officialKpis(jobs: ArenaJob[]): { assigned: number; closed: numb
   };
 }
 
-function scoreOf(rules: ArenaRules, t: Pick<Tally, "assigned" | "closed" | "profitMicro">) {
+export const methodologyOf = (rules: ArenaRules): ScoringMethodology => rules.scoring.methodology ?? "WEIGHTED_V0";
+
+/**
+ * Score of a tally under the rules' methodology. Indices are unrounded; only
+ * display rounds. WEIGHTED_V0 is today's formula, unchanged.
+ */
+export function scoreOf(rules: ArenaRules, t: Pick<Tally, "assigned" | "closed" | "profitMicro">) {
   const s = rules.scoring;
   const closingRate = t.assigned ? t.closed / t.assigned : 0;
   const avgTicket = t.assigned ? t.profitMicro / MICRO / t.assigned : 0;
   const closingIndex = Math.min(closingRate / (s.closingRate.targetBp / BP), s.closingRate.cap);
   const avgIndex = Math.min(avgTicket / (s.avgTicket.targetCents / 100), s.avgTicket.cap);
+  const closingScore = SCORE_SCALE * Math.max(0, closingIndex);
+  const avgScore = SCORE_SCALE * Math.max(0, avgIndex);
+  if (methodologyOf(rules) === "BALANCED_PERFORMANCE_V1") {
+    const limitingMetric: LimitingMetric = closingScore < avgScore ? "closingRate" : avgScore < closingScore ? "avgTicket" : "both";
+    return { closingRate, avgTicket, closingIndex, avgIndex, closingScore, avgScore, limitingMetric, score: Math.min(closingScore, avgScore) };
+  }
   return {
     closingRate,
     avgTicket,
     closingIndex,
     avgIndex,
+    closingScore,
+    avgScore,
+    limitingMetric: null,
     score: s.closingRate.weight * closingIndex + s.avgTicket.weight * avgIndex,
   };
 }
@@ -113,13 +132,27 @@ const TIE_VALUE: Record<TieBreakKey, (r: CompetitorResult) => number> = {
   closedJobs: (r) => r.closedJobs,
 };
 
-/** Score (unrounded) first, then the configured keys (higher wins), then id. */
+/**
+ * Ranking order.
+ *   WEIGHTED_V0:             score (unrounded), then the configured tie-break keys, then id.
+ *   BALANCED_PERFORMANCE_V1: score = min(C, A) (unrounded), then the higher of the
+ *                            two metric scores max(C, A), then official assigned
+ *                            CRM jobs, then id. The configured tieBreak is NOT used.
+ * Higher wins everywhere; the competitor id is the final stable key.
+ */
 export function compareRanking(rules: ArenaRules) {
+  const v1 = methodologyOf(rules) === "BALANCED_PERFORMANCE_V1";
   return (a: CompetitorResult, b: CompetitorResult): number => {
     if (a.score !== b.score) return b.score - a.score;
-    for (const k of rules.tieBreak) {
-      const d = TIE_VALUE[k](b) - TIE_VALUE[k](a);
-      if (d !== 0) return d;
+    if (v1) {
+      const ma = Math.max(a.closingScore, a.avgScore), mb = Math.max(b.closingScore, b.avgScore);
+      if (ma !== mb) return mb - ma;
+      if (a.assignedJobs !== b.assignedJobs) return b.assignedJobs - a.assignedJobs;
+    } else {
+      for (const k of rules.tieBreak) {
+        const d = TIE_VALUE[k](b) - TIE_VALUE[k](a);
+        if (d !== 0) return d;
+      }
     }
     return a.competitorId < b.competitorId ? -1 : a.competitorId > b.competitorId ? 1 : 0;
   };
