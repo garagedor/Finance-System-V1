@@ -9,6 +9,7 @@ import type { ArenaStore } from "./config-store";
 import type { ReviewStore } from "./review";
 import type { MappingRecord, TechnicianRecord } from "./identity";
 import type { LifecycleCollections } from "./lifecycle";
+import { RATE_LIMIT_TTL_INDEX } from "./tech/rate-limit";
 
 export const ARENA_COLLECTIONS = {
   settings: "arena_settings",
@@ -26,6 +27,8 @@ export const ARENA_COLLECTIONS = {
   claims: "arena_claim",
   /** Last known Weekly Balance account state per competitor (live fallback only). */
   accountStatus: "arena_account_status",
+  /** Shared exchange rate-limit windows (TTL-indexed). */
+  rateLimit: "arena_rate_limit",
 } as const;
 
 /** Lifecycle collections (lifecycle.ts). Results, approvals and non-live snapshots are insert-only. */
@@ -77,6 +80,7 @@ export function ensureArenaIndexes(db: Db): Promise<void> {
       db.collection(ARENA_COLLECTIONS.results).createIndex({ weekStart: -1 }),
       db.collection(ARENA_COLLECTIONS.approvals).createIndex({ competitionId: 1, at: 1 }),
       db.collection(ARENA_COLLECTIONS.techEvents).createIndex({ competitorId: 1, key: 1 }),
+      db.collection(ARENA_COLLECTIONS.rateLimit).createIndex(RATE_LIMIT_TTL_INDEX.key, RATE_LIMIT_TTL_INDEX.options),
     ]);
   })().catch((e) => {
     indexed = null;

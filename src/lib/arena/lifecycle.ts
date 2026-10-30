@@ -365,6 +365,23 @@ export async function freezeIfDue(ctx: LifecycleContext, c: CompetitionDoc): Pro
   return getCompetitionDoc(ctx, c._id);
 }
 
+/**
+ * Safety net for the daily cron: freeze every running week whose Sunday has
+ * ended, even if nobody opened it. Idempotent — an already frozen (or
+ * reviewed/approved) week is left alone, and a week still running is untouched.
+ */
+export async function freezeDueCompetitions(ctx: LifecycleContext): Promise<{ checked: number; frozen: string[]; notDue: number }> {
+  const running = await ctx.config.store.competitions.find({ status: "active" }).sort({ weekStart: 1 }).toArray();
+  const frozen: string[] = [];
+  let notDue = 0;
+  for (const c of running) {
+    const after = await freezeIfDue(ctx, c);
+    if (after.status === "active") notDue++;
+    else frozen.push(c._id);
+  }
+  return { checked: running.length, frozen, notDue };
+}
+
 // ── review ─────────────────────────────────────────────────────────────────
 
 async function latestReconciled(ctx: LifecycleContext, id: string): Promise<SnapshotDoc | null> {

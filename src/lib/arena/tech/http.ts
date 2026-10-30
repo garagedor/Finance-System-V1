@@ -19,13 +19,14 @@ import { readTechConfig, ArenaTechConfigError, type TechConfig } from "./config"
 import { remoteJwks, verifyWbAccessToken } from "./wb-token";
 import { verifierFromEnv } from "./verifier";
 import { passKeysFromEnv } from "./pass";
-import { MemoryRateLimiter } from "./rate-limit";
+import { MongoRateLimiter, type RateLimitCollection } from "./rate-limit";
+import { ARENA_COLLECTIONS } from "../mongo-store";
 import { authorizePass, exchange, type AccessDeps } from "./access";
 import { findCompetitor, TechBadRequest, TechNotFound, type TechCtx } from "./service";
 
 const MINUTE_MS = 60_000;
-// Per-process (see rate-limit.ts: production needs shared storage).
-const limiters = { ip: new MemoryRateLimiter(60, MINUTE_MS), userIp: new MemoryRateLimiter(10, MINUTE_MS) };
+const IP_PER_MINUTE = 60;
+const USER_IP_PER_MINUTE = 10;
 
 function corsHeaders(req: Request, cfg: TechConfig | null): Headers {
   const h = new Headers({ "Cache-Control": "no-store", Vary: "Origin" });
@@ -61,6 +62,9 @@ async function deps(cfg: TechConfig): Promise<{ deps: AccessDeps; ctx: TechCtx }
   const a = await arenaContexts();
   const ctx: TechCtx = { lifecycle: a.lifecycle, review: a.review, crmDb: a.crmDb };
   const keys = remoteJwks(cfg.wb.jwksUrl);
+  // Shared across instances: counters live in the Arena database (rate-limit.ts).
+  const rl = a.arenaDb.collection(ARENA_COLLECTIONS.rateLimit) as never as RateLimitCollection;
+  const limiters = { ip: new MongoRateLimiter(rl, IP_PER_MINUTE, MINUTE_MS), userIp: new MongoRateLimiter(rl, USER_IP_PER_MINUTE, MINUTE_MS) };
   return {
     ctx,
     deps: {
