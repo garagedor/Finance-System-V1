@@ -8,6 +8,8 @@ import {
 } from "../config-store";
 import type { LifecycleContext } from "../lifecycle";
 import type { ArenaJob } from "../types";
+import { checkAccounts, type AccountCacheDoc } from "../accounts";
+import { VerifierUnavailableError, type AccountStatus, type TechnicianVerifier } from "../tech/verifier";
 import { memoryStore, MemoryCollection } from "./memory-collection";
 
 export const OWNER = "owner-1";
@@ -36,7 +38,25 @@ export async function fixture(opts: { now?: string; devStack?: boolean } = {}) {
     snapshots: new MemoryCollection(), results: new MemoryCollection(), approvals: new MemoryCollection(),
     events: new MemoryCollection(), claims: new MemoryCollection(),
   };
-  const data = { jobs: [] as ArenaJob[], computeCalls: 0 };
+  const data = {
+    jobs: [] as ArenaJob[],
+    computeCalls: 0,
+    /** Weekly Balance accounts by id (default: every PEOPLE entry active + approved). */
+    accounts: new Map<string, AccountStatus>(PEOPLE.map((p) => [p.id, { active: true, approved: true, role: "technician" }])),
+    /** Ids whose verification fails (true = the whole verifier is down). */
+    verifierDown: false as boolean | Set<string>,
+    verifyCalls: 0,
+  };
+  const verifier: TechnicianVerifier = {
+    async verify(id) {
+      data.verifyCalls += 1;
+      if (data.verifierDown === true || (data.verifierDown instanceof Set && data.verifierDown.has(id)))
+        throw new VerifierUnavailableError("down (test)");
+      return data.accounts.get(id) ?? null;
+    },
+  };
+  const accountCache = new MemoryCollection<AccountCacheDoc>();
+  const accountDeps = { verifier, cache: accountCache, now: () => t };
   const competitors = () =>
     buildCompetitorMap({
       mappings: PEOPLE.map((p) => ({ supabaseUserId: p.id, supabaseFullName: p.name, crmTechNames: [p.crm] })),
@@ -47,10 +67,13 @@ export async function fixture(opts: { now?: string; devStack?: boolean } = {}) {
     config,
     lc: lc as never,
     devStack: opts.devStack ?? false,
-    compute: async (weekStart, rv) => {
+    compute: async (weekStart, rv, mode) => {
       data.computeCalls += 1;
-      return computeCompetition({ rules: rv.rules, rulesHash: rv.rulesHash, weekStart, competitors: competitors(), jobs: data.jobs });
+      const map = competitors();
+      const accounts = await checkAccounts(accountDeps, map.competitors.map((c) => c.id), mode);
+      return computeCompetition({ rules: rv.rules, rulesHash: rv.rulesHash, weekStart, competitors: map, jobs: data.jobs, accounts });
     },
+    checkAccounts: (ids, mode) => checkAccounts(accountDeps, ids, mode),
   };
   await initSettings(config, { budgetCeilingCents: 150_000, ownerUserId: OWNER, approverUserIds: [OWNER] }, OWNER);
   await saveTemplate(config, { templateId: "standard", name: "Standard Week", rules: SEED_STANDARD_WEEK }, OWNER);
@@ -59,6 +82,7 @@ export async function fixture(opts: { now?: string; devStack?: boolean } = {}) {
     lc,
     data,
     config,
+    accountCache,
     setNow: (iso: string) => (t = new Date(iso)),
     /** Create, schedule and start the WEEK competition (as the owner). */
     async startWeek(week = WEEK) {

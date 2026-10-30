@@ -132,7 +132,7 @@ for (const w of WEEKS) {
   const names = [...new Set(allJobs.map((j) => j.tech))];
   const competitors = buildCompetitorMap({ mappings, technicians, crmNamesInUse: names });
   const window = allJobs.filter((j) => j.date >= previousWeekStarts(w, baselineSpan).at(-1)! && j.date < addDays(w, 7));
-  const r = computeCompetition({ rules, rulesHash: rulesHash(rules), weekStart: w, competitors, jobs: window });
+  const r = computeCompetition({ rules, rulesHash: rulesHash(rules), weekStart: w, competitors, jobs: window, accounts: {} }); // performance only (accounts unverified never move a prize)
   const blockingDupes = r.duplicateGroups.filter((g) => g.mayAffectPrizes).length;
   weekly.push(
     `| ${w} | ${r.results.length} | ${r.gateCounts.jobs} | ${r.gateCounts.avgTicket} | ${r.gateCounts.closingRate} | **${r.gateCounts.allThree}** | $${(r.awardedCents / 100).toFixed(0)} | $${(r.unallocatedCents / 100).toFixed(0)} | ${r.duplicateGroups.length} (${blockingDupes}) | ${r.unattributed.reduce((s, u) => s + u.jobs, 0)} |`,

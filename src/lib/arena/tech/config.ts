@@ -8,8 +8,8 @@
  *   ARENA_PASS_PRIVATE_KEY        RS256 private key (PKCS#8 PEM, or base64 of the PEM)
  *   ARENA_PASS_TTL_SECONDS        pass lifetime, default 300 (5 min), max 900
  *   ARENA_TECH_ALLOWED_ORIGINS    comma list of browser origins allowed by CORS
- *   ARENA_VERIFIER                "supabase-rpc" (default) | "fake-dev" (dev stack only)
- *   ARENA_WB_VERIFIER_KEY         server-only key for the arena_verify_account RPC
+ *   ARENA_VERIFIER                "wb" (default: the arena-verify Edge Function) | "fake-dev" (dev stack only)
+ *   ARENA_WB_VERIFIER_SECRET      dedicated secret for the arena-verify Edge Function (≥ 32 chars)
  *   ARENA_FAKE_VERIFIER_FILE      JSON file for ARENA_VERIFIER=fake-dev
  *   ARENA_DEV_STACK               "1" only on the local dev stack
  *

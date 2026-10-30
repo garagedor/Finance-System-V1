@@ -5,9 +5,9 @@
  * failure (timeout, HTTP error, odd shape) is treated as "no".
  *
  * Implementations:
- *   SupabaseRpcVerifier  POST <wb>/rest/v1/rpc/arena_verify_account {_user_id}
- *                        with a server-only key; the function returns ONLY
- *                        {active, approved, role} (docs/arena/WB-VERIFY-FUNCTION.sql)
+ *   WbEdgeVerifier       POST <wb>/functions/v1/arena-verify {user_id} with the
+ *                        dedicated x-arena-verify-key secret; answers ONLY
+ *                        {active, approved, role} (ARENA_VERIFIER=wb, default)
  *   MemoryVerifier       tests, and ARENA_VERIFIER=fake-dev on the local dev stack
  *                        (refused when NODE_ENV=production unless ARENA_DEV_STACK=1)
  *
@@ -37,35 +37,47 @@ export const isAllowed = (s: AccountStatus | null): boolean =>
   !!s && s.active === true && s.approved === true && COMPETING_ROLES.includes(s.role);
 
 const VERIFY_TIMEOUT_MS = 4_000;
+const MIN_SECRET_LENGTH = 32;
 
-export class SupabaseRpcVerifier implements TechnicianVerifier {
-  private readonly baseUrl: string;
-  private readonly serverKey: string;
+/**
+ * The real verifier: the Weekly Balance `arena-verify` Edge Function
+ * (the-convert, supabase/functions/arena-verify), authenticated with a
+ * DEDICATED shared secret (ARENA_WB_VERIFIER_SECRET). That secret can do one
+ * thing only — ask {active, approved, role} for one account id. The Arena
+ * server never holds the service-role key or a database login.
+ */
+export class WbEdgeVerifier implements TechnicianVerifier {
+  private readonly url: string;
+  private readonly secret: string;
   private readonly fetchImpl: typeof fetch;
-  constructor(baseUrl: string, serverKey: string, fetchImpl: typeof fetch = fetch) {
-    this.baseUrl = baseUrl;
-    this.serverKey = serverKey;
+  private readonly timeoutMs: number;
+  constructor(baseUrl: string, secret: string, fetchImpl: typeof fetch = fetch, timeoutMs = VERIFY_TIMEOUT_MS) {
+    this.url = `${baseUrl}/functions/v1/arena-verify`;
+    this.secret = secret;
     this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
   }
   async verify(userId: string): Promise<AccountStatus | null> {
     let res: Response;
     try {
-      res = await this.fetchImpl(`${this.baseUrl}/rest/v1/rpc/arena_verify_account`, {
+      res = await this.fetchImpl(this.url, {
         method: "POST",
-        headers: { apikey: this.serverKey, Authorization: `Bearer ${this.serverKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ _user_id: userId }),
-        signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+        headers: { "x-arena-verify-key": this.secret, "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId }),
+        signal: AbortSignal.timeout(this.timeoutMs),
         cache: "no-store",
+        redirect: "error",
       });
     } catch {
       throw new VerifierUnavailableError("verification request failed");
     }
     if (!res.ok) throw new VerifierUnavailableError(`verification returned ${res.status}`);
-    const body = (await res.json().catch(() => null)) as unknown;
-    const row = Array.isArray(body) ? body[0] : body;
-    if (row === null || row === undefined) return null;
-    const r = row as Record<string, unknown>;
-    if (typeof r.active !== "boolean" || typeof r.approved !== "boolean" || typeof r.role !== "string")
+    const body = (await res.json().catch(() => undefined)) as { account?: unknown } | undefined;
+    if (!body || typeof body !== "object" || !("account" in body))
+      throw new VerifierUnavailableError("verification answer has an unexpected shape");
+    if (body.account === null) return null;
+    const r = body.account as Record<string, unknown>;
+    if (typeof r?.active !== "boolean" || typeof r.approved !== "boolean" || typeof r.role !== "string")
       throw new VerifierUnavailableError("verification answer has an unexpected shape");
     return { active: r.active, approved: r.approved, role: r.role };
   }
@@ -99,7 +111,7 @@ class FileFakeVerifier implements TechnicianVerifier {
 }
 
 export function verifierFromEnv(wbUrl: string, env: NodeJS.ProcessEnv = process.env): TechnicianVerifier {
-  const kind = (env.ARENA_VERIFIER ?? "supabase-rpc").trim();
+  const kind = (env.ARENA_VERIFIER ?? "wb").trim() || "wb";
   if (kind === "fake-dev") {
     if (env.NODE_ENV === "production" && env.ARENA_DEV_STACK !== "1")
       throw new ArenaTechConfigError("ARENA_VERIFIER=fake-dev is refused in production (needs ARENA_DEV_STACK=1)");
@@ -107,8 +119,8 @@ export function verifierFromEnv(wbUrl: string, env: NodeJS.ProcessEnv = process.
     if (!file) throw new ArenaTechConfigError("ARENA_FAKE_VERIFIER_FILE is required for ARENA_VERIFIER=fake-dev");
     return new FileFakeVerifier(file);
   }
-  if (kind !== "supabase-rpc") throw new ArenaTechConfigError(`unknown ARENA_VERIFIER "${kind}"`);
-  const key = (env.ARENA_WB_VERIFIER_KEY ?? "").trim();
-  if (!key) throw new ArenaTechConfigError("ARENA_WB_VERIFIER_KEY is not set");
-  return new SupabaseRpcVerifier(wbUrl, key);
+  if (kind !== "wb") throw new ArenaTechConfigError(`unknown ARENA_VERIFIER "${kind}"`);
+  const secret = (env.ARENA_WB_VERIFIER_SECRET ?? "").trim();
+  if (secret.length < MIN_SECRET_LENGTH) throw new ArenaTechConfigError("ARENA_WB_VERIFIER_SECRET is not set (or too short)");
+  return new WbEdgeVerifier(wbUrl, secret);
 }

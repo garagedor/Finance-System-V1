@@ -149,6 +149,27 @@ export interface CompetitorMap {
   issues: IdentityIssue[];
 }
 
+/**
+ * Weekly Balance account standing of a competitor, as decided OUTSIDE the
+ * engine (by the account verifier) and passed in as input:
+ *   eligible            active, approved, competing role
+ *   pending             signed up, not approved yet
+ *   inactive            deactivated, rejected or archived
+ *   unmapped            the mapped id is not a Weekly Balance account
+ *   not_competing_role  an account whose role cannot compete
+ *   unverified          the verifier could not answer (UNRESOLVED: never a
+ *                       disqualification, never a reason to move prizes)
+ */
+export type AccountState = "eligible" | "pending" | "inactive" | "unmapped" | "not_competing_role" | "unverified";
+
+export interface AccountInput {
+  state: AccountState;
+  /** When the answer was obtained (null when it never was). */
+  checkedAt: string | null;
+  /** Live phase only: a fresh check failed and the last known answer was used. */
+  lastKnown?: boolean;
+}
+
 export interface Gate {
   met: boolean;
   actual: number;
@@ -173,7 +194,13 @@ export interface CompetitorResult {
   avgIndex: number;
   score: number;
   gates: { jobs: Gate; avgTicket: Gate; closingRate: Gate };
+  /** All three performance gates met (unchanged by the account rule). */
   eligible: boolean;
+  /** The Weekly Balance account standing this result was computed with. */
+  account: AccountInput;
+  /** May hold a prize: performance-eligible AND the account is not excluded.
+   *  An `unverified` account keeps its place (unresolved, never redistributed). */
+  prizeEligible: boolean;
   /** 1-based rank among all participants (score, tie-break, id). */
   rank: number;
   prizePosition: number | null;
@@ -196,6 +223,11 @@ export interface CompetitionResult {
   rulesHash: string;
   results: CompetitorResult[];
   eligibleCount: number;
+  /** Performance-eligible competitors whose account does not exclude them. */
+  prizeEligibleCount: number;
+  /** Performance-eligible competitors whose account could not be verified:
+   *  their eligibility is UNRESOLVED and blocks approval. */
+  accountUnresolved: string[];
   gateCounts: { jobs: number; avgTicket: number; closingRate: number; allThree: number };
   awardedCents: number;
   unallocatedCents: number;

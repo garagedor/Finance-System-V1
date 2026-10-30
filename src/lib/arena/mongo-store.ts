@@ -24,6 +24,8 @@ export const ARENA_COLLECTIONS = {
   approvals: "arena_approval",
   techEvents: "arena_tech_event",
   claims: "arena_claim",
+  /** Last known Weekly Balance account state per competitor (live fallback only). */
+  accountStatus: "arena_account_status",
 } as const;
 
 /** Lifecycle collections (lifecycle.ts). Results, approvals and non-live snapshots are insert-only. */

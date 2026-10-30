@@ -6,7 +6,7 @@ import { createHash, generateKeyPairSync } from "node:crypto";
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair, decodeJwt, type JWK } from "jose";
 import { exchange, authorizePass, type AccessDeps, type Lookup } from "./access.ts";
 import { verifyWbAccessToken } from "./wb-token.ts";
-import { MemoryVerifier, SupabaseRpcVerifier, verifierFromEnv, type AccountStatus } from "./verifier.ts";
+import { MemoryVerifier, VerifierUnavailableError, WbEdgeVerifier, verifierFromEnv, type AccountStatus } from "./verifier.ts";
 import { issuePass, passKeysFromEnv, type PassKeys } from "./pass.ts";
 import { MemoryRateLimiter } from "./rate-limit.ts";
 import { readTechConfig, parseWbUrl, PASS_TTL_DEFAULT_SECONDS, PRODUCTION_WB_REF_SHA256, ArenaTechConfigError } from "./config.ts";
@@ -240,8 +240,11 @@ test("config: ARENA_VERIFIER=fake-dev is refused in production unless ARENA_DEV_
   const url = "https://abcdefghijklmnopqrst.supabase.co";
   assert.throws(() => verifierFromEnv(url, { NODE_ENV: "production", ARENA_VERIFIER: "fake-dev", ARENA_FAKE_VERIFIER_FILE: "/x" }), /refused in production/);
   assert.ok(verifierFromEnv(url, { NODE_ENV: "production", ARENA_DEV_STACK: "1", ARENA_VERIFIER: "fake-dev", ARENA_FAKE_VERIFIER_FILE: "/x" }));
-  assert.throws(() => verifierFromEnv(url, { NODE_ENV: "production" }), /ARENA_WB_VERIFIER_KEY/);
-  assert.ok(verifierFromEnv(url, { NODE_ENV: "production", ARENA_WB_VERIFIER_KEY: "k" }) instanceof SupabaseRpcVerifier);
+  assert.throws(() => verifierFromEnv(url, { NODE_ENV: "production" }), /ARENA_WB_VERIFIER_SECRET/);
+  assert.throws(() => verifierFromEnv(url, { NODE_ENV: "production", ARENA_WB_VERIFIER_SECRET: "short" }), /too short/);
+  assert.ok(verifierFromEnv(url, { NODE_ENV: "production", ARENA_WB_VERIFIER_SECRET: "k".repeat(40) }) instanceof WbEdgeVerifier);
+  assert.throws(() => verifierFromEnv(url, { NODE_ENV: "production", ARENA_VERIFIER: "supabase-rpc", ARENA_WB_VERIFIER_SECRET: "k".repeat(40) }), /unknown ARENA_VERIFIER/,
+    "the service-role RPC path no longer exists");
 });
 
 test("pass keys load from a PEM or its base64; non-RSA keys are refused", () => {
@@ -253,21 +256,26 @@ test("pass keys load from a PEM or its base64; non-RSA keys are refused", () => 
   assert.throws(() => passKeysFromEnv({} as NodeJS.ProcessEnv), /not set/);
 });
 
-test("the RPC verifier sends only the user id, reads only {active, approved, role}, and fails closed", async () => {
-  let sent: { url: string; body: string } | null = null;
-  const ok = new SupabaseRpcVerifier("https://abcdefghijklmnopqrst.supabase.co", "server-key", (async (url: string, init: RequestInit) => {
-    sent = { url, body: String(init.body) };
-    return new Response(JSON.stringify([{ active: true, approved: true, role: "technician" }]), { status: 200 });
-  }) as never);
+test("the Edge verifier sends only the user id + dedicated key, reads only {active, approved, role}, and fails closed", async () => {
+  let sent: { url: string; body: string; headers: Record<string, string> } | null = null;
+  const reply = (status: number, body: unknown) => (async (url: string, init: RequestInit) => {
+    sent = { url, body: String(init.body), headers: init.headers as Record<string, string> };
+    return new Response(typeof body === "string" ? body : JSON.stringify(body), { status });
+  }) as never;
+  const base = "https://abcdefghijklmnopqrst.supabase.co";
+  const ok = new WbEdgeVerifier(base, "s".repeat(40), reply(200, { account: { active: true, approved: true, role: "technician", full_name: "x" } }));
   assert.deepEqual(await ok.verify(ANN.id), { active: true, approved: true, role: "technician" });
-  assert.equal(sent!.url, "https://abcdefghijklmnopqrst.supabase.co/rest/v1/rpc/arena_verify_account");
-  assert.deepEqual(JSON.parse(sent!.body), { _user_id: ANN.id });
-  const err = new SupabaseRpcVerifier("https://x", "k", (async () => new Response("no", { status: 500 })) as never);
-  await assert.rejects(err.verify(ANN.id));
-  const odd = new SupabaseRpcVerifier("https://x", "k", (async () => new Response(JSON.stringify({ active: "yes" }), { status: 200 })) as never);
-  await assert.rejects(odd.verify(ANN.id));
-  const none = new SupabaseRpcVerifier("https://x", "k", (async () => new Response("[]", { status: 200 })) as never);
-  assert.equal(await none.verify(ANN.id), null);
+  assert.equal(sent!.url, `${base}/functions/v1/arena-verify`);
+  assert.deepEqual(JSON.parse(sent!.body), { user_id: ANN.id });
+  assert.equal(sent!.headers["x-arena-verify-key"], "s".repeat(40));
+  assert.ok(!("Authorization" in sent!.headers) && !("apikey" in sent!.headers), "no Supabase key is ever sent");
+  assert.equal(await new WbEdgeVerifier(base, "k", reply(200, { account: null })).verify(ANN.id), null);
+  for (const [st, b] of [[401, { error: "unauthorized" }], [503, { error: "x" }], [500, "no"], [200, { active: true }], [200, { account: { active: "yes" } }], [200, "not json"]] as const)
+    await assert.rejects(new WbEdgeVerifier(base, "k", reply(st, b)).verify(ANN.id), VerifierUnavailableError, `${st} ${JSON.stringify(b)}`);
+  const down = new WbEdgeVerifier(base, "k", (async () => { throw new TypeError("fetch failed"); }) as never);
+  await assert.rejects(down.verify(ANN.id), VerifierUnavailableError);
+  const slow = new WbEdgeVerifier(base, "k", ((_u: string, init: RequestInit) => new Promise((_r, rej) => init.signal!.addEventListener("abort", () => rej(new Error("aborted"))))) as never, 20);
+  await assert.rejects(slow.verify(ANN.id), VerifierUnavailableError);
 });
 
 // ── read models: data minimization ─────────────────────────────────────────

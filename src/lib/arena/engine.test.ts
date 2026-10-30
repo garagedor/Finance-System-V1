@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { computeCompetition, officialKpis } from "./engine.ts";
 import { SEED_STANDARD_WEEK, cloneRules, rulesHash, validateRules } from "./config.ts";
 import { buildCompetitorMap } from "./identity.ts";
-import type { ArenaJob, ArenaRules, JobExclusion } from "./types.ts";
+import type { AccountInput, AccountState, ArenaJob, ArenaRules, JobExclusion } from "./types.ts";
 
 const WEEK = "2026-11-02"; // a Monday
 let seq = 0;
@@ -21,8 +21,19 @@ function people(...names: string[]) {
     crmNamesInUse: names,
   });
 }
-function run(jobs: ArenaJob[], names: string[], rules: ArenaRules = cloneRules(SEED_STANDARD_WEEK), exclusions: JobExclusion[] = []) {
-  return computeCompetition({ rules, rulesHash: rulesHash(rules), weekStart: WEEK, competitors: people(...names), jobs, exclusions });
+const CHECKED = "2026-11-08T12:00:00.000Z";
+/** Every named person eligible, except the overrides. */
+function accountsFor(names: string[], over: Record<string, AccountState> = {}): Record<string, AccountInput> {
+  return Object.fromEntries(names.map((n) => [`u_${n}`, { state: over[n] ?? "eligible", checkedAt: CHECKED }]));
+}
+function run(
+  jobs: ArenaJob[],
+  names: string[],
+  rules: ArenaRules = cloneRules(SEED_STANDARD_WEEK),
+  exclusions: JobExclusion[] = [],
+  accounts: Record<string, AccountInput> = accountsFor(names),
+) {
+  return computeCompetition({ rules, rulesHash: rulesHash(rules), weekStart: WEEK, competitors: people(...names), jobs, exclusions, accounts });
 }
 const row = (r: ReturnType<typeof run>, name: string) => r.results.find((x) => x.competitorId === `u_${name}`)!;
 
@@ -305,4 +316,96 @@ test("config: participants can exclude a technician or a whole location", () => 
   const only = cloneRules(SEED_STANDARD_WEEK);
   only.participants.onlyCompetitorIds = ["u_Bo"];
   assert.deepEqual(run(field(), NAMES, only).results.map((x) => x.competitorId), ["u_Bo"]);
+});
+
+// ── account eligibility (Weekly Balance account, passed in as input) ───────
+
+/** Four performance-eligible people ranked Ann > Bo > Cy > Di, plus Ed (not eligible, top score). */
+function accountWeek() {
+  return [
+    ...many(10, "Ann", "Closed", 1000), ...many(10, "Bo", "Closed", 900), ...many(10, "Cy", "Closed", 800),
+    ...many(10, "Di", "Closed", 700), ...many(5, "Ed", "Closed", 5000),
+  ];
+}
+const ACCT = ["Ann", "Bo", "Cy", "Di", "Ed"];
+const prizes = (r: ReturnType<typeof run>) =>
+  r.results.filter((x) => x.prizePosition !== null).sort((a, b) => a.prizePosition! - b.prizePosition!).map((x) => x.displayName);
+
+for (const state of ["pending", "inactive", "unmapped", "not_competing_role"] as const) {
+  test(`account ${state} in a would-be prize spot: skipped, never displaces; rank/KPIs untouched`, () => {
+    const rules = cloneRules(SEED_STANDARD_WEEK);
+    rules.prizes.positionsCents = [30_000, 20_000, 10_000];
+    rules.prizes.budgetCents = 85_000;
+    const base = run(accountWeek(), ACCT, rules);
+    assert.deepEqual(prizes(base), ["Ann", "Bo", "Cy"]);
+    const r = run(accountWeek(), ACCT, rules, [], accountsFor(ACCT, { Bo: state }));
+    const bo = row(r, "Bo");
+    assert.deepEqual(prizes(r), ["Ann", "Cy", "Di"], "prizes go down the ranking of fully eligible competitors");
+    assert.equal(bo.prizePosition, null);
+    assert.equal(bo.prizeCents, 0);
+    assert.equal(bo.eligible, true, "performance gates are unchanged");
+    assert.equal(bo.prizeEligible, false);
+    assert.equal(bo.account.state, state);
+    // ranks, scores and official KPIs identical to the all-eligible run
+    for (const n of ACCT) {
+      const a = row(base, n), b = row(r, n);
+      assert.deepEqual([b.rank, b.score, b.closingRate, b.avgTicket, b.qualifyingJobs, b.assignedJobs, b.profitMicro],
+        [a.rank, a.score, a.closingRate, a.avgTicket, a.qualifyingJobs, a.assignedJobs, a.profitMicro]);
+    }
+    assert.equal(r.eligibleCount, base.eligibleCount, "gate counts are performance-only");
+    assert.equal(r.prizeEligibleCount, base.prizeEligibleCount - 1);
+    assert.deepEqual(r.accountUnresolved, []);
+  });
+}
+
+test("account unverified (verifier down): keeps the place, nothing is redistributed, eligibility unresolved", () => {
+  const rules = cloneRules(SEED_STANDARD_WEEK);
+  const base = run(accountWeek(), ACCT, rules);
+  const r = run(accountWeek(), ACCT, rules, [], accountsFor(ACCT, { Ann: "unverified", Bo: "unverified" }));
+  assert.deepEqual(prizes(r), prizes(base));
+  assert.deepEqual(r.results.map((x) => [x.competitorId, x.prizeCents]), base.results.map((x) => [x.competitorId, x.prizeCents]));
+  assert.deepEqual(r.accountUnresolved.sort(), ["u_Ann", "u_Bo"]);
+  assert.equal(row(r, "Ann").prizeEligible, true);
+});
+
+test("account unverified for someone NOT performance-eligible is not in contention", () => {
+  const r = run(accountWeek(), ACCT, cloneRules(SEED_STANDARD_WEEK), [], accountsFor(ACCT, { Ed: "unverified" }));
+  assert.equal(row(r, "Ed").eligible, false);
+  assert.deepEqual(r.accountUnresolved, []);
+});
+
+test("a competitor missing from the accounts input is unverified (never silently eligible)", () => {
+  const r = run(accountWeek(), ACCT, cloneRules(SEED_STANDARD_WEEK), [], {});
+  assert.ok(r.results.every((x) => x.account.state === "unverified" && x.account.checkedAt === null));
+});
+
+test("Most Improved winner account-ineligible → the award goes to the next fully eligible candidate", () => {
+  const rules = cloneRules(SEED_STANDARD_WEEK);
+  rules.prizes.positionsCents = [30_000];
+  rules.prizes.budgetCents = 60_000;
+  rules.mostImproved = { ...rules.mostImproved, enabled: true, baselineWeeks: 1, minValidWeeks: 1, minQualifyingJobsPerWeek: 1, minImprovement: 0 };
+  const prev = "2026-10-26";
+  const hist = [...many(10, "Bo", "Estimate", 0, prev), ...many(1, "Bo", "Closed", 10, prev), ...many(10, "Cy", "Estimate", 0, prev), ...many(2, "Cy", "Closed", 300, prev)];
+  const names = ["Ann", "Bo", "Cy"];
+  const week = [...many(10, "Ann", "Closed", 1000), ...many(10, "Bo", "Closed", 900), ...many(10, "Cy", "Closed", 800)];
+  const base = run([...week, ...hist], names, rules);
+  assert.equal(base.mostImprovedWinner, "u_Bo");
+  const r = run([...week, ...hist], names, rules, [], accountsFor(names, { Bo: "inactive" }));
+  assert.equal(r.mostImprovedWinner, "u_Cy");
+  assert.equal(row(r, "Bo").wonMostImproved, false);
+  assert.equal(row(r, "Bo").prizeCents, 0);
+  // and when the position winner is excluded, position + MI both move down the eligible ranking
+  const r2 = run([...week, ...hist], names, rules, [], accountsFor(names, { Ann: "pending" }));
+  assert.equal(row(r2, "Bo").prizePosition, 1);
+  assert.equal(r2.mostImprovedWinner, "u_Cy");
+});
+
+test("account eligibility is input only: the engine is a pure function of it", () => {
+  const a = accountsFor(ACCT, { Cy: "inactive" });
+  const r1 = run(accountWeek(), ACCT, cloneRules(SEED_STANDARD_WEEK), [], a);
+  const r2 = run(accountWeek(), ACCT, cloneRules(SEED_STANDARD_WEEK), [], structuredClone(a));
+  assert.deepEqual(
+    r1.results.map((x) => [x.competitorId, x.prizeCents, x.account]),
+    r2.results.map((x) => [x.competitorId, x.prizeCents, x.account]),
+  );
 });

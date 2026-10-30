@@ -4,6 +4,10 @@
  * constants: every threshold, target, weight, cap, prize, status list and
  * tie-break comes from the versioned `ArenaRules`.
  *
+ * Account eligibility (Weekly Balance account active + approved) is an INPUT
+ * (`accounts`), decided by the caller; it never changes a KPI, a score or a
+ * rank, only who may hold a prize.
+ *
  * Official KPIs are the CRM Home Leaderboard / Balance Report definitions,
  * unchanged:
  *   Closing Rate = Closed jobs / ALL assigned jobs in the week
@@ -12,6 +16,8 @@
  * confirmed duplicates reduce it and nothing else.
  */
 import type {
+  AccountInput,
+  AccountState,
   ArenaJob,
   ArenaRules,
   CompetitionResult,
@@ -127,6 +133,12 @@ function participates(rules: ArenaRules, c: { id: string; location: string }): b
   return true;
 }
 
+/** Account states that keep a competitor from holding any prize. `unverified`
+ *  is NOT one of them: an unanswered check never disqualifies anyone. */
+export const accountExcludes = (s: AccountState): boolean => s !== "eligible" && s !== "unverified";
+
+const UNVERIFIED: AccountInput = { state: "unverified", checkedAt: null };
+
 export interface ComputeInput {
   rules: ArenaRules;
   rulesHash: string;
@@ -137,6 +149,9 @@ export interface ComputeInput {
   exclusions?: JobExclusion[];
   /** Duplicate groups (sorted job ids joined by ",") an admin marked "not a duplicate". */
   dismissedDuplicateGroups?: string[];
+  /** Weekly Balance account standing by competitor id, decided by the caller.
+   *  A competitor missing here is `unverified`. */
+  accounts: Readonly<Record<string, AccountInput>>;
 }
 
 export function computeCompetition(input: ComputeInput): CompetitionResult {
@@ -181,6 +196,9 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
     if (!participates(rules, c)) continue;
     const s = scoreOf(rules, t);
     const g = gates(rules, t);
+    const eligible = g.jobs.met && g.avgTicket.met && g.closingRate.met;
+    const a = input.accounts?.[id] ?? UNVERIFIED;
+    const account: AccountInput = { state: a.state, checkedAt: a.checkedAt, ...(a.lastKnown ? { lastKnown: true } : {}) };
     results.push({
       competitorId: id,
       displayName: rules.participants.displayNames[id] || c.displayName,
@@ -193,7 +211,9 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
       profitMicro: t.profitMicro,
       ...s,
       gates: g,
-      eligible: g.jobs.met && g.avgTicket.met && g.closingRate.met,
+      eligible,
+      account,
+      prizeEligible: eligible && !accountExcludes(account.state),
       rank: 0,
       prizePosition: null,
       prizeCents: 0,
@@ -206,18 +226,20 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
   results.sort(compareRanking(rules));
   results.forEach((r, i) => (r.rank = i + 1));
 
-  // Prize positions: eligible competitors only, in rank order.
+  // Prize positions: prize-eligible competitors only, in rank order. An
+  // account-excluded competitor keeps their rank but is skipped, so the prize
+  // goes to the next fully eligible one; an unverified one keeps the place.
   const positions = rules.prizes.positionsCents;
   let next = 0;
   for (const r of results) {
     if (next >= positions.length) break;
-    if (!r.eligible) continue;
+    if (!r.prizeEligible) continue;
     r.prizePosition = next + 1;
     r.prizeCents = positions[next];
     next += 1;
   }
 
-  // Most Improved: eligible now, no position prize, enough valid baseline weeks.
+  // Most Improved: prize-eligible now (gates AND account), no position prize, enough valid baseline weeks.
   let mostImprovedWinner: string | null = null;
   if (rules.mostImproved.enabled) {
     const mi = rules.mostImproved;
@@ -235,7 +257,7 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
     }
     const byRank = compareRanking(rules);
     const candidates = results
-      .filter((r) => r.eligible && r.prizePosition === null && r.mostImproved && r.mostImproved.improvement > mi.minImprovement)
+      .filter((r) => r.prizeEligible && r.prizePosition === null && r.mostImproved && r.mostImproved.improvement > mi.minImprovement)
       .sort((a, b) => b.mostImproved!.improvement - a.mostImproved!.improvement || byRank(a, b));
     if (candidates.length) {
       candidates[0].wonMostImproved = true;
@@ -257,6 +279,8 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
     rulesHash: input.rulesHash,
     results,
     eligibleCount: results.filter((r) => r.eligible).length,
+    prizeEligibleCount: results.filter((r) => r.prizeEligible).length,
+    accountUnresolved: results.filter((r) => r.eligible && r.account.state === "unverified").map((r) => r.competitorId),
     gateCounts: {
       jobs: results.filter((r) => r.gates.jobs.met).length,
       avgTicket: results.filter((r) => r.gates.avgTicket.met).length,

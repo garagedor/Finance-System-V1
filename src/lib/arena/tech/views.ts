@@ -18,6 +18,12 @@ const cents = (dollars: number) => Math.round(dollars * CENTS);
 const money = (c: number) => `$${(c / CENTS).toLocaleString("en-US", { minimumFractionDigits: c % CENTS ? 2 : 0, maximumFractionDigits: 2 })}`;
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
+/** May this standing hold a prize? (records from before the account rule: the gates alone) */
+export const prizeEligibleOf = (s: ApprovedStanding) => s.prizeEligible ?? s.eligible;
+/** Excluded by the Weekly Balance account rule (pending / inactive / unmapped / role).
+ *  `unverified` is not excluded: it keeps its place until resolved. */
+const accountExcluded = (s: ApprovedStanding) => s.eligible && !prizeEligibleOf(s);
+
 export function rulesView(rules: ArenaRules): RulesView {
   const s = rules.scoring;
   return {
@@ -44,6 +50,14 @@ export const prizePoolCents = (rules: ArenaRules) =>
 const shownPrize = (s: ApprovedStanding, rules: ArenaRules, phase: CompetitionPhase) =>
   phase === "approved" ? s.prizeCents : rules.display.showPotentialPrize ? s.prizeCents : 0;
 
+/**
+ * ACCOUNT PRIVACY: a competitor excluded by the account rule stays on the
+ * national board at their real rank (their CRM performance is real and ranks
+ * must match the admin view), but only as "not prize-eligible": eligible
+ * false, no prize, and none of their metrics — the reason (pending, inactive,
+ * unmapped…) never leaves the server, and they never appear in the
+ * prize-eligible view.
+ */
 export function leaderboardRows(
   rows: ApprovedStanding[],
   rules: ArenaRules,
@@ -52,22 +66,23 @@ export function leaderboardRows(
   view: "national" | "eligible",
 ): LeaderboardRow[] {
   return rows
-    .filter((s) => view === "national" || s.eligible)
+    .filter((s) => view === "national" || prizeEligibleOf(s))
     .sort((a, b) => a.rank - b.rank)
     .map((s) => {
-      const show = s.eligible || rules.display.showIneligibleMetrics;
+      const pe = prizeEligibleOf(s);
+      const show = !accountExcluded(s) && (pe || rules.display.showIneligibleMetrics);
       return {
         rank: s.rank,
         competitorId: s.competitorId,
         displayName: s.displayName,
         location: s.location,
         score: r2(s.score),
-        eligible: s.eligible,
+        eligible: pe,
         gatesMet: { jobs: s.gates.jobs, avgTicket: s.gates.avgTicket, closingRate: s.gates.closingRate },
         closingRateBp: show ? bp(s.closingRate) : null,
         avgTicketCents: show ? cents(s.avgTicket) : null,
         qualifyingJobs: show ? s.qualifyingJobs : null,
-        prizeCents: shownPrize(s, rules, phase),
+        prizeCents: pe ? shownPrize(s, rules, phase) : 0,
         isMe: s.competitorId === me,
       };
     });
@@ -119,11 +134,12 @@ export function myStanding(
   const pointsToNextRank = above ? r2(Math.max(0, above.score - s.score)) : null;
   if (above && pointsToNextRank !== null && phase === "live")
     nextSteps.push({ kind: "rank", amount: pointsToNextRank, text: `${pointsToNextRank} points to pass #${above.rank}` });
-  const potential = s.eligible && (s.prizePosition !== null || s.wonMostImproved) ? shownPrize(s, rules, phase) : 0;
+  const pe = me ? prizeEligibleOf(s) : false;
+  const potential = pe && (s.prizePosition !== null || s.wonMostImproved) ? shownPrize(s, rules, phase) : 0;
   return {
     rank: me ? s.rank : null,
     score: r2(s.score),
-    eligible: s.eligible,
+    eligible: pe,
     gates,
     closingRateBp: crBp,
     avgTicketCents: avgCents,
@@ -149,7 +165,7 @@ export function historyWeeks(results: ResultDoc[], me: string): HistoryResponse[
       weekStart: r.weekStart,
       myRank: mine ? mine.rank : null,
       myScore: mine ? r2(mine.score) : null,
-      eligible: mine?.eligible ?? false,
+      eligible: mine ? prizeEligibleOf(mine) : false,
       prizeCents: mine?.prizeCents ?? 0,
       mostImproved: mine?.wonMostImproved ?? false,
       winners: r.standings

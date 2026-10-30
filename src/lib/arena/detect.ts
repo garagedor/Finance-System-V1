@@ -81,7 +81,7 @@ export function detectCases(input: DetectInput): DetectedCase[] {
     }
 
     // duplicates: the engine's own detector, with that week's results for prize impact
-    const result = computeCompetition({ rules, rulesHash: hash, weekStart: w.weekStart, competitors: map, jobs: w.jobs });
+    const result = computeCompetition({ rules, rulesHash: hash, weekStart: w.weekStart, competitors: map, jobs: w.jobs, accounts: {} });
     const groups = findSuspectedDuplicates(w.jobs, map, result.results, excluded);
     const byId = new Map(w.jobs.map((j) => [j.id, j]));
     const nameOf = new Map(map.competitors.map((c) => [c.id, c.displayName]));

@@ -7,6 +7,7 @@ import {
   approvalBlockers, freezeIfDue, liveSnapshot, phaseOf, reviewDiff, reviewSnapshot, ruleVersionOf, windowOf,
 } from "@/lib/arena/lifecycle";
 import { currentSettings } from "@/lib/arena/config-store";
+import { ACCOUNT_REASON } from "@/lib/arena/accounts";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ id: string }> };
@@ -35,6 +36,11 @@ export async function GET(_req: Request, p: P) {
         eligible: r.eligible, qualifyingJobs: r.qualifyingJobs, assignedJobs: r.assignedJobs, closedJobs: r.closedJobs,
         closingRate: r.closingRate, avgTicket: r.avgTicket, prizePosition: r.prizePosition, prizeCents: r.prizeCents,
         wonMostImproved: r.wonMostImproved,
+        // Admin-only: the Weekly Balance account standing and why (never sent to technicians).
+        prizeEligible: r.prizeEligible ?? r.eligible,
+        account: r.account
+          ? { state: r.account.state, reason: ACCOUNT_REASON[r.account.state], checkedAt: r.account.checkedAt, lastKnown: !!r.account.lastKnown }
+          : null,
       })),
     };
     return {
@@ -50,7 +56,7 @@ export async function GET(_req: Request, p: P) {
       approved: result && {
         approvedBy: result.approvedBy, approvedAt: result.approvedAt, note: result.note, awardedCents: result.awardedCents,
         contentHash: result.contentHash, snapshotId: result.snapshotId,
-        standings: result.standings.map((s) => ({ competitorId: s.competitorId, displayName: s.displayName, location: s.location, rank: s.rank, score: s.score, eligible: s.eligible, qualifyingJobs: s.qualifyingJobs, closingRate: s.closingRate, avgTicket: s.avgTicket, prizePosition: s.prizePosition, prizeCents: s.prizeCents, wonMostImproved: s.wonMostImproved })),
+        standings: result.standings.map((s) => ({ competitorId: s.competitorId, displayName: s.displayName, location: s.location, rank: s.rank, score: s.score, eligible: s.eligible, qualifyingJobs: s.qualifyingJobs, closingRate: s.closingRate, avgTicket: s.avgTicket, prizePosition: s.prizePosition, prizeCents: s.prizeCents, wonMostImproved: s.wonMostImproved, prizeEligible: s.prizeEligible ?? s.eligible, account: s.account ? { state: s.account, reason: ACCOUNT_REASON[s.account], checkedAt: null, lastKnown: false } : null })),
       },
     };
   });

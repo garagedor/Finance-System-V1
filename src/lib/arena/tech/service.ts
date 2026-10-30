@@ -20,7 +20,7 @@ import type {
 } from "../tech-api-contract";
 import { ARENA_TECH_API_VERSION } from "../tech-api-contract";
 import {
-  decodeCursor, encodeCursor, historyWeeks, leaderboardRows, myStanding, prizePoolCents, rulesView,
+  decodeCursor, encodeCursor, historyWeeks, leaderboardRows, myStanding, prizeEligibleOf, prizePoolCents, rulesView,
 } from "./views";
 import type { Lookup } from "./access";
 
@@ -166,7 +166,7 @@ export async function techLeaderboard(ctx: TechCtx, me: string, view: string | n
     view: v,
     dataAsOf: d.dataAsOf,
     rows: leaderboardRows(d.rows, d.rv.rules, d.phase, me, v),
-    eligibleCount: d.rows.filter((r) => r.eligible).length,
+    eligibleCount: d.rows.filter(prizeEligibleOf).length,
     participantCount: d.rows.length,
     prizePoolCents: prizePoolCents(d.rv.rules),
   };

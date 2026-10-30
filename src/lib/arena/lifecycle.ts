@@ -19,7 +19,8 @@
  * entries or any CRM/finance write: the approved record is the end of the line.
  */
 import { createHash } from "node:crypto";
-import type { CompetitionResult, CompetitorResult } from "./types";
+import type { AccountInput, AccountState, CompetitionResult, CompetitorResult } from "./types";
+import { accountApprovalProblems, accountBlockers, type AccountMode } from "./accounts";
 import type { ArenaEvent, CompetitionPhase } from "./tech-api-contract";
 import {
   ArenaAuthorizationError,
@@ -56,6 +57,10 @@ export interface ApprovedStanding {
   rank: number;
   score: number;
   eligible: boolean;
+  /** Weekly Balance account standing used for this record (absent on records
+   *  made before the account rule: treat as "eligible", prizeEligible = eligible). */
+  account?: AccountState;
+  prizeEligible?: boolean;
   gates: { jobs: boolean; avgTicket: boolean; closingRate: boolean };
   closingRate: number;
   avgTicket: number;
@@ -127,8 +132,11 @@ export interface LifecycleCollections {
 export interface LifecycleContext {
   config: StoreContext;
   lc: LifecycleCollections;
-  /** Runs the engine for one week on the CRM data (read-only). */
-  compute: (weekStart: string, rv: RuleVersionDoc) => Promise<CompetitionResult>;
+  /** Runs the engine for one week on the CRM data (read-only), with account
+   *  standings checked in `mode` (live: provisional, last known on failure). */
+  compute: (weekStart: string, rv: RuleVersionDoc, mode: AccountMode) => Promise<CompetitionResult>;
+  /** Fresh/live Weekly Balance account check (never throws; failure = unverified). */
+  checkAccounts: (ids: string[], mode: AccountMode) => Promise<Record<string, AccountInput>>;
   /** True only on the local dev stack (ARENA_DEV_STACK=1). */
   devStack: boolean;
 }
@@ -276,7 +284,7 @@ export async function liveSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv:
   const release = await tryClaim(ctx, `live:${c._id}`);
   if (!release) return cur ?? null;
   try {
-    const result = await ctx.compute(c.weekStart, rv);
+    const result = await ctx.compute(c.weekStart, rv, "live");
     const at = iso(ctx);
     const doc: SnapshotDoc = {
       _id: liveId(c._id), competitionId: c._id, weekStart: c.weekStart, kind: "live", n: (cur?.n ?? 0) + 1,
@@ -320,7 +328,7 @@ export async function freezeCompetition(
   const release = await tryClaim(ctx, `freeze:${id}`);
   if (!release) throw new ArenaStateError("the week is being frozen right now; reload in a moment");
   try {
-    const result = await ctx.compute(c.weekStart, rv);
+    const result = await ctx.compute(c.weekStart, rv, "fresh");
     const at = iso(ctx);
     const snap: SnapshotDoc = {
       _id: provisionalId(id), competitionId: id, weekStart: c.weekStart, kind: "provisional", n: 1,
@@ -371,7 +379,7 @@ export async function reviewSnapshot(ctx: LifecycleContext, id: string): Promise
 async function reconcileSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv: RuleVersionDoc, by: string): Promise<SnapshotDoc> {
   const prev = await latestReconciled(ctx, c._id);
   const n = (prev?.n ?? 0) + 1;
-  const result = await ctx.compute(c.weekStart, rv);
+  const result = await ctx.compute(c.weekStart, rv, "fresh");
   const snap: SnapshotDoc = {
     _id: `${c._id}:reconciled:${n}`, competitionId: c._id, weekStart: c.weekStart, kind: "reconciled", n,
     computedAt: iso(ctx), ruleVersionId: rv._id, rulesHash: rv.rulesHash, result,
@@ -401,16 +409,21 @@ export async function reconcileCompetition(ctx: LifecycleContext, id: string, by
   return reconcileSnapshot(ctx, c, await ruleVersionOf(ctx, c), by);
 }
 
+export interface DiffSide { rank: number; score: number; eligible: boolean; account: AccountState | null; prizeEligible: boolean; prizeCents: number }
+
 export interface ReviewDiffRow {
   competitorId: string;
   displayName: string;
-  before: { rank: number; score: number; eligible: boolean; prizeCents: number } | null;
-  after: { rank: number; score: number; eligible: boolean; prizeCents: number } | null;
+  before: DiffSide | null;
+  after: DiffSide | null;
 }
 
 /** Provisional vs. the snapshot under review, rows that differ only. */
 export function reviewDiff(provisional: CompetitionResult | null, current: CompetitionResult | null): ReviewDiffRow[] {
-  const pick = (r?: CompetitorResult) => (r ? { rank: r.rank, score: r.score, eligible: r.eligible, prizeCents: r.prizeCents } : null);
+  const pick = (r?: CompetitorResult): DiffSide | null =>
+    r
+      ? { rank: r.rank, score: r.score, eligible: r.eligible, account: r.account?.state ?? null, prizeEligible: r.prizeEligible ?? r.eligible, prizeCents: r.prizeCents }
+      : null;
   const a = new Map((provisional?.results ?? []).map((r) => [r.competitorId, r]));
   const b = new Map((current?.results ?? []).map((r) => [r.competitorId, r]));
   const out: ReviewDiffRow[] = [];
@@ -429,13 +442,14 @@ export function approvalBlockers(result: CompetitionResult): string[] {
   const p: string[] = [];
   const dup = result.duplicateGroups.filter((g) => g.mayAffectPrizes).length;
   if (dup) p.push(`${dup} suspected duplicate group(s) could change prizes; resolve them in the review queue and re-check`);
+  p.push(...accountBlockers(result));
   return p;
 }
 
 export function toStanding(r: CompetitorResult): ApprovedStanding {
   return {
     competitorId: r.competitorId, displayName: r.displayName, location: r.location, rank: r.rank, score: r.score,
-    eligible: r.eligible,
+    eligible: r.eligible, account: r.account?.state ?? "eligible", prizeEligible: r.prizeEligible ?? r.eligible,
     gates: { jobs: r.gates.jobs.met, avgTicket: r.gates.avgTicket.met, closingRate: r.gates.closingRate.met },
     closingRate: r.closingRate, avgTicket: r.avgTicket, assignedJobs: r.assignedJobs, closedJobs: r.closedJobs,
     qualifyingJobs: r.qualifyingJobs, closingIndex: r.closingIndex, avgIndex: r.avgIndex,
@@ -450,8 +464,9 @@ export const resultContentHash = (doc: Omit<ResultDoc, "contentHash">) =>
  * Approve the winners. OWNER ONLY (the settings owner, who must also be on the
  * approver list), only for a week in review, not before the review window
  * opens (Tuesday 12:00 in the competition timezone by default), only the exact
- * snapshot the owner looked at, and only when the rules still validate against
- * the budget ceiling. Writes one immutable result record; a second approval is
+ * snapshot the owner looked at, only when the rules still validate against
+ * the budget ceiling, and only when every Weekly Balance account standing is
+ * still what the snapshot recorded (checked again now; see accounts.ts). Writes one immutable result record; a second approval is
  * refused by the unique id. Creates NO payout or ledger entry.
  */
 export async function approveResults(
@@ -478,6 +493,14 @@ export async function approveResults(
   assertValidRules(rv.rules, { knownStatuses: ctx.config.knownStatuses, ceilingCents: s.budgetCeilingCents });
   const blockers = approvalBlockers(snap.result);
   if (blockers.length) throw new ArenaStateError(blockers.join("; "));
+  // Account eligibility is checked again NOW: the owner approves exactly the
+  // account standings that were reviewed, or nothing.
+  const fresh = await ctx.checkAccounts(snap.result.results.map((x) => x.competitorId), "fresh");
+  const accountProblems = accountApprovalProblems(snap.result, fresh);
+  if (accountProblems.length) {
+    await audit(ctx, "competition.approve.refused", id, by, accountProblems.join("; "), snap._id, null);
+    throw new ArenaStateError(accountProblems.join("; "));
+  }
   const r = snap.result;
   if (r.awardedCents > rv.rules.prizes.budgetCents) throw new ArenaStateError("awarded prizes exceed the budget");
   const holders = r.results.filter((x) => x.prizeCents > 0);

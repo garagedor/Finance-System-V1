@@ -9,6 +9,25 @@ interface Row {
   competitorId: string; displayName: string; location: string; rank: number; score: number; eligible: boolean;
   qualifyingJobs: number; assignedJobs: number; closedJobs: number; closingRate: number; avgTicket: number;
   prizePosition: number | null; prizeCents: number; wonMostImproved: boolean;
+  prizeEligible?: boolean;
+  account?: { state: string; reason: string; checkedAt: string | null; lastKnown: boolean } | null;
+}
+type Side = { rank: number; score: number; eligible: boolean; account?: string | null; prizeEligible?: boolean; prizeCents: number };
+const side = (x: Side | null) =>
+  x ? `#${x.rank} · ${x.score.toFixed(2)}${x.eligible ? " · gates met" : ""}${x.account && x.account !== "eligible" ? ` · account ${x.account.replace(/_/g, " ")}` : ""} · ${dollars(x.prizeCents)}` : "—";
+
+/** Account column: who may hold a prize, and why not (admin only). */
+function AccountCell({ r, live }: { r: Row; live: boolean }) {
+  const a = r.account;
+  if (!a) return <span className="muted">not checked</span>;
+  if (a.state === "eligible")
+    return <span title={a.checkedAt ? `checked ${when(a.checkedAt)}` : undefined}>OK{a.lastKnown ? <span className="muted small"> (last known)</span> : null}</span>;
+  const tone = a.state === "unverified" ? "pill pill-pending" : "pill pill-unpaid";
+  return (
+    <span className={tone} title={`${a.reason}${a.checkedAt ? ` · checked ${when(a.checkedAt)}` : ""}${a.lastKnown ? " · last known" : ""}`}>
+      {a.state === "unverified" ? "Unverified" : "Not prize-eligible"}: {a.reason}{live || a.lastKnown ? " (provisional)" : ""}
+    </span>
+  );
 }
 interface Results {
   competition: { _id: string; weekStart: string; status: string; devEarlyClose?: boolean };
@@ -19,7 +38,7 @@ interface Results {
   isOwner: boolean;
   snapshot: { _id: string; kind: string; computedAt: string; eligibleCount: number; awardedCents: number; unallocatedCents: number; rows: Row[] } | null;
   blockers: string[];
-  diff: { competitorId: string; displayName: string; before: { rank: number; score: number; eligible: boolean; prizeCents: number } | null; after: { rank: number; score: number; eligible: boolean; prizeCents: number } | null }[];
+  diff: { competitorId: string; displayName: string; before: Side | null; after: Side | null }[];
   approved: { approvedBy: string; approvedAt: string; note: string | null; awardedCents: number; contentHash: string; standings: Row[] } | null;
 }
 
@@ -53,6 +72,8 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
   const st = d.competition.status;
   const ended = new Date() >= new Date(d.window.closesAt);
   const rows = d.approved?.standings ?? d.snapshot?.rows ?? [];
+  const excluded = rows.filter((r) => r.eligible && r.account && r.account.state !== "eligible");
+  const live = !d.approved && d.snapshot?.kind === "live";
   return (
     <div className="portal-card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -93,18 +114,27 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
             <thead><tr><th>Technician</th><th>At freeze</th><th>Now</th></tr></thead>
             <tbody>{d.diff.map((x) => (
               <tr key={x.competitorId}><td>{x.displayName}</td>
-                <td>{x.before ? `#${x.before.rank} · ${x.before.score.toFixed(2)}${x.before.eligible ? " · eligible" : ""} · ${dollars(x.before.prizeCents)}` : "—"}</td>
-                <td>{x.after ? `#${x.after.rank} · ${x.after.score.toFixed(2)}${x.after.eligible ? " · eligible" : ""} · ${dollars(x.after.prizeCents)}` : "—"}</td></tr>
+                <td>{side(x.before)}</td>
+                <td>{side(x.after)}</td></tr>
             ))}</tbody>
           </table>
         </details>
       )}
       {d.snapshot && !d.approved && (
-        <div className="muted small">{d.snapshot.eligibleCount} eligible · {dollars(d.snapshot.awardedCents)} would be awarded · {dollars(d.snapshot.unallocatedCents)} unallocated</div>
+        <div className="muted small">{d.snapshot.eligibleCount} met all gates · {dollars(d.snapshot.awardedCents)} would be awarded · {dollars(d.snapshot.unallocatedCents)} unallocated
+          {d.snapshot.kind === "live" && " · account checks are provisional while the week runs; the final check is at freeze, review and approval"}</div>
+      )}
+      {excluded.length > 0 && (
+        <div className="portal-alert portal-alert-warn" data-testid="arena-account-excluded">
+          <b>Account eligibility</b> — {excluded.length} competitor(s) who met the gates cannot hold a prize right now; prizes go to the next fully eligible competitors:
+          <ul style={{ margin: "4px 0 0 18px" }}>
+            {excluded.map((r) => <li key={r.competitorId}>#{r.rank} {r.displayName} — {r.account?.reason ?? "not checked"}{r.account?.state === "unverified" ? " (unresolved: not disqualified, blocks approval)" : ""}</li>)}
+          </ul>
+        </div>
       )}
       <div style={{ overflowX: "auto" }}>
         <table className="portal-table">
-          <thead><tr><th>#</th><th>Technician</th><th>Location</th><th>Score</th><th>Qual. jobs</th><th>Closing</th><th>AVG ticket</th><th>Eligible</th><th>Prize</th></tr></thead>
+          <thead><tr><th>#</th><th>Technician</th><th>Location</th><th>Score</th><th>Qual. jobs</th><th>Closing</th><th>AVG ticket</th><th>Gates</th><th>Account</th><th>Prize</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.competitorId}>
@@ -112,11 +142,12 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
                 <td>{r.qualifyingJobs}</td>
                 <td>{"closingRate" in r && typeof r.closingRate === "number" ? `${(r.closingRate * 100).toFixed(1)}%` : "—"}</td>
                 <td>{"avgTicket" in r && typeof r.avgTicket === "number" ? dollars(Math.round(r.avgTicket * 100)) : "—"}</td>
-                <td>{r.eligible ? "Yes" : "No"}</td>
+                <td>{r.eligible ? "All met" : "No"}</td>
+                <td><AccountCell r={r} live={live} /></td>
                 <td>{r.prizeCents ? `${dollars(r.prizeCents)}${r.prizePosition ? ` (#${r.prizePosition})` : " (most improved)"}` : "—"}</td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={9} className="muted">No results yet.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={10} className="muted">No results yet.</td></tr>}
           </tbody>
         </table>
       </div>
