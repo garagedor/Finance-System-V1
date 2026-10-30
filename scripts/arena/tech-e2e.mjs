@@ -28,7 +28,6 @@ if (!stg.STAGING_REF || stg.STAGING_REF === prod.NEW_REF) throw new Error("refus
 const ANON = env(path.join(HOME, "convert-migration/staging/keys.env")).ANON_KEY;
 const WB = `https://${stg.STAGING_REF}.supabase.co`;
 const creds = JSON.parse(fs.readFileSync(path.join(HOME, "arena-dev/tech-creds.json"), "utf8"));
-const FAKE = path.join(HOME, "arena-dev/fake-verifier.json");
 const DEV_PW = /bcrypt\.hash\("([^"]+)"/.exec(fs.readFileSync(path.join(HOME, "arena-dev/seed.cjs"), "utf8"))[1]; // fictional dev password
 
 let pass = 0, fail = 0;
@@ -140,18 +139,28 @@ check("CORS preflight from an allowed origin", pre.status === 204 && pre.headers
 check("CORS preflight from another origin → 403", (await call("OPTIONS", "/api/arena/tech/me", { origin: "https://evil.example" })).status === 403);
 check("request from another origin → 403", (await call("GET", "/api/arena/tech/me", { token: P, origin: "https://evil.example" })).status === 403);
 
-// ── re-verification on every request (fake-dev verifier file) ──────────────
-const fakeBefore = fs.readFileSync(FAKE, "utf8");
+// ── re-verification on every request (REAL staging verifier) ───────────────
+// Bravo is deactivated on staging through the real admin channel (a Weekly
+// Balance manager's own session, PostgREST + RLS — what the admin screen
+// sends), then re-activated. Helper: ~/arena-dev/wb-admin.mjs (staging only).
+const wbAdmin = await import(path.join(HOME, "arena-dev/wb-admin.mjs"));
+const bravoEx = await exchange(await techLogin("bravo"));
+check("real verifier: bravo (approved) → 200 + pass", bravoEx.status === 200 && !!bravoEx.json?.pass, `${bravoEx.status} ${bravoEx.json?.code ?? ""}`);
+const BP = bravoEx.json?.pass;
 try {
-  const f = JSON.parse(fakeBefore);
-  f.accounts[creds.alpha.id].active = false;
-  fs.writeFileSync(FAKE, JSON.stringify(f), { mode: 0o600 });
-  const r = await call("GET", "/api/arena/tech/me", { token: P });
-  check("deactivated mid-session → next request refused (unexpired pass)", r.status === 403 && r.json?.code === "account_inactive", `${r.status}`);
+  const sw = await wbAdmin.activeSwitch(creds.bravo.id, false);
+  check("WB admin 'Active' switch alone leaves an APPROVED account active (known WB defect; trigger keeps status)", sw.status === "APPROVED" && sw.is_active === true);
+  const d = await wbAdmin.deactivate(creds.bravo.id);
+  check("staging admin deactivates bravo (status DEACTIVATED)", d.status === "DEACTIVATED" && d.is_active === false && d.can_login === false);
+  const r = await call("GET", "/api/arena/tech/me", { token: BP });
+  check("deactivated mid-session → next request refused (unexpired pass)", r.status === 403 && r.json?.code === "account_inactive", `${r.status} ${r.json?.code}`);
+  const again = await call("POST", "/api/arena/auth/exchange", { token: await techLogin("alpha") });
+  check("others unaffected (alpha exchange still 200)", again.status === 200);
 } finally {
-  fs.writeFileSync(FAKE, fakeBefore, { mode: 0o600 });
+  const re = await wbAdmin.reactivate(creds.bravo.id);
+  check("staging admin re-activates bravo (status APPROVED)", re.status === "APPROVED" && re.is_active === true);
 }
-check("re-activated → accepted again", (await call("GET", "/api/arena/tech/me", { token: P })).status === 200);
+check("re-activated → accepted again", (await call("GET", "/api/arena/tech/me", { token: BP })).status === 200);
 
 // ── owner acceptance flow (changes the dev live week) ──────────────────────
 if (ACCEPT) {
@@ -178,8 +187,43 @@ if (ACCEPT) {
   check("technician sees phase frozen", (await call("GET", "/api/arena/tech/me", { token: P })).json.competition.phase === "frozen");
   const rv = await call("POST", `/api/arena/admin/competitions/${id}/action`, { cookie: adminCookie, body: { action: "open_review" } });
   check("admin opens review", rv.status === 200, `${rv.status} ${rv.text.slice(0, 120)}`);
-  const res = await call("GET", `/api/arena/admin/competitions/${id}/results`, { cookie: ownerCookie });
+  let res = await call("GET", `/api/arena/admin/competitions/${id}/results`, { cookie: ownerCookie });
   check("results panel data: in review, approval open (dev early close), no blockers", res.json.phase === "in_review" && res.json.approvalOpen && res.json.blockers.length === 0, JSON.stringify(res.json.blockers));
+  // ── account eligibility (real staging verifier) ──
+  const rowOf = (r, key) => r.json.snapshot.rows.find((x) => x.competitorId === creds[key].id);
+  const ch = rowOf(res, "charlie");
+  const charliePaidBelow = res.json.snapshot.rows.some((x) => x.rank > ch.rank && x.prizeCents > 0);
+  check("eligibility: Charlie (PENDING on staging) met the gates in a would-be prize spot but is skipped",
+    ch.eligible && ch.account?.state === "pending" && ch.prizeCents === 0 && ch.prizePosition === null && charliePaidBelow,
+    `rank ${ch.rank} gates ${ch.eligible} account ${ch.account?.state} prize ${ch.prizeCents}`);
+  check("eligibility: admin sees the reason", /pending approval/i.test(ch.account?.reason ?? ""));
+  const lbReview = await call("GET", "/api/arena/tech/leaderboard", { token: P });
+  const chTech = lbReview.json.rows.find((x) => x.competitorId === creds.charlie.id);
+  check("eligibility: technicians see Charlie only as not prize-eligible, no reason, no metrics",
+    chTech && chTech.eligible === false && chTech.prizeCents === 0 && chTech.closingRateBp === null && !/pending|inactive|account|verif/i.test(lbReview.text),
+    JSON.stringify(chTech));
+  check("eligibility: Charlie absent from the prize-eligible view",
+    !(await call("GET", "/api/arena/tech/leaderboard?view=eligible", { token: P })).json.rows.some((x) => x.competitorId === creds.charlie.id));
+  const bravoBefore = rowOf(res, "bravo");
+  await wbAdmin.deactivate(creds.bravo.id);
+  try {
+    const blocked = await call("POST", `/api/arena/admin/competitions/${id}/approve`, { cookie: ownerCookie, body: { snapshotId: res.json.snapshot._id } });
+    check("eligibility: Bravo deactivated after review → approval blocked (status changed since review)",
+      blocked.status === 409 && /account status changed since this review/i.test(blocked.json?.error ?? "") && /Bravo/.test(blocked.json?.error ?? ""), `${blocked.status} ${blocked.json?.error}`);
+    const rc = await call("POST", `/api/arena/admin/competitions/${id}/action`, { cookie: ownerCookie, body: { action: "reconcile" } });
+    check("eligibility: re-check creates a new snapshot to review", rc.status === 200, `${rc.status}`);
+    res = await call("GET", `/api/arena/admin/competitions/${id}/results`, { cookie: ownerCookie });
+    const br = rowOf(res, "bravo");
+    check("eligibility: re-reviewed snapshot shows Bravo inactive, never holding a prize; ranks/KPIs unchanged",
+      br.account?.state === "inactive" && br.prizeCents === 0 && br.rank === bravoBefore.rank && br.closingRate === bravoBefore.closingRate, JSON.stringify(br.account));
+  } finally {
+    await wbAdmin.reactivate(creds.bravo.id);
+  }
+  const reBlocked = await call("POST", `/api/arena/admin/competitions/${id}/approve`, { cookie: ownerCookie, body: { snapshotId: res.json.snapshot._id } });
+  check("eligibility: Bravo re-activated after that review → blocked again until re-checked", reBlocked.status === 409 && /inactive → eligible/.test(reBlocked.json?.error ?? ""), reBlocked.json?.error);
+  await call("POST", `/api/arena/admin/competitions/${id}/action`, { cookie: ownerCookie, body: { action: "reconcile" } });
+  res = await call("GET", `/api/arena/admin/competitions/${id}/results`, { cookie: ownerCookie });
+  check("eligibility: after the final re-check Bravo is eligible again and there are no blockers", rowOf(res, "bravo").account?.state === "eligible" && res.json.blockers.length === 0);
   const notOwner = await call("POST", `/api/arena/admin/competitions/${id}/approve`, { cookie: adminCookie, body: { snapshotId: res.json.snapshot._id } });
   check("admin cannot approve (owner only) → 403", notOwner.status === 403);
   const evBeforeApproval = (await call("GET", `/api/arena/tech/events?since=${encodeURIComponent(cur0)}`, { token: P })).json.events;
