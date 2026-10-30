@@ -184,17 +184,44 @@ export async function techHistory(ctx: TechCtx, me: string, limitRaw: string | n
 
 const EVENTS_PAGE = 100;
 
+/** How long after approval a fresh app open still replays the caller's winning result. */
+export const RESULT_REPLAY_MS = 7 * 24 * 3600 * 1000;
+
 /**
- * Polled feed. Without `since` it returns the current position and no events
- * (a fresh app learns the official result from /me's `award`, never from a
- * replayed celebration). Each poll also drives the read-triggered recompute.
+ * The caller's `result_approved` event from the most recent approval, when it was
+ * approved within RESULT_REPLAY_MS and the caller actually won something. A fresh
+ * app open (no cursor) gets it so the winner celebration can show "on the next
+ * app open"; the app shows it once per week per device (dismissal remembered
+ * locally), so replaying it is safe. /me's `award` alone is not enough: once the
+ * next week starts, /me describes that week and the award is gone.
+ */
+async function recentWin(ctx: TechCtx, me: string): Promise<ArenaEvent | null> {
+  const lc = ctx.lifecycle.lc;
+  const res = (await lc.results.find({}).sort({ approvedAt: -1 }).toArray())[0];
+  if (!res) return null;
+  if (ctx.lifecycle.config.now().getTime() - Date.parse(res.approvedAt) > RESULT_REPLAY_MS) return null;
+  const docs = await lc.events.find({ competitorId: me, competitionId: res._id }).sort({ key: -1 }).toArray();
+  const e = docs.map((d) => d.event).find((x) => x.kind === "result_approved");
+  return e && e.kind === "result_approved" && (e.prizeCents > 0 || e.mostImproved) ? e : null;
+}
+
+/**
+ * Polled feed. Without `since` it returns the current position and, at most, the
+ * caller's recent winning `result_approved` (see recentWin) — never rank,
+ * qualification or phase history. Each poll also drives the read-triggered
+ * recompute.
  */
 export async function techEvents(ctx: TechCtx, me: string, since: string | null): Promise<EventsResponse> {
   await current(ctx); // freeze-if-due + live refresh generate events
   const ev = ctx.lifecycle.lc.events;
   if (since === null) {
     const last = await ev.findOne({ competitorId: me }, { sort: { key: -1 } });
-    return { apiVersion: ARENA_TECH_API_VERSION, cursor: encodeCursor(last?.key ?? `${new Date(0).toISOString()}#000000`), events: [] };
+    const win = await recentWin(ctx, me);
+    return {
+      apiVersion: ARENA_TECH_API_VERSION,
+      cursor: encodeCursor(last?.key ?? `${new Date(0).toISOString()}#000000`),
+      events: win ? [win] : [],
+    };
   }
   const key = decodeCursor(since);
   if (!key) throw new TechBadRequest("invalid cursor");

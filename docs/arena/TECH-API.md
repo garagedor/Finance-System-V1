@@ -22,9 +22,14 @@ Errors: `{ error, code }` with `code` from the contract.
 (switch off, misconfiguration, or the account verifier unreachable — fail closed).
 
 Behaviour notes for the app:
-- `events` without `since` returns the current cursor and **no** events. A fresh app
-  learns an official result from `/me.award`, never from a replayed celebration.
-  Poll with the returned cursor every `rules.refreshSeconds`.
+- `events` without `since` returns the current cursor and, at most, **one** event: the
+  caller's own `result_approved` from the most recent approval, if it was approved in
+  the last 7 days and the caller won something (prize or Most Improved). Never rank,
+  qualification or phase history. This is what makes "celebration on the next app
+  open" work after the next week has started (when `/me.award` already describes the
+  new week). The app shows it once per week per device (dismissal stored locally).
+  Poll with the returned cursor every `rules.refreshSeconds`; the replayed event is
+  not delivered again on that cursor.
 - `result_approved` is written only by the owner's approval action. Celebrate only on it.
 - `leaderboard?week=` works for any started week (live, frozen, in review, approved);
   a draft/scheduled week is `404`.

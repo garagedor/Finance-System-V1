@@ -433,3 +433,29 @@ test("next steps: closes needed to reach the minimum closing rate", () => {
   assert.equal(closesNeeded(4, 10, 4000), 0);
   assert.equal(closesNeeded(0, 0, 4000), 1);
 });
+
+test("events: a fresh open (no cursor) replays only the caller's recent winning result_approved", async () => {
+  const w = await techWorld();
+  const before = await techEvents(w.ctx, ANN.id, null);
+  assert.deepEqual(before.events, [], "nothing to replay before any approval");
+  w.setNow("2026-11-02T06:00:00Z");
+  await freezeCompetition(w.ctx.lifecycle, w.id, ADMIN);
+  await openReview(w.ctx.lifecycle, w.id, ADMIN);
+  w.setNow("2026-11-03T17:00:00Z");
+  await approveResults(w.ctx.lifecycle, w.id, OWNER, { snapshotId: (await reviewSnapshot(w.ctx.lifecycle, w.id))!._id });
+
+  const fresh = await techEvents(w.ctx, ANN.id, null);
+  assert.deepEqual(fresh.events, [
+    { kind: "result_approved", at: "2026-11-03T17:00:00.000Z", weekStart: "2026-10-26", prizeCents: 45_000, position: 1, mostImproved: false },
+  ]);
+  // The cursor already sits after it: polling on does not deliver it twice.
+  const next = await techEvents(w.ctx, ANN.id, fresh.cursor);
+  assert.ok(!next.events.some((e) => e.kind === "result_approved"));
+  // A fresh open again (new device / app restart) replays it again; the app dedupes per week.
+  assert.equal((await techEvents(w.ctx, ANN.id, null)).events.length, 1);
+  // Nobody else's result, and nothing for someone who won nothing.
+  assert.deepEqual((await techEvents(w.ctx, CY.id, null)).events, [], "ineligible: no prize, no replay");
+  // Only for a week after approval.
+  w.setNow("2026-11-10T17:00:01Z");
+  assert.deepEqual((await techEvents(w.ctx, ANN.id, null)).events, []);
+});
