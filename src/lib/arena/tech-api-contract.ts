@@ -115,6 +115,9 @@ export interface MeResponse {
   standing: MyStanding | null;   // null = not participating this week
   /** Only after approval: what this technician officially won. */
   award: { prizeCents: number; position: number | null; mostImproved: boolean } | null;
+  /** ADDED (server agent, additive): participant notices for this competition, newest
+   *  first — owner mid-week rule changes and suspensions (spec Addendum B.5). */
+  notices: { kind: "rules_amended" | "suspended" | "resumed"; message: string; at: string }[];
 }
 
 /** GET /api/arena/tech/leaderboard?view=national|eligible&week=YYYY-MM-DD */

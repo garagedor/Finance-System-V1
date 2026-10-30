@@ -13,7 +13,10 @@ import { currentSettings, type StoreContext } from "./config-store";
 import type { ReviewContext } from "./review";
 import { reviewDecisions, syncDetected } from "./review";
 import { arenaDbName } from "./env";
-import { arenaStores, ensureArenaIndexes, loadMappings, loadTechnicians } from "./mongo-store";
+import { arenaStores, ensureArenaIndexes, lifecycleCollections, loadMappings, loadTechnicians } from "./mongo-store";
+import type { LifecycleContext } from "./lifecycle";
+import type { RuleVersionDoc } from "./config-store";
+import type { CompetitionResult } from "./types";
 import { loadJobs } from "./job-source";
 import { buildCompetitorMap } from "./identity";
 import { computeCompetition } from "./engine";
@@ -26,7 +29,11 @@ export interface ArenaContexts {
   crmDb: Db;
   config: StoreContext;
   review: ReviewContext;
+  lifecycle: LifecycleContext;
 }
+
+/** The local dev stack marker. Never set in a deployed environment. */
+export const isDevStack = (env: NodeJS.ProcessEnv = process.env) => env.ARENA_DEV_STACK === "1";
 
 export async function arenaContexts(): Promise<ArenaContexts> {
   const client = await getMongoClient();
@@ -48,7 +55,14 @@ export function buildArenaContexts(arenaDb: Db, crmDb: Db, now: () => Date = () 
     now,
     newId,
   };
-  return { arenaDb, crmDb, config, review };
+  const partial = { arenaDb, crmDb, config, review } as ArenaContexts;
+  partial.lifecycle = {
+    config,
+    lc: lifecycleCollections(arenaDb),
+    compute: (weekStart: string, rv: RuleVersionDoc) => computeWeek(partial, rv.rules, rv.rulesHash, weekStart),
+    devStack: isDevStack(),
+  };
+  return partial;
 }
 
 /** Last fully completed Monday-start week (America/New_York). */
@@ -77,8 +91,7 @@ export interface PreviewSummary {
  * Run the real engine with these rules on a past week's real CRM jobs, using
  * every review decision in force. Read-only: nothing is saved.
  */
-export async function previewRules(ctx: ArenaContexts, rules: ArenaRules, weekStart: string): Promise<PreviewSummary> {
-  if (!isMonday(weekStart)) throw new Error("preview week must start on a Monday");
+async function runEngine(ctx: ArenaContexts, rules: ArenaRules, hash: string, weekStart: string) {
   const weeks = rules.mostImproved.enabled ? previousWeekStarts(weekStart, rules.mostImproved.baselineWeeks) : [];
   const from = weeks.length ? weeks[weeks.length - 1] : weekStart;
   const [jobs, mappings, technicians, decisions] = await Promise.all([
@@ -96,13 +109,24 @@ export async function previewRules(ctx: ArenaContexts, rules: ArenaRules, weekSt
   });
   const r = computeCompetition({
     rules,
-    rulesHash: rulesHash(rules),
+    rulesHash: hash,
     weekStart,
     competitors,
     jobs,
     exclusions: decisions.exclusions,
     dismissedDuplicateGroups: decisions.dismissedDuplicateGroups,
   });
+  return { r, competitors, jobs };
+}
+
+/** The official result of one week under one rule version (CRM read-only). */
+export async function computeWeek(ctx: ArenaContexts, rules: ArenaRules, hash: string, weekStart: string): Promise<CompetitionResult> {
+  return (await runEngine(ctx, rules, hash, weekStart)).r;
+}
+
+export async function previewRules(ctx: ArenaContexts, rules: ArenaRules, weekStart: string): Promise<PreviewSummary> {
+  if (!isMonday(weekStart)) throw new Error("preview week must start on a Monday");
+  const { r, competitors, jobs } = await runEngine(ctx, rules, rulesHash(rules), weekStart);
   const winners = r.results.filter((x) => x.prizePosition !== null).sort((a, b) => a.prizePosition! - b.prizePosition!);
   const lastScore = winners.length ? winners[winners.length - 1].score : Infinity;
   const mi = r.results.find((x) => x.wonMostImproved);

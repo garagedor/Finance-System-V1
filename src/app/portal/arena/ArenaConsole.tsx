@@ -10,6 +10,7 @@ import type { ArenaRules } from "@/lib/arena/types";
 import type { CompetitionDoc, SettingsDoc, TemplateDoc, AuditDoc } from "@/lib/arena/config-store";
 import type { Readiness } from "@/lib/arena/review";
 import RulesEditor from "./RulesEditor";
+import ResultsPanel from "./ResultsPanel";
 import { api, dollars, nextMonday, STATUS_LABEL, statusPill, weekLabel, when } from "./arena-ui";
 
 interface Overview {
@@ -171,6 +172,7 @@ function Weeks({ data, who, setError, onEdit, done }: {
   onEdit: (e: Editing) => void; done: (msg: string) => Promise<void>;
 }) {
   const [weekStart, setWeekStart] = useState(nextMonday());
+  const [resultsFor, setResultsFor] = useState<string | null>(null);
   const [source, setSource] = useState<string>(data.templates[0]?.templateId ?? "");
   const run = async (fn: () => Promise<unknown>, msg: string) => {
     try { await fn(); await done(msg); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -212,6 +214,9 @@ function Weeks({ data, who, setError, onEdit, done }: {
           {data.templates.length === 0 && <span className="muted small">Save a template first.</span>}
         </div>
       )}
+      {resultsFor && (
+        <ResultsPanel id={resultsFor} canEdit={data.me.canEditRules} who={who} onClose={() => setResultsFor(null)} onChanged={() => done("Results updated.")} />
+      )}
       <div className="portal-card" style={{ padding: 0, overflow: "hidden" }}>
         <table className="portal-table">
           <thead><tr><th>Week</th><th>Status</th><th>Rules</th><th>Created</th><th>Actions</th></tr></thead>
@@ -226,6 +231,8 @@ function Weeks({ data, who, setError, onEdit, done }: {
                   <td>{who(c.createdBy)}<div className="muted small">{when(c.createdAt)}</div></td>
                   <td>
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {["active", "suspended", "provisional", "in_review", "approved"].includes(c.status) &&
+                        <button className="portal-btn" onClick={() => setResultsFor(c._id)}>{c.status === "in_review" ? "Review" : "Results"}</button>}
                       {edit && (c.status === "draft" || c.status === "scheduled") && <button className="portal-btn" onClick={() => openRules(c, false)}>Edit rules</button>}
                       {edit && c.status === "draft" && <button className="portal-btn" onClick={() => act(c._id, "schedule", false)}>Schedule</button>}
                       {edit && owner && c.status === "scheduled" && <button className="portal-btn portal-btn-primary" onClick={() => act(c._id, "activate", false)}>Start week</button>}

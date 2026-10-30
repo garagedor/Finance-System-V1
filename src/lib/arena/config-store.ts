@@ -73,6 +73,12 @@ export interface CompetitionDoc {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  /** Lifecycle stamps (lifecycle.ts). */
+  frozenAt?: string | null;
+  reviewOpenedAt?: string | null;
+  approvedAt?: string | null;
+  /** Set only by the dev-stack "freeze now" action; lets a demo week be reviewed early. */
+  devEarlyClose?: boolean;
 }
 export interface NoticeDoc {
   _id: string;

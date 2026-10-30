@@ -8,6 +8,7 @@ import type { Db } from "mongodb";
 import type { ArenaStore } from "./config-store";
 import type { ReviewStore } from "./review";
 import type { MappingRecord, TechnicianRecord } from "./identity";
+import type { LifecycleCollections } from "./lifecycle";
 
 export const ARENA_COLLECTIONS = {
   settings: "arena_settings",
@@ -18,7 +19,24 @@ export const ARENA_COLLECTIONS = {
   audit: "arena_audit",
   reviewCases: "arena_review_case",
   reviewEvents: "arena_review_event",
+  snapshots: "arena_snapshot",
+  results: "arena_result",
+  approvals: "arena_approval",
+  techEvents: "arena_tech_event",
+  claims: "arena_claim",
 } as const;
+
+/** Lifecycle collections (lifecycle.ts). Results, approvals and non-live snapshots are insert-only. */
+export function lifecycleCollections(db: Db): LifecycleCollections {
+  const c = <T>(name: string) => db.collection(name) as never as T;
+  return {
+    snapshots: c(ARENA_COLLECTIONS.snapshots),
+    results: c(ARENA_COLLECTIONS.results),
+    approvals: c(ARENA_COLLECTIONS.approvals),
+    events: c(ARENA_COLLECTIONS.techEvents),
+    claims: c(ARENA_COLLECTIONS.claims),
+  };
+}
 
 export function arenaStores(db: Db): { config: ArenaStore; review: ReviewStore } {
   const c = <T>(name: string) => db.collection(name) as never as T;
@@ -53,6 +71,10 @@ export function ensureArenaIndexes(db: Db): Promise<void> {
       db.collection(ARENA_COLLECTIONS.audit).createIndex({ target: 1, at: -1 }),
       db.collection(ARENA_COLLECTIONS.reviewCases).createIndex({ kind: 1, status: 1 }),
       db.collection(ARENA_COLLECTIONS.reviewEvents).createIndex({ caseId: 1, at: 1 }),
+      db.collection(ARENA_COLLECTIONS.snapshots).createIndex({ competitionId: 1, kind: 1, n: -1 }),
+      db.collection(ARENA_COLLECTIONS.results).createIndex({ weekStart: -1 }),
+      db.collection(ARENA_COLLECTIONS.approvals).createIndex({ competitionId: 1, at: 1 }),
+      db.collection(ARENA_COLLECTIONS.techEvents).createIndex({ competitorId: 1, key: 1 }),
     ]);
   })().catch((e) => {
     indexed = null;
@@ -74,4 +96,12 @@ export async function loadMappings(crm: Db): Promise<MappingRecord[]> {
 export async function loadTechnicians(crm: Db): Promise<TechnicianRecord[]> {
   const rows = await crm.collection("Technician").find({}, { projection: { _id: 1, location: 1 } }).toArray();
   return rows as unknown as TechnicianRecord[];
+}
+
+/** Read-only: the one verified-person record for a balance-app account, if any. */
+export async function loadMappingFor(crm: Db, supabaseUserId: string): Promise<MappingRecord | null> {
+  const row = await crm
+    .collection("TechNameMapping")
+    .findOne({ supabaseUserId }, { projection: { supabaseUserId: 1, supabaseFullName: 1, crmTechNames: 1 } });
+  return (row as unknown as MappingRecord | null) ?? null;
 }

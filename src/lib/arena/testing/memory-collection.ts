@@ -1,8 +1,24 @@
 /** In-memory double of the narrow collection API config-store.ts uses (tests only). */
 import type { Filter, StoreCollection, ArenaStore } from "../config-store";
 
+type Cmp = string | number;
+const isOps = (v: unknown): v is Record<string, unknown> =>
+  !!v && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length > 0 && Object.keys(v).every((k) => k.startsWith("$"));
+/** Equality, plus the few operators the Arena stores use ($gt/$gte/$lt/$lte/$in/$ne). */
 const matches = (doc: Record<string, unknown>, filter: Filter) =>
-  Object.entries(filter).every(([k, v]) => doc[k] === v);
+  Object.entries(filter).every(([k, v]) => {
+    const x = doc[k];
+    if (!isOps(v)) return x === v;
+    return Object.entries(v).every(([op, arg]) => {
+      if (op === "$gt") return x !== undefined && (x as Cmp) > (arg as Cmp);
+      if (op === "$gte") return x !== undefined && (x as Cmp) >= (arg as Cmp);
+      if (op === "$lt") return x !== undefined && (x as Cmp) < (arg as Cmp);
+      if (op === "$lte") return x !== undefined && (x as Cmp) <= (arg as Cmp);
+      if (op === "$in") return (arg as unknown[]).includes(x);
+      if (op === "$ne") return x !== arg;
+      throw new Error(`unsupported operator ${op}`);
+    });
+  });
 
 function sorter(s: Record<string, 1 | -1>) {
   return (a: Record<string, unknown>, b: Record<string, unknown>) => {

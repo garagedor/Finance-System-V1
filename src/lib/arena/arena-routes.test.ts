@@ -18,7 +18,10 @@ function walk(dir: string): string[] {
   });
 }
 const strip = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-const routes = walk(API).filter((f) => f.endsWith("route.ts"));
+// Admin routes only; the technician API (tech/, auth/) has its own guard and
+// its own structural test (arena-tech-routes.test.ts).
+const routes = walk(join(API, "admin")).filter((f) => f.endsWith("route.ts"));
+const allRoutes = walk(API).filter((f) => f.endsWith("route.ts"));
 const rel = (f: string) => relative(API, f);
 
 /** exported handler name → its source text up to the next export */
@@ -59,7 +62,7 @@ test("state-changing handlers need an edit permission, except the two reviewed c
 });
 
 test("GET handlers never change state", () => {
-  const writes = /\.(insertOne|insertMany|updateOne|updateMany|replaceOne|deleteOne|deleteMany|bulkWrite|findOneAnd\w+|drop\w*)\s*\(|resolveCase|confirmCase|rejectCase|reopenCase|scanForReview|syncDetected|createCompetition|saveTemplate|updateDraftRules|initSettings|updateSettings/;
+  const writes = /\.(insertOne|insertMany|updateOne|updateMany|replaceOne|deleteOne|deleteMany|bulkWrite|findOneAnd\w+|drop\w*)\s*\(|resolveCase|confirmCase|rejectCase|reopenCase|scanForReview|syncDetected|createCompetition|saveTemplate|updateDraftRules|initSettings|updateSettings|approveResults|openReview|reconcileCompetition|freezeCompetition/;
   for (const f of routes) {
     const get = handlers(strip(readFileSync(f, "utf8"))).GET;
     if (get) assert.doesNotMatch(get, writes, `${rel(f)} GET writes`);
@@ -73,7 +76,7 @@ test("the settings bootstrap is limited to the configured owner account", () => 
 });
 
 test("no Arena route or module writes a CRM or finance collection, or reaches the AI shadow table", () => {
-  const files = [...routes, ...walk(LIB).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.includes("testing"))];
+  const files = [...allRoutes, ...walk(LIB).filter((f) => f.endsWith(".ts") && !f.endsWith(".test.ts") && !f.includes("testing"))];
   const crmNames = "Job|Job_ai|Technician|Location|users|TechNameMapping|AiJobLink|JobStatus";
   const crmWrite = new RegExp(`collection\\(["'\`](${crmNames})["'\`]\\)\\s*\\.\\s*(insert|update|replace|delete|bulkWrite|findOneAnd|drop|createIndex)`);
   for (const f of files) {
