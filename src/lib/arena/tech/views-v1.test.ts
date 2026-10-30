@@ -69,8 +69,9 @@ test("next steps: raise the LIMITING metric to pass the next rank (live)", () =>
   assert.deepEqual([m.closingScore, m.avgScore, m.score], [90, 150, 90]);
   const steps = m.nextSteps.filter((x) => x.kind === "raise_score");
   assert.equal(steps.length, 1, "only the limiting metric needs to move");
-  assert.match(steps[0].text, /^Raise your closing rate to 50% \(now 45%\) to pass #1$/);
-  assert.equal(steps[0].amount, 500); // basis points
+  // 20 assigned, 9 closed: (9+k)/(20+k) > 50% → k = 3 (12/23 = 52.2%)
+  assert.equal(steps[0].text, "Close 3 more jobs (closing rate 45% → 52.2%) to pass #1");
+  assert.equal(steps[0].amount, 3);
 });
 
 test("next steps: rank 1 below target → reach the 100-point target; both metrics listed when both are short", () => {
@@ -78,7 +79,8 @@ test("next steps: rank 1 below target → reach the 100-point target; both metri
   const s = standings(rules, person("Ann", 10, 4, 1000), ["Ann"]); // CR 40% → C 80; AVG 400 → A 80
   const m = myStanding(s[0], s, rules, "live");
   const texts = m.nextSteps.filter((x) => x.kind === "raise_score").map((x) => x.text);
-  assert.deepEqual(texts, ["Raise your closing rate to 50% (now 40%) to reach the 100-point target", "Raise your AVG TICKET to $500 (now $400) to reach the 100-point target"]);
+  // 10 assigned, 4 closed → (4+k)/(10+k) ≥ 50% → k = 2; profit $4,000 → $5,000 needs $1,000 more
+  assert.deepEqual(texts, ["Close 2 more jobs (closing rate 40% → 50%) to reach the 100-point target", "Add $1,000 more profit this week (AVG TICKET $400 → $500) to reach the 100-point target"]);
 });
 
 test("WEIGHTED_V0: no raise_score steps and no limiting metric", () => {
@@ -88,4 +90,17 @@ test("WEIGHTED_V0: no raise_score steps and no limiting metric", () => {
   const m = myStanding(s[0], s, rules, "live");
   assert.equal(m.limitingMetric, null);
   assert.ok(!m.nextSteps.some((x) => x.kind === "raise_score"));
+});
+
+test("level on score with the rank above: no '0 points to pass', and the raise step targets strictly more", () => {
+  const rules = V1();
+  // Ann and Bo both C = 85.71 (3/7 closed); Ann wins the tie on max(C, A)
+  const s = standings(rules, [...person("Ann", 7, 3, 2000), ...person("Bo", 7, 3, 1200)], ["Ann", "Bo"]);
+  const bo = s.find((x) => x.competitorId === "u_Bo")!;
+  assert.equal(bo.rank, 2);
+  const m = myStanding(bo, s, rules, "live");
+  assert.equal(m.nextSteps.find((x) => x.kind === "rank")!.text, "Level on score with #1; the tie-break puts them ahead");
+  const raise = m.nextSteps.filter((x) => x.kind === "raise_score");
+  assert.equal(raise.length, 1);
+  assert.equal(raise[0].text, "Close 1 more job (closing rate 42.9% → 50%) to pass #1");
 });

@@ -170,12 +170,32 @@ if (ACCEPT) {
   const rules = comp.json.ruleVersion.rules;
   const meBefore = (await call("GET", "/api/arena/tech/me", { token: P })).json.standing;
   const cur0 = (await call("GET", "/api/arena/tech/events", { token: P })).json.cursor;
-  const amended = { ...rules, eligibility: { ...rules.eligibility, minQualifyingJobs: 3, minAvgTicketCents: 10_000, minClosingRateBp: 1_000 } };
+  // The acceptance competition switches to BALANCED_PERFORMANCE_V1 through the owner's
+  // amend-with-reason flow (a new rule version; r1 stays as it was).
+  const amended = { ...rules, eligibility: { ...rules.eligibility, minQualifyingJobs: 3, minAvgTicketCents: 10_000, minClosingRateBp: 1_000 },
+    scoring: { ...rules.scoring, methodology: "BALANCED_PERFORMANCE_V1" } };
   const am = await call("POST", `/api/arena/admin/competitions/${id}/action`, { cookie: ownerCookie, body: { action: "amend", rules: amended, reason: "Acceptance demo: short week" } });
   check("owner amends the live rules in the Control Center API", am.status === 200, `${am.status} ${am.text.slice(0, 120)}`);
   const meAfter = await call("GET", "/api/arena/tech/me", { token: P });
   check("technician sees the new rules immediately", meAfter.json.rules.minQualifyingJobs === 3 && meAfter.json.notices[0]?.message === "Acceptance demo: short week");
   check("scoring responds: alpha is now eligible", !meBefore.eligible && meAfter.json.standing.eligible === true, `before ${meBefore.eligible} after ${meAfter.json.standing.eligible}`);
+  const st = meAfter.json.standing;
+  check("V1: /me methodology BALANCED_PERFORMANCE_V1, weights hidden, score = min(C, A)",
+    meAfter.json.rules.methodology === "BALANCED_PERFORMANCE_V1" && meAfter.json.rules.closingRateWeight === null &&
+    Math.abs(st.score - Math.min(st.closingScore, st.avgScore)) <= 0.01 && ["closingRate", "avgTicket", "both"].includes(st.limitingMetric),
+    `C ${st.closingScore} A ${st.avgScore} final ${st.score} limiting ${st.limitingMetric}`);
+  const lbV1 = await call("GET", "/api/arena/tech/leaderboard", { token: P });
+  const admV1 = await call("GET", `/api/arena/admin/competitions/${id}/results`, { cookie: ownerCookie });
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const disagree = lbV1.json.rows.filter((t) => {
+    const a = admV1.json.snapshot.rows.find((x) => x.competitorId === t.competitorId);
+    return !a || a.rank !== t.rank || r2(a.score) !== t.score || (t.closingScore !== null && (r2(a.closingScore) !== t.closingScore || r2(a.avgScore) !== t.avgScore || a.limitingMetric !== t.limitingMetric));
+  });
+  check("V1: admin results == technician leaderboard (rank, final, C, A, limiting) for every row", admV1.json.methodology === "BALANCED_PERFORMANCE_V1" && disagree.length === 0,
+    disagree.map((d) => d.displayName).join(", "));
+  check("V1: technician scores are min(C, A) on every row with metrics", lbV1.json.rows.every((r) => r.closingScore === null || Math.abs(r.score - Math.min(r.closingScore, r.avgScore)) <= 0.01));
+  const r1 = await call("GET", `/api/arena/admin/competitions/${id}`, { cookie: ownerCookie });
+  check("V1: the amend created a new rule version; r1 kept its V0 rules", r1.json.ruleVersion.n === 2 && rules.scoring.methodology === undefined, `n ${r1.json.ruleVersion?.n}`);
   const evA = await call("GET", `/api/arena/tech/events?since=${encodeURIComponent(cur0)}`, { token: P });
   check("events: qualification (+ rank) events after the change", evA.json.events.some((e) => e.kind === "qualified" && e.gate === "all"), evA.json.events.map((e) => e.kind).join(","));
   check("admin cannot use 'freeze now (dev)' (owner only)",

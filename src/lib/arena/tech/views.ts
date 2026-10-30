@@ -18,7 +18,7 @@ const bp = (rate: number) => Math.round(rate * BP);
 const cents = (dollars: number) => Math.round(dollars * CENTS);
 const money = (c: number) => `$${(c / CENTS).toLocaleString("en-US", { minimumFractionDigits: c % CENTS ? 2 : 0, maximumFractionDigits: 2 })}`;
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const pctText = (bpv: number) => `${(bpv / CENTS).toFixed(bpv % CENTS ? 1 : 0)}%`;
+const pctText = (bpv: number) => `${(bpv / CENTS).toFixed(bpv % CENTS ? 1 : 0)}%`; // bp → "42.9%"
 
 /** Normalized metric scores of a standing (older records: derived from the indices). */
 export const metricScores = (s: ApprovedStanding) => ({
@@ -149,22 +149,36 @@ export function myStanding(
   const above = me && me.rank > 1 ? sorted.find((x) => x.rank === me.rank - 1) : undefined;
   const pointsToNextRank = above ? r2(Math.max(0, above.score - s.score)) : null;
   if (above && pointsToNextRank !== null && phase === "live")
-    nextSteps.push({ kind: "rank", amount: pointsToNextRank, text: `${pointsToNextRank} points to pass #${above.rank}` });
+    nextSteps.push({
+      kind: "rank",
+      amount: pointsToNextRank,
+      text: pointsToNextRank > 0 ? `${pointsToNextRank} points to pass #${above.rank}` : `Level on score with #${above.rank}; the tie-break puts them ahead`,
+    });
   // BALANCED_PERFORMANCE_V1: the score only rises with the LIMITING metric —
   // say exactly how far it has to go (to pass the next rank, else to the target).
   if (methodologyOf(rules) === "BALANCED_PERFORMANCE_V1" && me && s.assignedJobs > 0) {
-    const goal = above && phase === "live" ? { score: above.score, why: `to pass #${above.rank}` } : s.score < 100 ? { score: 100, why: "to reach the 100-point target" } : null;
+    // Passing someone needs a strictly higher score; reaching the target needs exactly 100.
+    const goal = above && phase === "live" ? { score: above.score, why: `to pass #${above.rank}`, strict: true } : s.score < SCORE_SCALE ? { score: SCORE_SCALE, why: "to reach the 100-point target", strict: false } : null;
     const sc = rules.scoring;
     const ms = metricScores(s);
     if (goal) {
-      const need = goal.score / 100;
-      if (ms.closingScore < goal.score && need <= sc.closingRate.cap) {
-        const target = Math.ceil(need * sc.closingRate.targetBp);
-        nextSteps.push({ kind: "raise_score", amount: Math.max(0, target - crBp), text: `Raise your closing rate to ${pctText(target)} (now ${pctText(crBp)}) ${goal.why}` });
+      const need = goal.score / SCORE_SCALE;
+      // Concrete moves, each assuming the rest of the week stays as it is:
+      //   closing rate → more closed jobs (each one is also a new assigned job)
+      //   AVG ticket   → more profit on the jobs already assigned
+      const n = s.assignedJobs, c = s.closedJobs;
+      if ((goal.strict ? ms.closingScore <= goal.score : ms.closingScore < goal.score) && need <= sc.closingRate.cap) {
+        const r = (need * sc.closingRate.targetBp) / BP;
+        const x = (r * n - c) / (1 - r);
+        const k = r >= 1 ? Infinity : Math.max(1, goal.strict ? Math.floor(x) + 1 : Math.ceil(x));
+        if (Number.isFinite(k))
+          nextSteps.push({ kind: "raise_score", amount: k, text: `Close ${plural(k, "more job")} (closing rate ${pctText(crBp)} → ${pctText(bp((c + k) / (n + k)))}) ${goal.why}` });
       }
-      if (ms.avgScore < goal.score && need <= sc.avgTicket.cap) {
-        const target = Math.ceil(need * sc.avgTicket.targetCents);
-        nextSteps.push({ kind: "raise_score", amount: Math.max(0, target - avgCents), text: `Raise your AVG TICKET to ${money(target)} (now ${money(avgCents)}) ${goal.why}` });
+      if ((goal.strict ? ms.avgScore <= goal.score : ms.avgScore < goal.score) && need <= sc.avgTicket.cap) {
+        const want = need * sc.avgTicket.targetCents * n; // total profit (cents) at the goal
+        const have = s.avgTicket * n * CENTS;
+        const extra = Math.max(1, goal.strict ? Math.floor(want - have) + 1 : Math.ceil(want - have));
+        nextSteps.push({ kind: "raise_score", amount: extra, text: `Add ${money(extra)} more profit this week (AVG TICKET ${money(avgCents)} → ${money(Math.round((have + extra) / n))}) ${goal.why}` });
       }
     }
   }
