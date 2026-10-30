@@ -220,7 +220,8 @@ test("config: technician API is off unless ARENA_TECH_ENABLED=1; pass lifetime d
   assert.equal(c.enabled, false);
   assert.equal(c.passTtlSeconds, 300);
   assert.equal(c.wb.issuer, ISS);
-  assert.equal(readTechConfig({ ...base, ARENA_TECH_ENABLED: "1", ARENA_PASS_TTL_SECONDS: "600" }).passTtlSeconds, 600);
+  const complete = { ARENA_WB_VERIFIER_SECRET: "s".repeat(40), ARENA_PASS_PRIVATE_KEY: "pem", ARENA_TECH_ALLOWED_ORIGINS: "capacitor://localhost", ARENA_MONGODB_DB: "arena" };
+  assert.equal(readTechConfig({ ...base, ...complete, ARENA_TECH_ENABLED: "1", ARENA_PASS_TTL_SECONDS: "600" }).passTtlSeconds, 600);
   assert.throws(() => readTechConfig({ ...base, ARENA_PASS_TTL_SECONDS: "86400" }), ArenaTechConfigError);
   assert.throws(() => readTechConfig({ ...base, ARENA_WB_SUPABASE_URL: "http://abcdefghijklmnopqrst.supabase.co" }), ArenaTechConfigError);
   assert.throws(() => readTechConfig({ ...base, ARENA_WB_SUPABASE_URL: "https://evil.example.com" }), ArenaTechConfigError);

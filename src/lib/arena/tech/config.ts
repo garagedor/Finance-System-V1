@@ -19,6 +19,7 @@
  * ARENA_WB_DENY_REFS.
  */
 import { createHash } from "node:crypto";
+import { techEnvProblems } from "./self-check";
 
 export class ArenaTechConfigError extends Error {}
 
@@ -55,6 +56,8 @@ export function parseWbUrl(raw: string | undefined, env: NodeJS.ProcessEnv): Tec
 }
 
 export function readTechConfig(env: NodeJS.ProcessEnv = process.env): TechConfig {
+  const problems = techEnvProblems(env);
+  if (problems.length) throw new ArenaTechConfigError(`unsafe technician configuration: ${problems.join("; ")}`);
   const ttlRaw = (env.ARENA_PASS_TTL_SECONDS ?? "").trim();
   const ttl = ttlRaw ? Number(ttlRaw) : PASS_TTL_DEFAULT_SECONDS;
   if (!Number.isInteger(ttl) || ttl < PASS_TTL_MIN_SECONDS || ttl > PASS_TTL_MAX_SECONDS)

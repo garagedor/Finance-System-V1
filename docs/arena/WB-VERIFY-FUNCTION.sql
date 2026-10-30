@@ -1,3 +1,7 @@
+-- SUPERSEDED (2026-10-30): implemented on the Weekly Balance branch
+-- feature/arena-verify as supabase/migrations/20261030120000_arena_verify_account.sql
+-- (pending-aware semantics) + the arena-verify Edge Function. See VERIFIER.md.
+-- Kept only as the original proposal.
 -- 317 LIVE ARENA — Weekly Balance account verifier (owner Decision 4, "Option B").
 --
 -- PROPOSAL ONLY. Not applied anywhere. To be added on a Weekly Balance branch,

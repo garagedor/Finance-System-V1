@@ -4,7 +4,7 @@
  * review cases. API routes stay thin and call these.
  */
 import "server-only";
-import type { Db } from "mongodb";
+import { MongoClient, type Db } from "mongodb";
 import { getMongoClient } from "@/lib/mongo";
 import { getDb as getCrmDb, newId } from "@/lib/finance-db";
 import { KNOWN_STATUSES } from "@/lib/status-canonical";
@@ -12,7 +12,7 @@ import type { ArenaRules } from "./types";
 import { currentSettings, type StoreCollection, type StoreContext } from "./config-store";
 import type { ReviewContext } from "./review";
 import { reviewDecisions, syncDetected } from "./review";
-import { arenaDbName } from "./env";
+import { ArenaEnvError, arenaDbName, crmDbName } from "./env";
 import { arenaStores, ensureArenaIndexes, lifecycleCollections, loadMappings, loadTechnicians } from "./mongo-store";
 import type { LifecycleContext } from "./lifecycle";
 import type { RuleVersionDoc } from "./config-store";
@@ -54,7 +54,33 @@ export function accountVerifierFromEnv(env: NodeJS.ProcessEnv = process.env): Te
 /** The local dev stack marker. Never set in a deployed environment. */
 export const isDevStack = (env: NodeJS.ProcessEnv = process.env) => env.ARENA_DEV_STACK === "1";
 
+/**
+ * Optional dedicated Atlas user for the Arena (ARENA_MONGODB_URI): readWrite on
+ * the Arena database only, and read-only `find` on the three CRM collections the
+ * Arena reads (Job, TechNameMapping, Technician). When it is set, ALL Arena
+ * database access goes through it, so the Arena cannot write CRM data even by
+ * mistake. Unset: the CRM app's connection is used (docs/arena/PRODUCTION-ENV.md).
+ */
+let dedicated: Promise<MongoClient> | null = null;
+function dedicatedArenaClient(env: NodeJS.ProcessEnv = process.env): Promise<MongoClient> | null {
+  const uri = (env.ARENA_MONGODB_URI ?? "").trim();
+  if (!uri) return null;
+  if (!/^mongodb(\+srv)?:\/\/\S+$/.test(uri)) throw new ArenaEnvError("ARENA_MONGODB_URI is not a MongoDB connection string");
+  dedicated ??= MongoClient.connect(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 8000, retryWrites: true, appName: "lbs-arena" }).catch((e) => {
+    dedicated = null;
+    throw e;
+  });
+  return dedicated;
+}
+
 export async function arenaContexts(): Promise<ArenaContexts> {
+  const own = dedicatedArenaClient();
+  if (own) {
+    const client = await own;
+    const arenaDb = client.db(arenaDbName());
+    await ensureArenaIndexes(arenaDb);
+    return buildArenaContexts(arenaDb, client.db(crmDbName()));
+  }
   const client = await getMongoClient();
   const arenaDb = client.db(arenaDbName());
   await ensureArenaIndexes(arenaDb);

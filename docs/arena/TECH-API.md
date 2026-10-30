@@ -127,8 +127,8 @@ Admin API added: `GET /api/arena/admin/competitions/[id]/results`,
 | `ARENA_PASS_PRIVATE_KEY` | RSA private key, PKCS#8 PEM or base64 of the PEM. Public key is derived. |
 | `ARENA_PASS_TTL_SECONDS` | Pass lifetime, default **300**, allowed 60–900. |
 | `ARENA_TECH_ALLOWED_ORIGINS` | Comma list for CORS (dev: `http://127.0.0.1:5173,http://localhost:5173,capacitor://localhost`). A request with any other `Origin` is refused. Credentials are never allowed. |
-| `ARENA_VERIFIER` | `supabase-rpc` (default) or `fake-dev`. |
-| `ARENA_WB_VERIFIER_KEY` | Server-only key for `arena_verify_account` (supabase-rpc). |
+| `ARENA_VERIFIER` | `wb` (default: the Weekly Balance `arena-verify` Edge Function, see VERIFIER.md) or `fake-dev`. |
+| `ARENA_WB_VERIFIER_SECRET` | Dedicated secret for `arena-verify` (≥ 32 chars). Never the service-role key. |
 | `ARENA_FAKE_VERIFIER_FILE` | JSON `{accounts: {<uuid>: {active, approved, role}}}` for `fake-dev`; re-read on every call. |
 | `ARENA_DEV_STACK` | `1` only on the local dev stack. Enables the dev-only freeze, and allows `fake-dev` under `NODE_ENV=production`. |
 
@@ -159,9 +159,10 @@ Files in `~/arena-dev/` (none committed): `arena-dev.env` (600), `keys/arena-pas
    (+ amend rules → dev freeze → review → owner approval → celebration event; re-run
    step 3 afterwards to restore the live week).
 
-The dev stack uses `ARENA_VERIFIER=fake-dev` because the Weekly Balance function does
-not exist yet (`docs/arena/WB-VERIFY-FUNCTION.sql` is a proposal, applied nowhere).
-Logins are still real staging logins; there is no test-token mode.
+The dev stack uses the REAL verifier (`ARENA_VERIFIER=wb`) against the staging
+`arena-verify` function (docs/arena/VERIFIER.md). All 15 demo competitors are real
+staging accounts (Charlie stays pending on purpose). Logins are real staging logins;
+there is no test-token mode. Production configuration: docs/arena/PRODUCTION-ENV.md.
 
 ## Data minimization
 
@@ -182,23 +183,17 @@ ineligible metrics or the row is eligible). History shows only winners and the c
 - Exact-path middleware exemption; every other `/api` route still needs the CRM session
   (tested across the whole route tree).
 - Fail closed: switch off, bad config, verifier errors → `503`; unknown account → `403`.
-- Rate limit on the exchange: 60/min per IP and 10/min per user+IP.
+- Rate limit on the exchange: 60/min per IP and 10/min per user+IP, counted in the
+  Arena database (shared across serverless instances, TTL-cleaned).
+- Startup self-check refuses dangerous configurations (tech/self-check.ts).
+- Account eligibility (prizes) uses the same verifier: fresh at freeze/review/approval,
+  last known while live; unavailable = unresolved → approval blocked.
 
 ## What production still needs
 
-1. Weekly Balance: review and apply `WB-VERIFY-FUNCTION.sql` (staging, then production);
-   issue a server-only credential for it — preferably narrower than service_role
-   (a dedicated role with EXECUTE on that one function).
-2. CRM env in Vercel: `ARENA_WB_SUPABASE_URL` (production project), `ARENA_PASS_PRIVATE_KEY`
-   (fresh key, stored as a sensitive variable), `ARENA_WB_VERIFIER_KEY`,
-   `ARENA_TECH_ALLOWED_ORIGINS` (the real app origins), then `ARENA_TECH_ENABLED=1` at launch.
-   Never set `ARENA_DEV_STACK` or `ARENA_VERIFIER=fake-dev` there.
-3. Rate limiting in shared storage (Mongo/Redis); the in-memory limiter is per instance.
-4. The Arena database (`ARENA_MONGODB_DB`) and `ARENA_OWNER_USER_ID` in production, the
-   owner bootstrapping settings, and a `TechNameMapping` review for every competitor.
-5. The freeze backstop in the existing daily cron (spec §4) — today freezing happens on
-   the first read after Sunday ends, or by an admin.
-6. Key rotation story for the pass key (add `kid` + a second verification key).
-7. Event-feed retention (old `arena_tech_event` rows are never pruned).
-8. Owner sign-off on the contract addition (`notices`) and on the dev-only actions
+See docs/arena/PRODUCTION-ENV.md (variables, forbidden settings, Atlas users, WB
+function rollout, launch checklist). Remaining open items beyond it:
+1. Key rotation story for the pass key (add `kid` + a second verification key).
+2. Event-feed retention (old `arena_tech_event` rows are never pruned).
+3. Owner sign-off on the contract addition (`notices`) and on the dev-only actions
    staying dev-only.
