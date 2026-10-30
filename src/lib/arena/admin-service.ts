@@ -135,7 +135,7 @@ export interface PreviewSummary {
   rulesHash: string;
   participants: number;
   eligible: number;
-  prizes: { position: number; name: string; location: string; score: number; cents: number }[];
+  prizes: { position: number; name: string; location: string; score: number; closingScore: number; avgScore: number; limitingMetric: string | null; cents: number }[];
   mostImproved: { name: string; improvement: number; cents: number } | null;
   paidCents: number;
   budgetCents: number;
@@ -205,7 +205,10 @@ export async function previewRules(ctx: ArenaContexts, rules: ArenaRules, weekSt
     rulesHash: r.rulesHash,
     participants: r.results.length,
     eligible: r.eligibleCount,
-    prizes: winners.map((x) => ({ position: x.prizePosition!, name: x.displayName, location: x.location, score: x.score, cents: x.prizeCents })),
+    prizes: winners.map((x) => ({
+      position: x.prizePosition!, name: x.displayName, location: x.location, score: x.score,
+      closingScore: x.closingScore, avgScore: x.avgScore, limitingMetric: x.limitingMetric, cents: x.prizeCents,
+    })),
     mostImproved: mi ? { name: mi.displayName, improvement: mi.mostImproved?.improvement ?? 0, cents: rules.mostImproved.amountCents } : null,
     paidCents: r.awardedCents,
     budgetCents: rules.prizes.budgetCents,

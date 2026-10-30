@@ -21,6 +21,7 @@ interface Overview {
   readiness: Readiness;
   userNames: Record<string, string>;
   seedRules: ArenaRules;
+  seedBalancedRules: ArenaRules;
 }
 type Tab = "weeks" | "templates" | "settings" | "audit";
 type Editing =
@@ -157,6 +158,11 @@ export default function ArenaConsole() {
               <button className="portal-btn" onClick={() => setEditing({ kind: "template", templateId: data.templates.length ? "" : "standard", name: data.templates.length ? "" : "Standard Week", rules: structuredClone(data.seedRules), isNew: true })}>
                 New template from the approved standard rules
               </button>
+              {!data.templates.some((t) => t.templateId === "balanced") && (
+                <button className="portal-btn" style={{ marginLeft: 8 }} onClick={() => setEditing({ kind: "template", templateId: "balanced", name: "Balanced Performance", rules: structuredClone(data.seedBalancedRules), isNew: true })}>
+                  New template: Balanced Performance (V1)
+                </button>
+              )}
             </div>
           )}
         </div>

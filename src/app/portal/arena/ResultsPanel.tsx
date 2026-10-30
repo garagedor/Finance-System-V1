@@ -10,6 +10,7 @@ interface Row {
   qualifyingJobs: number; assignedJobs: number; closedJobs: number; closingRate: number; avgTicket: number;
   prizePosition: number | null; prizeCents: number; wonMostImproved: boolean;
   prizeEligible?: boolean;
+  closingScore?: number; avgScore?: number; limitingMetric?: string | null;
   account?: { state: string; reason: string; checkedAt: string | null; lastKnown: boolean } | null;
 }
 type Side = { rank: number; score: number; eligible: boolean; account?: string | null; prizeEligible?: boolean; prizeCents: number };
@@ -31,6 +32,7 @@ function AccountCell({ r, live }: { r: Row; live: boolean }) {
 }
 interface Results {
   competition: { _id: string; weekStart: string; status: string; devEarlyClose?: boolean };
+  methodology?: "WEIGHTED_V0" | "BALANCED_PERFORMANCE_V1";
   phase: string;
   window: { closesAt: string; approvalOpensAt: string };
   approvalOpen: boolean;
@@ -74,6 +76,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
   const rows = d.approved?.standings ?? d.snapshot?.rows ?? [];
   const excluded = rows.filter((r) => r.eligible && r.account && r.account.state !== "eligible");
   const live = !d.approved && d.snapshot?.kind === "live";
+  const v1 = d.methodology === "BALANCED_PERFORMANCE_V1";
   return (
     <div className="portal-card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
@@ -84,6 +87,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
             Week closes {when(d.window.closesAt)} · approval opens {when(d.window.approvalOpensAt)}
             {d.competition.devEarlyClose && " · frozen early (dev demo)"}
             {d.snapshot && <> · data as of {when(d.snapshot.computedAt)} ({d.snapshot.kind})</>}
+            {" · "}<span data-testid="arena-results-methodology">{v1 ? "Balanced Performance (V1): final = min(C, A)" : "Weighted (V0)"}</span>
           </div>
         </div>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -134,11 +138,15 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
       )}
       <div style={{ overflowX: "auto" }}>
         <table className="portal-table">
-          <thead><tr><th>#</th><th>Technician</th><th>Location</th><th>Score</th><th>Qual. jobs</th><th>Closing</th><th>AVG ticket</th><th>Gates</th><th>Account</th><th>Prize</th></tr></thead>
+          <thead><tr><th>#</th><th>Technician</th><th>Location</th>{v1 && <><th title="100 × closing rate ÷ target (capped)">C</th><th title="100 × AVG ticket ÷ target (capped)">A</th><th>Limiting</th></>}<th>{v1 ? "Final (min)" : "Score"}</th><th>Qual. jobs</th><th>Closing</th><th>AVG ticket</th><th>Gates</th><th>Account</th><th>Prize</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.competitorId}>
-                <td>{r.rank}</td><td>{r.displayName}</td><td>{r.location}</td><td>{r.score.toFixed(2)}</td>
+                <td>{r.rank}</td><td>{r.displayName}</td><td>{r.location}</td>
+                {v1 && <><td className={r.limitingMetric === "closingRate" || r.limitingMetric === "both" ? "text-danger" : undefined}>{r.closingScore?.toFixed(2) ?? "—"}</td>
+                  <td className={r.limitingMetric === "avgTicket" || r.limitingMetric === "both" ? "text-danger" : undefined}>{r.avgScore?.toFixed(2) ?? "—"}</td>
+                  <td>{r.limitingMetric === "closingRate" ? "Closing rate" : r.limitingMetric === "avgTicket" ? "AVG ticket" : r.limitingMetric === "both" ? "Both" : "—"}</td></>}
+                <td>{r.score.toFixed(2)}</td>
                 <td>{r.qualifyingJobs}</td>
                 <td>{"closingRate" in r && typeof r.closingRate === "number" ? `${(r.closingRate * 100).toFixed(1)}%` : "—"}</td>
                 <td>{"avgTicket" in r && typeof r.avgTicket === "number" ? dollars(Math.round(r.avgTicket * 100)) : "—"}</td>
@@ -147,7 +155,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
                 <td>{r.prizeCents ? `${dollars(r.prizeCents)}${r.prizePosition ? ` (#${r.prizePosition})` : " (most improved)"}` : "—"}</td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={10} className="muted">No results yet.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={v1 ? 13 : 10} className="muted">No results yet.</td></tr>}
           </tbody>
         </table>
       </div>

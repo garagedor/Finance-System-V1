@@ -36,6 +36,8 @@ function Num({ label, value, onChange, step = "1", suffix, prefix, hint }: {
   );
 }
 
+const LIMIT_LABEL: Record<string, string> = { closingRate: "Closing rate", avgTicket: "AVG ticket", both: "Both" };
+
 export default function RulesEditor({
   initial, title, saveLabel, onSave, onCancel, needsReason, extra,
 }: {
@@ -49,6 +51,7 @@ export default function RulesEditor({
   extra?: React.ReactNode;
 }) {
   const [r, setR] = useState<ArenaRules>(() => structuredClone(initial));
+  const v1 = r.scoring.methodology === "BALANCED_PERFORMANCE_V1";
   const [reason, setReason] = useState("");
   const [problems, setProblems] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -93,16 +96,31 @@ export default function RulesEditor({
 
       <section>
         <div className="portal-section-label">Score</div>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 420, marginBottom: 8 }}>
+          <span className="portal-label">Scoring methodology</span>
+          <select className="portal-input" value={v1 ? "BALANCED_PERFORMANCE_V1" : "WEIGHTED_V0"} aria-label="Scoring methodology"
+            onChange={(e) => set((x) => { x.scoring.methodology = e.target.value as "WEIGHTED_V0" | "BALANCED_PERFORMANCE_V1"; })}>
+            <option value="WEIGHTED_V0">Weighted (V0) — weighted sum of both metrics</option>
+            <option value="BALANCED_PERFORMANCE_V1">Balanced Performance (V1) — the weaker metric decides</option>
+          </select>
+        </label>
+        <p className="muted small" style={{ margin: "0 0 8px" }} data-testid="arena-methodology-help">
+          {v1
+            ? <>Each metric scores 100 at its target: <b>C</b> = 100 × closing rate ÷ target, <b>A</b> = 100 × AVG ticket ÷ target, each capped at cap × 100. <b>Final score = the lower of C and A</b> (no sum, no average), so a technician only rises by improving the weaker metric. Ties: the higher of C and A, then more assigned jobs, then account id. These are scoring targets, separate from the eligibility minimums above.</>
+            : <>Score = closing-rate weight × min(rate ÷ target, cap) + AVG-ticket weight × min(AVG ÷ target, cap).</>}
+        </p>
         <div className="portal-grid-3">
-          <Num label="Closing rate weight" suffix="pts" value={r.scoring.closingRate.weight} onChange={(v) => set((x) => { x.scoring.closingRate.weight = Number(v); })} />
-          <Num label="Closing rate target" suffix="%" step="0.01" value={r.scoring.closingRate.targetBp / 100} onChange={(v) => set((x) => { x.scoring.closingRate.targetBp = toBp(v); })} />
+          {!v1 && <Num label="Closing rate weight" suffix="pts" value={r.scoring.closingRate.weight} onChange={(v) => set((x) => { x.scoring.closingRate.weight = Number(v); })} />}
+          <Num label={v1 ? "Closing rate scoring target" : "Closing rate target"} suffix="%" step="0.01" value={r.scoring.closingRate.targetBp / 100} onChange={(v) => set((x) => { x.scoring.closingRate.targetBp = toBp(v); })} />
           <Num label="Closing rate cap" suffix="× target" step="0.05" value={r.scoring.closingRate.cap} onChange={(v) => set((x) => { x.scoring.closingRate.cap = Number(v); })} />
-          <Num label="AVG ticket weight" suffix="pts" value={r.scoring.avgTicket.weight} onChange={(v) => set((x) => { x.scoring.avgTicket.weight = Number(v); })} />
-          <Num label="AVG ticket target" prefix="$" step="0.01" value={r.scoring.avgTicket.targetCents / 100} onChange={(v) => set((x) => { x.scoring.avgTicket.targetCents = toCents(v); })} />
+          {!v1 && <Num label="AVG ticket weight" suffix="pts" value={r.scoring.avgTicket.weight} onChange={(v) => set((x) => { x.scoring.avgTicket.weight = Number(v); })} />}
+          <Num label={v1 ? "AVG ticket scoring target" : "AVG ticket target"} prefix="$" step="0.01" value={r.scoring.avgTicket.targetCents / 100} onChange={(v) => set((x) => { x.scoring.avgTicket.targetCents = toCents(v); })} />
           <Num label="AVG ticket cap" suffix="× target" step="0.05" value={r.scoring.avgTicket.cap} onChange={(v) => set((x) => { x.scoring.avgTicket.cap = Number(v); })} />
         </div>
         <p className="muted small" style={{ margin: "6px 0 0" }}>
-          Maximum score {(r.scoring.closingRate.weight * r.scoring.closingRate.cap + r.scoring.avgTicket.weight * r.scoring.avgTicket.cap).toFixed(1)} points.
+          {v1
+            ? <>Score range 0 – {(100 * Math.min(r.scoring.closingRate.cap, r.scoring.avgTicket.cap)).toFixed(0)} points. Weights are not used by this methodology.</>
+            : <>Maximum score {(r.scoring.closingRate.weight * r.scoring.closingRate.cap + r.scoring.avgTicket.weight * r.scoring.avgTicket.cap).toFixed(1)} points.</>}
         </p>
       </section>
 
@@ -183,7 +201,8 @@ export default function RulesEditor({
       </section>
 
       <section>
-        <div className="portal-section-label">Ties, after score (in order)</div>
+        <div className="portal-section-label">Ties, after score (in order){v1 ? " — Weighted (V0) only" : ""}</div>
+        {v1 && <p className="portal-alert portal-alert-info" style={{ margin: "0 0 6px" }} data-testid="arena-tiebreak-v1-note">Not used by Balanced Performance (V1): its ties are fixed — higher of C and A, then more assigned jobs, then account id.</p>}
         <ol style={{ margin: 0, paddingLeft: 20, display: "flex", flexDirection: "column", gap: 6 }}>
           {r.tieBreak.map((k, i) => (
             <li key={k}>
@@ -247,13 +266,13 @@ export default function RulesEditor({
               paying <b>{dollars(preview.paidCents)}</b> of {dollars(preview.budgetCents)} ({dollars(preview.unallocatedCents)} unallocated).
             </p>
             <table className="portal-table">
-              <thead><tr><th>Place</th><th>Technician</th><th>Location</th><th style={{ textAlign: "right" }}>Score</th><th style={{ textAlign: "right" }}>Prize</th></tr></thead>
+              <thead><tr><th>Place</th><th>Technician</th><th>Location</th>{v1 && <><th style={{ textAlign: "right" }}>C</th><th style={{ textAlign: "right" }}>A</th><th>Limiting</th></>}<th style={{ textAlign: "right" }}>Score</th><th style={{ textAlign: "right" }}>Prize</th></tr></thead>
               <tbody>
                 {preview.prizes.map((p) => (
-                  <tr key={p.position}><td>#{p.position}</td><td>{p.name}</td><td>{p.location}</td><td style={{ textAlign: "right" }}>{p.score.toFixed(2)}</td><td style={{ textAlign: "right" }}>{dollars(p.cents)}</td></tr>
+                  <tr key={p.position}><td>#{p.position}</td><td>{p.name}</td><td>{p.location}</td>{v1 && <><td style={{ textAlign: "right" }}>{p.closingScore.toFixed(2)}</td><td style={{ textAlign: "right" }}>{p.avgScore.toFixed(2)}</td><td>{LIMIT_LABEL[p.limitingMetric ?? ""] ?? "—"}</td></>}<td style={{ textAlign: "right" }}>{p.score.toFixed(2)}</td><td style={{ textAlign: "right" }}>{dollars(p.cents)}</td></tr>
                 ))}
                 {preview.mostImproved && (
-                  <tr><td>Most Improved</td><td>{preview.mostImproved.name}</td><td /><td style={{ textAlign: "right" }}>+{preview.mostImproved.improvement.toFixed(2)}</td><td style={{ textAlign: "right" }}>{dollars(preview.mostImproved.cents)}</td></tr>
+                  <tr><td>Most Improved</td><td>{preview.mostImproved.name}</td><td />{v1 && <><td /><td /><td /></>}<td style={{ textAlign: "right" }}>+{preview.mostImproved.improvement.toFixed(2)}</td><td style={{ textAlign: "right" }}>{dollars(preview.mostImproved.cents)}</td></tr>
                 )}
               </tbody>
             </table>
