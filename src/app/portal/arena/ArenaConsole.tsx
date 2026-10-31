@@ -387,7 +387,7 @@ function Names() {
                 <tr key={r.id}>
                   <td>{r.fullName || "—"}</td>
                   <td><b>{r.displayName}</b><div className="muted small">{SOURCE_LABEL[r.source]}</div></td>
-                  <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                     {r.collision === "unresolved" && <span className="pill pill-unpaid">Collision · needs override</span>}
                     {r.collision === "prefix" && <span className="pill pill-pending">Collision · longer last name</span>}
                     {r.collision === "location" && <span className="pill pill-pending">Collision · location added</span>}
@@ -398,7 +398,7 @@ function Names() {
                       </span>
                     )}
                     {!r.collision && !r.needsEnglish && r.possibleDuplicateOf.length === 0 && <span className="muted small">—</span>}
-                  </td>
+                  </div></td>
                   <td className="small">{r.crmNames.join(", ") || "—"}{r.location ? ` · ${r.location}` : ""}</td>
                   <td className="small muted">{r.id}</td>
                 </tr>

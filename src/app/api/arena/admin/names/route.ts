@@ -27,7 +27,9 @@ export async function GET() {
       // An unresolved collision blocks review until an override is set.
       blocking: r.collision === "unresolved",
     }));
-    rows.sort((a, b) => Number(b.blocking) - Number(a.blocking) || a.displayName.localeCompare(b.displayName) || (a.id < b.id ? -1 : 1));
+    // Blocking first, then anything flagged, then everyone else by public name.
+    const weight = (r: (typeof rows)[number]) => (r.blocking ? 2 : r.collision || r.needsEnglish || r.possibleDuplicateOf.length ? 1 : 0);
+    rows.sort((a, b) => weight(b) - weight(a) || a.displayName.localeCompare(b.displayName) || (a.id < b.id ? -1 : 1));
     return { rows, format: "FIRST_LAST_INITIAL_V1" };
   });
 }
