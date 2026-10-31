@@ -81,7 +81,10 @@ const claims = decode(P);
 check("pass: RS256, aud arena, iss lbs-crm-arena, sub = competitor, 5 min",
   JSON.parse(Buffer.from(P.split(".")[0], "base64url")).alg === "RS256" && claims.aud === "arena" && claims.iss === "lbs-crm-arena" &&
   claims.sub === creds.alpha.id && claims.exp - claims.iat === 300);
-check("exchange body shape", ex.json.competitorId === creds.alpha.id && ex.json.displayName === creds.alpha.name && !!Date.parse(ex.json.expiresAt));
+// Public display name = first name + last initial (owner decision 2026-10-31).
+const firstLastInitial = (n) => { const p = n.trim().split(/\s+/); return p.length < 2 ? p[0] : `${p[0]} ${p[p.length - 1][0].toUpperCase()}.`; };
+check("exchange body shape", ex.json.competitorId === creds.alpha.id && ex.json.displayName === firstLastInitial(creds.alpha.name) && !!Date.parse(ex.json.expiresAt),
+  `displayName ${JSON.stringify(ex.json.displayName)}`);
 
 const me = await call("GET", "/api/arena/tech/me", { token: P });
 check("GET /me → 200", me.status === 200, `${me.status}`);
