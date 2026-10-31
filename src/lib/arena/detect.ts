@@ -41,7 +41,7 @@ export function detectCases(input: DetectInput): DetectedCase[] {
   for (const w of input.weeks) for (const j of w.jobs) if (j.location) locations.add(fold(j.location));
 
   const identity = new Map<string, IdentityCaseData & { weeks: Set<string> }>();
-  const people = new Map<string, { name: string; crmNames: Set<string>; weeks: Set<string> }>();
+  const people = new Map<string, { name: string; fullName: string; reason: DisplayNameCaseData["reason"] | null; crmNames: Set<string>; weeks: Set<string> }>();
 
   for (const w of input.weeks) {
     const names = [...new Set(w.jobs.map((j) => j.tech).filter(Boolean))];
@@ -72,9 +72,14 @@ export function detectCases(input: DetectInput): DetectedCase[] {
       identity.set(issue.crmName, cur);
     }
 
-    // display names: verified people whose name is not yet in Latin letters
+    // display names: verified people whose name is not in Latin letters, or
+    // whose public name still collides with someone else's (needs an override)
     for (const c of map.competitors) {
-      const p = people.get(c.id) ?? { name: c.displayName, crmNames: new Set<string>(), weeks: new Set<string>() };
+      const pn = map.publicNames?.get(c.id);
+      const reason: DisplayNameCaseData["reason"] | null = pn
+        ? pn.collision === "unresolved" ? "name_collision" : pn.needsEnglish ? "needs_english" : null
+        : isEnglishDisplayName(c.displayName) ? null : "needs_english";
+      const p = people.get(c.id) ?? { name: c.displayName, fullName: pn?.fullName ?? c.displayName, reason, crmNames: new Set<string>(), weeks: new Set<string>() };
       c.crmNames.forEach((n) => p.crmNames.add(n));
       p.weeks.add(w.weekStart);
       people.set(c.id, p);
@@ -106,8 +111,8 @@ export function detectCases(input: DetectInput): DetectedCase[] {
     put({ kind: "identity_name", key: crmName, data, weeks: [...weeks] });
   }
   for (const [id, p] of people) {
-    if (input.displayNames[id] || isEnglishDisplayName(p.name)) continue;
-    const data: DisplayNameCaseData = { competitorId: id, currentName: p.name, crmNames: [...p.crmNames].sort() };
+    if (input.displayNames[id] || !p.reason) continue;
+    const data: DisplayNameCaseData = { competitorId: id, currentName: p.name, crmNames: [...p.crmNames].sort(), reason: p.reason, fullName: p.fullName };
     put({ kind: "display_name", key: id, data, weeks: [...p.weeks] });
   }
   return [...out.values()].sort((a, b) => (a.kind + a.key < b.kind + b.key ? -1 : 1));

@@ -159,6 +159,10 @@ export interface CompetitorMap {
   /** exact CRM name → competitor id (only verified attributions) */
   byCrmName: Map<string, string>;
   issues: IdentityIssue[];
+  /** Absent on maps built before display-name formats existed (= FULL_NAME_V0). */
+  nameFormat?: import("./display-name").DisplayNameFormat;
+  /** Public name of every verified person (empty under FULL_NAME_V0). */
+  publicNames?: Map<string, import("./display-name").PublicName>;
 }
 
 /**
@@ -254,4 +258,6 @@ export interface CompetitionResult {
   duplicateGroups: DuplicateGroup[];
   /** Jobs whose CRM name has no verified competitor (pools, subs, unmapped). */
   unattributed: { crmName: string; jobs: number }[];
+  /** How displayName was built; absent on results computed before 2026-10-31 (= FULL_NAME_V0). */
+  displayNameFormat?: import("./display-name").DisplayNameFormat;
 }

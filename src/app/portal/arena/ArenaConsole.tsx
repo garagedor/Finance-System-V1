@@ -23,7 +23,7 @@ interface Overview {
   seedRules: ArenaRules;
   seedBalancedRules: ArenaRules;
 }
-type Tab = "weeks" | "templates" | "settings" | "audit";
+type Tab = "weeks" | "templates" | "names" | "settings" | "audit";
 type Editing =
   | { kind: "week"; id: string; rules: ArenaRules; amend: boolean }
   | { kind: "template"; templateId: string; name: string; rules: ArenaRules; isNew: boolean };
@@ -129,7 +129,7 @@ export default function ArenaConsole() {
       {error && <div className="portal-alert portal-alert-error" role="alert">{error}</div>}
 
       <div className="portal-range-pills" role="tablist" aria-label="Arena sections">
-        {([["weeks", "Weeks"], ["templates", "Templates"], ["settings", "Owner settings"], ["audit", "Audit log"]] as const).map(([k, label]) => (
+        {([["weeks", "Weeks"], ["templates", "Templates"], ["names", "Display names"], ["settings", "Owner settings"], ["audit", "Audit log"]] as const).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`portal-range-pill${tab === k ? " active" : ""}`} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
@@ -168,6 +168,7 @@ export default function ArenaConsole() {
         </div>
       )}
       {tab === "settings" && <Settings data={data} who={who} done={done} />}
+      {tab === "names" && <Names />}
       {tab === "audit" && <Audit who={who} />}
     </div>
   );
@@ -341,6 +342,72 @@ function Audit({ who }: { who: (id: string) => string }) {
         </table>
       </div>
       {more && rows.length > 0 && <div style={{ padding: 12 }}><button className="portal-btn" onClick={() => page(rows[rows.length - 1].at)}>Show older</button></div>}
+    </div>
+  );
+}
+
+interface NameRow {
+  id: string; fullName: string; displayName: string; source: "override" | "formatted" | "crm_fallback" | "raw";
+  needsEnglish: boolean; collision: "prefix" | "location" | "unresolved" | null; blocking: boolean;
+  possibleDuplicateOf: { id: string; fullName: string }[]; crmNames: string[]; location: string;
+}
+const SOURCE_LABEL: Record<NameRow["source"], string> = {
+  override: "Override (shown as set)", formatted: "First name + last initial", crm_fallback: "From the CRM name", raw: "As stored",
+};
+
+function Names() {
+  const [rows, setRows] = useState<NameRow[] | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    api<{ rows: NameRow[] }>("/api/arena/admin/names").then((d) => setRows(d.rows)).catch((e) => setErr(e instanceof Error ? e.message : String(e)));
+  }, []);
+  if (err) return <div className="portal-alert portal-alert-error" role="alert">{err}</div>;
+  if (!rows) return <div className="muted">Loading…</div>;
+  const blocking = rows.filter((r) => r.blocking).length;
+  const english = rows.filter((r) => r.needsEnglish).length;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <p className="muted small" style={{ margin: 0 }}>
+        Leaderboards, history and winners show the <b>public display name</b> (first name + last initial). Rankings, ties and the audit use the
+        competitor id only. Approved weeks keep the names they were approved with. To set or change an override, use a display-name case in the{" "}
+        <Link href="/portal/arena/review">review queue</Link>.
+      </p>
+      {(blocking > 0 || english > 0) && (
+        <div className={`portal-alert ${blocking ? "portal-alert-error" : "portal-alert-warn"}`} role="status">
+          {blocking > 0 && `${blocking} name(s) still identical after adding the location — set an override (blocks review). `}
+          {english > 0 && `${english} name(s) need an English display name.`}
+        </div>
+      )}
+      <div className="portal-card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table className="portal-table">
+            <thead><tr><th>Full name</th><th>Public display name</th><th>Flags</th><th>CRM names · location</th><th>Competitor id</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.fullName || "—"}</td>
+                  <td><b>{r.displayName}</b><div className="muted small">{SOURCE_LABEL[r.source]}</div></td>
+                  <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {r.collision === "unresolved" && <span className="pill pill-unpaid">Collision · needs override</span>}
+                    {r.collision === "prefix" && <span className="pill pill-pending">Collision · longer last name</span>}
+                    {r.collision === "location" && <span className="pill pill-pending">Collision · location added</span>}
+                    {r.needsEnglish && <span className="pill pill-pending">Needs English display name</span>}
+                    {r.possibleDuplicateOf.length > 0 && (
+                      <span className="pill pill-pending" title={r.possibleDuplicateOf.map((p) => p.fullName).join(", ")}>
+                        Possible duplicate account — confirm ({r.possibleDuplicateOf.map((p) => p.fullName).join(", ")})
+                      </span>
+                    )}
+                    {!r.collision && !r.needsEnglish && r.possibleDuplicateOf.length === 0 && <span className="muted small">—</span>}
+                  </td>
+                  <td className="small">{r.crmNames.join(", ") || "—"}{r.location ? ` · ${r.location}` : ""}</td>
+                  <td className="small muted">{r.id}</td>
+                </tr>
+              ))}
+              {rows.length === 0 && <tr><td colSpan={5} className="muted">No verified people yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }

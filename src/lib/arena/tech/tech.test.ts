@@ -378,7 +378,7 @@ test("data minimization: /me, /leaderboard, /history and /events expose only con
   const hist = await techHistory(w.ctx, ANN.id, null);
   assertMinimal("history", hist, ids);
   assert.equal(hist.weeks[0].myRank, 1);
-  assert.equal(hist.weeks[0].winners[0].displayName, "Ann Able");
+  assert.equal(hist.weeks[0].winners[0].displayName, "Ann A.", "public format: first name + last initial");
   const after = await techMe(w.ctx, ANN.id);
   assert.equal(after.competition!.phase, "approved");
   assert.deepEqual(after.award, { prizeCents: 45_000, position: 1, mostImproved: false });

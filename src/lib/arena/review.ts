@@ -45,6 +45,10 @@ export interface DisplayNameCaseData {
   competitorId: string;
   currentName: string;
   crmNames: string[];
+  /** Why an override is needed (absent on cases detected before 2026-10-31 = needs_english). */
+  reason?: "needs_english" | "name_collision";
+  /** The full name behind the public name (for the reviewer only). */
+  fullName?: string;
 }
 export type CaseData = DuplicateCaseData | IdentityCaseData | DisplayNameCaseData;
 

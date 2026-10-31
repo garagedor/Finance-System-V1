@@ -25,7 +25,7 @@ export const ARENA_TECH_API_VERSION = 1;
  *  audience pinned), requires an active, approved technician or area-manager
  *  profile, maps the Supabase user id to a competitor, and returns a short pass. */
 export interface ExchangeResponse {
-  pass: string;            // RS256 JWT, aud "arena", ~15 min
+  pass: string;            // RS256 JWT, aud "arena", 5 min by default (ARENA_PASS_TTL_SECONDS, max 15 min)
   expiresAt: string;       // ISO
   competitorId: string;
   displayName: string;

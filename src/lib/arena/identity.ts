@@ -16,6 +16,7 @@
  *  6. otherwise → unmapped (location pools, subcontractors, new hires)
  */
 import type { Competitor, CompetitorMap, IdentityIssue, IdentityOverride } from "./types";
+import { CURRENT_DISPLAY_NAME_FORMAT, personLocation, resolvePublicNames, type DisplayNameFormat, type PublicName } from "./display-name";
 
 export interface MappingRecord {
   supabaseUserId: string;
@@ -37,6 +38,12 @@ export function buildCompetitorMap(input: {
   crmNamesInUse: string[];
   overrides?: IdentityOverride[];
   displayNames?: Record<string, string>;
+  /**
+   * How public names are built. Default: the current owner-approved format.
+   * FULL_NAME_V0 reproduces results computed before 2026-10-31 (stored records
+   * carry the format they were computed with; they are never rewritten).
+   */
+  nameFormat?: DisplayNameFormat;
 }): CompetitorMap {
   const issues: IdentityIssue[] = [];
   const byCrmName = new Map<string, string>();
@@ -98,6 +105,8 @@ export function buildCompetitorMap(input: {
   }
 
   const techLocation = new Map(input.technicians.map((t) => [t._id, t.location ?? ""]));
+  const nameFormat = input.nameFormat ?? CURRENT_DISPLAY_NAME_FORMAT;
+  const publicNames = nameFormat === "FULL_NAME_V0" ? new Map<string, PublicName>() : rosterNames(input.mappings, input.technicians, input.displayNames);
   const namesOf = new Map<string, string[]>();
   for (const [name, id] of byCrmName) (namesOf.get(id) ?? namesOf.set(id, []).get(id)!).push(name);
 
@@ -108,7 +117,10 @@ export function buildCompetitorMap(input: {
       const location = names.map((n) => techLocation.get(n)).find((l) => l) ?? "";
       return {
         id,
-        displayName: input.displayNames?.[id] || m?.supabaseFullName?.trim() || names[0],
+        displayName:
+          nameFormat === "FULL_NAME_V0"
+            ? input.displayNames?.[id] || m?.supabaseFullName?.trim() || names[0]
+            : publicNames.get(id)?.displayName || names[0],
         crmNames: names,
         location,
       };
@@ -116,5 +128,26 @@ export function buildCompetitorMap(input: {
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   issues.sort((a, b) => (a.crmName < b.crmName ? -1 : 1));
-  return { competitors, byCrmName, issues };
+  return { competitors, byCrmName, issues, nameFormat, publicNames };
+}
+
+/**
+ * Public names of EVERY verified person (all mapping records), so a name is
+ * stable across weeks and collisions are judged against everyone.
+ */
+export function rosterNames(
+  mappings: MappingRecord[],
+  technicians: TechnicianRecord[],
+  overrides: Record<string, string> = {},
+): Map<string, PublicName> {
+  const techLocation = new Map(technicians.map((t) => [t._id, t.location ?? ""]));
+  return resolvePublicNames(
+    mappings
+      .filter((m) => m.supabaseUserId)
+      .map((m) => {
+        const crmNames = (m.crmTechNames ?? []).filter((n): n is string => typeof n === "string" && !!n.trim());
+        return { id: m.supabaseUserId, fullName: m.supabaseFullName, crmNames, location: personLocation(crmNames, techLocation) };
+      }),
+    overrides,
+  );
 }

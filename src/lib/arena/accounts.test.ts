@@ -113,7 +113,7 @@ test("status flips between review and approval → approval blocked until re-che
   const snap = await toReview(f);
   assert.deepEqual(prizeHolders(snap.result), [ANN.id, BO.id]);
   f.data.accounts.set(BO.id, INACTIVE); // deactivated after the owner opened the review
-  await assert.rejects(approveResults(f.ctx, f.id, OWNER, { snapshotId: snap._id }), /account status changed since this review: Bo Baker \(eligible → inactive\)/i);
+  await assert.rejects(approveResults(f.ctx, f.id, OWNER, { snapshotId: snap._id }), /account status changed since this review: Bo B\. \(eligible → inactive\)/i);
   assert.equal(await f.lc.results.findOne({ _id: f.id }), null, "nothing approved");
   const audit = await f.config.store.audit.find({ action: "competition.approve.refused" }).sort({ at: 1 }).toArray();
   assert.equal(audit.length, 1);

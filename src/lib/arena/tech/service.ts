@@ -13,7 +13,8 @@ import {
 } from "../lifecycle";
 import type { WeekWindow } from "../week";
 import { addDays, isMonday } from "../week";
-import { loadMappingFor, loadTechnicians } from "../mongo-store";
+import { loadMappingFor, loadMappings, loadTechnicians } from "../mongo-store";
+import { rosterNames } from "../identity";
 import { reviewDecisions, type ReviewContext } from "../review";
 import type {
   ArenaEvent, CompetitionPhase, EventsResponse, HistoryResponse, LeaderboardResponse, MeResponse,
@@ -104,10 +105,11 @@ export async function findCompetitor(ctx: TechCtx, supabaseUserId: string): Prom
     if (!participates(cur.rv.rules, supabaseUserId, location)) return { ok: false };
   }
   const decisions = await reviewDecisions(ctx.review);
+  // Same public name the engine uses ("First L.", collisions resolved over everyone).
+  const roster = rosterNames(await loadMappings(ctx.crmDb), await loadTechnicians(ctx.crmDb), decisions.displayNames);
   const displayName =
     cur?.rv.rules.participants.displayNames[supabaseUserId] ||
-    decisions.displayNames[supabaseUserId] ||
-    m.supabaseFullName?.trim() ||
+    roster.get(supabaseUserId)?.displayName ||
     names[0] ||
     "Technician";
   return { ok: true, competitor: { competitorId: supabaseUserId, displayName } };

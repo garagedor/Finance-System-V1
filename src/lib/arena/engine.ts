@@ -327,6 +327,7 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
     unattributed: [...unattributed.entries()]
       .map(([crmName, jobs]) => ({ crmName, jobs }))
       .sort((a, b) => b.jobs - a.jobs || (a.crmName < b.crmName ? -1 : 1)),
+    ...(input.competitors.nameFormat ? { displayNameFormat: input.competitors.nameFormat } : {}),
   };
 }
 

@@ -93,7 +93,7 @@ test("full admin + review session writes only Arena collections and leaves the C
   assert.equal((await readiness(ctx.review)).launchReady, true);
 
   const preview = await previewRules(ctx, SEED_STANDARD_WEEK, W1);
-  assert.deepEqual(preview.prizes.map((p) => p.name).sort(), ["Dana Cohen", "Yuval German"]);
+  assert.deepEqual(preview.prizes.map((p) => p.name).sort(), ["Dana Cohen", "Yuval G."], "override verbatim; formatted name otherwise");
   assert.equal(preview.unmappedNamesWithJobs.length, 0, "Plenty was classified, so it no longer blocks");
   assert.equal(preview.blockingDuplicates, 0);
   assert.equal(preview.paidCents + preview.unallocatedCents, preview.budgetCents);

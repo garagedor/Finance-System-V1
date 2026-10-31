@@ -191,6 +191,7 @@ function CaseCard({ c, me, people, peopleById, who, onChanged }: {
             {c.kind === "duplicate_group" && `${(d as DuplicateCaseData).competitorName} · ${(d as DuplicateCaseData).date}`}
             {c.kind === "identity_name" && `“${(d as IdentityCaseData).crmName}”`}
             {c.kind === "display_name" && (d as DisplayNameCaseData).currentName}
+            {c.kind === "display_name" && (d as DisplayNameCaseData).reason === "name_collision" && <span className="pill pill-unpaid" style={{ marginLeft: 8 }}>Name collision</span>}
           </b>
           {c.kind === "duplicate_group" && (d as DuplicateCaseData).likely && <span className="pill pill-unpaid" style={{ marginLeft: 8 }}>Likely duplicate</span>}
           {c.kind === "duplicate_group" && (d as DuplicateCaseData).mayAffectPrizes && <span className="pill pill-pending" style={{ marginLeft: 6 }}>Could change prizes</span>}
@@ -223,7 +224,13 @@ function CaseCard({ c, me, people, peopleById, who, onChanged }: {
         </p>
       )}
       {c.kind === "display_name" && (
-        <p style={{ margin: 0 }}>CRM names: {(d as DisplayNameCaseData).crmNames.join(", ")}. The national leaderboard needs a name in English letters.</p>
+        <p style={{ margin: 0 }}>
+          {(d as DisplayNameCaseData).fullName && <>Full name: {(d as DisplayNameCaseData).fullName}. </>}
+          CRM names: {(d as DisplayNameCaseData).crmNames.join(", ")}.{" "}
+          {(d as DisplayNameCaseData).reason === "name_collision"
+            ? "This public name is identical to another technician's, even with the location added. Set a display name so each person is distinguishable."
+            : "Needs English display name: the national leaderboard needs a name in English letters."}
+        </p>
       )}
       <div className="muted small">Seen in weeks: {c.weeks.map(weekLabel).join(", ")}</div>
 
