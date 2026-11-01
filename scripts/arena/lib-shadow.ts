@@ -278,7 +278,9 @@ export function rulesSummary(r: ArenaRules): string[] {
     `prizes: ${r.prizes.positionsCents.map((c, i) => `#${i + 1} ${usd(c)}`).join(" · ")} · budget ${usd(r.prizes.budgetCents)}`,
     `Most Improved: ${mi.enabled ? `${usd(mi.amountCents)}; baseline ${mi.baselineWeeks} weeks, ≥ ${mi.minValidWeeks} valid, ≥ ${mi.minQualifyingJobsPerWeek} qualifying jobs per baseline week, improvement > ${mi.minImprovement}` : "off"}`,
     `qualifying statuses: ${r.qualifying.statuses.join(", ")}`,
-    `tie-break: ${r.tieBreak.join(" → ")}`,
+    r.scoring.methodology === "BALANCED_PERFORMANCE_V1"
+      ? "tie-break (fixed for BALANCED_PERFORMANCE_V1): unrounded final score → higher metric score → more assigned jobs → competitor id"
+      : `tie-break: ${r.tieBreak.join(" → ")}`,
     `review window: approval opens ${r.review.approvalOpensDaysAfterWeekEnd} day(s) after the week ends, ${r.review.approvalOpensLocalTime} ${r.timezone}`,
   ];
 }
