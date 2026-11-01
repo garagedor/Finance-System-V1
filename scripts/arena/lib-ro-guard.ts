@@ -20,6 +20,12 @@ export const ALLOWED_ACTIONS: ReadonlySet<string> = new Set(["find", "listCollec
 /** Shared users that can write; never acceptable for shadow reads, whatever their roles say. */
 export const FORBIDDEN_USERS: readonly string[] = ["lbs_crm_app", "lbs_ops"];
 export const GUARD_EXIT_CODE = 3;
+/** MongoDB / Atlas built-in roles: never acceptable, even `read` (it carries collStats, dbStats, changeStream, …). */
+export const BUILTIN_ROLES: ReadonlySet<string> = new Set([
+  "read", "readWrite", "readAnyDatabase", "readWriteAnyDatabase", "dbAdmin", "dbAdminAnyDatabase", "dbOwner", "userAdmin",
+  "userAdminAnyDatabase", "clusterAdmin", "clusterManager", "clusterMonitor", "hostManager", "backup", "restore", "root",
+  "enableSharding", "atlasAdmin", "__system",
+]);
 
 export interface Privilege {
   resource: { db?: string; collection?: string; cluster?: boolean; anyResource?: boolean };
@@ -35,6 +41,8 @@ export interface ConnectionStatus {
 export interface GuardVerdict {
   ok: boolean;
   users: string[];
+  /** Roles the server reports for the user (`role@db`). */
+  roles: string[];
   reasons: string[];
   /** CRM collections with `find` ("*" = the whole CRM database). */
   findOn: string[];
@@ -58,6 +66,8 @@ export function evaluateGuard(status: ConnectionStatus, crmDb = CRM_DB_DEFAULT):
   for (const u of info.authenticatedUsers ?? [])
     if (FORBIDDEN_USERS.includes(u.user.toLowerCase())) reasons.push(`user "${u.user}" is a shared read-write account and is never allowed here`);
   if (!Array.isArray(privileges)) reasons.push("the server did not report privileges (connectionStatus showPrivileges)");
+  const builtin = (info.authenticatedUserRoles ?? []).filter((r) => BUILTIN_ROLES.has(r.role)).map((r) => `${r.role}@${r.db}`);
+  if (builtin.length) reasons.push(`built-in role(s) ${builtin.join(", ")}: use a custom role with find only`);
 
   const findOn = new Set<string>();
   const badResources: string[] = [];
@@ -75,6 +85,7 @@ export function evaluateGuard(status: ConnectionStatus, crmDb = CRM_DB_DEFAULT):
   return {
     ok: reasons.length === 0,
     users,
+    roles: (info.authenticatedUserRoles ?? []).map((r) => `${r.role}@${r.db}`).sort(),
     reasons,
     findOn: [...findOn].sort(),
     canFind: (c: string) => all || findOn.has(c),
@@ -180,4 +191,43 @@ export function assertLocalMongoUri(uri: string): void {
     const host = h.replace(/:\d+$/, "");
     if (host !== "127.0.0.1") throw new GuardRefusal("ARENA_SHADOW_LOCAL_URI must point at 127.0.0.1 only (local Arena state)");
   }
+}
+
+// ── server-side access probes (shadow-verify-access, shadow-preflight) ─────
+export const PROBE_ID = "__arena_probe_nonexistent__";
+export interface ProbeLine { ok: boolean; name: string; detail: string }
+
+/**
+ * 1. the SERVER refuses a write: updateOne on Job with a filter that matches
+ *    nothing (_id PROBE_ID, no upsert) → Unauthorized (13). Even a wrongly
+ *    accepted command could not change anything.
+ * 2. the SERVER refuses find on a collection that is not granted (`users`) → 13
+ * 3. the in-process proxy blocks writes before they are sent
+ */
+export async function accessProbes(crm: GuardedCrm): Promise<ProbeLine[]> {
+  const out: ProbeLine[] = [];
+  const num = (e: unknown) => (e as { code?: number })?.code;
+  const name = (e: unknown) => (e as { codeName?: string })?.codeName ?? (e instanceof Error ? e.name : "error");
+  const ag = crm.raw.db(crm.db.databaseName);
+  try {
+    const r = await ag.collection("Job").updateOne({ _id: PROBE_ID as never }, { $set: { __arenaProbe: 1 } }, { upsert: false });
+    out.push({ ok: false, name: "server refuses a write on Job", detail: `the server ACCEPTED the command (matched ${r.matchedCount}, modified ${r.modifiedCount}) — the user can write, or the server runs without access control` });
+  } catch (e) {
+    out.push({ ok: num(e) === 13, name: "server refuses a write on Job", detail: `code ${num(e)} ${name(e)}` });
+  }
+  try {
+    await ag.collection("users").findOne({}, { projection: { _id: 1 } });
+    out.push({ ok: false, name: "server refuses find on a non-granted collection (users)", detail: "the read was ALLOWED" });
+  } catch (e) {
+    out.push({ ok: num(e) === 13, name: "server refuses find on a non-granted collection (users)", detail: `code ${num(e)} ${name(e)}` });
+  }
+  const before = crm.blocked.length;
+  try {
+    await crm.db.collection("Job").updateOne({ _id: PROBE_ID as never }, { $set: { __arenaProbe: 1 } });
+    out.push({ ok: false, name: "in-process proxy blocks writes", detail: "the proxy let a write through" });
+  } catch (e) {
+    out.push({ ok: /READ-ONLY/.test((e as Error).message), name: "in-process proxy blocks writes", detail: (e as Error).message });
+  }
+  crm.blocked.splice(before); // the deliberate probe is not a blocked CRM write attempt
+  return out;
 }

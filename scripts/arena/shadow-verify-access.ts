@@ -11,17 +11,15 @@
  *    has that _id and upsert is off.
  * 3. the SERVER refuses a read of a collection that is not granted (`users`) → 13
  * 4. the in-process proxy blocks writes before they are sent
- * Exit 0 only when every line is PASS.
+ * Exit 0 only when every line is PASS. (The probes live in lib-ro-guard.ts and
+ * are shared with shadow-preflight.ts.)
  */
-import { GUARD_EXIT_CODE, openGuardedCrm, runGuarded } from "./lib-ro-guard.ts";
+import { GUARD_EXIT_CODE, accessProbes, openGuardedCrm, runGuarded } from "./lib-ro-guard.ts";
 
-const PROBE_ID = "__arena_probe_nonexistent__";
 const line = (ok: boolean, name: string, detail = "") => {
   console.log(`${ok ? "PASS" : "FAIL"}  ${name}${detail ? ` — ${detail}` : ""}`);
   return ok;
 };
-const code = (e: unknown) => (e as { code?: number })?.code;
-const codeName = (e: unknown) => (e as { codeName?: string })?.codeName ?? (e instanceof Error ? e.name : "error");
 
 await runGuarded(async () => {
   let crm;
@@ -33,29 +31,7 @@ await runGuarded(async () => {
   }
   const results: boolean[] = [];
   results.push(line(true, "guard: read-only CRM user", `${crm.verdict.users.join(", ")}; find on ${crm.verdict.findOn.join(", ")}`));
-  const ag = crm.raw.db(crm.db.databaseName);
-
-  try {
-    const r = await ag.collection("Job").updateOne({ _id: PROBE_ID as never }, { $set: { __arenaProbe: 1 } }, { upsert: false });
-    results.push(line(false, "server refuses a write on Job", `the server ACCEPTED the command (matched ${r.matchedCount}, modified ${r.modifiedCount}) — the user can write, or the server runs without access control`));
-  } catch (e) {
-    results.push(line(code(e) === 13, "server refuses a write on Job", `code ${code(e)} ${codeName(e)}`));
-  }
-
-  try {
-    await ag.collection("users").findOne({}, { projection: { _id: 1 } });
-    results.push(line(false, "server refuses find on a non-granted collection (users)", "the read was ALLOWED"));
-  } catch (e) {
-    results.push(line(code(e) === 13, "server refuses find on a non-granted collection (users)", `code ${code(e)} ${codeName(e)}`));
-  }
-
-  try {
-    await crm.db.collection("Job").updateOne({ _id: PROBE_ID as never }, { $set: { __arenaProbe: 1 } });
-    results.push(line(false, "in-process proxy blocks writes", "the proxy let a write through"));
-  } catch (e) {
-    results.push(line(/READ-ONLY/.test((e as Error).message), "in-process proxy blocks writes", (e as Error).message));
-  }
-
+  for (const p of await accessProbes(crm)) results.push(line(p.ok, p.name, p.detail));
   await crm.close();
   return results.every(Boolean) ? 0 : 1;
 });

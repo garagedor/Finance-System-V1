@@ -89,3 +89,15 @@ test("local Arena state must be on 127.0.0.1", () => {
   for (const bad of ["mongodb+srv://cluster0.example.mongodb.net", "mongodb://localhost:27017", "mongodb://127.0.0.1:1,10.0.0.5:27017", "mongodb://u:p@db.example.com/x"])
     assert.throws(() => assertLocalMongoUri(bad), /127\.0\.0\.1/, bad);
 });
+
+test("guard: a built-in role is refused by name, even plain `read` (it carries collStats, dbStats, changeStream)", () => {
+  const s = status("arena_shadow_ro", [on("Job", ["find"])]);
+  s.authInfo!.authenticatedUserRoles = [{ role: "read", db: "ag" }];
+  const v = evaluateGuard(s);
+  assert.equal(v.ok, false);
+  assert.ok(v.reasons.some((r) => /built-in role\(s\) read@ag/.test(r)), v.reasons.join("; "));
+  s.authInfo!.authenticatedUserRoles = [{ role: "arenaShadowRead", db: "admin" }];
+  const ok = evaluateGuard(s);
+  assert.equal(ok.ok, true, ok.reasons.join("; "));
+  assert.deepEqual(ok.roles, ["arenaShadowRead@admin"]);
+});
