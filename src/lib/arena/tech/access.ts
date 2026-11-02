@@ -3,9 +3,15 @@
  *
  *   exchange()      Weekly Balance access token → Arena pass
  *   authorizePass() every technician request: valid pass AND, re-checked now,
- *                   the master switch, the Weekly Balance account (active +
- *                   approved + competing role) and the competitor mapping /
- *                   Arena participation. A pass alone is never sufficient.
+ *                   the master switch, the pilot allowlist, the Weekly Balance
+ *                   account (active + approved + competing role) and the
+ *                   competitor mapping / Arena participation. A pass alone is
+ *                   never sufficient.
+ *
+ * Pilot allowlist (allowlist.ts): default deny. A person who is not on it gets
+ * EXACTLY the "Arena off" answer (503 arena_disabled), and it is checked before
+ * the account, mapping and per-user rate limit, so their answers (inactive, not
+ * a competitor, rate limited) can never reveal that the Arena is on for others.
  */
 import type { ExchangeError, ExchangeResponse, ArenaErrorBody } from "../tech-api-contract";
 import { WbTokenError } from "./wb-token";
@@ -25,6 +31,8 @@ export type Lookup =
 
 export interface AccessDeps {
   enabled: boolean;
+  /** Pilot allowlist lookup (no cache). Anything but `true`, or a throw, is "not allowed". */
+  isAllowlisted: (competitorId: string) => Promise<boolean>;
   verifyWbToken: (token: string) => Promise<{ userId: string }>;
   verifier: TechnicianVerifier;
   findCompetitor: (supabaseUserId: string) => Promise<Lookup>;
@@ -55,6 +63,18 @@ export function bearer(authorization: string | null | undefined): string | null 
   return m ? m[1] : null;
 }
 
+/** The pilot allowlist, failing closed. */
+async function allowlisted(deps: AccessDeps, competitorId: string): Promise<boolean> {
+  try {
+    if ((await deps.isAllowlisted(competitorId)) === true) return true;
+    deps.log?.("[arena-tech] refused: not on the pilot allowlist");
+    return false;
+  } catch {
+    deps.log?.("[arena-tech] allowlist unavailable; refusing");
+    return false;
+  }
+}
+
 /** Account check shared by exchange and every request. */
 async function accountAndMapping(deps: AccessDeps, userId: string): Promise<Outcome<never> | CompetitorLookup> {
   let status;
@@ -82,6 +102,8 @@ export async function exchange(deps: AccessDeps, authorization: string | null, i
     if (!(e instanceof WbTokenError)) deps.log?.("[arena-tech] token verification error");
     return fail(401, "invalid_token");
   }
+  // Same answer as the switch being off (see the header).
+  if (!(await allowlisted(deps, userId))) return fail(503, "arena_disabled");
   if (!(await deps.limiters.userIp.take(`u:${userId}|${ip}`))) return fail(429, "rate_limited");
   const who = await accountAndMapping(deps, userId);
   if ("status" in who) return who;
@@ -103,6 +125,8 @@ export async function authorizePass(
     if (!(e instanceof PassError)) throw e;
     return { ok: false, outcome: err(401, "unauthorized", "The Arena pass is invalid or expired") };
   }
+  // Removed from the allowlist mid-session: refused now, whatever the pass says.
+  if (!(await allowlisted(deps, competitorId))) return { ok: false, outcome: fail(503, "arena_disabled") };
   // Competitor id = the Weekly Balance user id (one TechNameMapping record).
   const who = await accountAndMapping(deps, competitorId);
   if ("status" in who) return { ok: false, outcome: who };

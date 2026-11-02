@@ -31,6 +31,8 @@ export const ARENA_COLLECTIONS = {
   accountStatus: "arena_account_status",
   /** Shared exchange rate-limit windows (TTL-indexed). */
   rateLimit: "arena_rate_limit",
+  /** Pilot allowlist: current technician-access state per competitor (history in arena_audit). */
+  techAccess: "arena_tech_access",
 } as const;
 
 /** Lifecycle collections (lifecycle.ts). Results, approvals and non-live snapshots are insert-only. */

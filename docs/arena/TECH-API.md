@@ -65,7 +65,7 @@ The copy in the-convert (`src/arena/contract.ts`) must receive the same field.
    re-exchanges when it expires (or on any 401).
 
 **Every technician request re-checks** (pass validity alone is never enough):
-master switch on → pass signature/iss/aud/alg/expiry → Weekly Balance account still
+master switch on → pass signature/iss/aud/alg/expiry → on the pilot allowlist → Weekly Balance account still
 active + approved (verifier, **no cache**) → mapping still points to that user and
 the person is not excluded. A deactivation, un-approval, unmapping or exclusion is
 refused on the very next call even with an unexpired pass (tested in unit tests and
@@ -197,3 +197,30 @@ function rollout, launch checklist). Remaining open items beyond it:
 2. Event-feed retention (old `arena_tech_event` rows are never pruned).
 3. Owner sign-off on the contract addition (`notices`) and on the dev-only actions
    staying dev-only.
+
+## Pilot allowlist (technician access gate)
+
+`src/lib/arena/tech/allowlist.ts`, collection `arena_tech_access` (Arena database).
+**Default deny:** with `ARENA_TECH_ENABLED=1`, only competitor ids (Weekly Balance user
+ids, lowercase) with `allowed: true` get through the exchange and every `tech/*` request.
+Anyone else gets **exactly** the switch-off answer (`503 arena_disabled`, same body and
+headers). The allowlist is checked right after the token/pass signature and BEFORE the
+verifier, the mapping and the per-user rate limit, so someone outside the pilot never
+sees `account_inactive`, `not_a_competitor` or a per-user `429`, and the Weekly Balance
+verifier is not called for them. No cache: a revoke refuses the very next request even
+with an unexpired pass. A lookup error is "not allowed" (fail closed).
+
+Still observable to anyone (unchanged): `401` for a missing/invalid token or pass, the
+per-IP `429` (60/min) and the CORS origin check. The real WB app always sends a valid
+token, so a non-allowlisted technician sees only "Arena is coming soon".
+
+Management (`/api/arena/admin/tech-access`, CRM session):
+- `GET` (`arena:console:view`): current rows, `techApiEnabled`, `allowedCount`, last 200 access audit rows.
+- `POST { competitorId, allowed: true|false, reason }` (`arena:rules:edit`): grant / revoke one.
+- `POST { action: "revoke_all", reason }`: emergency, revoke everyone.
+- Changes are **owner-only** inside the store (settings `ownerUserId`), need a reason, and are
+  audited in `arena_audit` (`tech_access.grant|revoke|revoke_all`, `target tech_access:<id>`,
+  `by`, `at`, `reason`, `before`, `after`). A grant must name an id with a `TechNameMapping`.
+
+The allowlist controls ACCESS only. Who is scored, ranked and prize-eligible stays the
+competition's participant rules (`rules.participants`).
