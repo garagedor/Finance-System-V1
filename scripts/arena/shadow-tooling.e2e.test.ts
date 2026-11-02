@@ -278,7 +278,7 @@ test("approve 2026-10-12: a pending duplicate that could change prizes blocks th
   const note = d.decisions.plan.notes.find((n: string) => /pending office confirmation Sofia R\./.test(n));
   assert.ok(note, JSON.stringify(d.decisions.plan.notes));
   assert.ok(d.decisions.plan.notes.some((n: string) => /"Benny" pending identification/.test(n)));
-  const ids = /jobs (.+)$/.exec(note)![1].split(", ");
+  const ids = /jobs ([^;]+)/.exec(note)![1].trim().split(", ");
   assert.equal(ids.length, 2);
   assert.equal(await localDb((db) => db.collection("arena_result").countDocuments()), 0, "nothing approved");
 
