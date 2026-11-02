@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import './ProviderXlsxButton.css';
 
 type Row = { key: string; count: number };
 
@@ -17,6 +18,7 @@ export default function ProviderXlsxButton({ startDate, endDate }: { startDate: 
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
   const btnRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   // The panel is portalled to <body> with fixed positioning: the page header
@@ -111,14 +113,21 @@ export default function ProviderXlsxButton({ startDate, endDate }: { startDate: 
     }
   };
 
-  const btn: React.CSSProperties = {
-    background: 'var(--ds-info-wash)', color: 'var(--ds-info-text)', border: '1px solid var(--ds-info-line)',
-    borderRadius: 10, padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-  };
+  const q = query.trim().toLowerCase();
+  const shown = q ? rows.filter((r) => r.key.toLowerCase().includes(q)) : rows;
+  const allShownPicked = shown.length > 0 && shown.every((r) => picked.has(r.key));
+  const pickedJobs = rows.reduce((n, r) => n + (picked.has(r.key) ? r.count : 0), 0);
+  const selectAll = () => setPicked((s) => new Set([...s, ...shown.map((r) => r.key)]));
+  const clearAll = () => setPicked((s) => {
+    if (!q) return new Set();
+    const next = new Set(s);
+    shown.forEach((r) => next.delete(r.key));
+    return next;
+  });
 
   return (
     <>
-      <button ref={btnRef} type="button" style={btn} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+      <button ref={btnRef} type="button" className="pxs-trigger" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="dialog">
         ⬇ Provider spreadsheet
       </button>
       {open && pos && typeof document !== 'undefined' && createPortal((
@@ -126,50 +135,74 @@ export default function ProviderXlsxButton({ startDate, endDate }: { startDate: 
           ref={panelRef}
           role="dialog"
           aria-label="Provider spreadsheet"
-          style={{
-            position: 'fixed', right: pos.right, top: pos.top, zIndex: 9999, width: 'min(340px, calc(100vw - 32px))',
-            maxHeight: `calc(100vh - ${pos.top + 16}px)`, overflowY: 'auto',
-            background: 'var(--ds-surface-1)', color: 'var(--ds-ink)', border: '1px solid var(--ds-line-strong)',
-            borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.25)', padding: 14,
-          }}
+          className="pxs-panel"
+          style={{ right: pos.right, top: pos.top, maxHeight: `calc(100vh - ${pos.top + 16}px)` }}
         >
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Provider statistics by location</div>
-          <div style={{ fontSize: 12, color: 'var(--ds-ink-2)', marginBottom: 10 }}>
-            {startDate} → {endDate} · all locations
+          <div className="pxs-head">
+            <div>
+              <div className="pxs-title">Provider spreadsheet</div>
+              <div className="pxs-sub">{startDate} → {endDate} · all locations</div>
+            </div>
+            <button type="button" className="pxs-close" onClick={() => setOpen(false)} aria-label="Close">×</button>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, marginBottom: 8 }}>
-            Select providers with at least
-            <input
-              type="number"
-              min={1}
-              value={minJobs}
-              onChange={(e) => selectMin(Math.max(1, Number(e.target.value) || 1))}
-              style={{ width: 64, padding: '4px 6px', borderRadius: 6, border: '1px solid var(--ds-line-strong)', background: 'var(--ds-surface-2)', color: 'var(--ds-ink)' }}
-            />
-            jobs
-          </label>
-          <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid var(--ds-line)', borderRadius: 8 }}>
+
+          <div className="pxs-tools">
+            <div className="pxs-seg" role="group" aria-label="Quick select">
+              <button type="button" onClick={selectAll} disabled={loading || shown.length === 0 || allShownPicked}>Select all</button>
+              <button type="button" onClick={clearAll} disabled={loading || picked.size === 0}>Clear</button>
+            </div>
+            <label className="pxs-min">
+              <span>≥</span>
+              <input
+                type="number"
+                min={1}
+                value={minJobs}
+                onChange={(e) => selectMin(Math.max(1, Number(e.target.value) || 1))}
+                aria-label="Select providers with at least this many jobs"
+              />
+              <span>jobs</span>
+            </label>
+          </div>
+
+          <input
+            className="pxs-search"
+            type="search"
+            placeholder="Search providers…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+
+          <div className="pxs-list-head">
+            <span>Provider</span>
+            <span>Jobs</span>
+          </div>
+          <div className="pxs-list" role="listbox" aria-multiselectable="true">
             {loading ? (
-              <div style={{ padding: 10, fontSize: 13 }}>Loading…</div>
-            ) : rows.length === 0 ? (
-              <div style={{ padding: 10, fontSize: 13 }}>No jobs in this range.</div>
-            ) : rows.map((r) => (
-              <label key={r.key} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>
-                <input type="checkbox" checked={picked.has(r.key)} onChange={() => toggle(r.key)} />
-                <span style={{ flex: 1 }}>{r.key}</span>
-                <span style={{ color: 'var(--ds-ink-2)' }}>{r.count}</span>
-              </label>
-            ))}
+              <div className="pxs-empty">Loading providers…</div>
+            ) : shown.length === 0 ? (
+              <div className="pxs-empty">{rows.length === 0 ? 'No jobs in this range.' : 'No provider matches.'}</div>
+            ) : shown.map((r) => {
+              const on = picked.has(r.key);
+              return (
+                <label key={r.key} className={`pxs-row${on ? ' is-on' : ''}`} role="option" aria-selected={on}>
+                  <input type="checkbox" checked={on} onChange={() => toggle(r.key)} />
+                  <span className="pxs-name" title={r.key}>{r.key}</span>
+                  <span className="pxs-count">{r.count.toLocaleString()}</span>
+                </label>
+              );
+            })}
           </div>
-          {error && <div style={{ color: 'var(--ds-crit-text)', fontSize: 12, marginTop: 8 }}>{error}</div>}
-          <button
-            type="button"
-            onClick={download}
-            disabled={busy || picked.size === 0}
-            style={{ ...btn, width: '100%', marginTop: 10, opacity: busy || picked.size === 0 ? 0.6 : 1, cursor: busy || picked.size === 0 ? 'default' : 'pointer' }}
-          >
-            {busy ? 'Building… (can take a minute)' : `Download spreadsheet (${picked.size} provider${picked.size === 1 ? '' : 's'})`}
-          </button>
+
+          {error && <div className="pxs-error">{error}</div>}
+
+          <div className="pxs-foot">
+            <div className="pxs-summary">
+              <strong>{picked.size}</strong> of {rows.length} providers · {pickedJobs.toLocaleString()} jobs
+            </div>
+            <button type="button" className="pxs-go" onClick={download} disabled={busy || picked.size === 0}>
+              {busy ? 'Building… (up to a minute)' : 'Download spreadsheet'}
+            </button>
+          </div>
         </div>
       ), document.body)}
     </>
