@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState, useRef } from 'react';
+import ProviderXlsxButton from './ProviderXlsxButton';
+import { isStatsXlsxOwner } from '@/lib/stats-owner';
 import { formatCurrency } from '../utils/jobUtils';
 import { buildReportFilename, REPORT_FILENAME_DEFAULTS } from '@/lib/report-filename-format';
 import './styles.css';
@@ -412,7 +414,10 @@ export default function StatsPage() {
             <p className="stats-kicker">Analytics</p>
             <h1 className="stats-title">Statistics</h1>
           </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            {!compareMode && isStatsXlsxOwner(user) && (
+              <ProviderXlsxButton startDate={activeFilters.startDate} endDate={activeFilters.endDate} />
+            )}
             {!compareMode && (
               <button
                 onClick={handleDownloadPdf}
