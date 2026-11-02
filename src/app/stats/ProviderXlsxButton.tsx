@@ -129,7 +129,7 @@ export default function ProviderXlsxButton({ startDate, endDate }: { startDate: 
           style={{
             position: 'fixed', right: pos.right, top: pos.top, zIndex: 9999, width: 'min(340px, calc(100vw - 32px))',
             maxHeight: `calc(100vh - ${pos.top + 16}px)`, overflowY: 'auto',
-            background: 'var(--ds-surface)', color: 'var(--ds-ink)', border: '1px solid var(--ds-line-strong)',
+            background: 'var(--ds-surface-1)', color: 'var(--ds-ink)', border: '1px solid var(--ds-line-strong)',
             borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.25)', padding: 14,
           }}
         >
