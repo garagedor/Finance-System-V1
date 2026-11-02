@@ -25,6 +25,8 @@ export const ARENA_COLLECTIONS = {
   approvals: "arena_approval",
   techEvents: "arena_tech_event",
   claims: "arena_claim",
+  /** CRM job changes found after approval (insert-only; never applied). */
+  lateCorrections: "arena_late_correction",
   /** Last known Weekly Balance account state per competitor (live fallback only). */
   accountStatus: "arena_account_status",
   /** Shared exchange rate-limit windows (TTL-indexed). */
@@ -40,6 +42,7 @@ export function lifecycleCollections(db: Db): LifecycleCollections {
     approvals: c(ARENA_COLLECTIONS.approvals),
     events: c(ARENA_COLLECTIONS.techEvents),
     claims: c(ARENA_COLLECTIONS.claims),
+    lateCorrections: c(ARENA_COLLECTIONS.lateCorrections),
   };
 }
 
@@ -80,6 +83,7 @@ export function ensureArenaIndexes(db: Db): Promise<void> {
       db.collection(ARENA_COLLECTIONS.results).createIndex({ weekStart: -1 }),
       db.collection(ARENA_COLLECTIONS.approvals).createIndex({ competitionId: 1, at: 1 }),
       db.collection(ARENA_COLLECTIONS.techEvents).createIndex({ competitorId: 1, key: 1 }),
+      db.collection(ARENA_COLLECTIONS.lateCorrections).createIndex({ competitionId: 1, detectedAt: -1 }),
       db.collection(ARENA_COLLECTIONS.rateLimit).createIndex(RATE_LIMIT_TTL_INDEX.key, RATE_LIMIT_TTL_INDEX.options),
     ]);
   })().catch((e) => {

@@ -30,6 +30,60 @@ function AccountCell({ r, live }: { r: Row; live: boolean }) {
     </span>
   );
 }
+interface JobChange { jobId: string; kind: string; week: string; techBefore: string | null; techAfter: string | null; before: string | null; after: string | null; detail: string; detectedAt: string; crmUpdatedAt: string | null }
+interface ImpactSide { rank: number; score: number; prizePosition: number | null; prizeCents: number; wonMostImproved: boolean; assignedJobs: number; closedJobs: number; qualifyingJobs: number; eligible: boolean }
+interface LateReport {
+  against: { snapshotId: string; readAt: string }; read: { readAt: string }; detectedAt: string; changes: JobChange[];
+  impact: { material: boolean; reasons: string[]; rows: { competitorId: string; displayName: string; before: ImpactSide | null; after: ImpactSide | null; material: boolean; why: string[] }[] };
+  updateTimestampField: string | null;
+}
+interface LateDecision { choice: "keep_freeze" | "accept_correction"; reason: string; by: string; at: string; carriedFrom?: string }
+const KIND: Record<string, string> = {
+  removed: "Job removed", redated_out: "Re-dated out of the week", redated_in: "Re-dated into the week", reassigned: "Re-assigned",
+  status: "Status edited", profit: "Profit edited", location: "Location edited", date: "Re-dated (same week)", added: "Job added",
+};
+const impactSide = (x: ImpactSide | null) =>
+  x ? `#${x.rank} · ${x.score.toFixed(2)} · ${x.assignedJobs}/${x.closedJobs}/${x.qualifyingJobs} · ${x.prizePosition !== null ? `prize #${x.prizePosition} ${dollars(x.prizeCents)}` : x.wonMostImproved ? `Most Improved ${dollars(x.prizeCents)}` : "no prize"}` : "—";
+
+/** Per-job change list and its effect on prizes (admin only). */
+function LateChanges({ r, title, sides = ["Freeze job set", "Corrected CRM"] }: { r: LateReport; title: string; sides?: [string, string] }) {
+  return (
+    <details open data-testid="arena-late-changes">
+      <summary><b>{title}: {r.changes.length} job change(s)</b>{r.impact.material ? <span className="pill pill-unpaid" style={{ marginLeft: 8 }}>Affects prizes</span> : <span className="muted small"> · no effect on prizes</span>}</summary>
+      <div className="muted small" style={{ margin: "4px 0" }}>
+        Compared with the snapshot read {when(r.against.readAt)} · re-read {when(r.read.readAt)} ·{" "}
+        {r.updateTimestampField ? `CRM edit times from “${r.updateTimestampField}”` : "the CRM does not record when a job was edited: times shown are when the Arena detected the change"}
+      </div>
+      <div style={{ overflowX: "auto" }}>
+        <table className="portal-table">
+          <thead><tr><th>Change</th><th>Job</th><th>Technician</th><th>Before</th><th>After</th><th>Detected</th></tr></thead>
+          <tbody>{r.changes.map((c) => (
+            <tr key={`${c.jobId}-${c.kind}`}>
+              <td title={c.detail}>{KIND[c.kind] ?? c.kind}{c.week === "baseline" ? <span className="muted small"> (baseline week)</span> : null}</td>
+              <td className="small"><code>{c.jobId.slice(-8)}</code></td>
+              <td>{c.techBefore ?? "—"}{c.techAfter !== null && c.techAfter !== c.techBefore ? ` → ${c.techAfter || "(nobody)"}` : ""}</td>
+              <td>{c.before ?? "—"}</td><td>{c.after ?? "—"}</td>
+              <td className="small">{when(c.detectedAt)}{c.crmUpdatedAt ? <div className="muted">edited {when(c.crmUpdatedAt)}</div> : null}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+      {r.impact.rows.length > 0 && (
+        <div style={{ overflowX: "auto", marginTop: 6 }}>
+          <table className="portal-table">
+            <thead><tr><th>Technician</th><th>{sides[0]}</th><th>{sides[1]}</th><th>Effect</th></tr></thead>
+            <tbody>{r.impact.rows.map((x) => (
+              <tr key={x.competitorId}><td>{x.displayName}</td><td>{impactSide(x.before)}</td><td>{impactSide(x.after)}</td>
+                <td className={x.material ? "text-danger" : "muted"}>{x.material ? x.why.join(", ") : "no prize effect"}</td></tr>
+            ))}</tbody>
+          </table>
+          <div className="muted small">Rank · score · assigned/closed/qualifying · prize — same review decisions on both sides, only the CRM job edits differ.</div>
+        </div>
+      )}
+    </details>
+  );
+}
+
 interface Results {
   competition: { _id: string; weekStart: string; status: string; devEarlyClose?: boolean };
   methodology?: "WEIGHTED_V0" | "BALANCED_PERFORMANCE_V1";
@@ -42,6 +96,11 @@ interface Results {
   blockers: string[];
   diff: { competitorId: string; displayName: string; before: Side | null; after: Side | null }[];
   approved: { approvedBy: string; approvedAt: string; note: string | null; awardedCents: number; contentHash: string; standings: Row[] } | null;
+  lateChanges?: LateReport | null;
+  lateDecision?: LateDecision | null;
+  basis?: "read" | "freeze_jobs" | null;
+  source?: { readAt: string; jobs: number; jobsHash: string; inputHash: string; identity: { user: string | null; database: string; collection: string }; updateField: string | null } | null;
+  lateCorrections?: { _id: string; detectedAt: string; approvedContentHash: string; report: LateReport }[];
 }
 
 export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
@@ -63,6 +122,13 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
     finally { setBusy(false); }
   };
   const act = (action: string) => run(() => api(`/api/arena/admin/competitions/${id}/action`, { method: "POST", body: { action } }));
+  const decideLate = (choice: "keep_freeze" | "accept_correction") => run(async () => {
+    if (!d?.snapshot) throw new Error("Nothing to decide");
+    const label = choice === "keep_freeze" ? "KEEP THE FREEZE SNAPSHOT (ignore these CRM edits for this week)" : "ACCEPT THE CORRECTION (use the corrected CRM data)";
+    const reason = window.prompt(`${label}\n\nReason (required, kept in the audit log):`, "");
+    if (reason === null) return;
+    await api(`/api/arena/admin/competitions/${id}/action`, { method: "POST", body: { action: "late_decision", snapshotId: d.snapshot._id, choice, reason } });
+  });
   const approve = () => run(async () => {
     if (!d?.snapshot) throw new Error("Nothing to approve");
     const note = window.prompt("Approve these winners? This is final and cannot be changed. Optional note:", "");
@@ -96,6 +162,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
             <button className="portal-btn" disabled={busy} onClick={() => act("freeze_now_dev")} title="Local dev stack only">Freeze now (dev)</button>}
           {canEdit && st === "provisional" && <button className="portal-btn portal-btn-primary" disabled={busy} onClick={() => act("open_review")}>Open review</button>}
           {canEdit && st === "in_review" && <button className="portal-btn" disabled={busy} onClick={() => act("reconcile")}>Re-check CRM data</button>}
+          {canEdit && st === "approved" && <button className="portal-btn" disabled={busy} onClick={() => act("late_check")} title="Re-read the CRM and log any change since approval. The approved result never changes.">Check CRM for late corrections</button>}
           {canEdit && d.isOwner && st === "in_review" &&
             <button className="portal-btn portal-btn-primary" disabled={busy || !d.approvalOpen || d.blockers.length > 0} onClick={approve}
               title={!d.approvalOpen ? "Approval opens after the review window" : d.blockers.join("; ")}>Approve winners</button>}
@@ -104,13 +171,62 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
       </div>
       {error && <div className="portal-alert portal-alert-error" role="alert">{error}</div>}
       {st === "in_review" && !d.isOwner && <div className="muted small">Only the owner can approve winners.</div>}
-      {d.blockers.length > 0 && <div className="portal-alert portal-alert-error">{d.blockers.join(" · ")}</div>}
+      {(() => {
+        // The late-change blocker has its own panel (with the owner's choice) below.
+        const lateBlock = !!d.lateChanges?.impact.material && !d.lateDecision;
+        const other = d.blockers.filter((b) => !(lateBlock && b.startsWith("CRM jobs changed after the freeze")));
+        return other.length > 0 && <div className="portal-alert portal-alert-error">{other.join(" · ")}</div>;
+      })()}
       {d.approved && (
         <div className="portal-alert portal-alert-info">
           Approved by {who(d.approved.approvedBy)} on {when(d.approved.approvedAt)} · {dollars(d.approved.awardedCents)} awarded
           {d.approved.note ? ` · “${d.approved.note}”` : ""} · record {d.approved.contentHash.slice(0, 12)}… (immutable; no payouts are created)
         </div>
       )}
+      {d.source && (
+        <div className="muted small" data-testid="arena-source">
+          Source snapshot: {d.source.jobs} CRM jobs read {when(d.source.readAt)} as {d.source.identity.user ?? "the app connection"} ({d.source.identity.database}.{d.source.identity.collection}) · input {d.source.inputHash.slice(0, 12)}…
+        </div>
+      )}
+      {d.lateChanges && !d.approved && (
+        <>
+          {d.lateChanges.impact.material && !d.lateDecision && (
+            <div className="portal-alert portal-alert-error" data-testid="arena-late-block" role="alert">
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%" }}>
+                <b>Approval blocked — CRM jobs changed after the freeze and this changes prizes.</b>
+                <ul style={{ margin: "0 0 0 18px" }}>{d.lateChanges.impact.reasons.map((x) => <li key={x}>{x}</li>)}</ul>
+                <div className="small">Keep freeze snapshot = score the week on the jobs stored at the freeze. Accept correction = use the corrected CRM data. A reason is required; nothing is paid either way.</div>
+                {d.isOwner && canEdit ? (
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button className="portal-btn" disabled={busy} onClick={() => decideLate("keep_freeze")} data-testid="arena-late-keep">Keep freeze snapshot</button>
+                    <button className="portal-btn" disabled={busy} onClick={() => decideLate("accept_correction")} data-testid="arena-late-accept">Accept correction</button>
+                  </div>
+                ) : <div className="small">Only the owner can choose: keep the freeze snapshot, or accept the correction (with a reason).</div>}
+              </div>
+            </div>
+          )}
+          {d.lateDecision && (
+            <div className="portal-alert portal-alert-info" data-testid="arena-late-decision">
+              <div>
+                Owner decision on late CRM changes: <b>{d.lateDecision.choice === "keep_freeze" ? "Keep freeze snapshot" : "Accept correction"}</b> — “{d.lateDecision.reason}” ({who(d.lateDecision.by)}, {when(d.lateDecision.at)}).
+                {" "}The results below use the {d.basis === "freeze_jobs" ? "job set stored at the freeze" : "corrected CRM data"}.
+              </div>
+            </div>
+          )}
+          {d.lateChanges.changes.length > 0 && <LateChanges r={d.lateChanges} title="CRM changes since the freeze" />}
+        </>
+      )}
+      {d.approved && (d.lateCorrections ?? []).map((x) => (
+        <div key={x._id} className="portal-alert portal-alert-warn" data-testid="arena-late-correction">
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, width: "100%", minWidth: 0 }}>
+            <div>
+              <b>Late correction after approval</b> — detected {when(x.detectedAt)}{x.report.impact.material ? `: ${x.report.impact.reasons.join("; ")}` : " (no prize effect)"}.
+              {" "}The approved result (record {x.approvedContentHash.slice(0, 12)}…) is unchanged; handle this manually. No payout or ledger entry exists or is created.
+            </div>
+            <LateChanges r={x.report} title="Changes since the approved snapshot" sides={["Approved snapshot", "CRM now"]} />
+          </div>
+        </div>
+      ))}
       {d.diff.length > 0 && (
         <details open>
           <summary><b>{d.diff.length} change(s) since the freeze</b></summary>

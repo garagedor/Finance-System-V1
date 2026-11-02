@@ -192,7 +192,8 @@ before anything changes.
 node --env-file=$HOME/.arena-shadow-ro.env --import ./scripts/arena/transpile-register.mjs \
   scripts/arena/shadow-approve.ts <weekStart Monday> ~/317-live-arena/shadow \
   [--accounts <file.json>] [--accept-unverified-for-simulation] \
-  [--decisions <file>] [--rules-confirmation <file>] [--template <templateId>] [--allow-early]
+  [--decisions <file>] [--rules-confirmation <file>] [--template <templateId>] [--allow-early] \
+  [--stop-after freeze|review] [--late-decision keep-freeze|accept-correction --late-reason "…"]
 ```
 
 Runs the **real lifecycle** (`lifecycle.ts`) on the local `ARENA_SHADOW_DB`
@@ -242,6 +243,17 @@ the week's current status; an approved week is reported and left unchanged.
   make an earlier approved week differ — apply the data-review decisions before the
   first practice approval.
 
+- **Late CRM edits** (see `LATE-EDITS.md`): the freeze stores the exact job set (read
+  time, CRM user, hashes); every re-check is diffed against it and the report lists each
+  change (removed / re-dated / re-assigned / status / profit / location / added) with its
+  detection time. Changes that move a prize, Most Improved or a prize-relevant
+  eligibility refuse the approval (exit 2) until `--late-decision keep-freeze|accept-correction
+  --late-reason "…"`. `--stop-after freeze|review` stops the run there. On an approved
+  week the run re-reads the CRM and logs post-approval corrections (never applied).
+- **Integrity** recomputes a snapshot that stores its source from that stored input (so
+  a later CRM edit cannot make an approved week MISMATCH) and checks the approved
+  record's content hash and standings against it.
+
 Output: `<outDir>/<weekStart>-simulated-approval/report.md` and `data.json` (mode 600,
 folder 700; refused inside any git repository). Exit: 0 approved (or already approved)
 with safety OK and integrity IDENTICAL; 1 error, safety or integrity failure; 2 refused
@@ -278,3 +290,8 @@ by a rule (nothing approved); 3 guard refusal.
   byte-identical before/after (all collections including `finance_*`), other local
   databases untouched, integrity IDENTICAL. Uses a throwaway `arena_shadow_e2e_<pid>`
   database, dropped at the end.
+- `scripts/arena/late-edits.e2e.test.ts` (dev only, same servers; run with
+  `--test-concurrency=1` and never together with the file above): the late-CRM-edit story
+  on a fictional week — freeze, immaterial edits listed, the trial's deleted $0 Estimate
+  blocking under V0 and V1, keep-freeze / accept-correction, post-approval correction
+  logged with the approved record unchanged, CRM copy byte-identical at the end.

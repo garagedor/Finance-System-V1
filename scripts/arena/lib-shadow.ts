@@ -26,7 +26,9 @@ import { reviewDecisions, isEnglishDisplayName, NON_COMPETITOR_CATEGORIES } from
 import type {
   DisplayNameCaseData, DuplicateCaseData, IdentityCaseData, NonCompetitorCategory, Resolution, ReviewCaseDoc,
 } from "../../src/lib/arena/review.ts";
-import { toStanding } from "../../src/lib/arena/lifecycle.ts";
+import { resultContentHash, toStanding, verifySnapshotSource, type ResultDoc, type SnapshotDoc } from "../../src/lib/arena/lifecycle.ts";
+import type { RuleVersionDoc } from "../../src/lib/arena/config-store.ts";
+import type { ImpactSide, LateChangeReport } from "../../src/lib/arena/source-snapshot.ts";
 import { addDays, previousWeekStarts } from "../../src/lib/arena/week.ts";
 import type { AccountInput, AccountState, ArenaRules } from "../../src/lib/arena/types.ts";
 import type { DisplayNameFormat } from "../../src/lib/arena/display-name.ts";
@@ -411,10 +413,17 @@ export interface IntegrityLine { verdict: "IDENTICAL" | "MISMATCH"; label: strin
 
 /**
  * Recompute every APPROVED result (and the snapshot it approved) under its
- * ORIGINAL rule version with today's engine and today's review decisions, and
- * compare field by field. Other frozen snapshots are listed for information
- * only (`counts: false`): a snapshot taken before later review decisions is
- * expected to differ and is never what was approved.
+ * ORIGINAL rule version with today's engine and compare field by field.
+ *
+ * A snapshot that stores its source (source-snapshot.ts) is recomputed from
+ * THAT stored input — the job set read at the time, the decisions and account
+ * standings in force — so a CRM edit made after approval cannot change the
+ * verdict (it is reported as a late correction instead). The approved record's
+ * content hash and its standings are checked against the snapshot too. Older
+ * snapshots without a stored source fall back to today's CRM and today's
+ * review decisions.
+ *
+ * Other frozen snapshots are listed for information only (`counts: false`).
  */
 export async function integrityCheck(crm: Db, arena: Db): Promise<{ lines: IntegrityLine[]; identical: number; mismatched: number }> {
   const engineFor = async (rules: ArenaRules, weekStart: string, accounts: Record<string, AccountInput>, hash: string, nameFormat?: DisplayNameFormat) => {
@@ -450,17 +459,73 @@ export async function integrityCheck(crm: Db, arena: Db): Promise<{ lines: Integ
     });
   };
   const fmt = (r: { displayNameFormat?: DisplayNameFormat } | undefined): DisplayNameFormat => r?.displayNameFormat ?? "FULL_NAME_V0";
+  const fromSource = async (label: string, snap: SnapshotDoc, counts: boolean, res?: ResultDoc & { simulated?: boolean }) => {
+    const rv = (await arena.collection("arena_rule_version").findOne({ _id: snap.ruleVersionId as never })) as unknown as RuleVersionDoc | null;
+    if (!rv) { lines.push({ verdict: "MISMATCH", label, detail: `rule version ${snap.ruleVersionId} missing`, counts }); return; }
+    const v = verifySnapshotSource(snap, rv);
+    const diffs = [...v.problems];
+    if (rulesHash(rv.rules) !== rv.rulesHash) diffs.push("rules hash");
+    if (res) {
+      const { contentHash, simulated: _s, _id, ...rest } = res as ResultDoc & { simulated?: boolean };
+      void _s;
+      if (resultContentHash({ _id, ...rest } as Omit<ResultDoc, "contentHash">) !== contentHash) diffs.push("approved record content hash");
+      const want = snap.result.results.map(toStanding);
+      if (JSON.stringify(want) !== JSON.stringify(res.standings)) diffs.push("approved standings differ from the approved snapshot");
+      if (res.snapshotResultHash && res.snapshotResultHash !== snap.resultHash) diffs.push("approved record names another result hash");
+      if (res.sourceInputHash && res.sourceInputHash !== snap.source?.inputHash) diffs.push("approved record names another source");
+    }
+    const methodology = rv.rules.scoring.methodology ?? "WEIGHTED_V0 (field absent)";
+    lines.push({
+      verdict: diffs.length ? "MISMATCH" : "IDENTICAL", counts, label,
+      detail: `rules ${rv._id} [${methodology}] recomputed from the STORED source snapshot (read ${snap.source?.readAt}, ${snap.source?.jobs.length} jobs, input ${snap.source?.inputHash.slice(0, 12)}…, result ${v.recomputedHash?.slice(0, 12)}…)${res ? `; record hash ${res.contentHash.slice(0, 12)}… verified` : ""}${diffs.length ? " — " + diffs.join("; ") : ""}`,
+    });
+  };
   const results = await arena.collection("arena_result").find({}).sort({ _id: 1 }).toArray();
   const approvedSnaps = new Set(results.map((r) => r.snapshotId as string));
   for (const res of results) {
-    const snap = await arena.collection("arena_snapshot").findOne({ _id: res.snapshotId });
-    await cmp(`approved ${res._id}`, res.ruleVersionId, res.weekStart, res.standings, res.standings, fmt(snap?.result), true);
+    const snap = (await arena.collection("arena_snapshot").findOne({ _id: res.snapshotId })) as unknown as SnapshotDoc | null;
+    if (snap?.source) await fromSource(`approved ${res._id}`, snap, true, res as unknown as ResultDoc);
+    else await cmp(`approved ${res._id}`, res.ruleVersionId, res.weekStart, res.standings, res.standings, fmt(snap?.result), true);
   }
   const frozen = await arena.collection("arena_snapshot").find({ kind: { $in: ["provisional", "reconciled"] } }).sort({ _id: 1 }).toArray();
   for (const s of frozen) {
+    const label = `snapshot ${s._id}${approvedSnaps.has(s._id as unknown as string) ? " (approved)" : " (informational)"}`;
+    const counts = approvedSnaps.has(s._id as unknown as string);
+    if (s.source) { await fromSource(label, s as unknown as SnapshotDoc, counts); continue; }
     const stored = s.result.results.map(toStanding);
-    await cmp(`snapshot ${s._id}${approvedSnaps.has(s._id as unknown as string) ? " (approved)" : " (informational)"}`, s.ruleVersionId, s.weekStart, stored, s.result.results, fmt(s.result), approvedSnaps.has(s._id as unknown as string));
+    await cmp(label, s.ruleVersionId, s.weekStart, stored, s.result.results, fmt(s.result), counts);
   }
   const counted = lines.filter((l) => l.counts);
   return { lines, identical: counted.filter((l) => l.verdict === "IDENTICAL").length, mismatched: counted.filter((l) => l.verdict === "MISMATCH").length };
+}
+
+// ── late CRM changes (report rendering) ─────────────────────────────────────
+
+const KIND_LABEL: Record<string, string> = {
+  removed: "job removed", redated_out: "re-dated out of the week", redated_in: "re-dated into the week", reassigned: "re-assigned",
+  status: "status edited", profit: "profit edited", location: "location edited", date: "re-dated within the week", added: "job added",
+};
+const sideText = (x: ImpactSide | null) =>
+  x ? `#${x.rank} · ${x.score.toFixed(2)} · ${x.assignedJobs}/${x.closedJobs}/${x.qualifyingJobs} · $${x.profit.toFixed(2)} · ${x.prizePosition !== null ? `prize #${x.prizePosition} $${(x.prizeCents / 100).toFixed(0)}` : x.wonMostImproved ? `Most Improved $${(x.prizeCents / 100).toFixed(0)}` : "no prize"}${x.eligible ? "" : " · not eligible"}` : "—";
+
+/** Markdown tables for a late-change report (owner-readable). */
+export function renderLateChanges(r: LateChangeReport): string[] {
+  const out: string[] = [];
+  out.push(`Compared with \`${r.against.snapshotId}\` (read ${r.against.readAt}, jobs ${r.against.jobsHash.slice(0, 12)}…) · re-read ${r.read.readAt} (jobs ${r.read.jobsHash.slice(0, 12)}…)`);
+  out.push(`CRM edit times: ${r.updateTimestampField ? `recorded by the CRM in \`${r.updateTimestampField}\`` : "**not recorded** — the CRM job documents carry no update-timestamp field, so the times below are when the Arena DETECTED each change, not when it was made"}.`);
+  out.push("");
+  if (!r.changes.length) { out.push("No job changed."); return out; }
+  out.push(`| Job | Change | Week | Technician (freeze → now) | Before | After | Detected | CRM edit time |`);
+  out.push(`|---|---|---|---|---|---|---|---|`);
+  for (const c of r.changes)
+    out.push(`| \`${c.jobId}\` | ${KIND_LABEL[c.kind] ?? c.kind} — ${c.detail} | ${c.week} | ${c.techBefore ?? "—"} → ${c.techAfter ?? "—"} | ${c.before ?? "—"} | ${c.after ?? "—"} | ${c.detectedAt} | ${c.crmUpdatedAt ?? "not recorded"} |`);
+  out.push("");
+  out.push(`**Effect on prizes:** ${r.impact.material ? `**MATERIAL** — ${r.impact.reasons.join("; ")}` : "none (no prize, Most Improved or prize-relevant eligibility changes)"}`);
+  if (r.impact.rows.length) {
+    out.push("");
+    out.push(`| Technician | Freeze job set (rank · score · assigned/closed/qualifying · profit · prize) | Re-read | Material |`);
+    out.push(`|---|---|---|---|`);
+    for (const x of r.impact.rows) out.push(`| ${x.displayName} | ${sideText(x.before)} | ${sideText(x.after)} | ${x.material ? `YES — ${x.why.join(", ")}` : "no"} |`);
+  }
+  return out;
 }

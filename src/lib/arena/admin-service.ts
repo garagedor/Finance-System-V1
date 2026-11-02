@@ -17,7 +17,8 @@ import { arenaStores, ensureArenaIndexes, lifecycleCollections, loadMappings, lo
 import type { LifecycleContext } from "./lifecycle";
 import type { RuleVersionDoc } from "./config-store";
 import type { CompetitionResult } from "./types";
-import { loadJobs } from "./job-source";
+import { loadJobs, lookupJobs, readJobSource, PRODUCTION_JOB_COLLECTION } from "./job-source";
+import { buildSource, type SourceIdentity, type SourceSnapshot } from "./source-snapshot";
 import { buildCompetitorMap } from "./identity";
 import { computeCompetition } from "./engine";
 import { rulesHash } from "./config";
@@ -116,8 +117,11 @@ export function buildArenaContexts(
   partial.lifecycle = {
     config,
     lc: lifecycleCollections(arenaDb),
-    compute: (weekStart: string, rv: RuleVersionDoc, mode: AccountMode) =>
-      computeWeek(partial, rv.rules, rv.rulesHash, weekStart, (ids) => check(ids, mode)),
+    compute: async (weekStart: string, rv: RuleVersionDoc, mode: AccountMode) => {
+      const { r, source } = await runEngine(partial, rv.rules, rv.rulesHash, weekStart, (ids) => check(ids, mode));
+      return { result: r, source };
+    },
+    lookupJobs: (ids: string[]) => lookupJobs(crmDb, ids),
     checkAccounts: check,
     devStack: isDevStack(),
   };
@@ -152,15 +156,31 @@ export interface PreviewSummary {
  */
 type AccountLookup = (ids: string[]) => Promise<Record<string, AccountInput>>;
 
+/** Who the CRM is read as: the database user name only (never a password or the URI). */
+export function crmSourceIdentity(crmDb: Db, env: NodeJS.ProcessEnv = process.env): SourceIdentity {
+  const uri = (env.ARENA_MONGODB_URI ?? "").trim() || (env.MONGODB_URI ?? "").trim();
+  const m = /^mongodb(?:\+srv)?:\/\/([^:@/]+)(?::[^@]*)?@/.exec(uri);
+  let user: string | null = null;
+  try {
+    user = m ? decodeURIComponent(m[1]) : null;
+  } catch {
+    user = null;
+  }
+  return { system: "crm", database: crmDb.databaseName, collection: PRODUCTION_JOB_COLLECTION, user, via: "admin-service" };
+}
+
 async function runEngine(ctx: ArenaContexts, rules: ArenaRules, hash: string, weekStart: string, accountsFor?: AccountLookup) {
   const weeks = rules.mostImproved.enabled ? previousWeekStarts(weekStart, rules.mostImproved.baselineWeeks) : [];
   const from = weeks.length ? weeks[weeks.length - 1] : weekStart;
-  const [jobs, mappings, technicians, decisions] = await Promise.all([
-    loadJobs(ctx.crmDb, [from, weekStart].sort()[0], addDays(weekStart, 7)),
+  const window = { from: [from, weekStart].sort()[0], toExclusive: addDays(weekStart, 7) };
+  const readAt = ctx.config.now().toISOString();
+  const [read, mappings, technicians, decisions] = await Promise.all([
+    readJobSource(ctx.crmDb, window.from, window.toExclusive),
     loadMappings(ctx.crmDb),
     loadTechnicians(ctx.crmDb),
     reviewDecisions(ctx.review),
   ]);
+  const jobs = read.jobs;
   const competitors = buildCompetitorMap({
     mappings,
     technicians,
@@ -181,7 +201,11 @@ async function runEngine(ctx: ArenaContexts, rules: ArenaRules, hash: string, we
     dismissedDuplicateGroups: decisions.dismissedDuplicateGroups,
     accounts,
   });
-  return { r, competitors, jobs };
+  const source: SourceSnapshot = buildSource({
+    readAt, identity: crmSourceIdentity(ctx.crmDb), window, jobs, updateTimestamps: read.updateTimestamps, competitors,
+    exclusions: decisions.exclusions, dismissedDuplicateGroups: decisions.dismissedDuplicateGroups, accounts,
+  });
+  return { r, competitors, jobs, source };
 }
 
 /** The official result of one week under one rule version (CRM read-only). */

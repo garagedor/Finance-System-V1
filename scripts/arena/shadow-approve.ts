@@ -5,6 +5,7 @@
  *     scripts/arena/shadow-approve.ts <weekStart Monday> <outDir> \
  *       [--accounts <file.json>] [--accept-unverified-for-simulation] \
  *       [--decisions <file.json>] [--template <templateId>] [--allow-early]
+ *       [--stop-after freeze|review] [--late-decision keep-freeze|accept-correction --late-reason <text>]
  *
  * Runs the REAL lifecycle (lifecycle.ts) against ARENA_SHADOW_DB on 127.0.0.1:
  *   create/start the week (if needed) → freeze → open review → apply the
@@ -30,6 +31,14 @@
  *     (Tuesday 12:00 America/New_York) unless --allow-early (TESTING ONLY: the
  *     lifecycle then runs on a simulated clock set just after the window opens).
  *
+ * Late CRM edits (source-snapshot.ts): the freeze stores the exact job set with
+ * hashes; every re-check is diffed against it. When the changes alter a prize,
+ * Most Improved or a prize-relevant eligibility, the lifecycle refuses the
+ * approval until the owner decides (--late-decision keep-freeze|accept-correction
+ * --late-reason "…"). --stop-after freeze|review stops the run there (to let the
+ * CRM change in between). On an approved week the run re-reads the CRM and logs
+ * any post-approval late correction (never applied).
+ *
  * After approval: the history integrity check over the local database.
  * Output: <outDir>/<weekStart>-simulated-approval/{report.md,data.json}, mode
  * 600, folder 700, refused inside any git repository.
@@ -43,6 +52,7 @@ import { MongoClient, type Db } from "mongodb";
 import { assertLocalMongoUri, GuardRefusal, openGuardedCrm, runGuarded } from "./lib-ro-guard.ts";
 import {
   DEFAULT_SHADOW_DIR, SIMULATION_ACTOR as ACTOR, SIMULATION_BANNER, ensurePrivateDir, integrityCheck, markSimulated, parseAccountsFile,
+  renderLateChanges as renderLateChangesFn,
   planDecisions, readDecisionsFile, readFingerprintFile, rulesFingerprint, rulesSummary, simulationAccounts, trackWrites, writePrivate,
   type DecisionPlan,
 } from "./lib-shadow.ts";
@@ -51,11 +61,13 @@ import {
   ArenaStateError, activateCompetition, createCompetition, initSettings, scheduleCompetition, type CompetitionDoc, type RuleVersionDoc, type StoreContext,
 } from "../../src/lib/arena/config-store.ts";
 import {
-  approveResults, freezeCompetition, openReview, reconcileCompetition, reviewSnapshot, type LifecycleContext, type ResultDoc,
+  approveResults, checkLateCorrections, decideLateChanges, freezeCompetition, openReview, reconcileCompetition, reviewSnapshot,
+  type LateChoice, type LifecycleContext, type ResultDoc, type SnapshotDoc,
 } from "../../src/lib/arena/lifecycle.ts";
+import { buildSource, type LateChangeReport } from "../../src/lib/arena/source-snapshot.ts";
 import { computeCompetition } from "../../src/lib/arena/engine.ts";
 import { buildCompetitorMap } from "../../src/lib/arena/identity.ts";
-import { loadJobs } from "../../src/lib/arena/job-source.ts";
+import { loadJobs, lookupJobs, readJobSource } from "../../src/lib/arena/job-source.ts";
 import { detectCases } from "../../src/lib/arena/detect.ts";
 import { caseId, resolveCase, reviewDecisions, syncDetected, type ReviewCaseDoc, type ReviewContext } from "../../src/lib/arena/review.ts";
 import { ARENA_COLLECTIONS, arenaStores, lifecycleCollections, loadMappings, loadTechnicians } from "../../src/lib/arena/mongo-store.ts";
@@ -70,6 +82,7 @@ function parseArgs(argv: string[]) {
   const o = {
     accounts: null as string | null, acceptUnverified: false, allowEarly: false, template: null as string | null,
     decisions: path.join(DEFAULT_SHADOW_DIR, "decisions.json"), rulesConfirmation: path.join(DEFAULT_SHADOW_DIR, "approved-rules.sha256"),
+    stopAfter: null as "freeze" | "review" | null, lateDecision: null as LateChoice | null, lateReason: null as string | null,
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -80,6 +93,15 @@ function parseArgs(argv: string[]) {
     else if (a === "--template") o.template = val();
     else if (a === "--decisions") o.decisions = path.resolve(val());
     else if (a === "--rules-confirmation") o.rulesConfirmation = path.resolve(val());
+    else if (a === "--stop-after") {
+      const v = val();
+      if (v !== "freeze" && v !== "review") throw new Error("--stop-after takes freeze or review");
+      o.stopAfter = v;
+    } else if (a === "--late-decision") {
+      const v = val();
+      if (v !== "keep-freeze" && v !== "accept-correction") throw new Error("--late-decision takes keep-freeze or accept-correction");
+      o.lateDecision = v === "keep-freeze" ? "keep_freeze" : "accept_correction";
+    } else if (a === "--late-reason") o.lateReason = val();
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else pos.push(a);
   }
@@ -87,10 +109,13 @@ function parseArgs(argv: string[]) {
   if (!week || !outDir)
     throw new Error("usage: shadow-approve.ts <weekStart> <outDir> [--accounts <file>] [--accept-unverified-for-simulation] [--decisions <file>] [--template <id>] [--allow-early]");
   if (!isMonday(week)) throw new Error("weekStart must be a Monday (YYYY-MM-DD)");
+  if (o.lateDecision && !o.lateReason?.trim()) throw new Error("--late-decision needs --late-reason \"…\" (the owner's reason)");
   return { week, outDir: path.resolve(outDir), ...o };
 }
 
 class Refusal extends Error {}
+/** --stop-after: a deliberate stop (outcome "frozen" / "in_review"), not an error. */
+class Stop extends Error {}
 
 const usd = (c: number) => `$${(c / 100).toFixed(0)}`;
 const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
@@ -123,7 +148,8 @@ await runGuarded(async () => {
   const out = (s = "") => md.push(s);
   const data: Record<string, unknown> = { simulated: true, banner: SIMULATION_BANNER, actor: ACTOR, week: args.week };
   const steps: string[] = [];
-  let outcome: "approved" | "already_approved" | "refused" | "error" = "error";
+  type Outcome = "approved" | "already_approved" | "refused" | "error" | "frozen" | "in_review";
+  let outcome: Outcome = "error";
   let refusedReason: string | null = null;
   let exitCode = 1;
   let unverifiedPrize: { competitorId: string; displayName: string; position: string }[] = [];
@@ -197,19 +223,31 @@ await runGuarded(async () => {
     } else if (settings.ownerUserId !== ACTOR)
       throw new Refusal(`the local ${dbName} database belongs to another owner (${settings.ownerUserId}); use a separate ARENA_SHADOW_DB for simulations`);
 
-    const compute = async (weekStart: string, rv: RuleVersionDoc): Promise<CompetitionResult> => {
+    const compute = async (weekStart: string, rv: RuleVersionDoc): Promise<{ result: CompetitionResult; source: ReturnType<typeof buildSource> }> => {
       const weeks = rv.rules.mostImproved.enabled ? previousWeekStarts(weekStart, rv.rules.mostImproved.baselineWeeks) : [];
       const from = weeks.length ? weeks[weeks.length - 1] : weekStart;
-      const [jobs, mappings, technicians, d] = await Promise.all([
-        loadJobs(crmDb, [from, weekStart].sort()[0], addDays(weekStart, 7)), loadMappings(crmDb), loadTechnicians(crmDb), reviewDecisions(review),
+      const window = { from: [from, weekStart].sort()[0], toExclusive: addDays(weekStart, 7) };
+      const readAt = new Date().toISOString(); // the REAL read time, even on a simulated lifecycle clock
+      const [read, mappings, technicians, d] = await Promise.all([
+        readJobSource(crmDb, window.from, window.toExclusive), loadMappings(crmDb), loadTechnicians(crmDb), reviewDecisions(review),
       ]);
+      const jobs = read.jobs;
       const competitors = buildCompetitorMap({ mappings, technicians, crmNamesInUse: [...new Set(jobs.map((j) => j.tech))], overrides: d.overrides, displayNames: d.displayNames });
-      return computeCompetition({
+      const accounts = acc.lookup(competitors.competitors.map((c) => c.id));
+      const result = computeCompetition({
         rules: rv.rules, rulesHash: rv.rulesHash, weekStart, competitors, jobs, exclusions: d.exclusions,
-        dismissedDuplicateGroups: d.dismissedDuplicateGroups, accounts: acc.lookup(competitors.competitors.map((c) => c.id)),
+        dismissedDuplicateGroups: d.dismissedDuplicateGroups, accounts,
       });
+      const source = buildSource({
+        readAt, window, jobs, updateTimestamps: read.updateTimestamps, competitors, accounts,
+        identity: { system: "crm", database: crm.db.databaseName, collection: "Job", user: crm.verdict.users.join(", ") || null, via: "shadow-approve (read-only guard)" },
+        exclusions: d.exclusions, dismissedDuplicateGroups: d.dismissedDuplicateGroups,
+      });
+      return { result, source };
     };
-    const lctx: LifecycleContext = { config, lc, compute, checkAccounts: async (ids) => acc.lookup(ids), devStack: false };
+    const lctx: LifecycleContext = {
+      config, lc, compute, checkAccounts: async (ids) => acc.lookup(ids), devStack: false, lookupJobs: (ids) => lookupJobs(crmDb, ids),
+    };
 
     // Decisions → review cases for this week (detect, record, plan). Conflicts refuse before anything changes.
     const [weekJobs, technicians, before] = await Promise.all([
@@ -250,13 +288,25 @@ await runGuarded(async () => {
     if (c!.status === "approved") {
       outcome = "already_approved";
       result = (await lc.results.findOne({ _id: id })) as ResultDoc | null;
-      steps.push(`already approved at ${result?.approvedAt} — nothing changed`);
+      steps.push(`already approved at ${result?.approvedAt} — the approved record is never changed`);
+      // Post-approval: re-read the CRM and log any late correction for the owner (never applied).
+      try {
+        const lcx = await checkLateCorrections(lctx, id, ACTOR);
+        data.lateCorrection = lcx;
+        steps.push(lcx.status === "unchanged" ? "post-approval CRM re-read: no job changed since the approved snapshot"
+          : `post-approval CRM re-read: ${lcx.report.changes.length} job change(s) → ${lcx.status === "logged" ? `logged as ${lcx.record!._id}` : `already logged as ${lcx.record!._id}`} (owner handles manually; approved result unchanged)`);
+      } catch (e) {
+        if (!(e instanceof ArenaStateError)) throw e;
+        steps.push(`post-approval CRM re-read skipped: ${e.message}`);
+      }
       exitCode = 0;
     } else {
       if (c!.status === "active" || c!.status === "suspended") {
         const s = await freezeCompetition(lctx, id, ACTOR);
-        steps.push(`froze the week → ${s._id}`);
+        steps.push(`froze the week → ${s._id} (source snapshot: ${s.source?.jobs.length ?? 0} jobs, read ${s.source?.readAt ?? "—"})`);
         c = await get();
+        data.freezeSnapshot = s;
+        if (args.stopAfter === "freeze") throw new Stop("frozen");
       }
       if (c!.status === "provisional") {
         const s = await openReview(lctx, id, ACTOR);
@@ -269,9 +319,20 @@ await runGuarded(async () => {
         steps.push(`applied decision: ${r.label}`);
       }
       const s = await reconcileCompetition(lctx, id, ACTOR);
-      steps.push(`re-checked the CRM data → ${s._id}`);
-      const snap = (await reviewSnapshot(lctx, id))!;
+      steps.push(`re-checked the CRM data → ${s._id}${s.lateChanges ? ` (${s.lateChanges.changes.length} job change(s) since the freeze${s.lateChanges.impact.material ? ", AFFECTS PRIZES" : ""}${s.lateDecision ? `; owner decision ${s.lateDecision.choice} kept` : ""})` : ""}`);
+      let snap = (await reviewSnapshot(lctx, id))!;
+      if (args.lateDecision) {
+        if (snap.lateChanges?.impact.material && !snap.lateDecision) {
+          snap = await decideLateChanges(lctx, id, ACTOR, { snapshotId: snap._id, choice: args.lateDecision, reason: args.lateReason! });
+          steps.push(`owner decision on late CRM changes: ${args.lateDecision === "keep_freeze" ? "KEEP FREEZE SNAPSHOT" : "ACCEPT CORRECTION"} — “${args.lateReason}” → ${snap._id}`);
+        } else steps.push(`--late-decision given, but nothing is waiting for a decision (${snap.lateDecision ? `already decided: ${snap.lateDecision.choice}` : "no late change affects prizes"})`);
+      }
       data.reviewedSnapshot = { id: snap._id, result: snap.result };
+      data.lateChanges = snap.lateChanges ?? null;
+      data.lateDecision = snap.lateDecision ?? null;
+      data.basis = snap.basis ?? null;
+      data.freezeSnapshot = await lc.snapshots.findOne({ _id: `${id}:provisional` });
+      if (args.stopAfter === "review") throw new Stop("in_review");
       unverifiedPrize = snap.result.results
         .filter((r) => (r.prizePosition !== null || r.wonMostImproved) && acc.rawState(r.competitorId) === "unverified")
         .map((r) => ({ competitorId: r.competitorId, displayName: r.displayName, position: r.prizePosition ? `#${r.prizePosition}` : "Most Improved" }));
@@ -293,7 +354,10 @@ await runGuarded(async () => {
     }
     data.result = result;
   } catch (e) {
-    if (e instanceof Refusal) {
+    if (e instanceof Stop) {
+      outcome = e.message as Outcome;
+      exitCode = 0;
+    } else if (e instanceof Refusal) {
       outcome = "refused";
       refusedReason = e.message;
       exitCode = REFUSED;
@@ -340,7 +404,7 @@ await runGuarded(async () => {
   out(`# 317 LIVE ARENA — SIMULATED approval · week ${args.week} → ${addDays(args.week, 6)}`);
   out(`Generated ${data.generatedAt} · actor \`${ACTOR}\` · local database \`${dbName}\` on 127.0.0.1 · CRM read-only as ${crm.verdict.users.join(", ")}`);
   out();
-  out(`## Outcome: ${outcome === "approved" ? "SIMULATED APPROVAL RECORDED" : outcome === "already_approved" ? "ALREADY APPROVED (simulation) — unchanged" : outcome === "refused" ? "REFUSED — nothing approved" : "ERROR — nothing approved"}`);
+  out(`## Outcome: ${outcome === "approved" ? "SIMULATED APPROVAL RECORDED" : outcome === "already_approved" ? "ALREADY APPROVED (simulation) — unchanged" : outcome === "refused" ? "REFUSED — nothing approved" : outcome === "frozen" ? "FROZEN (--stop-after freeze) — nothing approved" : outcome === "in_review" ? "IN REVIEW (--stop-after review) — nothing approved" : "ERROR — nothing approved"}`);
   if (refusedReason) out(`**Reason:** ${refusedReason}`);
   const clk = data.clock as { real: string; simulated: boolean; lifecycleNow: string } | undefined;
   if (clk?.simulated) out(`\n**--allow-early (TESTING ONLY):** the week had not ended / the review window was not open at ${clk.real}; the lifecycle ran on a simulated clock (${clk.lifecycleNow}). This result says nothing about the real week.`);
@@ -372,6 +436,33 @@ await runGuarded(async () => {
   out(`## Lifecycle steps`);
   for (const s of steps) out(`- ${s}`);
   out();
+  const fz = data.freezeSnapshot as SnapshotDoc | null | undefined;
+  if (fz?.source) {
+    out(`## Freeze source snapshot`);
+    out(`\`${fz._id}\` · computed ${fz.computedAt} (lifecycle clock) · CRM read at **${fz.source.readAt}** as \`${fz.source.identity.user ?? "app connection"}\` on \`${fz.source.identity.database}.${fz.source.identity.collection}\` (${fz.source.identity.via})`);
+    out(`- ${fz.source.jobs.length} jobs in ${fz.source.window.from} … < ${fz.source.window.toExclusive} · job-set hash \`${fz.source.jobsHash}\``);
+    out(`- input hash \`${fz.source.inputHash}\` · result hash \`${fz.resultHash}\` · recomputed from the stored input: ${fz.reproducible ? "**identical**" : "**DIFFERENT**"}`);
+    out(`- CRM update-timestamp field: ${fz.source.updateTimestamps.field ?? "none on the job documents (edit times are not recorded by the CRM)"}`);
+    out();
+  }
+  const lcData = data.lateChanges as LateChangeReport | null | undefined;
+  if (lcData) {
+    const dec = data.lateDecision as SnapshotDoc["lateDecision"];
+    out(`## Late CRM changes since the freeze`);
+    for (const l of renderLateChangesFn(lcData)) out(l);
+    out();
+    out(`**Approval:** ${!lcData.impact.material ? "not blocked by late changes (listed only)" : dec ? `owner decided **${dec.choice === "keep_freeze" ? "KEEP FREEZE SNAPSHOT" : "ACCEPT CORRECTION"}** — “${dec.reason}” (${dec.by}, ${dec.at})${dec.carriedFrom ? ` · kept from ${dec.carriedFrom}` : ""}; snapshot under review uses the ${data.basis === "freeze_jobs" ? "freeze job set" : "corrected CRM read"}` : "**BLOCKED** until the owner chooses keep freeze snapshot / accept correction with a reason (--late-decision keep-freeze|accept-correction --late-reason \"…\")"}`);
+    out();
+  }
+  const pac = data.lateCorrection as { status: string; report: LateChangeReport; record: { _id: string; approvedContentHash: string } | null } | undefined;
+  if (pac) {
+    out(`## Post-approval CRM re-read (late corrections)`);
+    out(pac.status === "unchanged" ? "No job changed since the approved snapshot." :
+      `**${pac.report.changes.length} job change(s) after approval** — ${pac.status === "logged" ? "logged" : "already logged"} as \`${pac.record?._id}\` (arena_late_correction). The approved result (hash \`${pac.record?.approvedContentHash.slice(0, 16)}…\`), its snapshot and prize list are NOT changed; the owner handles this manually. No financial record is created.`);
+    out();
+    if (pac.report.changes.length) for (const l of renderLateChangesFn(pac.report)) out(l);
+    out();
+  }
   if (r) {
     out(`## Approved standings (SIMULATION)`);
     out(`Paid on paper ${usd(r.awardedCents)} of ${usd(r.budgetCents)} · unallocated ${usd(r.unallocatedCents)} · approved by \`${r.approvedBy}\` at ${r.approvedAt} · content hash \`${r.contentHash}\``);
@@ -395,7 +486,7 @@ await runGuarded(async () => {
   out(`- Verdict: ${safety.ok ? "**OK** — nothing was written outside the local Arena database" : "**FAILED**"}`);
   out();
   out(`## History integrity: ${integrityVerdict}`);
-  out(`Every approved record (and the snapshot it approved) recomputed under its original rule version with today's engine: ${integrity.identical} identical, ${integrity.mismatched} mismatched. Other frozen snapshots are informational (taken before later review decisions).`);
+  out(`Every approved record (and the snapshot it approved) recomputed under its original rule version with today's engine — from its stored source snapshot when it has one (so later CRM edits cannot change it): ${integrity.identical} identical, ${integrity.mismatched} mismatched. Other frozen snapshots are informational (taken before later review decisions).`);
   for (const l of integrity.lines) out(`- ${l.verdict} ${l.label} ${l.detail}`);
   out();
   out(`> **${SIMULATION_BANNER}**`);

@@ -4,7 +4,7 @@
 // read-triggered live refresh / freeze-if-due technicians cause).
 import { arenaRoute, BadRequest } from "../../../_lib";
 import {
-  approvalBlockers, freezeIfDue, liveSnapshot, phaseOf, reviewDiff, reviewSnapshot, ruleVersionOf, windowOf,
+  approvalBlockers, freezeIfDue, liveSnapshot, phaseOf, reviewDiff, reviewSnapshot, ruleVersionOf, snapshotBlockers, windowOf,
 } from "@/lib/arena/lifecycle";
 import { currentSettings } from "@/lib/arena/config-store";
 import { ACCOUNT_REASON } from "@/lib/arena/accounts";
@@ -53,7 +53,19 @@ export async function GET(_req: Request, p: P) {
       devStack: lc.devStack,
       isOwner: settings.ownerUserId === session.userId,
       snapshot: strip(shown),
-      blockers: shown ? approvalBlockers(shown.result) : [],
+      blockers: shown ? (shown.kind === "live" ? approvalBlockers(shown.result) : snapshotBlockers(shown)) : [],
+      // Late CRM edits since the freeze (review), and the owner's choice when they change prizes.
+      lateChanges: shown?.lateChanges ?? null,
+      lateDecision: shown?.lateDecision ?? null,
+      basis: shown?.basis ?? null,
+      source: (() => {
+        const s = (c.status === "approved" && result ? null : shown)?.source ?? provisional?.source;
+        return s ? { readAt: s.readAt, jobs: s.jobs.length, jobsHash: s.jobsHash, inputHash: s.inputHash, identity: s.identity, updateField: s.updateTimestamps.field } : null;
+      })(),
+      // After approval: CRM changes found later, for the owner to handle manually (never applied).
+      lateCorrections: c.status === "approved"
+        ? await lc.lc.lateCorrections.find({ competitionId: id }).sort({ detectedAt: -1 }).toArray()
+        : [],
       diff: review ? reviewDiff(provisional?.result ?? null, review.result) : [],
       approved: result && {
         approvedBy: result.approvedBy, approvedAt: result.approvedAt, note: result.note, awardedCents: result.awardedCents,

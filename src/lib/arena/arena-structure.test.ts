@@ -24,6 +24,7 @@ test("no business constants outside the seed template (config.ts)", () => {
     "week.ts": [/\* 60_000/, /h \* 60 \+ m/, /86_400_000/, /slice\(0, 10\)/], // ISO date formatting
     "job-source.ts": [/slice\(-10\)/], // US phone digits, for duplicate grouping
     "review.ts": [/2 to 40 characters/], // display-name length, not a competition rule
+    "source-snapshot.ts": [/\/ 100\)/], // cents → dollars in change labels
     "config.ts": [/.*/], // the seed lives here
   };
   for (const f of runtimeFiles) {

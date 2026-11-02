@@ -11,6 +11,8 @@ import type { ArenaJob } from "../types";
 import { checkAccounts, type AccountCacheDoc } from "../accounts";
 import { VerifierUnavailableError, type AccountStatus, type TechnicianVerifier } from "../tech/verifier";
 import { memoryStore, MemoryCollection } from "./memory-collection";
+import { buildSource, type JobLookup } from "../source-snapshot";
+import { addDays } from "../week";
 
 export const OWNER = "owner-1";
 export const ADMIN = "admin-2";
@@ -30,22 +32,26 @@ export function jobs(n: number, crm: string, status: string, profit: number, dat
   });
 }
 
-export async function fixture(opts: { now?: string; devStack?: boolean } = {}) {
+export async function fixture(opts: { now?: string; devStack?: boolean; people?: typeof PEOPLE } = {}) {
+  const people = opts.people ?? PEOPLE;
   let t = new Date(opts.now ?? "2026-10-28T15:00:00Z");
   let n = 0;
   const config: StoreContext = { store: memoryStore(), knownStatuses: KNOWN_STATUSES, now: () => t, newId: (p) => `${p}_${++n}` };
   const lc = {
     snapshots: new MemoryCollection(), results: new MemoryCollection(), approvals: new MemoryCollection(),
-    events: new MemoryCollection(), claims: new MemoryCollection(),
+    events: new MemoryCollection(), claims: new MemoryCollection(), lateCorrections: new MemoryCollection(),
   };
   const data = {
     jobs: [] as ArenaJob[],
     computeCalls: 0,
     /** Weekly Balance accounts by id (default: every PEOPLE entry active + approved). */
-    accounts: new Map<string, AccountStatus>(PEOPLE.map((p) => [p.id, { active: true, approved: true, role: "technician" }])),
+    accounts: new Map<string, AccountStatus>(people.map((p) => [p.id, { active: true, approved: true, role: "technician" }])),
     /** Ids whose verification fails (true = the whole verifier is down). */
     verifierDown: false as boolean | Set<string>,
     verifyCalls: 0,
+    /** What a by-id lookup finds for jobs that left the read (default: deleted). */
+    lookup: new Map<string, JobLookup>(),
+    updateTimestamps: { field: null as string | null, byJobId: {} as Record<string, string> },
   };
   const verifier: TechnicianVerifier = {
     async verify(id) {
@@ -59,8 +65,8 @@ export async function fixture(opts: { now?: string; devStack?: boolean } = {}) {
   const accountDeps = { verifier, cache: accountCache, now: () => t };
   const competitors = () =>
     buildCompetitorMap({
-      mappings: PEOPLE.map((p) => ({ supabaseUserId: p.id, supabaseFullName: p.name, crmTechNames: [p.crm] })),
-      technicians: PEOPLE.map((p) => ({ _id: p.crm, location: p.location })),
+      mappings: people.map((p) => ({ supabaseUserId: p.id, supabaseFullName: p.name, crmTechNames: [p.crm] })),
+      technicians: people.map((p) => ({ _id: p.crm, location: p.location })),
       crmNamesInUse: [...new Set(data.jobs.map((j) => j.tech))],
     });
   const ctx: LifecycleContext = {
@@ -71,8 +77,15 @@ export async function fixture(opts: { now?: string; devStack?: boolean } = {}) {
       data.computeCalls += 1;
       const map = competitors();
       const accounts = await checkAccounts(accountDeps, map.competitors.map((c) => c.id), mode);
-      return computeCompetition({ rules: rv.rules, rulesHash: rv.rulesHash, weekStart, competitors: map, jobs: data.jobs, accounts });
+      const result = computeCompetition({ rules: rv.rules, rulesHash: rv.rulesHash, weekStart, competitors: map, jobs: data.jobs, accounts });
+      const source = buildSource({
+        readAt: t.toISOString(), identity: { system: "crm", database: "test", collection: "Job", user: "fixture", via: "lifecycle-fixture" },
+        window: { from: addDays(weekStart, -7 * rv.rules.mostImproved.baselineWeeks), toExclusive: addDays(weekStart, 7) },
+        jobs: data.jobs, updateTimestamps: data.updateTimestamps, competitors: map, accounts,
+      });
+      return { result, source };
     },
+    lookupJobs: async (ids) => Object.fromEntries(ids.map((id) => [id, data.lookup.get(id) ?? "deleted"])),
     checkAccounts: (ids, mode) => checkAccounts(accountDeps, ids, mode),
   };
   await initSettings(config, { budgetCeilingCents: 150_000, ownerUserId: OWNER, approverUserIds: [OWNER] }, OWNER);
@@ -85,8 +98,8 @@ export async function fixture(opts: { now?: string; devStack?: boolean } = {}) {
     accountCache,
     setNow: (iso: string) => (t = new Date(iso)),
     /** Create, schedule and start the WEEK competition (as the owner). */
-    async startWeek(week = WEEK) {
-      const c = await createCompetition(config, week, { template: "standard" }, ADMIN);
+    async startWeek(week = WEEK, template = "standard") {
+      const c = await createCompetition(config, week, { template }, ADMIN);
       await scheduleCompetition(config, c._id, ADMIN);
       await activateCompetition(config, c._id, OWNER);
       return c._id;

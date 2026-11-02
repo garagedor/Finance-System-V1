@@ -12,6 +12,18 @@
  *   arena_tech_event   per-competitor event feed derived from successive snapshots;
  *                      `result_approved` is written ONLY by approveResults().
  *   arena_claim        compare-and-swap leases so one caller recomputes at a time.
+ *   arena_late_correction  insert-only: CRM job changes found AFTER approval
+ *                      (detected and shown to the owner; never applied).
+ *
+ * Source snapshots and late CRM edits (source-snapshot.ts): the provisional and
+ * every reconciled snapshot store the exact engine input they were computed
+ * from (job set, competitor map, decisions, accounts, read time, CRM identity)
+ * with content hashes, so the stored result can be recomputed bit for bit.
+ * Each re-check is diffed against the freeze snapshot; when the CRM changes
+ * alter a prize, Most Improved or a prize-relevant eligibility, approval is
+ * blocked until the owner explicitly keeps the freeze snapshot or accepts the
+ * correction, with a reason (decideLateChanges). After approval, changes are
+ * only detected and logged (checkLateCorrections).
  *
  * Status flow: active → provisional (freeze, at Monday 00:00 after the week in the
  * competition timezone) → in_review (an admin opens review) → approved (owner only,
@@ -35,6 +47,10 @@ import {
 } from "./config-store";
 import { assertValidRules, canonicalJson } from "./config";
 import { weekWindow, type WeekWindow } from "./week";
+import {
+  computeFromSource, lateChangeReport, plain, resultHash, sourceProblems, vanishedIds, withJobs,
+  type JobLookup, type LateChangeReport, type SourceSnapshot,
+} from "./source-snapshot";
 
 export type SnapshotKind = "live" | "provisional" | "reconciled";
 
@@ -48,6 +64,53 @@ export interface SnapshotDoc {
   ruleVersionId: string;
   rulesHash: string;
   result: CompetitionResult;
+  /** Exact engine input of this result (provisional/reconciled; absent on live and on older snapshots). */
+  source?: SourceSnapshot;
+  /** sha256 of `result` (recomputing from `source` must give the same). */
+  resultHash?: string;
+  /** False when recomputing from `source` did not reproduce `result` at write time (blocks approval). */
+  reproducible?: boolean;
+  /** Reconciled only: the job list is a fresh CRM read, or the freeze job set (owner kept the freeze snapshot). */
+  basis?: "read" | "freeze_jobs";
+  /** Reconciled only: job changes since the freeze and their effect on prizes. */
+  lateChanges?: LateChangeReport;
+  /** Reconciled only: the owner's explicit choice about material late changes. */
+  lateDecision?: LateDecision | null;
+}
+
+export type LateChoice = "keep_freeze" | "accept_correction";
+
+export interface LateDecision {
+  choice: LateChoice;
+  reason: string;
+  by: string;
+  at: string;
+  /** The exact set of changes decided on; a later re-check with the same set keeps the decision. */
+  changeSetHash: string;
+  decidedOnSnapshotId: string;
+  /** Set when a later re-check found the same changes and kept the decision. */
+  carriedFrom?: string;
+}
+
+/** A CRM change found after the results were approved. Insert-only; never applied. */
+export interface LateCorrectionDoc {
+  _id: string;
+  competitionId: string;
+  weekStart: string;
+  kind: "post_approval";
+  approvedContentHash: string;
+  approvedSnapshotId: string;
+  detectedAt: string;
+  by: string;
+  report: LateChangeReport;
+  /** Always manual: the Arena never changes an approved result or creates any financial record. */
+  ownerAction: "manual";
+}
+
+/** What the engine run returns: the result, and (when the caller can) its exact input. */
+export interface ComputedWeek {
+  result: CompetitionResult;
+  source?: SourceSnapshot;
 }
 
 /** One competitor's line in an approved result (no job ids, no money detail). */
@@ -95,6 +158,9 @@ export interface ResultDoc {
   unallocatedCents: number;
   budgetCents: number;
   mostImprovedWinner: string | null;
+  /** Hashes of the approved snapshot's stored input and result (absent on records made before source snapshots). */
+  sourceInputHash?: string;
+  snapshotResultHash?: string;
   /** sha256 of the canonical record above (integrity check). */
   contentHash: string;
 }
@@ -132,6 +198,7 @@ export interface LifecycleCollections {
   approvals: StoreCollection<ApprovalDoc>;
   events: StoreCollection<TechEventDoc>;
   claims: StoreCollection<ClaimDoc>;
+  lateCorrections: StoreCollection<LateCorrectionDoc>;
 }
 
 export interface LifecycleContext {
@@ -139,7 +206,9 @@ export interface LifecycleContext {
   lc: LifecycleCollections;
   /** Runs the engine for one week on the CRM data (read-only), with account
    *  standings checked in `mode` (live: provisional, last known on failure). */
-  compute: (weekStart: string, rv: RuleVersionDoc, mode: AccountMode) => Promise<CompetitionResult>;
+  compute: (weekStart: string, rv: RuleVersionDoc, mode: AccountMode) => Promise<ComputedWeek>;
+  /** Read-only by-id lookup of jobs that left a read (deleted / re-dated / unassigned). Optional. */
+  lookupJobs?: (ids: string[]) => Promise<Record<string, JobLookup>>;
   /** Fresh/live Weekly Balance account check (never throws; failure = unverified). */
   checkAccounts: (ids: string[], mode: AccountMode) => Promise<Record<string, AccountInput>>;
   /** True only on the local dev stack (ARENA_DEV_STACK=1). */
@@ -289,7 +358,7 @@ export async function liveSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv:
   const release = await tryClaim(ctx, `live:${c._id}`);
   if (!release) return cur ?? null;
   try {
-    const result = await ctx.compute(c.weekStart, rv, "live");
+    const { result } = await ctx.compute(c.weekStart, rv, "live");
     const at = iso(ctx);
     const doc: SnapshotDoc = {
       _id: liveId(c._id), competitionId: c._id, weekStart: c.weekStart, kind: "live", n: (cur?.n ?? 0) + 1,
@@ -333,11 +402,11 @@ export async function freezeCompetition(
   const release = await tryClaim(ctx, `freeze:${id}`);
   if (!release) throw new ArenaStateError("the week is being frozen right now; reload in a moment");
   try {
-    const result = await ctx.compute(c.weekStart, rv, "fresh");
+    const { result, source } = await ctx.compute(c.weekStart, rv, "fresh");
     const at = iso(ctx);
     const snap: SnapshotDoc = {
       _id: provisionalId(id), competitionId: id, weekStart: c.weekStart, kind: "provisional", n: 1,
-      computedAt: at, ruleVersionId: rv._id, rulesHash: rv.rulesHash, result,
+      computedAt: at, ruleVersionId: rv._id, rulesHash: rv.rulesHash, result: plain(result), ...withSource(source, result, rv, c.weekStart),
     };
     try {
       await ctx.lc.snapshots.insertOne(snap);
@@ -398,16 +467,68 @@ export async function reviewSnapshot(ctx: LifecycleContext, id: string): Promise
   return (await latestReconciled(ctx, id)) ?? (await ctx.lc.snapshots.findOne({ _id: provisionalId(id) }));
 }
 
+/** Source fields of a snapshot: the input, its result hash, and whether it reproduces. */
+function withSource(source: SourceSnapshot | undefined, result: CompetitionResult, rv: RuleVersionDoc, weekStart: string): Partial<SnapshotDoc> {
+  if (!source) return {};
+  const h = resultHash(result);
+  const again = resultHash(computeFromSource(source, rv.rules, rv.rulesHash, weekStart));
+  return { source, resultHash: h, reproducible: again === h };
+}
+
+/**
+ * Compare a fresh read with the freeze snapshot: per-job changes, and their
+ * effect on prizes measured with everything else equal (the freeze job set
+ * recomputed with the read's competitor map, decisions and accounts).
+ */
+async function lateChangesSinceFreeze(
+  ctx: LifecycleContext, c: CompetitionDoc, rv: RuleVersionDoc, read: ComputedWeek, at: string,
+): Promise<{ report: LateChangeReport; freezeJobsSource: SourceSnapshot; freezeJobsResult: CompetitionResult } | null> {
+  const frozen = await ctx.lc.snapshots.findOne({ _id: provisionalId(c._id) });
+  if (!read.source || !frozen?.source) return null; // a snapshot from before source snapshots existed
+  const lookup = ctx.lookupJobs ? await ctx.lookupJobs(vanishedIds(frozen.source, read.source)) : {};
+  const freezeJobsSource = withJobs(read.source, frozen.source.jobs, { snapshotId: frozen._id, readAt: frozen.source.readAt });
+  const freezeJobsResult = computeFromSource(freezeJobsSource, rv.rules, rv.rulesHash, c.weekStart);
+  const report = lateChangeReport({
+    against: { snapshotId: frozen._id, source: frozen.source }, read: read.source, weekStart: c.weekStart, detectedAt: at,
+    lookup, baseResult: freezeJobsResult, readResult: read.result,
+  });
+  return { report, freezeJobsSource, freezeJobsResult };
+}
+
 async function reconcileSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv: RuleVersionDoc, by: string): Promise<SnapshotDoc> {
   const prev = await latestReconciled(ctx, c._id);
   const n = (prev?.n ?? 0) + 1;
-  const result = await ctx.compute(c.weekStart, rv, "fresh");
+  const read = await ctx.compute(c.weekStart, rv, "fresh");
+  const at = iso(ctx);
+  const late = await lateChangesSinceFreeze(ctx, c, rv, read, at);
+  let result = read.result;
+  let source = read.source;
+  let basis: SnapshotDoc["basis"] = "read";
+  let lateDecision: LateDecision | null = null;
+  if (late) {
+    // The owner already decided on exactly these changes: keep that decision.
+    const d = prev?.lateDecision;
+    if (late.report.impact.material && d && d.changeSetHash === late.report.changeSetHash) {
+      lateDecision = { ...d, carriedFrom: prev!._id };
+      if (d.choice === "keep_freeze") {
+        result = late.freezeJobsResult;
+        source = late.freezeJobsSource;
+        basis = "freeze_jobs";
+      }
+    }
+  }
   const snap: SnapshotDoc = {
     _id: `${c._id}:reconciled:${n}`, competitionId: c._id, weekStart: c.weekStart, kind: "reconciled", n,
-    computedAt: iso(ctx), ruleVersionId: rv._id, rulesHash: rv.rulesHash, result,
+    computedAt: at, ruleVersionId: rv._id, rulesHash: rv.rulesHash, result: plain(result), ...withSource(source, result, rv, c.weekStart),
+    ...(late ? { basis, lateChanges: plain(late.report), lateDecision } : {}),
   };
   await ctx.lc.snapshots.insertOne(snap);
   await audit(ctx, "competition.reconcile", c._id, by, null, prev?._id ?? provisionalId(c._id), snap._id);
+  if (late?.report.changes.length)
+    await audit(ctx, "competition.late_changes.detected", c._id, by, null, late.report.against.snapshotId, {
+      snapshotId: snap._id, changes: late.report.changes.length, material: late.report.impact.material,
+      reasons: late.report.impact.reasons, decision: lateDecision?.choice ?? null,
+    });
   return snap;
 }
 
@@ -468,6 +589,22 @@ export function approvalBlockers(result: CompetitionResult): string[] {
   return p;
 }
 
+/** Late-change and reproducibility blockers of the snapshot under review. */
+export function lateChangeBlockers(snap: SnapshotDoc): string[] {
+  const p: string[] = [];
+  if (snap.reproducible === false) p.push("the stored source snapshot does not reproduce this result; re-check before approving");
+  const l = snap.lateChanges;
+  if (l?.impact.material && !snap.lateDecision)
+    p.push(
+      `CRM jobs changed after the freeze and this changes prizes (${l.impact.reasons.join("; ")}); ` +
+        `the owner must choose "keep freeze snapshot" or "accept correction" with a reason`,
+    );
+  return p;
+}
+
+/** Everything that blocks approving this snapshot (duplicates, accounts, late CRM changes). */
+export const snapshotBlockers = (snap: SnapshotDoc) => [...approvalBlockers(snap.result), ...lateChangeBlockers(snap)];
+
 export function toStanding(r: CompetitorResult): ApprovedStanding {
   return {
     competitorId: r.competitorId, displayName: r.displayName, location: r.location, rank: r.rank, score: r.score,
@@ -514,7 +651,7 @@ export async function approveResults(
     throw new ArenaStateError("the results changed since you opened them; reload and review again");
   if (snap.ruleVersionId !== rv._id) throw new ArenaStateError("the rules changed after this snapshot; re-check first");
   assertValidRules(rv.rules, { knownStatuses: ctx.config.knownStatuses, ceilingCents: s.budgetCeilingCents });
-  const blockers = approvalBlockers(snap.result);
+  const blockers = snapshotBlockers(snap);
   if (blockers.length) throw new ArenaStateError(blockers.join("; "));
   // Account eligibility is checked again NOW: the owner approves exactly the
   // account standings that were reviewed, or nothing.
@@ -535,6 +672,7 @@ export async function approveResults(
     _id: id, competitionId: id, weekStart: c.weekStart, snapshotId: snap._id, ruleVersionId: rv._id, rulesHash: rv.rulesHash,
     approvedBy: by, approvedAt: at, note, standings: r.results.map(toStanding), awardedCents: r.awardedCents,
     unallocatedCents: r.unallocatedCents, budgetCents: rv.rules.prizes.budgetCents, mostImprovedWinner: r.mostImprovedWinner,
+    ...(snap.source && snap.resultHash ? { sourceInputHash: snap.source.inputHash, snapshotResultHash: snap.resultHash } : {}),
   };
   const doc: ResultDoc = { ...base, contentHash: resultContentHash(base) };
   try {
@@ -558,6 +696,122 @@ export async function approveResults(
     ]);
   await writeEvents(ctx, id, at, evs);
   return doc;
+}
+
+// ── late CRM changes: the owner's choice, and after approval ───────────────
+
+/**
+ * The owner's explicit choice about late CRM changes that alter prizes. OWNER
+ * ONLY, only for a week in review, only on the exact snapshot the owner looked
+ * at, with a reason. Writes a NEW reconciled snapshot (insert-only):
+ *   keep_freeze        the job set stored at freeze, with today's review decisions
+ *   accept_correction  the corrected CRM read as reviewed
+ * The choice stays in force for later re-checks that find the same changes; a
+ * different set of changes needs a new choice.
+ */
+export async function decideLateChanges(
+  ctx: LifecycleContext,
+  id: string,
+  by: string,
+  input: { snapshotId: string; choice: LateChoice; reason: string },
+): Promise<SnapshotDoc> {
+  const s = await currentSettings(ctx.config);
+  if (by !== s.ownerUserId) throw new ArenaAuthorizationError("only the owner can decide on late CRM changes");
+  if (input.choice !== "keep_freeze" && input.choice !== "accept_correction")
+    throw new ArenaStateError('choose "keep_freeze" or "accept_correction"');
+  const reason = (input.reason ?? "").trim();
+  if (reason.length < 3) throw new ArenaStateError("a reason is required");
+  const c = await getCompetitionDoc(ctx, id);
+  if (c.status !== "in_review") throw new ArenaStateError(`only a week in review takes a late-change decision (is ${c.status})`);
+  const snap = await reviewSnapshot(ctx, id);
+  if (!snap || snap._id !== input.snapshotId) throw new ArenaStateError("the results changed since you opened them; reload and review again");
+  if (!snap.lateChanges?.impact.material) throw new ArenaStateError("no late CRM change that affects prizes is waiting for a decision");
+  if (snap.lateDecision) throw new ArenaStateError(`already decided: ${snap.lateDecision.choice}`);
+  const frozen = await ctx.lc.snapshots.findOne({ _id: provisionalId(id) });
+  if (!frozen?.source || !snap.source) throw new ArenaStateError("source snapshots missing; re-check first");
+  const rv = await ruleVersionOf(ctx, c);
+  if (snap.ruleVersionId !== rv._id) throw new ArenaStateError("the rules changed after this snapshot; re-check first");
+  const at = iso(ctx);
+  let source = snap.source;
+  let result = snap.result;
+  if (input.choice === "keep_freeze") {
+    source = withJobs(snap.source, frozen.source.jobs, { snapshotId: frozen._id, readAt: frozen.source.readAt });
+    result = computeFromSource(source, rv.rules, rv.rulesHash, c.weekStart);
+  }
+  const n = snap.n + 1;
+  const doc: SnapshotDoc = {
+    _id: `${id}:reconciled:${n}`, competitionId: id, weekStart: c.weekStart, kind: "reconciled", n,
+    computedAt: at, ruleVersionId: rv._id, rulesHash: rv.rulesHash, result: plain(result), ...withSource(source, result, rv, c.weekStart),
+    basis: input.choice === "keep_freeze" ? "freeze_jobs" : "read",
+    lateChanges: snap.lateChanges,
+    lateDecision: { choice: input.choice, reason, by, at, changeSetHash: snap.lateChanges.changeSetHash, decidedOnSnapshotId: snap._id },
+  };
+  try {
+    await ctx.lc.snapshots.insertOne(doc);
+  } catch {
+    throw new ArenaStateError("the results changed since you opened them; reload and review again");
+  }
+  await audit(ctx, `competition.late_changes.${input.choice}`, id, by, reason, snap._id, {
+    snapshotId: doc._id, changeSetHash: snap.lateChanges.changeSetHash, reasons: snap.lateChanges.impact.reasons,
+  });
+  return doc;
+}
+
+/**
+ * After approval: re-read the CRM and compare with the job set the approved
+ * result was computed from. Changes are logged (insert-only, one record per
+ * distinct change set) for the owner to handle MANUALLY. The approved result,
+ * its snapshot, the approval record and the technician feed are never touched,
+ * and nothing financial is created.
+ */
+export async function checkLateCorrections(
+  ctx: LifecycleContext,
+  id: string,
+  by: string,
+): Promise<{ status: "unchanged" | "logged" | "already_logged"; report: LateChangeReport; record: LateCorrectionDoc | null }> {
+  const c = await getCompetitionDoc(ctx, id);
+  if (c.status !== "approved") throw new ArenaStateError(`only an approved week is checked for late corrections (is ${c.status})`);
+  const res = await ctx.lc.results.findOne({ _id: id });
+  if (!res) throw new ArenaStateError("approved result record missing");
+  const snap = await ctx.lc.snapshots.findOne({ _id: res.snapshotId });
+  if (!snap?.source) throw new ArenaStateError("approved before source snapshots existed: no job-level comparison is possible");
+  const rv = await ctx.config.store.ruleVersions.findOne({ _id: res.ruleVersionId });
+  if (!rv) throw new ArenaStateError(`rule version ${res.ruleVersionId} missing`);
+  const read = await ctx.compute(c.weekStart, rv, "live");
+  if (!read.source) throw new ArenaStateError("this environment cannot produce a source snapshot");
+  const at = iso(ctx);
+  const lookup = ctx.lookupJobs ? await ctx.lookupJobs(vanishedIds(snap.source, read.source)) : {};
+  // Today's jobs with the APPROVED inputs (map, decisions, accounts): only CRM job edits are measured.
+  const readResult = computeFromSource(withJobs(snap.source, read.source.jobs, null), rv.rules, rv.rulesHash, c.weekStart);
+  const report = plain(lateChangeReport({
+    against: { snapshotId: snap._id, source: snap.source }, read: read.source, weekStart: c.weekStart, detectedAt: at,
+    lookup, baseResult: snap.result, readResult,
+  }));
+  if (!report.changes.length) return { status: "unchanged", report, record: null };
+  const last = await ctx.lc.lateCorrections.findOne({ competitionId: id }, { sort: { detectedAt: -1 } });
+  if (last && last.report.changeSetHash === report.changeSetHash) return { status: "already_logged", report, record: last };
+  const record: LateCorrectionDoc = {
+    _id: ctx.config.newId("alate"), competitionId: id, weekStart: c.weekStart, kind: "post_approval",
+    approvedContentHash: res.contentHash, approvedSnapshotId: snap._id, detectedAt: at, by, report, ownerAction: "manual",
+  };
+  await ctx.lc.lateCorrections.insertOne(record);
+  await audit(ctx, "competition.late_correction.detected", id, by, null, { contentHash: res.contentHash }, {
+    record: record._id, changes: report.changes.length, material: report.impact.material, reasons: report.impact.reasons,
+  });
+  return { status: "logged", report, record };
+}
+
+/**
+ * Recompute a stored snapshot from its stored source: the hashes of the input
+ * hold and the result is reproduced bit for bit.
+ */
+export function verifySnapshotSource(snap: SnapshotDoc, rv: RuleVersionDoc): { ok: boolean; problems: string[]; recomputedHash: string | null } {
+  if (!snap.source) return { ok: false, problems: ["no stored source"], recomputedHash: null };
+  const problems = sourceProblems(snap.source);
+  const again = resultHash(computeFromSource(snap.source, rv.rules, rv.rulesHash, snap.weekStart));
+  if (snap.resultHash && again !== snap.resultHash) problems.push("recomputed result differs from the stored result hash");
+  if (resultHash(snap.result) !== (snap.resultHash ?? again)) problems.push("stored result differs from its hash");
+  return { ok: problems.length === 0, problems, recomputedHash: again };
 }
 
 // ── selection for technicians ──────────────────────────────────────────────
