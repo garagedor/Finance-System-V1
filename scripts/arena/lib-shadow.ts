@@ -24,7 +24,7 @@ import { loadJobs } from "../../src/lib/arena/job-source.ts";
 import { arenaStores, loadMappings, loadTechnicians } from "../../src/lib/arena/mongo-store.ts";
 import { reviewDecisions, isEnglishDisplayName, NON_COMPETITOR_CATEGORIES } from "../../src/lib/arena/review.ts";
 import type {
-  DisplayNameCaseData, DuplicateCaseData, IdentityCaseData, NonCompetitorCategory, Resolution, ReviewCaseDoc,
+  DisplayNameCaseData, DuplicateCaseData, IdentityCaseData, NonCompetitorCategory, Resolution, ReviewCaseDoc, ReviewDecisions,
 } from "../../src/lib/arena/review.ts";
 import { resultContentHash, toStanding, verifySnapshotSource, type ResultDoc, type SnapshotDoc } from "../../src/lib/arena/lifecycle.ts";
 import type { RuleVersionDoc } from "../../src/lib/arena/config-store.ts";
@@ -63,11 +63,24 @@ export interface DecisionDuplicateGroup {
   date: string;
   /** Net profit of each copy (null = any). */
   profit: number | null;
-  /** confirmed: the office confirmed one invoice / one payment → count once. */
-  status: "confirmed" | "pending_office_confirmation";
+  /**
+   * confirmed: the office confirmed one invoice / one payment → count once (excludeJobIds left out);
+   * keep_both: a normal two-part visit / not a double entry → both jobs count (the group is dismissed);
+   * pending_office_confirmation: nothing applied — the group keeps blocking that week's approval.
+   */
+  status: "confirmed" | "pending_office_confirmation" | "keep_both";
   /** Jobs to leave out of the count (required when confirmed; at least one job of the group stays counted). */
   excludeJobIds: string[];
+  /** Optional: the exact job ids of the group (from the shadow report); when given, only that exact group matches. */
+  jobIds?: string[];
   reason: string;
+}
+/** Owner policy for whole classes of suspected duplicates (D2). "review" = decide pair by pair. */
+export interface DecisionDuplicatePolicy {
+  /** A group whose jobs are all Closed / X close with at least one of each (a two-part visit). */
+  closedPlusXClose?: "keep_both" | "review";
+  /** A group in which every job has $0 profit (OOA, Estimate, No answer…). */
+  zeroDollar?: "keep_both" | "review";
 }
 export interface DecisionDisplayName {
   /** The account's full name, as shown in the review queue. */
@@ -83,8 +96,11 @@ export interface ShadowDecisions {
   mappings: DecisionMapping[];
   countOnceDuplicateGroups: DecisionDuplicateGroup[];
   displayNameOverrides: DecisionDisplayName[];
+  /** Optional (absent = "review" for both). */
+  duplicatePolicy?: DecisionDuplicatePolicy;
 }
 
+const POLICY_VALUES = ["keep_both", "review"];
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const str = (v: unknown) => typeof v === "string" && v.trim().length > 0;
 
@@ -125,11 +141,26 @@ export function validateDecisions(raw: unknown): { decisions: ShadowDecisions | 
     if (!ISO_DAY.test(String(x.date))) p.push(`${at} "${x.technician}": date must be YYYY-MM-DD`);
     if (x.profit !== null && (typeof x.profit !== "number" || !Number.isFinite(x.profit))) p.push(`${at} "${x.technician}": profit must be a number or null`);
     if (!Array.isArray(x.excludeJobIds) || x.excludeJobIds.some((j) => !str(j))) p.push(`${at} "${x.technician}": excludeJobIds must be a list of job ids`);
+    if (x.jobIds !== undefined && (!Array.isArray(x.jobIds) || x.jobIds.length < 2 || x.jobIds.some((j) => !str(j))))
+      p.push(`${at} "${x.technician}": jobIds, when given, must list the 2 or more job ids of the group`);
+    else if (x.jobIds && Array.isArray(x.excludeJobIds) && x.excludeJobIds.some((j) => !x.jobIds!.includes(j)))
+      p.push(`${at} "${x.technician}": every excludeJobIds entry must be one of jobIds`);
     if (x.status === "confirmed") {
       if (!x.excludeJobIds?.length) p.push(`${at} "${x.technician}" ${x.date}: a confirmed group needs excludeJobIds (the copy to leave out)`);
-    } else if (x.status !== "pending_office_confirmation") p.push(`${at} "${x.technician}": status must be "confirmed" or "pending_office_confirmation"`);
+      else if (x.jobIds && x.excludeJobIds.length >= x.jobIds.length) p.push(`${at} "${x.technician}" ${x.date}: at least one job of the group must stay counted`);
+    } else if (x.status === "keep_both") {
+      if (x.excludeJobIds?.length) p.push(`${at} "${x.technician}" ${x.date}: keep_both leaves nothing out (excludeJobIds must be empty)`);
+    } else if (x.status !== "pending_office_confirmation") p.push(`${at} "${x.technician}": status must be "confirmed", "keep_both" or "pending_office_confirmation"`);
     if (!str(x.reason)) p.push(`${at} "${x.technician}": a reason is required`);
   });
+  if (d.duplicatePolicy !== undefined) {
+    const pol = d.duplicatePolicy as Record<string, unknown> | null;
+    if (!pol || typeof pol !== "object" || Array.isArray(pol)) p.push(`"duplicatePolicy" must be an object`);
+    else for (const [k, v] of Object.entries(pol)) {
+      if (k !== "closedPlusXClose" && k !== "zeroDollar") p.push(`duplicatePolicy.${k}: unknown policy (closedPlusXClose, zeroDollar)`);
+      else if (!POLICY_VALUES.includes(v as string)) p.push(`duplicatePolicy.${k} must be "keep_both" or "review"`);
+    }
+  }
   d.displayNameOverrides!.forEach((x, i) => {
     if (!str(x?.fullName) && !str(x?.competitorId)) return p.push(`displayNameOverrides[${i}]: fullName or competitorId is required`);
     if (!isEnglishDisplayName(String(x.displayName ?? "").trim())) p.push(`displayNameOverrides[${i}] "${x.fullName}": displayName must be Latin letters, 2–40 characters`);
@@ -151,8 +182,10 @@ export function readDecisionsFile(file: string): { decisions: ShadowDecisions | 
 
 export const decisionsSummary = (d: ShadowDecisions) => {
   const dup = d.countOnceDuplicateGroups;
+  const pol = d.duplicatePolicy ?? {};
   return `${d.exclusions.length} exclusions, ${d.mappings.filter((m) => m.status === "attach").length} mappings (+${d.mappings.filter((m) => m.status !== "attach").length} pending identification), ` +
-    `${dup.filter((g) => g.status === "confirmed").length} duplicate groups confirmed (+${dup.filter((g) => g.status !== "confirmed").length} pending office), ${d.displayNameOverrides.length} display-name overrides`;
+    `${dup.filter((g) => g.status === "confirmed").length} duplicate groups confirmed, ${dup.filter((g) => g.status === "keep_both").length} keep both (+${dup.filter((g) => g.status === "pending_office_confirmation").length} pending office), ` +
+    `policy: Closed+X close ${pol.closedPlusXClose ?? "review"}, $0 pairs ${pol.zeroDollar ?? "review"}, ${d.displayNameOverrides.length} display-name overrides`;
 };
 
 export interface PlannedResolution { caseId: string; resolution: Resolution; reason: string; label: string }
@@ -162,14 +195,44 @@ export interface DecisionPlan {
   /** Local decision differs from the file: refuse until the owner reopens it. */
   conflicts: string[];
   notes: string[];
+  /**
+   * Cases of this week the decisions file does not cover at all (open in the
+   * local database and in no list of the file): a CRM name nobody decided is a
+   * STOP condition for the daily check; an undecided duplicate group blocks
+   * that week's approval.
+   */
+  undecided: { names: string[]; duplicates: string[]; displayNames: string[] };
+  /** Covered, but deliberately left open: pending identification / pending office confirmation. */
+  pending: { names: string[]; duplicates: string[] };
 }
 
 const sameResolution = (a: Resolution | null, b: Resolution) => !!a && canonicalJson(a) === canonicalJson(b);
 
+const near = (a: number, b: number) => Math.abs(a - b) < 0.005;
+/** All jobs Closed / X close, at least one of each: a normal two-part visit (D2). */
+export const isClosedPlusXClose = (g: DuplicateCaseData) =>
+  g.jobs.every((j) => j.status === "Closed" || j.status === "X close") && g.jobs.some((j) => j.status === "Closed") && g.jobs.some((j) => j.status === "X close");
+/** Every job $0 profit (OOA, Estimate, No answer…): no money involved (D2). */
+export const isZeroDollar = (g: DuplicateCaseData) => g.jobs.every((j) => near(j.profit, 0));
+
+const dupLabel = (g: DuplicateCaseData) =>
+  `${g.competitorName} ${g.date} [${g.jobs.map((j) => `${j.status} $${j.profit.toFixed(2)}`).join(" + ")}] (jobs ${g.jobs.map((j) => j.id).join(", ")})`;
+
+/** Does a decisions-file duplicate entry name this detected group? */
+export function matchesDuplicate(x: DecisionDuplicateGroup, g: DuplicateCaseData): boolean {
+  const ids = g.jobs.map((j) => j.id);
+  if (x.jobIds?.length) return x.jobIds.length === ids.length && x.jobIds.every((id) => ids.includes(id));
+  if (x.status === "confirmed") return x.excludeJobIds.length > 0 && x.excludeJobIds.every((id) => ids.includes(id));
+  const who = [g.competitorName, ...g.jobs.map((j) => j.tech)].map((s) => s.trim().toLowerCase());
+  return g.date === x.date && who.includes(x.technician.trim().toLowerCase()) && (x.profit === null || g.jobs.every((j) => near(j.profit, x.profit!)));
+}
+
 /** Pure: which review cases the decisions file resolves, and how. */
 export function planDecisions(cases: ReviewCaseDoc[], d: ShadowDecisions): DecisionPlan {
-  const plan: DecisionPlan = { apply: [], alreadyInForce: [], conflicts: [], notes: [] };
+  const plan: DecisionPlan = { apply: [], alreadyInForce: [], conflicts: [], notes: [], undecided: { names: [], duplicates: [], displayNames: [] }, pending: { names: [], duplicates: [] } };
+  const covered = new Set<string>();
   const consider = (c: ReviewCaseDoc, r: Resolution, reason: string, label: string) => {
+    covered.add(c._id);
     if (c.status === "open") plan.apply.push({ caseId: c._id, resolution: r, reason: `decisions.json: ${reason}`, label });
     else if (sameResolution(c.resolution, r)) plan.alreadyInForce.push(label);
     else plan.conflicts.push(`${label}: the local database already has a different ${c.status.replace("_", " ")} decision (${JSON.stringify(c.resolution)}); reopen it or fix decisions.json`);
@@ -185,6 +248,7 @@ export function planDecisions(cases: ReviewCaseDoc[], d: ShadowDecisions): Decis
   for (const x of d.mappings) {
     const c = identity.get(x.crmName.trim());
     if (x.status === "pending_identification") {
+      if (c) { covered.add(c._id); plan.pending.names.push(`${x.crmName} (${(c.data as IdentityCaseData).jobs} job(s))`); }
       plan.notes.push(c ? `"${x.crmName}" pending identification: ${(c.data as IdentityCaseData).jobs} job(s) this week, not credited to anyone and cannot win` : `"${x.crmName}" pending identification: no jobs this week`);
       continue;
     }
@@ -194,19 +258,27 @@ export function planDecisions(cases: ReviewCaseDoc[], d: ShadowDecisions): Decis
   const dups = byKind("duplicate_group");
   for (const x of d.countOnceDuplicateGroups) {
     const label = `${x.technician} ${x.date}${x.profit !== null ? ` $${x.profit.toFixed(2)}` : ""}`;
+    const c = dups.find((g) => matchesDuplicate(x, g.data as DuplicateCaseData));
     if (x.status === "confirmed") {
-      const c = dups.find((g) => x.excludeJobIds.every((id) => (g.data as DuplicateCaseData).jobs.some((j) => j.id === id)));
       if (!c) { plan.notes.push(`count once ${label}: its jobs are not a suspected group this week`); continue; }
       consider(c, { kind: "duplicate_confirmed", excludeJobIds: [...x.excludeJobIds].sort() }, x.reason, `count once ${label}`);
-    } else {
-      const c = dups.find((g) => {
-        const gd = g.data as DuplicateCaseData;
-        const who = [gd.competitorName, ...gd.jobs.map((j) => j.tech)].map((s) => s.trim().toLowerCase());
-        return gd.date === x.date && who.includes(x.technician.trim().toLowerCase()) &&
-          (x.profit === null || gd.jobs.every((j) => Math.abs(j.profit - x.profit!) < 0.005));
-      });
-      if (c) plan.notes.push(`pending office confirmation ${label}: counted both ways for now — jobs ${(c.data as DuplicateCaseData).jobs.map((j) => j.id).join(", ")}`);
+    } else if (x.status === "keep_both") {
+      if (!c) { plan.notes.push(`keep both ${label}: not a suspected group this week`); continue; }
+      consider(c, { kind: "duplicate_dismissed" }, x.reason, `keep both ${label}`);
+    } else if (c) {
+      covered.add(c._id);
+      plan.pending.duplicates.push(dupLabel(c.data as DuplicateCaseData));
+      plan.notes.push(`pending office confirmation ${label}: counted both ways for now — jobs ${(c.data as DuplicateCaseData).jobs.map((j) => j.id).join(", ")}; it blocks this week's approval until decided`);
     }
+  }
+  const pol = d.duplicatePolicy ?? {};
+  for (const c of dups) {
+    if (covered.has(c._id)) continue;
+    const g = c.data as DuplicateCaseData;
+    if (pol.closedPlusXClose === "keep_both" && isClosedPlusXClose(g))
+      consider(c, { kind: "duplicate_dismissed" }, "D2 policy: Closed + X close is a normal two-part visit, keep both", `keep both (policy Closed + X close) ${dupLabel(g)}`);
+    else if (pol.zeroDollar === "keep_both" && isZeroDollar(g))
+      consider(c, { kind: "duplicate_dismissed" }, "D2 policy: $0 pair, no money involved, keep both", `keep both (policy $0) ${dupLabel(g)}`);
   }
   for (const c of byKind("display_name")) {
     const data = c.data as DisplayNameCaseData;
@@ -215,7 +287,79 @@ export function planDecisions(cases: ReviewCaseDoc[], d: ShadowDecisions): Decis
       (!o.competitorId && [data.fullName, data.currentName].some((n) => n && n.trim() === o.fullName.trim())));
     if (x) consider(c, { kind: "display_name", displayName: x.displayName.trim() }, x.reason, `display name "${x.displayName}" for ${data.fullName ?? data.currentName}`);
   }
+  for (const c of cases) {
+    if (covered.has(c._id) || c.status !== "open") continue;
+    if (c.kind === "identity_name") { const x = c.data as IdentityCaseData; plan.undecided.names.push(`${x.crmName} (${x.jobs} job(s)${x.locations.length ? ` at ${x.locations.join(", ")}` : ""})`); }
+    else if (c.kind === "duplicate_group") plan.undecided.duplicates.push(dupLabel(c.data as DuplicateCaseData));
+    else { const x = c.data as DisplayNameCaseData; plan.undecided.displayNames.push(`${x.fullName ?? x.currentName} (${x.reason ?? "needs_english"})`); }
+  }
   return plan;
+}
+
+/**
+ * Pure: the engine inputs the plan WOULD produce, on top of the decisions already
+ * in force (same mapping as review.ts reviewDecisions). Used by the daily
+ * shadow run to show standings "with the decisions file applied" without
+ * writing anything.
+ */
+export function projectDecisions(base: ReviewDecisions, cases: ReviewCaseDoc[], plan: DecisionPlan, by = "decisions.json", at = new Date(0).toISOString()): ReviewDecisions {
+  const out: ReviewDecisions = {
+    exclusions: [...base.exclusions], dismissedDuplicateGroups: [...base.dismissedDuplicateGroups], overrides: [...base.overrides], displayNames: { ...base.displayNames },
+  };
+  const byId = new Map(cases.map((c) => [c._id, c]));
+  for (const a of plan.apply) {
+    const c = byId.get(a.caseId);
+    if (!c) continue;
+    const r = a.resolution;
+    if (r.kind === "duplicate_confirmed") for (const jobId of r.excludeJobIds) out.exclusions.push({ jobId, kind: "duplicate", reason: a.reason, by, at });
+    else if (r.kind === "duplicate_dismissed") out.dismissedDuplicateGroups.push(c.key);
+    else if (r.kind === "identity_attach") out.overrides.push({ crmName: (c.data as IdentityCaseData).crmName, competitorId: r.competitorId, reason: a.reason, by, at });
+    else if (r.kind === "identity_not_competitor") out.overrides.push({ crmName: (c.data as IdentityCaseData).crmName, competitorId: null, reason: `${r.category}: ${a.reason}`, by, at });
+    else if (r.kind === "display_name") out.displayNames[(c.data as DisplayNameCaseData).competitorId] = r.displayName;
+  }
+  return out;
+}
+
+/** Turn detected cases (detect.ts) into case documents for planning, keeping local decisions already recorded. */
+export function asCaseDocs(found: { kind: ReviewCaseDoc["kind"]; key: string; data: ReviewCaseDoc["data"]; weeks: string[] }[], recorded: ReviewCaseDoc[] = []): ReviewCaseDoc[] {
+  const rec = new Map(recorded.map((c) => [c._id, c]));
+  return found.map((f) => {
+    const id = `${f.kind}:${f.key}`;
+    const r = rec.get(id);
+    return r ? { ...r, data: f.data } : {
+      _id: id, kind: f.kind, key: f.key, status: "open", data: f.data, weeks: f.weeks, firstSeenAt: "", lastSeenAt: "",
+      resolution: null, reason: null, decidedBy: null, decidedAt: null, confirmedBy: null, confirmedAt: null, version: 0,
+    } as ReviewCaseDoc;
+  });
+}
+
+// ── clock gate for the simulated approval ──────────────────────────────────
+
+/**
+ * When shadow-approve may run on the REAL clock:
+ *   - nothing before the week has ended (Sunday 23:59:59 in the rules timezone);
+ *   - the Monday freeze (--stop-after freeze) as soon as the week has ended;
+ *   - review / approval only once the review window opens (Tuesday 12:00).
+ * `early` = the real clock is not enough; the caller refuses unless --allow-early (testing only).
+ */
+export function approvalClockGate(o: { now: Date; closesAt: Date; approvalOpensAt: Date; stopAfter: "freeze" | "review" | null }): { early: boolean; why: string | null } {
+  if (o.now < o.closesAt) return { early: true, why: `the week has not ended (it closes ${o.closesAt.toISOString()})` };
+  if (o.now < o.approvalOpensAt && o.stopAfter !== "freeze")
+    return { early: true, why: `the review window opens ${o.approvalOpensAt.toISOString()} (Tuesday 12:00); before that only the freeze may run (--stop-after freeze)` };
+  return { early: false, why: null };
+}
+
+// ── run archive ────────────────────────────────────────────────────────────
+
+/** A filesystem-safe run stamp from an ISO time ("2026-11-09T14-05-00.000Z"). */
+export const runStamp = (iso: string) => iso.replace(/:/g, "-");
+
+/** Keep every run: <dir>/runs/<stamp>[-<suffix>]/<file> (mode 700 / 600). Returns the run folder. */
+export function archiveRun(dir: string, stamp: string, files: Record<string, string>, suffix = ""): string {
+  const runs = ensurePrivateDir(path.join(dir, "runs"));
+  const run = ensurePrivateDir(path.join(runs, `${stamp}${suffix ? `-${suffix}` : ""}`));
+  for (const [f, content] of Object.entries(files)) writePrivate(run, f, content);
+  return run;
 }
 
 // ── accounts file ──────────────────────────────────────────────────────────
