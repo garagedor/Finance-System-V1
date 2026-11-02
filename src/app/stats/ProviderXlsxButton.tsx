@@ -5,7 +5,7 @@
 // download the by-location workbook from /api/stats/provider-xlsx.
 
 import { useEffect, useRef, useState } from 'react';
-import { useClickOutside } from '@/hooks/useClickOutside';
+import { createPortal } from 'react-dom';
 
 type Row = { key: string; count: number };
 
@@ -17,8 +17,38 @@ export default function ProviderXlsxButton({ startDate, endDate }: { startDate: 
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, () => setOpen(false));
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  // The panel is portalled to <body> with fixed positioning: the page header
+  // is its own stacking context (fade-up animation), so a panel rendered
+  // inside it drew BEHIND the filters and cards below and could not be used.
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 8, right: Math.max(16, window.innerWidth - r.right) });
+    };
+    place();
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const t = e.target as Node;
+      if (panelRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
 
   // Provider job counts for the date range only (other page filters ignored —
   // the spreadsheet covers every location and tech).
@@ -87,16 +117,18 @@ export default function ProviderXlsxButton({ startDate, endDate }: { startDate: 
   };
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button type="button" style={btn} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+    <>
+      <button ref={btnRef} type="button" style={btn} onClick={() => setOpen((o) => !o)} aria-expanded={open}>
         ⬇ Provider spreadsheet
       </button>
-      {open && (
+      {open && pos && typeof document !== 'undefined' && createPortal((
         <div
+          ref={panelRef}
           role="dialog"
           aria-label="Provider spreadsheet"
           style={{
-            position: 'absolute', right: 0, top: 'calc(100% + 8px)', zIndex: 50, width: 'min(340px, calc(100vw - 32px))',
+            position: 'fixed', right: pos.right, top: pos.top, zIndex: 9999, width: 'min(340px, calc(100vw - 32px))',
+            maxHeight: `calc(100vh - ${pos.top + 16}px)`, overflowY: 'auto',
             background: 'var(--ds-surface)', color: 'var(--ds-ink)', border: '1px solid var(--ds-line-strong)',
             borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.25)', padding: 14,
           }}
@@ -139,7 +171,7 @@ export default function ProviderXlsxButton({ startDate, endDate }: { startDate: 
             {busy ? 'Building… (can take a minute)' : `Download spreadsheet (${picked.size} provider${picked.size === 1 ? '' : 's'})`}
           </button>
         </div>
-      )}
-    </div>
+      ), document.body)}
+    </>
   );
 }
