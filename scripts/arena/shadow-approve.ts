@@ -156,6 +156,7 @@ await runGuarded(async () => {
   let refusedReason: string | null = null;
   let exitCode = 1;
   let unverifiedPrize: { competitorId: string; displayName: string; position: string }[] = [];
+  const appliedLabels = new Set<string>();
 
   // CRM: read-only, proven before any read. Every collection opened is recorded.
   const crm = await openGuardedCrm();
@@ -324,6 +325,7 @@ await runGuarded(async () => {
       if (c!.status !== "in_review") throw new Error(`unexpected status ${c!.status}`);
       for (const r of plan.apply) {
         await resolveCase(review, r.caseId, r.resolution, ACTOR, r.reason);
+        appliedLabels.add(r.label);
         steps.push(`applied decision: ${r.label}`);
       }
       const s = await reconcileCompetition(lctx, id, ACTOR);
@@ -434,8 +436,8 @@ await runGuarded(async () => {
   const dd = data.decisions as { file: string; plan: DecisionPlan } | undefined;
   if (dd) {
     out(`## Data-review decisions (Arena-only; no CRM record changes)`);
-    out(`File: ${dd.file}. Applied: ${dd.plan.apply.length} · already in force: ${dd.plan.alreadyInForce.length} · conflicts: ${dd.plan.conflicts.length}`);
-    for (const x of dd.plan.apply) out(`- applied: ${x.label}`);
+    out(`File: ${dd.file}. Applied in this run: ${appliedLabels.size} of ${dd.plan.apply.length} · already in force: ${dd.plan.alreadyInForce.length} · conflicts: ${dd.plan.conflicts.length}`);
+    for (const x of dd.plan.apply) out(`- ${appliedLabels.has(x.label) ? "applied" : "not applied in this run (decisions are applied when the review opens; never to an approved week)"}: ${x.label}`);
     for (const x of dd.plan.alreadyInForce) out(`- in force: ${x}`);
     for (const x of dd.plan.conflicts) out(`- **conflict:** ${x}`);
     for (const x of dd.plan.notes) out(`- note: ${x}`);

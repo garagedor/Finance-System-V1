@@ -42,6 +42,7 @@ const ROOT = path.resolve(process.argv[2] ?? "");
 if (!process.argv[2]) throw new Error("usage: shadow-rehearsal.e2e.ts <outRoot>");
 if (ROOT.startsWith(REPO)) throw new Error("outRoot must be outside the repository");
 const OUT = path.join(ROOT, "shadow");
+if (fs.existsSync(OUT)) throw new Error(`${OUT} exists: use a new <outRoot> (every run must start from an empty shadow folder)`);
 fs.mkdirSync(OUT, { recursive: true, mode: 0o700 });
 fs.chmodSync(ROOT, 0o700); fs.chmodSync(OUT, 0o700);
 
@@ -128,7 +129,7 @@ interface Run { code: number; out: string; err: string }
 const childEnv = {
   PATH: process.env.PATH!, HOME: process.env.HOME!, ARENA_CRM_RO_URI: RO_URI, ARENA_CRM_DB: CRM_DB,
   ARENA_SHADOW_LOCAL_URI: "mongodb://127.0.0.1:27031", ARENA_SHADOW_DB: ARENA_DB,
-};
+} as unknown as NodeJS.ProcessEnv;
 /** Run one runbook command; the synthetic CRM must be byte-identical afterwards. */
 async function arenaCmd(label: string, loader: "test" | "transpile", script: string, args: string[]): Promise<Run> {
   const before = await crmFingerprint();
