@@ -30,6 +30,8 @@
  *   - Refused before the week has ended and before the review window opens
  *     (Tuesday 12:00 America/New_York) unless --allow-early (TESTING ONLY: the
  *     lifecycle then runs on a simulated clock set just after the window opens).
+ *     Exception: `--stop-after freeze` (the Monday freeze) runs on the REAL clock
+ *     as soon as the week has ended; on a week already frozen it changes nothing.
  *
  * Late CRM edits (source-snapshot.ts): the freeze stores the exact job set with
  * hashes; every re-check is diffed against it. When the changes alter a prize,
@@ -40,8 +42,9 @@
  * any post-approval late correction (never applied).
  *
  * After approval: the history integrity check over the local database.
- * Output: <outDir>/<weekStart>-simulated-approval/{report.md,data.json}, mode
- * 600, folder 700, refused inside any git repository.
+ * Output: <outDir>/<weekStart>-simulated-approval/{report.md,data.json} (latest
+ * run) plus a copy of every run in .../runs/<time>-<outcome>/, mode 600, folder
+ * 700, refused inside any git repository.
  * Exit: 0 approved (integrity IDENTICAL), 1 error / safety or integrity failure,
  * 2 refused by a rule (nothing approved), 3 guard refusal.
  */
@@ -51,7 +54,7 @@ import { randomUUID } from "node:crypto";
 import { MongoClient, type Db } from "mongodb";
 import { assertLocalMongoUri, GuardRefusal, openGuardedCrm, runGuarded } from "./lib-ro-guard.ts";
 import {
-  DEFAULT_SHADOW_DIR, SIMULATION_ACTOR as ACTOR, SIMULATION_BANNER, ensurePrivateDir, integrityCheck, markSimulated, parseAccountsFile,
+  DEFAULT_SHADOW_DIR, SIMULATION_ACTOR as ACTOR, SIMULATION_BANNER, approvalClockGate, archiveRun, ensurePrivateDir, runStamp, integrityCheck, markSimulated, parseAccountsFile,
   renderLateChanges as renderLateChangesFn,
   planDecisions, readDecisionsFile, readFingerprintFile, rulesFingerprint, rulesSummary, simulationAccounts, trackWrites, writePrivate,
   type DecisionPlan,
@@ -153,6 +156,7 @@ await runGuarded(async () => {
   let refusedReason: string | null = null;
   let exitCode = 1;
   let unverifiedPrize: { competitorId: string; displayName: string; position: string }[] = [];
+  const appliedLabels = new Set<string>();
 
   // CRM: read-only, proven before any read. Every collection opened is recorded.
   const crm = await openGuardedCrm();
@@ -190,11 +194,10 @@ await runGuarded(async () => {
     const w = weekWindow(args.week, rules.timezone, rules.review);
     const realNow = new Date();
     let offsetMs = 0;
-    const early = realNow < w.closesAt || realNow < w.approvalOpensAt;
+    const gate = approvalClockGate({ now: realNow, closesAt: w.closesAt, approvalOpensAt: w.approvalOpensAt, stopAfter: args.stopAfter });
+    const early = gate.early;
     if (early) {
-      const why = realNow < w.closesAt
-        ? `the week ${args.week} has not ended (it closes ${w.closesAt.toISOString()})`
-        : `the review window opens ${w.approvalOpensAt.toISOString()} (Tuesday 12:00 ${rules.timezone})`;
+      const why = `week ${args.week}: ${gate.why}`;
       if (!args.allowEarly) throw new Refusal(`${why}; refusing (use --allow-early only for testing)`);
       offsetMs = w.approvalOpensAt.getTime() + 1000 - realNow.getTime();
       console.error(`\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n!! --allow-early: ${why}.\n!! TESTING ONLY. The lifecycle runs on a SIMULATED clock (${w.approvalOpensAt.toISOString()} + 1 s).\n!! Late CRM entries are missing; this result means nothing for the real week.\n!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n`);
@@ -281,6 +284,12 @@ await runGuarded(async () => {
       steps.push(`resumed ${id} (status ${c.status})`);
     }
     if (c!.status === "draft") { await scheduleCompetition(config, id, ACTOR); c = await get(); }
+    // The Monday freeze on a week already past it: nothing to do (never opens the review early).
+    if (args.stopAfter === "freeze" && !["draft", "scheduled", "active", "suspended"].includes(c!.status)) {
+      steps.push(`--stop-after freeze: ${id} is already ${c!.status}; nothing changed`);
+      data.freezeSnapshot = await lc.snapshots.findOne({ _id: `${id}:provisional` });
+      throw new Stop("frozen");
+    }
     if (c!.status === "scheduled") { await activateCompetition(config, id, ACTOR); c = await get(); }
     if (c!.status === "cancelled") throw new Refusal(`${id} is cancelled in the local database`);
 
@@ -316,6 +325,7 @@ await runGuarded(async () => {
       if (c!.status !== "in_review") throw new Error(`unexpected status ${c!.status}`);
       for (const r of plan.apply) {
         await resolveCase(review, r.caseId, r.resolution, ACTOR, r.reason);
+        appliedLabels.add(r.label);
         steps.push(`applied decision: ${r.label}`);
       }
       const s = await reconcileCompetition(lctx, id, ACTOR);
@@ -426,11 +436,14 @@ await runGuarded(async () => {
   const dd = data.decisions as { file: string; plan: DecisionPlan } | undefined;
   if (dd) {
     out(`## Data-review decisions (Arena-only; no CRM record changes)`);
-    out(`File: ${dd.file}. Applied: ${dd.plan.apply.length} · already in force: ${dd.plan.alreadyInForce.length} · conflicts: ${dd.plan.conflicts.length}`);
-    for (const x of dd.plan.apply) out(`- applied: ${x.label}`);
+    out(`File: ${dd.file}. Applied in this run: ${appliedLabels.size} of ${dd.plan.apply.length} · already in force: ${dd.plan.alreadyInForce.length} · conflicts: ${dd.plan.conflicts.length}`);
+    for (const x of dd.plan.apply) out(`- ${appliedLabels.has(x.label) ? "applied" : "not applied in this run (decisions are applied when the review opens; never to an approved week)"}: ${x.label}`);
     for (const x of dd.plan.alreadyInForce) out(`- in force: ${x}`);
     for (const x of dd.plan.conflicts) out(`- **conflict:** ${x}`);
     for (const x of dd.plan.notes) out(`- note: ${x}`);
+    const u = dd.plan.undecided;
+    if (u && u.names.length + u.duplicates.length + u.displayNames.length)
+      out(`- **UNDECIDED by the decisions file (acceptance A3 fails until decided):** ${[...u.names.map((x) => `name ${x}`), ...u.duplicates.map((x) => `duplicate ${x}`), ...u.displayNames.map((x) => `display name ${x}`)].join("; ")}`);
     out();
   }
   out(`## Lifecycle steps`);
@@ -491,8 +504,9 @@ await runGuarded(async () => {
   out();
   out(`> **${SIMULATION_BANNER}**`);
 
-  writePrivate(outDir, "report.md", md.join("\n") + "\n");
-  writePrivate(outDir, "data.json", JSON.stringify(data, null, 1));
+  const files = { "report.md": md.join("\n") + "\n", "data.json": JSON.stringify(data, null, 1) };
+  for (const [f, content] of Object.entries(files)) writePrivate(outDir, f, content);
+  archiveRun(outDir, runStamp(String(data.generatedAt)), files, outcome);
   console.log(`[SIMULATION] ${args.week}: ${outcome}${refusedReason ? ` — ${refusedReason}` : ""}; safety ${safety.ok ? "OK" : "FAILED"}; integrity ${integrityVerdict} (${integrity.identical} identical, ${integrity.mismatched} mismatched) → ${outDir}`);
   await local.close().catch(() => {});
   await crm.close().catch(() => {});

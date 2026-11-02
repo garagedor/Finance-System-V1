@@ -1,8 +1,18 @@
 /**
  * Shadow validation of ONE week against the real CRM, read-only.
  *
- *   node --env-file=<file> --import ./scripts/test-register.mjs \
+ *   node --env-file=<file> --import ./scripts/arena/transpile-register.mjs \
  *     scripts/arena/shadow-week.ts <weekStart> <outDir> [--snapshot] [--no-balance-report] [--template <templateId>]
+ *       [--decisions <file>] [--strict]
+ *
+ * Decisions (read-only here): <outDir>/decisions.json when present (or --decisions).
+ * The standings are then shown WITH the owner's decisions applied in memory
+ * (nothing is recorded; shadow-approve records them), and every review case is
+ * classified decided / pending / UNDECIDED. A CRM name that is neither mapped
+ * nor on the exclusion list is a STOP condition, as is any CRM parity mismatch.
+ * --strict: exit 2 when a STOP condition holds (the reports are still written).
+ * --day-label YYYY-MM-DD: REHEARSAL ONLY (synthetic data) — the ET day this run stands for;
+ *   recorded next to the real run time and shown as "simulated day" in the weekly reconciliation.
  *
  * CRM: through lib-ro-guard (server-proven read-only user + in-process write
  * proxy). Arena state (review decisions, templates, shadow snapshots) lives in a
@@ -11,21 +21,25 @@
  * and nothing is sent anywhere (the account verifier is NOT called: every
  * account is "unverified", which never moves a prize).
  *
- * Output: <outDir>/<weekStart>/report.md (owner-readable) + data.json, mode 600,
+ * Output: <outDir>/<weekStart>/report.md (owner-readable) + data.json (the latest
+ * run) and a copy of every run in <outDir>/<weekStart>/runs/<time>/, mode 600,
  * directory mode 700. <outDir> must be outside the repository (it contains names).
  */
 import fs from "node:fs";
 import path from "node:path";
-import { MongoClient, ObjectId } from "mongodb";
+import { createHash } from "node:crypto";
+import { MongoClient, ObjectId, type Db } from "mongodb";
 import { assertLocalMongoUri, GuardRefusal, openGuardedCrm, runGuarded } from "./lib-ro-guard.ts";
 import { SEED_BALANCED_PERFORMANCE, cloneRules, rulesHash } from "../../src/lib/arena/config.ts";
 import { computeCompetition, officialKpis } from "../../src/lib/arena/engine.ts";
 import { buildCompetitorMap, rosterNames } from "../../src/lib/arena/identity.ts";
 import { loadJobs, toArenaJob } from "../../src/lib/arena/job-source.ts";
 import { detectCases } from "../../src/lib/arena/detect.ts";
-import { reviewDecisions } from "../../src/lib/arena/review.ts";
+import { reviewDecisions, type ReviewCaseDoc } from "../../src/lib/arena/review.ts";
+import { canonicalJson } from "../../src/lib/arena/config.ts";
+import { archiveRun, asCaseDocs, planDecisions, projectDecisions, readDecisionsFile, runStamp, type DecisionPlan, type ShadowDecisions } from "./lib-shadow.ts";
 import { ARENA_COLLECTIONS, arenaStores, loadMappings, loadTechnicians } from "../../src/lib/arena/mongo-store.ts";
-import { addDays, isMonday, previousWeekStarts } from "../../src/lib/arena/week.ts";
+import { addDays, isMonday, previousWeekStarts, weekWindow } from "../../src/lib/arena/week.ts";
 import type { ArenaJob, ArenaRules, CompetitionResult } from "../../src/lib/arena/types.ts";
 import type { DisplayNameCaseData, DuplicateCaseData, IdentityCaseData } from "../../src/lib/arena/review.ts";
 
@@ -36,17 +50,20 @@ const MATERIAL_RATE = 0.00005;
 
 function parseArgs(argv: string[]) {
   const pos: string[] = [];
-  const o = { snapshot: false, noBalanceReport: false, template: null as string | null };
+  const o = { snapshot: false, noBalanceReport: false, template: null as string | null, decisions: null as string | null, strict: false, dayLabel: null as string | null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--snapshot") o.snapshot = true;
     else if (a === "--no-balance-report") o.noBalanceReport = true;
     else if (a === "--template") o.template = argv[++i] ?? null;
+    else if (a === "--decisions") o.decisions = argv[++i] ? path.resolve(argv[i]) : null;
+    else if (a === "--strict") o.strict = true;
+    else if (a === "--day-label") { o.dayLabel = argv[++i] ?? null; if (!o.dayLabel || !/^\d{4}-\d{2}-\d{2}$/.test(o.dayLabel)) throw new Error("--day-label takes YYYY-MM-DD"); }
     else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
     else pos.push(a);
   }
   const [week, outDir] = pos;
-  if (!week || !outDir) throw new Error("usage: shadow-week.ts <weekStart> <outDir> [--snapshot] [--no-balance-report] [--template <templateId>]");
+  if (!week || !outDir) throw new Error("usage: shadow-week.ts <weekStart> <outDir> [--snapshot] [--no-balance-report] [--template <templateId>] [--decisions <file>] [--strict]");
   if (!isMonday(week)) throw new Error("weekStart must be a Monday (YYYY-MM-DD)");
   const out = path.resolve(outDir);
   if (out === REPO || out.startsWith(REPO + path.sep)) throw new Error("outDir must be outside the repository (the report contains technician names)");
@@ -56,6 +73,25 @@ function parseArgs(argv: string[]) {
 const pct = (x: number) => `${(x * 100).toFixed(2)}%`;
 const usd = (x: number) => `$${x.toFixed(2)}`;
 const cents = (c: number) => `$${(c / 100).toFixed(0)}`;
+const sha = (x: unknown) => createHash("sha256").update(canonicalJson(x)).digest("hex");
+
+/**
+ * CRM code paths (Home Leaderboard, Balance Report) name the database "ag" in
+ * code. When ARENA_CRM_DB names another database (a local rehearsal copy),
+ * send those reads to the same database the Arena reads, so parity compares
+ * like with like. With the default ("ag") this is the identity.
+ */
+function sameCrmDb<T extends object>(client: T, crmDb: string): T {
+  if (crmDb === "ag") return client;
+  return new Proxy(client, {
+    get(t, p, r) {
+      const v = Reflect.get(t, p, r);
+      if (p === "db" && typeof v === "function") return (n?: string, ...a: unknown[]) => (v as (n?: string, ...a: unknown[]) => Db).call(t, n === "ag" || n === undefined ? crmDb : n, ...a);
+      return typeof v === "function" ? v.bind(t) : v;
+    },
+  });
+}
+
 const lim = (m: string | null) => (m === "closingRate" ? "CR" : m === "avgTicket" ? "AVG" : m === "both" ? "both" : "—");
 
 await runGuarded(async () => {
@@ -69,7 +105,7 @@ await runGuarded(async () => {
   const crm = await openGuardedCrm();
   const verdict = crm.verdict;
   // CRM code paths (Home Leaderboard, Balance Report) use the shared client: give them the guarded one.
-  (globalThis as { __lbsMongo?: unknown }).__lbsMongo = { client: crm.client, promise: null, connectedAt: Date.now(), lastError: null };
+  (globalThis as { __lbsMongo?: unknown }).__lbsMongo = { client: sameCrmDb(crm.client, crm.db.databaseName), promise: null, connectedAt: Date.now(), lastError: null };
   const local = new MongoClient(localUri, { serverSelectionTimeoutMS: 5_000 });
   await local.connect();
   const arena = local.db(localDbName);
@@ -97,7 +133,28 @@ await runGuarded(async () => {
     const from = baseline.length ? baseline[baseline.length - 1] : week;
     const [jobs, mappings, technicians] = await Promise.all([loadJobs(crm.db, from, end), loadMappings(crm.db), loadTechnicians(crm.db)]);
     const weekJobs = jobs.filter((j) => j.date >= week && j.date < end);
-    const decisions = await reviewDecisions({ store: arenaStores(arena).review } as never);
+    const inForce = await reviewDecisions({ store: arenaStores(arena).review } as never);
+
+    // 3b) review queue for this week (same detector as the Control Center) and the owner's decisions file
+    const cases = detectCases({
+      weeks: [{ weekStart: week, jobs: weekJobs }], mappings, technicians, rules: v1,
+      overrides: inForce.overrides, displayNames: inForce.displayNames, exclusions: inForce.exclusions,
+    });
+    const decisionsFile = args.decisions ?? (fs.existsSync(path.join(args.out, "decisions.json")) ? path.join(args.out, "decisions.json") : null);
+    let fileDecisions: ShadowDecisions | null = null;
+    let plan: DecisionPlan | null = null;
+    let decisionsNote = "no decisions file (standings use only the decisions recorded in the local database; unknown CRM names cannot be checked)";
+    let decisions = inForce;
+    if (decisionsFile) {
+      const r = readDecisionsFile(decisionsFile);
+      if (!r.decisions) throw new Error(`decisions file ${decisionsFile}: ${r.problems.join("; ")}`);
+      fileDecisions = r.decisions;
+      const recorded = (await arena.collection(ARENA_COLLECTIONS.reviewCases).find({}).toArray()) as unknown as ReviewCaseDoc[];
+      const caseDocs = asCaseDocs(cases, recorded);
+      plan = planDecisions(caseDocs, fileDecisions);
+      decisions = projectDecisions(inForce, caseDocs, plan);
+      decisionsNote = `${decisionsFile} applied in memory (${plan.apply.length} to apply at review, ${plan.alreadyInForce.length} already in force, ${plan.conflicts.length} conflicts)`;
+    }
     const competitors = buildCompetitorMap({
       mappings, technicians, crmNamesInUse: [...new Set(jobs.map((j) => j.tech))], overrides: decisions.overrides, displayNames: decisions.displayNames,
     });
@@ -108,11 +165,7 @@ await runGuarded(async () => {
       });
     const a = run(v1), b = run(v0);
 
-    // 4) review queue for this week (same detector as the Control Center)
-    const cases = detectCases({
-      weeks: [{ weekStart: week, jobs: weekJobs }], mappings, technicians, rules: v1,
-      overrides: decisions.overrides, displayNames: decisions.displayNames, exclusions: decisions.exclusions,
-    });
+    // 4) display-name flags
     const roster = rosterNames(mappings, technicians, decisions.displayNames);
     const inWeek = new Set(a.results.map((r) => r.competitorId));
     const nameFlags = [...roster.values()].filter((r) => inWeek.has(r.id) && (r.collision || r.needsEnglish || r.possibleDuplicateOf.length));
@@ -164,6 +217,20 @@ await runGuarded(async () => {
       }
     }
     for (const t of hsByTech.keys()) if (!byName.has(t)) parity.push({ tech: t, source: "Home Leaderboard", field: "present only in CRM", arena: 0, crm: hsByTech.get(t)!.count });
+
+    // 5b) STOP conditions for the daily check, and run hashes (rerun = same input → same result)
+    const stops: string[] = [];
+    if (parity.length) stops.push(`CRM parity: ${parity.length} mismatch(es) between the Arena and the CRM`);
+    if (plan?.undecided.names.length) stops.push(`CRM name(s) neither mapped nor on the exclusion list: ${plan.undecided.names.join("; ")}`);
+    if (plan?.conflicts.length) stops.push(`decisions file conflicts with the local database: ${plan.conflicts.join("; ")}`);
+    if (!decisionsFile && args.strict) stops.push("no decisions file: unknown CRM names cannot be checked");
+    const sortedJobs = [...weekJobs].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+    const hashes = {
+      jobs: sha(sortedJobs),
+      input: sha({ jobs: [...jobs].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0)), mappings, technicians, decisions, rules: rulesHash(v1) }),
+      result: sha({ v1: a, v0: b }),
+    };
+    const ww = weekWindow(week, v1.timezone, v1.review);
 
     // 6) optional timestamped snapshot + diff vs the previous one (local Arena db only)
     const at = new Date().toISOString();
@@ -221,7 +288,12 @@ await runGuarded(async () => {
     out();
     out(`Shadow mode: nothing was written to the CRM, nothing was sent anywhere. Weekly Balance accounts were NOT checked (every account "unverified", which never moves a prize), so these are performance results, not approved winners.`);
     out();
-    out(`## 1. Standings — Balanced Performance (V1, primary)`);
+    out(stops.length ? `**STOP — ${stops.length} condition(s); escalate before continuing:**` : `**Daily check: no STOP condition.**`);
+    for (const x of stops) out(`- STOP: ${x}`);
+    if (args.dayLabel) out(`REHEARSAL: this run stands for ET day ${args.dayLabel} (real run time ${at}).`);
+    out(`Decisions: ${decisionsNote}. Week ${new Date(at) >= ww.closesAt ? "ENDED (this run is after Sunday 23:59:59 ET)" : "still running"} · input ${hashes.input.slice(0, 12)}… · result ${hashes.result.slice(0, 12)}…`);
+    out();
+    out(`## 1. Standings — Balanced Performance (V1, primary)${plan ? " · with the decisions file applied" : ""}`);
     out(`Gates: ${v1.eligibility.minQualifyingJobs} qualifying jobs · AVG ≥ ${cents(v1.eligibility.minAvgTicketCents)} · CR ≥ ${v1.eligibility.minClosingRateBp / 100}%. Qualified: ${a.gateCounts.allThree} of ${a.results.length}. Paid ${cents(a.awardedCents)} of ${cents(v1.prizes.budgetCents)}.`);
     out();
     out(`| Rank | Technician | Location | Assigned | Closed | Closing Rate | AVG TICKET | Qualifying | C | A | Score | Limiting | Gates | Prize |`);
@@ -252,6 +324,15 @@ await runGuarded(async () => {
     for (const r of nameFlags)
       out(`  - ${r.fullName} → **${r.displayName}**${r.collision ? ` · collision (${r.collision})` : ""}${r.needsEnglish ? " · needs English display name" : ""}${r.possibleDuplicateOf.length ? ` · possible duplicate account — confirm (${r.possibleDuplicateOf.map((id) => roster.get(id)?.fullName ?? id).join(", ")})` : ""}`);
     out(`- Unattributed jobs (pools, subcontractors, unmapped): ${a.unattributed.reduce((s, u) => s + u.jobs, 0)}`);
+    if (plan) {
+      out(`- Against the decisions file: ${plan.apply.length} to apply at review · ${plan.alreadyInForce.length} in force · pending ${plan.pending.names.length} name(s) / ${plan.pending.duplicates.length} duplicate(s) · **UNDECIDED ${plan.undecided.names.length} name(s), ${plan.undecided.duplicates.length} duplicate group(s), ${plan.undecided.displayNames.length} display name(s)**`);
+      for (const x of plan.apply) out(`  - will apply: ${x.label}`);
+      for (const x of plan.pending.names) out(`  - pending identification (not credited, cannot win): ${x}`);
+      for (const x of plan.pending.duplicates) out(`  - pending office confirmation (blocks this week's approval): ${x}`);
+      for (const x of plan.undecided.names) out(`  - **UNDECIDED name (STOP):** ${x}`);
+      for (const x of plan.undecided.duplicates) out(`  - **UNDECIDED duplicate (blocks approval):** ${x}`);
+      for (const x of plan.undecided.displayNames) out(`  - undecided display name: ${x}`);
+    }
     out();
     out(`## 4. CRM parity`);
     out(`Home Leaderboard: included · Balance Report: ${balanceNote}. Comparisons: ${comparisons}. Tolerance $0.005 / 0.005 pp.`);
@@ -284,14 +365,20 @@ await runGuarded(async () => {
       fs.writeFileSync(p, s, { mode: 0o600 });
       fs.chmodSync(p, 0o600);
     };
-    write("report.md", md.join("\n") + "\n");
-    write("data.json", JSON.stringify({
-      week, generatedAt: at, crmUser: verdict.users, findOn: verdict.findOn, rules: { label: rulesLabel, hash: rulesHash(v1) },
-      v1: a, v0: b, cases, displayNameFlags: nameFlags, parity: { comparisons, mismatches: parity, balanceReport: balanceNote },
-      blockedWrites: crm.blocked, snapshot: args.snapshot ? { id: `${week}@${at}`, diff } : null,
-    }, null, 1));
-    console.log(`shadow ${week}: ${a.results.length} competitors, ${a.gateCounts.allThree} qualified, parity ${comparisons} comparisons / ${parity.length} mismatches, ${cases.length} review cases → ${dir}`);
-    return 0;
+    const files = {
+      "report.md": md.join("\n") + "\n",
+      "data.json": JSON.stringify({
+        week, generatedAt: at, crmUser: verdict.users, findOn: verdict.findOn, rules: { label: rulesLabel, hash: rulesHash(v1) },
+        v1: a, v0: b, cases, displayNameFlags: nameFlags, parity: { comparisons, mismatches: parity, balanceReport: balanceNote },
+        blockedWrites: crm.blocked, snapshot: args.snapshot ? { id: `${week}@${at}`, diff } : null,
+        guard: { ok: verdict.ok, users: verdict.users, roles: verdict.roles },
+        decisions: { file: decisionsFile, plan }, stops, hashes, weekEnded: new Date(at) >= ww.closesAt, dayLabel: args.dayLabel,
+      }, null, 1),
+    };
+    for (const [f, c] of Object.entries(files)) write(f, c);
+    archiveRun(dir, runStamp(at), files);
+    console.log(`shadow ${week}: ${a.results.length} competitors, ${a.gateCounts.allThree} qualified, parity ${comparisons} comparisons / ${parity.length} mismatches, ${cases.length} review cases, ${stops.length ? `STOP ×${stops.length}` : "no STOP"} → ${dir}`);
+    return args.strict && stops.length ? 2 : 0;
   } finally {
     await local.close().catch(() => {});
     await crm.close().catch(() => {});
