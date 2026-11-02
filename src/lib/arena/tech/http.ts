@@ -22,6 +22,7 @@ import { passKeysFromEnv } from "./pass";
 import { MongoRateLimiter, type RateLimitCollection } from "./rate-limit";
 import { ARENA_COLLECTIONS } from "../mongo-store";
 import { authorizePass, exchange, type AccessDeps } from "./access";
+import { isAllowlisted, type TechAccessCollection } from "./allowlist";
 import { findCompetitor, TechBadRequest, TechNotFound, type TechCtx } from "./service";
 
 const MINUTE_MS = 60_000;
@@ -65,10 +66,12 @@ async function deps(cfg: TechConfig): Promise<{ deps: AccessDeps; ctx: TechCtx }
   // Shared across instances: counters live in the Arena database (rate-limit.ts).
   const rl = a.arenaDb.collection(ARENA_COLLECTIONS.rateLimit) as never as RateLimitCollection;
   const limiters = { ip: new MongoRateLimiter(rl, IP_PER_MINUTE, MINUTE_MS), userIp: new MongoRateLimiter(rl, USER_IP_PER_MINUTE, MINUTE_MS) };
+  const access = a.arenaDb.collection(ARENA_COLLECTIONS.techAccess) as never as TechAccessCollection;
   return {
     ctx,
     deps: {
       enabled: cfg.enabled,
+      isAllowlisted: (id) => isAllowlisted(access, id),
       verifyWbToken: (t) => verifyWbAccessToken(t, { issuer: cfg.wb.issuer, keys }),
       verifier: verifierFromEnv(cfg.wb.url),
       findCompetitor: (id) => findCompetitor(ctx, id),

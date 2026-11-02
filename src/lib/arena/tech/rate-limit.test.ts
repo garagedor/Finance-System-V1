@@ -53,6 +53,7 @@ test("exchange uses the limiter asynchronously: the 11th attempt from one user+I
   const { coll } = fakeCollection();
   const deps = {
     enabled: true,
+    isAllowlisted: async () => true, // on the pilot allowlist (allowlist.test.ts covers the gate)
     verifyWbToken: async () => ({ userId: "u1" }),
     verifier: { verify: async () => ({ active: false, approved: false, role: "technician" }) },
     findCompetitor: async () => ({ ok: false }),

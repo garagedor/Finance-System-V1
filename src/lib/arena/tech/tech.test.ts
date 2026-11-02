@@ -53,6 +53,8 @@ function deps(over: Partial<AccessDeps> = {}, accounts?: Map<string, AccountStat
   );
   const d: AccessDeps = {
     enabled: true,
+    // Everyone here is on the pilot allowlist; allowlist.test.ts covers the gate itself.
+    isAllowlisted: async () => true,
     verifyWbToken: (t) => verifyWbAccessToken(t, { issuer: ISS, keys: jwks, now: NOW }),
     verifier,
     findCompetitor: async (id): Promise<Lookup> =>
