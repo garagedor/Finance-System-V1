@@ -5,24 +5,47 @@
  * CRM names, customers, commissions). Nothing is read from or written to the CRM.
  *
  *   node --import ./scripts/arena/transpile-register.mjs scripts/arena/owner-preview-snapshot.ts \
- *     <data.json> <out.json> [--pending <competitorId>=<reason> ...]
+ *     <data.json> <out.json> --template <seed id> [--pending <competitorId>=<reason> ...]
+ *
+ * --template names the prize structure to PRESENT (a code seed: balanced-p2-2026-11
+ * or balanced-v1). When it differs from the rules the week was computed with, the
+ * stored results are RE-ALLOCATED with the engine's own allocatePrizes (ranks,
+ * scores, eligibility and Most Improved baselines are unchanged by prize amounts;
+ * only the scoring/eligibility rules must match, which is checked). The input file
+ * is never modified; the output says which rules it shows and that it was re-allocated.
  */
 import fs from "node:fs";
-import { SEED_BALANCED_PERFORMANCE } from "../../src/lib/arena/config";
+import { ARENA_RULE_SEEDS, cloneRules, ruleSeed, rulesHash } from "../../src/lib/arena/config";
 import { leaderboardRows, myStanding, prizePoolCents, rulesView } from "../../src/lib/arena/tech/views";
 import type { ApprovedStanding } from "../../src/lib/arena/lifecycle";
+import type { CompetitionResult } from "../../src/lib/arena/types";
+import { reallocateStored } from "./lib-reallocate";
 
 const [dataFile, outFile, ...rest] = process.argv.slice(2);
-if (!dataFile || !outFile) throw new Error("usage: <data.json> <out.json> [--pending id=reason ...]");
+const USAGE = `usage: <data.json> <out.json> --template <${ARENA_RULE_SEEDS.map((x) => x.id).join("|")}> [--pending id=reason ...]`;
+if (!dataFile || !outFile) throw new Error(USAGE);
 const pending: Record<string, string> = {};
-for (let i = 0; i < rest.length; i++) if (rest[i] === "--pending") { const [id, ...r] = rest[++i].split("="); pending[id] = r.join("="); }
+let templateId: string | null = null;
+for (let i = 0; i < rest.length; i++) {
+  if (rest[i] === "--pending") { const [id, ...r] = rest[++i].split("="); pending[id] = r.join("="); }
+  else if (rest[i] === "--template") templateId = rest[++i] ?? null;
+  else throw new Error(`unknown argument ${rest[i]}; ${USAGE}`);
+}
+const seed = templateId ? ruleSeed(templateId) : null;
+if (!seed) throw new Error(`--template is required (${USAGE})`);
 
 const d = JSON.parse(fs.readFileSync(dataFile, "utf8"));
-const rules = SEED_BALANCED_PERFORMANCE;
-if (d.rules?.hash && !String(d.rules.hash).startsWith("c122c43b")) throw new Error(`unexpected rules hash ${d.rules.hash}`);
+const rules = cloneRules(seed.rules);
+// The rules the stored week was computed with: must be a known code seed (by fingerprint).
+const storedHash = String(d.rules?.hash ?? d.v1?.rulesHash ?? "");
+const computedWith = ARENA_RULE_SEEDS.find((x) => rulesHash(x.rules) === storedHash);
+if (!computedWith) throw new Error(`unexpected stored rules hash ${storedHash}`);
+if (d.v1?.rulesHash !== storedHash) throw new Error("data.json rules.hash and v1.rulesHash disagree");
+const reallocated = rulesHash(rules) !== storedHash;
+const result: CompetitionResult = reallocated ? reallocateStored(d.v1 as CompetitionResult, rules, computedWith.rules) : (d.v1 as CompetitionResult);
 const phase = "frozen" as const; // week ended; not reviewed, not approved
 
-const rows: ApprovedStanding[] = d.v1.results.map((r: any) => ({
+const rows: ApprovedStanding[] = result.results.map((r) => ({
   competitorId: r.competitorId, displayName: r.displayName, location: r.location, rank: r.rank, score: r.score,
   eligible: r.eligible, prizeEligible: r.prizeEligible, gates: { jobs: r.gates.jobs.met, avgTicket: r.gates.avgTicket.met, closingRate: r.gates.closingRate.met },
   closingRate: r.closingRate, avgTicket: r.avgTicket, assignedJobs: r.assignedJobs, closedJobs: r.closedJobs, qualifyingJobs: r.qualifyingJobs,
@@ -59,7 +82,8 @@ for (const s of rows) {
 const out = {
   schema: "arena-owner-preview/1",
   label: "OWNER PREVIEW · PROJECTED / UNOFFICIAL",
-  week, weekEnd, dataAsOf, rulesHash: d.rules?.hash ?? null,
+  week, weekEnd, dataAsOf, rulesHash: rulesHash(rules),
+  rules: { id: seed.id, label: seed.label, fingerprint: rulesHash(rules), computedWith: computedWith.id, storedFingerprint: storedHash, reallocated },
   pending, // competitorId -> reason shown as PENDING REVIEW
   leaderboard: { national: board("national"), eligible: board("eligible") },
   me,
@@ -70,4 +94,4 @@ for (const forbidden of ["jobIds", "profitMicro", "crmName", "phone", "customer"
   if (json.includes(`"${forbidden}"`)) throw new Error(`data minimization: ${forbidden} present`);
 }
 fs.writeFileSync(outFile, json, { mode: 0o600 });
-console.log(`wrote ${outFile}: ${rows.length} competitors, ${Object.keys(pending).length} pending review`);
+console.log(`wrote ${outFile}: ${rows.length} competitors, ${Object.keys(pending).length} pending review · rules ${seed.label} ${rulesHash(rules).slice(0, 12)}…${reallocated ? ` (re-allocated from ${computedWith.id})` : ""} · paid ${result.awardedCents / 100} · MI ${rows.find((r) => r.wonMostImproved)?.displayName ?? "none"}`);

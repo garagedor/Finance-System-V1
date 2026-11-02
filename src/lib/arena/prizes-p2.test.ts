@@ -145,3 +145,19 @@ test("shadow tooling: --template is required; code seeds resolve; an ambiguous l
   assert.ok(rulesSummary(p2.rules).includes("prizes: #1 $550 · #2 $400 · #3 $300 · budget $1,500"));
   assert.ok(rulesSummary(p2.rules).some((l) => l.startsWith("Most Improved: $250;")));
 });
+
+test("lib-reallocate: stored result re-allocated = engine run under the new prizes; refuses different scoring rules", async () => {
+  const { reallocateStored } = await import("../../../scripts/arena/lib-reallocate.ts");
+  const stored = run(cloneRules(SEED_BALANCED_PERFORMANCE), { B: "pending" });
+  const direct = run(cloneRules(SEED_BALANCED_PERFORMANCE_P2), { B: "pending" });
+  const re = reallocateStored(stored, cloneRules(SEED_BALANCED_PERFORMANCE_P2), SEED_BALANCED_PERFORMANCE);
+  assert.deepEqual(re.results, direct.results);
+  assert.deepEqual([re.awardedCents, re.unallocatedCents, re.mostImprovedWinner, re.rulesHash], [direct.awardedCents, direct.unallocatedCents, direct.mostImprovedWinner, P2_FP]);
+  const same = reallocateStored(stored, cloneRules(SEED_BALANCED_PERFORMANCE), SEED_BALANCED_PERFORMANCE);
+  assert.equal(JSON.stringify(same), JSON.stringify(stored), "same rules → byte-identical");
+  assert.notEqual(stored.results[0].prizeCents, re.results[0].prizeCents, "the input is not modified");
+  assert.equal(stored.results[0].prizeCents, 45_000);
+  const other = cloneRules(SEED_BALANCED_PERFORMANCE_P2);
+  other.eligibility.minQualifyingJobs = 9;
+  assert.throws(() => reallocateStored(stored, other, SEED_BALANCED_PERFORMANCE), /same scoring/);
+});
