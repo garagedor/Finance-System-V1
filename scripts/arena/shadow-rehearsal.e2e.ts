@@ -4,11 +4,11 @@
  *   node --no-warnings --import ./scripts/arena/transpile-register.mjs scripts/arena/shadow-rehearsal.e2e.ts <outRoot>
  *
  * Where everything lives (nothing else is touched):
- *   - the "CRM" is a synthetic database arena_wtshadow_crm on the local dev mongod 127.0.0.1:27031,
+ *   - the "CRM" is a synthetic database <prefix>_crm (ARENA_REHEARSAL_DB_PREFIX, default arena_wtshadow) on the local dev mongod 127.0.0.1:27031,
  *     read by the Arena through a database-scoped user with `find` only (created here, dropped at the end);
  *     27031 runs WITHOUT access control, so the server-side refusal (preflight F2) cannot pass here —
  *     the in-process write proxy is the only write barrier in this rehearsal;
- *   - Arena state: arena_wtshadow_arena on the same mongod (dropped at the start; kept at the end for inspection);
+ *   - Arena state: <prefix>_arena on the same mongod (dropped at the start; kept at the end for inspection);
  *   - outputs: <outRoot>/shadow (mode 700) — the same layout the real shadow uses in ~/317-live-arena/shadow.
  * Refuses any other host, port or database name. The password of the scoped user lives in this process
  * and the children's environment only (never written to a file, never printed).
@@ -27,17 +27,20 @@ import path from "node:path";
 import { createHash, randomBytes } from "node:crypto";
 import { execFile } from "node:child_process";
 import { MongoClient, ObjectId, type Db } from "mongodb";
-import { SEED_BALANCED_PERFORMANCE, cloneRules, rulesHash } from "../../src/lib/arena/config.ts";
+import { cloneRules, ruleSeed, rulesHash } from "../../src/lib/arena/config.ts";
 import { addDays, previousWeekStarts } from "../../src/lib/arena/week.ts";
 import { DECISIONS_SCHEMA, validateDecisions, type ShadowDecisions } from "./lib-shadow.ts";
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const HOST = "mongodb://127.0.0.1:27031";
-const CRM_DB = "arena_wtshadow_crm";
-const ARENA_DB = "arena_wtshadow_arena";
-const RO_USER = "arena_wtshadow_ro";
-const RO_ROLE = "arenaWtShadowRead";
-for (const n of [CRM_DB, ARENA_DB]) if (!/^arena_wtshadow_[a-z]+$/.test(n)) throw new Error(`refusing database ${n}`);
+// ARENA_REHEARSAL_DB_PREFIX picks the throwaway databases (default arena_wtshadow; e.g. arena_int_r1 for an integration run).
+const PFX = process.env.ARENA_REHEARSAL_DB_PREFIX ?? "arena_wtshadow";
+if (!/^arena_(wtshadow|int_[a-z0-9]+)$/.test(PFX)) throw new Error(`refusing database prefix ${PFX} (arena_wtshadow or arena_int_<name>)`);
+const CRM_DB = `${PFX}_crm`;
+const ARENA_DB = `${PFX}_arena`;
+const RO_USER = `${PFX}_ro`;
+const RO_ROLE = PFX === "arena_wtshadow" ? "arenaWtShadowRead" : `${PFX.replace(/_/g, "")}Read`;
+for (const n of [CRM_DB, ARENA_DB]) if (!/^arena_(wtshadow|int_[a-z0-9]+)_[a-z]+$/.test(n)) throw new Error(`refusing database ${n}`);
 const ROOT = path.resolve(process.argv[2] ?? "");
 if (!process.argv[2]) throw new Error("usage: shadow-rehearsal.e2e.ts <outRoot>");
 if (ROOT.startsWith(REPO)) throw new Error("outRoot must be outside the repository");
@@ -47,9 +50,17 @@ fs.mkdirSync(OUT, { recursive: true, mode: 0o700 });
 fs.chmodSync(ROOT, 0o700); fs.chmodSync(OUT, 0o700);
 
 const W1 = "2026-10-05", W2 = "2026-10-12";
-const RULES = cloneRules(SEED_BALANCED_PERFORMANCE);
+// The rules every official command names with --template (no default since the 2026-11 prize change).
+const TEMPLATE = process.env.ARENA_REHEARSAL_TEMPLATE ?? "balanced-p2-2026-11";
+const APPROVED_FP: Record<string, string> = {
+  "balanced-p2-2026-11": "6ae3d1278fef64bf9e23bdc21bab865c91abae2a71c22efbd5443f7bc38a0d0c",
+  "balanced-v1": "c122c43bae974c7aa73fc960b19ca921adf646c82b89d67f9eee3fdb21c7d2b4",
+};
+const SEED = ruleSeed(TEMPLATE);
+if (!SEED || !APPROVED_FP[TEMPLATE]) throw new Error(`unknown rehearsal template ${TEMPLATE}`);
+const RULES = cloneRules(SEED.rules);
 const FP = rulesHash(RULES);
-assert.equal(FP, "c122c43bae974c7aa73fc960b19ca921adf646c82b89d67f9eee3fdb21c7d2b4", "the approved fingerprint");
+assert.equal(FP, APPROVED_FP[TEMPLATE], "the approved fingerprint");
 
 // ── fictional roster ───────────────────────────────────────────────────────
 const uid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -146,8 +157,8 @@ async function arenaCmd(label: string, loader: "test" | "transpile", script: str
   say(`- **${label}** → exit ${r.code} · ${(r.out.trim().split("\n").pop() ?? "").slice(0, 300)}${r.code && r.err.trim() ? ` · stderr: ${r.err.trim().split("\n").slice(-2).join(" / ").slice(0, 300)}` : ""}`);
   return r;
 }
-const daily = (week: string, day: string) => arenaCmd(`daily ${week} as ${day}`, "transpile", "shadow-week.ts", [week, OUT, "--snapshot", "--strict", "--day-label", day]);
-const approveArgs = (week: string, extra: string[]) => [week, OUT, "--decisions", path.join(OUT, "decisions.json"), "--rules-confirmation", path.join(OUT, "approved-rules.sha256"), "--accounts", path.join(OUT, "accounts.json"), ...extra];
+const daily = (week: string, day: string) => arenaCmd(`daily ${week} as ${day}`, "transpile", "shadow-week.ts", [week, OUT, "--template", TEMPLATE, "--snapshot", "--strict", "--day-label", day]);
+const approveArgs = (week: string, extra: string[]) => [week, OUT, "--template", TEMPLATE, "--decisions", path.join(OUT, "decisions.json"), "--rules-confirmation", path.join(OUT, "approved-rules.sha256"), "--accounts", path.join(OUT, "accounts.json"), ...extra];
 const approve = (label: string, week: string, extra: string[] = []) => arenaCmd(label, "transpile", "shadow-approve.ts", approveArgs(week, extra));
 const reconcile = (week: string) => arenaCmd(`weekly reconciliation ${week}`, "transpile", "shadow-reconcile.ts", [week, OUT]);
 const dailyData = (week: string) => JSON.parse(fs.readFileSync(path.join(OUT, week, "data.json"), "utf8"));
@@ -181,7 +192,7 @@ try {
   await crm.collection("Job").insertMany(base as never[]);
   say(`- seeded ${PEOPLE.length} fictional people, ${base.length} baseline jobs (${previousWeekStarts(W1, 4).join(", ")})`);
 
-  fs.writeFileSync(path.join(OUT, "approved-rules.sha256"), `${FP}  BALANCED_PERFORMANCE_V1 (rehearsal copy of the owner-approved fingerprint)\n`, { mode: 0o600 });
+  fs.writeFileSync(path.join(OUT, "approved-rules.sha256"), `${FP}  ${SEED.label} (rehearsal copy of the owner-approved fingerprint)\n`, { mode: 0o600 });
   fs.writeFileSync(path.join(OUT, "accounts.json"), JSON.stringify(Object.fromEntries(PEOPLE.map((p) => [p.id, "eligible"])), null, 1), { mode: 0o600 });
   decisions = {
     schema: DECISIONS_SCHEMA, exclusions: [
@@ -195,7 +206,7 @@ try {
   writeDecisions("start: pools/sub excluded, Johnny pending, D2 policy keep both");
 
   // Preflight (runbook step 0). 27031 has no access control: F2 is EXPECTED to fail here.
-  const pf = await arenaCmd("preflight", "transpile", "shadow-preflight.ts", ["--out", OUT, "--shadow-dir", OUT, "--no-clock-check"]);
+  const pf = await arenaCmd("preflight", "transpile", "shadow-preflight.ts", ["--template", TEMPLATE, "--out", OUT, "--shadow-dir", OUT, "--no-clock-check"]);
   fs.writeFileSync(path.join(ROOT, "preflight-rehearsal.txt"), pf.out, { mode: 0o600 });
   assert.match(pf.out, /FAIL\s+F2\s+server refuses a write on Job/, "rehearsal server has no access control → F2 FAIL (expected)");
   for (const id of ["F1", "F3", "F4", "F5", "F6", "F7", "F8"]) assert.match(pf.out, new RegExp(`PASS\\s+${id} `), `preflight ${id} PASS`);
@@ -250,14 +261,19 @@ try {
   const fz2 = await approve(`Monday freeze ${W1} again (idempotent)`, W1, ["--stop-after", "freeze"]);
   assert.equal(fz2.code, 0); assert.ok(approvalData(W1).steps.some((s: string) => /already provisional/.test(s)));
 
-  // Office edits AFTER the freeze: delete one Emery Closed, re-date a Blake Estimate out of the week, re-assign a Finley Estimate to Gray.
-  const del = w1.find((j) => j.tech === "Emery" && j.status === "Closed")!;
+  // Office edits AFTER the freeze: a deletion, a Blake Estimate re-dated out of the week, a re-assignment.
+  //   6-place prizes: delete one Emery Closed (Emery #6 → #7 loses $50), re-assign a Finley Estimate to Gray.
+  //   3-place prizes (P2): #4–#6 carry no cash, so the material edit hits the Most Improved winner instead:
+  //   delete one Gray Closed and re-assign another Gray Closed to Finley (Gray 7/18 = 38.9% < 40%: loses Most Improved).
+  const p2 = SEED.rules.prizes.positionsCents.length === 3;
+  const [delTech, fromTech, toTech, moved] = p2 ? ["Gray", "Gray", "Finley", "Closed"] : ["Emery", "Finley", "Gray", "Estimate"];
+  const del = w1.find((j) => j.tech === delTech && j.status === "Closed")!;
   const redate = w1.find((j) => j.tech === "Blake" && j.status === "Estimate" && j.date === addDays(W1, 6))!;
-  const reassign = w1.find((j) => j.tech === "Finley" && j.status === "Estimate")!;
+  const reassign = w1.find((j) => j.tech === fromTech && j.status === moved && j._id !== del._id)!;
   await crm.collection("Job").deleteOne({ _id: del._id });
   await crm.collection("Job").updateOne({ _id: redate._id }, { $set: { date: mon1 } });
-  await crm.collection("Job").updateOne({ _id: reassign._id }, { $set: { tech: "Gray" } });
-  say(`- office AFTER freeze: deleted ${del._id} (Emery Closed), re-dated ${redate._id} (Blake) to ${mon1}, re-assigned ${reassign._id} Finley → Gray`);
+  await crm.collection("Job").updateOne({ _id: reassign._id }, { $set: { tech: toTech } });
+  say(`- office AFTER freeze: deleted ${del._id} (${delTech} Closed), re-dated ${redate._id} (Blake) to ${mon1}, re-assigned ${reassign._id} ${fromTech} ${moved} → ${toTech}`);
 
   // Tuesday 12:00 ET onward: review + re-check (stops in review)
   const tue = await approve(`Tuesday review ${W1}`, W1, ["--stop-after", "review"]);
@@ -265,7 +281,7 @@ try {
   assert.equal(tue.code, 0); assert.equal(tueD.outcome, "in_review");
   const listed = tueD.lateChanges.changes.map((c: { jobId: string; kind: string }) => `${c.jobId}:${c.kind}`);
   assert.ok(listed.includes(`${del._id}:removed`) && listed.includes(`${redate._id}:redated_out`) && listed.includes(`${reassign._id}:reassigned`), `late changes listed: ${listed.join(", ")}`);
-  assert.equal(tueD.lateChanges.impact.material, true, "the deletion changes a prize");
+  assert.equal(tueD.lateChanges.impact.material, true, `the late changes change a prize: ${JSON.stringify(tueD.lateChanges.impact.reasons)}`);
   assert.ok(tueD.decisions.plan.undecided.duplicates.length === 1, "Casey's pair still undecided");
 
   // Thursday: office confirms Casey's pair (one invoice) → count once; approval still blocked by the material late change.
@@ -275,7 +291,7 @@ try {
   const thu = await approve(`Thursday approve ${W1} (no late decision)`, W1);
   assert.equal(thu.code, 2, "refused: late change affects prizes and the owner has not chosen");
   assert.match(approvalData(W1).refusedReason, /keep freeze snapshot|accept correction/);
-  const thu2 = await approve(`Thursday approve ${W1} with owner choice KEEP FREEZE`, W1, ["--late-decision", "keep-freeze", "--late-reason", "Rehearsal: deletion after the freeze not explained by the office; keep the Monday snapshot"]);
+  const thu2 = await approve(`Thursday approve ${W1} with owner choice KEEP FREEZE`, W1, ["--late-decision", "keep-freeze", "--late-reason", "Rehearsal: changes after the freeze not explained by the office; keep the Monday snapshot"]);
   const a1 = approvalData(W1);
   assert.equal(thu2.code, 0, a1.refusedReason ?? ""); assert.equal(a1.outcome, "approved");
   assert.equal(a1.safety.ok, true); assert.equal(a1.integrity.mismatched, 0);

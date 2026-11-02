@@ -27,7 +27,10 @@ import { weekStartOf } from "../../src/lib/arena/week.ts";
 const REPO = path.resolve(import.meta.dirname, "../..");
 const ENV_FILE = path.join(os.homedir(), "arena-dev", "shadow-ro.env");
 const LOCAL = "mongodb://127.0.0.1:27031";
-const DB = `arena_shadow_e2e_${process.pid}`;
+// ARENA_E2E_DB_PREFIX renames the throwaway database (default arena_shadow_e2e; e.g. arena_int_tooling).
+const DB_PREFIX = process.env.ARENA_E2E_DB_PREFIX ?? "arena_shadow_e2e";
+if (!/^arena_[a-z0-9_]+$/.test(DB_PREFIX) || /^arena_(shadow|trial|preview|dev|wtshadow)(?!_e2e$)/.test(DB_PREFIX)) throw new Error(`refusing ARENA_E2E_DB_PREFIX ${DB_PREFIX}`);
+const DB = `${DB_PREFIX}_${process.pid}`;
 const env = Object.fromEntries(
   fs.readFileSync(ENV_FILE, "utf8").split("\n").map((l) => /^([A-Z0-9_]+)=(.*)$/.exec(l)).filter(Boolean).map((m) => [m![1], m![2]]),
 ) as Record<string, string>;
@@ -37,6 +40,8 @@ for (const k of ["ARENA_CRM_RO_URI", "ARENA_CRM_RO_URI_NOUSER", "ARENA_CRM_URI_L
 const tmp = (mode = 0o700) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), "arena-shadow-e2e-")); fs.chmodSync(d, mode); return d; };
 const SHADOW = tmp();
 const OUT = tmp();
+// The scenarios below were written for the 6-place prizes: they name that code seed explicitly.
+const TEMPLATE = "balanced-v1";
 const FP = rulesHash(SEED_BALANCED_PERFORMANCE);
 const writeShadow = (files: Record<string, string | null>, dir = SHADOW) => {
   for (const [f, c] of Object.entries(files)) {
@@ -68,7 +73,7 @@ function run(script: string, args: string[], extra: Record<string, string> = {})
   });
 }
 const preflight = (args: string[] = [], extra: Record<string, string> = {}) =>
-  run("shadow-preflight.ts", ["--out", OUT, "--shadow-dir", SHADOW, "--no-clock-check", ...args], extra);
+  run("shadow-preflight.ts", ["--template", TEMPLATE, "--out", OUT, "--shadow-dir", SHADOW, "--no-clock-check", ...args], extra);
 const failLines = (r: Run) => r.out.split("\n").filter((l) => l.startsWith("FAIL"));
 const noSecrets = (r: Run) => {
   for (const k of Object.keys(env)) if (/URI/.test(k)) {
@@ -243,7 +248,7 @@ test("preflight F8/F9: open or in-repo output folder, too little disk FAIL", asy
 // ── simulated approval ─────────────────────────────────────────────────────
 
 const approve = (week: string, args: string[] = [], extra: Record<string, string> = {}) =>
-  run("shadow-approve.ts", [week, OUT, "--decisions", path.join(SHADOW, "decisions.json"), "--rules-confirmation", path.join(SHADOW, "approved-rules.sha256"), ...args], extra);
+  run("shadow-approve.ts", [week, OUT, "--template", TEMPLATE, "--decisions", path.join(SHADOW, "decisions.json"), "--rules-confirmation", path.join(SHADOW, "approved-rules.sha256"), ...args], extra);
 const report = (week: string) => fs.readFileSync(path.join(OUT, `${week}-simulated-approval`, "report.md"), "utf8");
 const dataOf = (week: string) => JSON.parse(fs.readFileSync(path.join(OUT, `${week}-simulated-approval`, "data.json"), "utf8"));
 async function localDb<T>(fn: (db: import("mongodb").Db) => Promise<T>): Promise<T> {

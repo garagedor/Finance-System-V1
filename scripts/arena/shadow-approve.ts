@@ -4,7 +4,7 @@
  *   node --env-file=<file> --import ./scripts/arena/transpile-register.mjs \
  *     scripts/arena/shadow-approve.ts <weekStart Monday> <outDir> \
  *       [--accounts <file.json>] [--accept-unverified-for-simulation] \
- *       [--decisions <file.json>] [--template <templateId>] [--allow-early]
+ *       --template <id> [--decisions <file.json>] [--allow-early]
  *       [--stop-after freeze|review] [--late-decision keep-freeze|accept-correction --late-reason <text>]
  *
  * Runs the REAL lifecycle (lifecycle.ts) against ARENA_SHADOW_DB on 127.0.0.1:
@@ -56,10 +56,10 @@ import { assertLocalMongoUri, GuardRefusal, openGuardedCrm, runGuarded } from ".
 import {
   DEFAULT_SHADOW_DIR, SIMULATION_ACTOR as ACTOR, SIMULATION_BANNER, approvalClockGate, archiveRun, ensurePrivateDir, runStamp, integrityCheck, markSimulated, parseAccountsFile,
   renderLateChanges as renderLateChangesFn,
-  planDecisions, readDecisionsFile, readFingerprintFile, rulesFingerprint, rulesSummary, simulationAccounts, trackWrites, writePrivate,
+  planDecisions, readDecisionsFile, readFingerprintFile, resolveShadowRules, rulesFingerprint, rulesSummary, simulationAccounts, trackWrites, writePrivate,
   type DecisionPlan,
 } from "./lib-shadow.ts";
-import { SEED_BALANCED_PERFORMANCE, SEED_SETTINGS_BUDGET_CEILING_CENTS, cloneRules } from "../../src/lib/arena/config.ts";
+import { SEED_SETTINGS_BUDGET_CEILING_CENTS } from "../../src/lib/arena/config.ts";
 import {
   ArenaStateError, activateCompetition, createCompetition, initSettings, scheduleCompetition, type CompetitionDoc, type RuleVersionDoc, type StoreContext,
 } from "../../src/lib/arena/config-store.ts";
@@ -110,7 +110,7 @@ function parseArgs(argv: string[]) {
   }
   const [week, outDir] = pos;
   if (!week || !outDir)
-    throw new Error("usage: shadow-approve.ts <weekStart> <outDir> [--accounts <file>] [--accept-unverified-for-simulation] [--decisions <file>] [--template <id>] [--allow-early]");
+    throw new Error("usage: shadow-approve.ts <weekStart> <outDir> [--accounts <file>] [--accept-unverified-for-simulation] --template <id> [--decisions <file>] [--allow-early]");
   if (!isMonday(week)) throw new Error("weekStart must be a Monday (YYYY-MM-DD)");
   if (o.lateDecision && !o.lateReason?.trim()) throw new Error("--late-decision needs --late-reason \"…\" (the owner's reason)");
   return { week, outDir: path.resolve(outDir), ...o };
@@ -176,15 +176,9 @@ await runGuarded(async () => {
   const arena = trackWrites(rawArena, localWrites);
 
   try {
-    // Rules: a local template, else the owner-approved Balanced Performance seed.
-    let rules: ArenaRules = cloneRules(SEED_BALANCED_PERFORMANCE);
-    let rulesLabel = "Balanced Performance (owner-approved seed, code)";
-    if (args.template) {
-      const t = await rawArena.collection(ARENA_COLLECTIONS.templates).findOne({ templateId: args.template, current: true });
-      if (!t) throw new Error(`template "${args.template}" not found in the local ${dbName} database`);
-      rules = cloneRules(t.rules as ArenaRules);
-      rulesLabel = `${t.name} v${t.version} (local ${dbName})`;
-    }
+    // Rules: named explicitly with --template (a code seed or a local template); no default.
+    const { rules, label: rulesLabel } = await resolveShadowRules(args.template,
+      (id) => rawArena.collection(ARENA_COLLECTIONS.templates).findOne({ templateId: id, current: true }), dbName);
     const fp = rulesFingerprint(rules);
     const confirmedFp = readFingerprintFile(args.rulesConfirmation);
     if (confirmedFp && confirmedFp !== fp) throw new Refusal(`the rules (${fp.slice(0, 12)}…) differ from the owner-confirmed fingerprint in ${args.rulesConfirmation}`);

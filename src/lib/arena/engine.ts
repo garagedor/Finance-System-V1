@@ -172,6 +172,52 @@ export const accountExcludes = (s: AccountState): boolean => s !== "eligible" &&
 
 const UNVERIFIED: AccountInput = { state: "unverified", checkedAt: null };
 
+/**
+ * Prize positions and the Most Improved winner, over RANKED results whose
+ * `mostImproved` baseline is already filled in. This is the only prize
+ * allocation in the Arena: computeCompetition calls it, and so does any tool
+ * that re-allocates stored results under different prize amounts (ranks,
+ * scores, eligibility and baselines do not depend on the prize amounts).
+ * Resets and then sets prizePosition / prizeCents / wonMostImproved on each
+ * result (in place); returns the Most Improved winner's id, or null.
+ *
+ *   positions: prize-eligible competitors only, in rank order. An
+ *   account-excluded competitor keeps their rank but is skipped, so the prize
+ *   goes to the next fully eligible one; an unverified one keeps the place.
+ *   Most Improved: prize-eligible now (gates AND account), NO position prize,
+ *   improvement > minImprovement; largest improvement wins, then rank order.
+ *   With N position prizes, the ranks after the N-th paid place are the first
+ *   ones Most Improved can go to.
+ */
+export function allocatePrizes(rules: ArenaRules, results: CompetitorResult[]): string | null {
+  for (const r of results) {
+    r.prizePosition = null;
+    r.prizeCents = 0;
+    r.wonMostImproved = false;
+  }
+  const ranked = [...results].sort((a, b) => a.rank - b.rank);
+  const positions = rules.prizes.positionsCents;
+  let next = 0;
+  for (const r of ranked) {
+    if (next >= positions.length) break;
+    if (!r.prizeEligible) continue;
+    r.prizePosition = next + 1;
+    r.prizeCents = positions[next];
+    next += 1;
+  }
+
+  if (!rules.mostImproved.enabled) return null;
+  const mi = rules.mostImproved;
+  const byRank = compareRanking(rules);
+  const candidates = ranked
+    .filter((r) => r.prizeEligible && r.prizePosition === null && r.mostImproved && r.mostImproved.improvement > mi.minImprovement)
+    .sort((a, b) => b.mostImproved!.improvement - a.mostImproved!.improvement || byRank(a, b));
+  if (!candidates.length) return null;
+  candidates[0].wonMostImproved = true;
+  candidates[0].prizeCents = mi.amountCents;
+  return candidates[0].competitorId;
+}
+
 export interface ComputeInput {
   rules: ArenaRules;
   rulesHash: string;
@@ -259,21 +305,7 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
   results.sort(compareRanking(rules));
   results.forEach((r, i) => (r.rank = i + 1));
 
-  // Prize positions: prize-eligible competitors only, in rank order. An
-  // account-excluded competitor keeps their rank but is skipped, so the prize
-  // goes to the next fully eligible one; an unverified one keeps the place.
-  const positions = rules.prizes.positionsCents;
-  let next = 0;
-  for (const r of results) {
-    if (next >= positions.length) break;
-    if (!r.prizeEligible) continue;
-    r.prizePosition = next + 1;
-    r.prizeCents = positions[next];
-    next += 1;
-  }
-
-  // Most Improved: prize-eligible now (gates AND account), no position prize, enough valid baseline weeks.
-  let mostImprovedWinner: string | null = null;
+  // Most Improved baselines: enough valid baseline weeks → pooled baseline score.
   if (rules.mostImproved.enabled) {
     const mi = rules.mostImproved;
     for (const r of results) {
@@ -288,16 +320,9 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
       const baselineScore = scoreOf(rules, pooled).score;
       r.mostImproved = { baselineScore, improvement: r.score - baselineScore, validWeeks: valid.length };
     }
-    const byRank = compareRanking(rules);
-    const candidates = results
-      .filter((r) => r.prizeEligible && r.prizePosition === null && r.mostImproved && r.mostImproved.improvement > mi.minImprovement)
-      .sort((a, b) => b.mostImproved!.improvement - a.mostImproved!.improvement || byRank(a, b));
-    if (candidates.length) {
-      candidates[0].wonMostImproved = true;
-      candidates[0].prizeCents = mi.amountCents;
-      mostImprovedWinner = candidates[0].competitorId;
-    }
   }
+
+  const mostImprovedWinner = allocatePrizes(rules, results);
 
   const awardedCents = results.reduce((s, r) => s + r.prizeCents, 0);
   if (awardedCents > rules.prizes.budgetCents) {

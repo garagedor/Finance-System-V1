@@ -52,6 +52,36 @@ export const SEED_BALANCED_PERFORMANCE: ArenaRules = {
   },
 };
 
+/**
+ * "Balanced Performance · Prizes 2026-11" (owner decision 2026-11-02): identical
+ * to SEED_BALANCED_PERFORMANCE — same methodology, targets, caps, eligibility
+ * minimums, statuses, review window — EXCEPT the prizes: three cash places
+ * $550 / $400 / $300 and Most Improved $250, weekly budget exactly $1,500.
+ * Places 4+ are ranked and shown but win no cash; Most Improved can go to any
+ * prize-eligible competitor without a position prize (so from #4 down).
+ * A NEW versioned template: SEED_BALANCED_PERFORMANCE above is unchanged, and
+ * results approved under it are never re-allocated.
+ */
+export const SEED_BALANCED_PERFORMANCE_P2: ArenaRules = {
+  ...SEED_BALANCED_PERFORMANCE,
+  prizes: { positionsCents: [55_000, 40_000, 30_000], budgetCents: 150_000 },
+  mostImproved: { ...SEED_BALANCED_PERFORMANCE.mostImproved, amountCents: 25_000 },
+};
+
+/** Code seeds the official tooling can name explicitly (`--template <id>`). */
+export interface ArenaRulesSeed {
+  id: string;
+  label: string;
+  /** The exported constant, for reports. */
+  code: string;
+  rules: ArenaRules;
+}
+export const ARENA_RULE_SEEDS: readonly ArenaRulesSeed[] = [
+  { id: "balanced-p2-2026-11", label: "Balanced Performance · Prizes 2026-11", code: "SEED_BALANCED_PERFORMANCE_P2", rules: SEED_BALANCED_PERFORMANCE_P2 },
+  { id: "balanced-v1", label: "Balanced Performance · Prizes 2026-10 (6 places, superseded)", code: "SEED_BALANCED_PERFORMANCE", rules: SEED_BALANCED_PERFORMANCE },
+];
+export const ruleSeed = (id: string): ArenaRulesSeed | null => ARENA_RULE_SEEDS.find((s) => s.id === id) ?? null;
+
 export const SEED_SETTINGS_BUDGET_CEILING_CENTS = 150_000;
 
 export class ArenaConfigError extends Error {

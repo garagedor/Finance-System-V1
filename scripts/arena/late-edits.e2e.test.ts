@@ -36,7 +36,10 @@ const LOCAL = "mongodb://127.0.0.1:27031";
 const WEEK = "2026-07-20";
 const UI_DB = process.env.ARENA_LATE_EDITS_UI_DB ?? null;
 if (UI_DB && !/^arena_[A-Za-z0-9_]+$/.test(UI_DB)) throw new Error("ARENA_LATE_EDITS_UI_DB must be an arena_* database name");
-const DB = { v0: `arena_late_e2e_v0_${process.pid}`, v1: `arena_late_e2e_v1_${process.pid}`, ui: UI_DB ?? "" };
+// ARENA_E2E_DB_PREFIX renames the throwaway databases (default arena_late_e2e; e.g. arena_int_late).
+const DB_PREFIX = process.env.ARENA_E2E_DB_PREFIX ?? "arena_late_e2e";
+if (!/^arena_[a-z0-9_]+$/.test(DB_PREFIX) || /^arena_(shadow|trial|preview|dev|wtshadow)/.test(DB_PREFIX)) throw new Error(`refusing ARENA_E2E_DB_PREFIX ${DB_PREFIX}`);
+const DB = { v0: `${DB_PREFIX}_v0_${process.pid}`, v1: `${DB_PREFIX}_v1_${process.pid}`, ui: UI_DB ?? "" };
 type Which = "v0" | "v1" | "ui";
 /** The databases a step runs on: v0 and v1, plus the UI-state one (v0 rules) while it is wanted. */
 const withUi = (upTo: boolean): Which[] => (UI_DB && upTo ? ["v0", "v1", "ui"] : ["v0", "v1"]);

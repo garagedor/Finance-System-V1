@@ -2,7 +2,7 @@
  * Shadow validation of ONE week against the real CRM, read-only.
  *
  *   node --env-file=<file> --import ./scripts/arena/transpile-register.mjs \
- *     scripts/arena/shadow-week.ts <weekStart> <outDir> [--snapshot] [--no-balance-report] [--template <templateId>]
+ *     scripts/arena/shadow-week.ts <weekStart> <outDir> --template <id> [--snapshot] [--no-balance-report]
  *       [--decisions <file>] [--strict]
  *
  * Decisions (read-only here): <outDir>/decisions.json when present (or --decisions).
@@ -30,14 +30,14 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { MongoClient, ObjectId, type Db } from "mongodb";
 import { assertLocalMongoUri, GuardRefusal, openGuardedCrm, runGuarded } from "./lib-ro-guard.ts";
-import { SEED_BALANCED_PERFORMANCE, cloneRules, rulesHash } from "../../src/lib/arena/config.ts";
+import { cloneRules, rulesHash } from "../../src/lib/arena/config.ts";
 import { computeCompetition, officialKpis } from "../../src/lib/arena/engine.ts";
 import { buildCompetitorMap, rosterNames } from "../../src/lib/arena/identity.ts";
 import { loadJobs, toArenaJob } from "../../src/lib/arena/job-source.ts";
 import { detectCases } from "../../src/lib/arena/detect.ts";
 import { reviewDecisions, type ReviewCaseDoc } from "../../src/lib/arena/review.ts";
 import { canonicalJson } from "../../src/lib/arena/config.ts";
-import { archiveRun, asCaseDocs, planDecisions, projectDecisions, readDecisionsFile, runStamp, type DecisionPlan, type ShadowDecisions } from "./lib-shadow.ts";
+import { archiveRun, asCaseDocs, planDecisions, projectDecisions, readDecisionsFile, resolveShadowRules, runStamp, type DecisionPlan, type ShadowDecisions } from "./lib-shadow.ts";
 import { ARENA_COLLECTIONS, arenaStores, loadMappings, loadTechnicians } from "../../src/lib/arena/mongo-store.ts";
 import { addDays, isMonday, previousWeekStarts, weekWindow } from "../../src/lib/arena/week.ts";
 import type { ArenaJob, ArenaRules, CompetitionResult } from "../../src/lib/arena/types.ts";
@@ -63,7 +63,7 @@ function parseArgs(argv: string[]) {
     else pos.push(a);
   }
   const [week, outDir] = pos;
-  if (!week || !outDir) throw new Error("usage: shadow-week.ts <weekStart> <outDir> [--snapshot] [--no-balance-report] [--template <templateId>] [--decisions <file>] [--strict]");
+  if (!week || !outDir) throw new Error("usage: shadow-week.ts <weekStart> <outDir> --template <id> [--snapshot] [--no-balance-report] [--decisions <file>] [--strict]");
   if (!isMonday(week)) throw new Error("weekStart must be a Monday (YYYY-MM-DD)");
   const out = path.resolve(outDir);
   if (out === REPO || out.startsWith(REPO + path.sep)) throw new Error("outDir must be outside the repository (the report contains technician names)");
@@ -112,15 +112,9 @@ await runGuarded(async () => {
   if (arena.databaseName === crm.db.databaseName) throw new GuardRefusal("the local Arena database must not be the CRM database");
 
   try {
-    // 2) rules: a template stored in the local Arena db, else the owner-approved Balanced Performance seed
-    let rules: ArenaRules = cloneRules(SEED_BALANCED_PERFORMANCE);
-    let rulesLabel = "Balanced Performance (owner-approved seed, code)";
-    if (args.template) {
-      const t = await arena.collection(ARENA_COLLECTIONS.templates).findOne({ templateId: args.template, current: true });
-      if (!t) throw new Error(`template "${args.template}" not found in the local ${localDbName} database`);
-      rules = cloneRules(t.rules as ArenaRules);
-      rulesLabel = `${t.name} v${t.version} (local ${localDbName})`;
-    }
+    // 2) rules: named explicitly with --template (a code seed or a local template); no default
+    const { rules, label: rulesLabel } = await resolveShadowRules(args.template,
+      (id) => arena.collection(ARENA_COLLECTIONS.templates).findOne({ templateId: id, current: true }), localDbName);
     const v1 = cloneRules(rules);
     v1.scoring.methodology = "BALANCED_PERFORMANCE_V1";
     const v0 = cloneRules(rules);

@@ -2,7 +2,7 @@
  * Shadow-validation preflight: one command, one PASS/FAIL line per check.
  *
  *   node --env-file=<file with ARENA_CRM_RO_URI> --import ./scripts/arena/transpile-register.mjs \
- *     scripts/arena/shadow-preflight.ts [--out <dir>] [--shadow-dir <dir>] [--template <templateId>] \
+ *     scripts/arena/shadow-preflight.ts --template <id> [--out <dir>] [--shadow-dir <dir>] \
  *     [--print-only] [--arena-ports 3000,3999,5173] [--min-free-gb 1] [--no-clock-check]
  *
  *   F1  read-only guard for ARENA_CRM_RO_URI (find only on the CRM db; not lbs_crm_app / lbs_ops; no built-in role, not even `read`)
@@ -25,9 +25,8 @@ import { MongoClient } from "mongodb";
 import { accessProbes, assertLocalMongoUri, openGuardedCrm, type GuardedCrm } from "./lib-ro-guard.ts";
 import {
   DEFAULT_ARENA_PORTS, DEFAULT_SHADOW_DIR, MAX_CLOCK_SKEW_MS, clockSkew, decisionsSummary, outputDirProblems, parseListeners,
-  publicArenaListeners, readDecisionsFile, readFingerprintFile, rulesFingerprint, rulesSummary, techAccessEnvVars,
+  publicArenaListeners, readDecisionsFile, readFingerprintFile, resolveShadowRules, rulesFingerprint, rulesSummary, techAccessEnvVars,
 } from "./lib-shadow.ts";
-import { SEED_BALANCED_PERFORMANCE, cloneRules } from "../../src/lib/arena/config.ts";
 import { ARENA_COLLECTIONS } from "../../src/lib/arena/mongo-store.ts";
 import type { ArenaRules } from "../../src/lib/arena/types.ts";
 
@@ -114,9 +113,13 @@ async function main(): Promise<number> {
   // F4: local Arena state
   const localUri = process.env.ARENA_SHADOW_LOCAL_URI || "mongodb://127.0.0.1:27031";
   const localDb = process.env.ARENA_SHADOW_DB || "arena_shadow";
-  let rules: ArenaRules = cloneRules(SEED_BALANCED_PERFORMANCE);
-  let rulesLabel = "Balanced Performance (owner-approved seed, code: SEED_BALANCED_PERFORMANCE)";
+  let rules: ArenaRules | null = null;
+  let rulesLabel = "(none)";
   let rulesProblem: string | null = null;
+  const pickRules = async (find: Parameters<typeof resolveShadowRules>[1]) => {
+    try { ({ rules, label: rulesLabel } = await resolveShadowRules(args.template, find, localDb)); }
+    catch (e) { rulesProblem = (e as Error).message; }
+  };
   try {
     assertLocalMongoUri(localUri);
     if (!/^arena_/.test(localDb)) throw new Error("ARENA_SHADOW_DB must be an arena_* database");
@@ -125,27 +128,26 @@ async function main(): Promise<number> {
       await local.connect();
       await local.db(localDb).command({ ping: 1 });
       line("PASS", "F4", "local Arena state on 127.0.0.1", `database ${localDb} reachable`);
-      if (args.template) {
-        const t = await local.db(localDb).collection(ARENA_COLLECTIONS.templates).findOne({ templateId: args.template, current: true });
-        if (!t) rulesProblem = `template "${args.template}" not found in the local ${localDb} database`;
-        else { rules = cloneRules(t.rules as ArenaRules); rulesLabel = `${t.name} v${t.version} (local ${localDb})`; }
-      }
+      await pickRules((id) => local.db(localDb).collection(ARENA_COLLECTIONS.templates).findOne({ templateId: id, current: true }));
     } finally {
       await local.close().catch(() => {});
     }
   } catch (e) {
     line("FAIL", "F4", "local Arena state on 127.0.0.1", (e as { codeName?: string }).codeName ?? (e as Error).message.split("\n")[0]);
-    if (args.template) rulesProblem = "the template could not be read (local database unavailable)";
+    if (rules === null && rulesProblem === null) await pickRules(null);
   }
 
   // F5: rules
-  const fp = rulesFingerprint(rules);
+  const chosen = rules as ArenaRules | null;
+  const fp = chosen ? rulesFingerprint(chosen) : "";
   console.log(`      rules: ${rulesLabel}`);
-  for (const s of rulesSummary(rules)) console.log(`        ${s}`);
-  console.log(`        fingerprint (SHA-256 of the canonical JSON): ${fp}`);
+  if (chosen) {
+    for (const s of rulesSummary(chosen)) console.log(`        ${s}`);
+    console.log(`        fingerprint (SHA-256 of the canonical JSON): ${fp}`);
+  }
   const fpFile = path.join(args.shadowDir, "approved-rules.sha256");
   const confirmed = readFingerprintFile(fpFile);
-  if (rulesProblem) line("FAIL", "F5", "rules", rulesProblem);
+  if (rulesProblem || !chosen) line("FAIL", "F5", "rules", rulesProblem ?? "no rules chosen");
   else if (confirmed === null) line(args.printOnly ? "INFO" : "FAIL", "F5", "rules fingerprint", `owner has not confirmed rules yet (${fpFile} is absent)${args.printOnly ? "; printed for confirmation" : ""}`);
   else if (confirmed === "") line("FAIL", "F5", "rules fingerprint", `${fpFile} holds no SHA-256 value`);
   else line(pass(confirmed === fp), "F5", "rules fingerprint", confirmed === fp ? `matches the owner-confirmed ${fpFile}` : `DIFFERS from the owner-confirmed value ${confirmed.slice(0, 12)}… — the rules changed after confirmation`);

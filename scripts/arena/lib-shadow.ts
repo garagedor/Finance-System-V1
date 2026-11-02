@@ -17,7 +17,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { Db } from "mongodb";
-import { canonicalJson, rulesHash } from "../../src/lib/arena/config.ts";
+import { ARENA_RULE_SEEDS, canonicalJson, cloneRules, ruleSeed, rulesHash } from "../../src/lib/arena/config.ts";
 import { computeCompetition } from "../../src/lib/arena/engine.ts";
 import { buildCompetitorMap } from "../../src/lib/arena/identity.ts";
 import { loadJobs } from "../../src/lib/arena/job-source.ts";
@@ -404,6 +404,36 @@ export function simulationAccounts(states: Readonly<Record<string, AccountState>
 
 /** sha256 of the canonical JSON of the rules (equals rulesHash). */
 export const rulesFingerprint = (rules: ArenaRules) => rulesHash(rules);
+
+/**
+ * The rules an official shadow command uses. There is NO default: every
+ * command names its rules with `--template <id>` (owner decision 2026-11-02
+ * changed the prizes, so a silent default could pay the wrong structure).
+ *   - a code seed id (ARENA_RULE_SEEDS: "balanced-p2-2026-11" = current
+ *     prizes, "balanced-v1" = the superseded 6-place prizes, for comparison);
+ *   - else a template saved in the local Arena database (templateId, current).
+ * A local template that reuses a code-seed id with DIFFERENT rules is refused
+ * (ambiguous), never silently preferred.
+ */
+export const TEMPLATE_REQUIRED =
+  `--template <id> is required: ${ARENA_RULE_SEEDS.map((s) => `"${s.id}" (${s.label})`).join(", ")}, or a template id saved in the local Arena database`;
+export async function resolveShadowRules(
+  templateId: string | null,
+  findLocalTemplate: ((id: string) => Promise<Record<string, unknown> | null>) | null,
+  localDbName: string,
+): Promise<{ rules: ArenaRules; label: string; source: "seed" | "local" }> {
+  if (!templateId) throw new Error(TEMPLATE_REQUIRED);
+  const seed = ruleSeed(templateId);
+  const local = findLocalTemplate ? await findLocalTemplate(templateId) : null;
+  if (seed) {
+    if (local && rulesHash(local.rules as ArenaRules) !== rulesHash(seed.rules))
+      throw new Error(`template "${templateId}" is both a code seed and a DIFFERENT local template in ${localDbName}; refusing (ambiguous)`);
+    return { rules: cloneRules(seed.rules), label: `${seed.label} (code seed ${seed.id}, ${seed.code})`, source: "seed" };
+  }
+  if (!findLocalTemplate) throw new Error(`template "${templateId}" is not a code seed and the local ${localDbName} database is unavailable`);
+  if (!local) throw new Error(`template "${templateId}" not found: not a code seed (${ARENA_RULE_SEEDS.map((s) => s.id).join(", ")}) nor in the local ${localDbName} database`);
+  return { rules: cloneRules(local.rules as ArenaRules), label: `${String(local.name)} v${String(local.version)} (local ${localDbName})`, source: "local" };
+}
 
 /** The fingerprint written in an owner-confirmed file (first 64-hex token). */
 export function readFingerprintFile(file: string): string | null {

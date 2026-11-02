@@ -3,7 +3,7 @@ import { arenaRoute } from "../_lib";
 import { readiness } from "@/lib/arena/review";
 import { arenaOwnerFromEnv } from "@/lib/arena/env";
 import { ARENA_COLLECTIONS } from "@/lib/arena/mongo-store";
-import { SEED_BALANCED_PERFORMANCE, SEED_STANDARD_WEEK } from "@/lib/arena/config";
+import { SEED_BALANCED_PERFORMANCE, SEED_STANDARD_WEEK, ruleSeed } from "@/lib/arena/config";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +37,8 @@ export async function GET() {
       seedRules: SEED_STANDARD_WEEK,
       // Owner-approved Balanced Performance (V1) starting point: a NEW template.
       seedBalancedRules: SEED_BALANCED_PERFORMANCE,
+      // Owner decision 2026-11-02: 3 cash places + Most Improved, $1,500. Same id as the shadow tooling's code seed.
+      seedBalancedP2: (({ id, label, rules }) => ({ templateId: id, name: label, rules }))(ruleSeed("balanced-p2-2026-11")!),
       userNames: Object.fromEntries(users.map((u) => [String(u._id), String(u.name ?? "")])),
     };
   });

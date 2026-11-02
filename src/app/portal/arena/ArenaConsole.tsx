@@ -22,6 +22,8 @@ interface Overview {
   userNames: Record<string, string>;
   seedRules: ArenaRules;
   seedBalancedRules: ArenaRules;
+  /** "Balanced Performance · Prizes 2026-11" (3 places + Most Improved); absent on older servers. */
+  seedBalancedP2?: { templateId: string; name: string; rules: ArenaRules };
 }
 type Tab = "weeks" | "templates" | "names" | "settings" | "audit";
 type Editing =
@@ -161,6 +163,11 @@ export default function ArenaConsole() {
               {!data.templates.some((t) => t.templateId === "balanced") && (
                 <button className="portal-btn" style={{ marginLeft: 8 }} onClick={() => setEditing({ kind: "template", templateId: "balanced", name: "Balanced Performance", rules: structuredClone(data.seedBalancedRules), isNew: true })}>
                   New template: Balanced Performance (V1)
+                </button>
+              )}
+              {data.seedBalancedP2 && !data.templates.some((t) => t.templateId === data.seedBalancedP2!.templateId) && (
+                <button className="portal-btn" style={{ marginLeft: 8 }} onClick={() => setEditing({ kind: "template", templateId: data.seedBalancedP2!.templateId, name: data.seedBalancedP2!.name, rules: structuredClone(data.seedBalancedP2!.rules), isNew: true })}>
+                  New template: {data.seedBalancedP2.name}
                 </button>
               )}
             </div>
