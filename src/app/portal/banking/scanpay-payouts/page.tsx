@@ -25,7 +25,7 @@ export default async function ScanpayPayoutsPage({ searchParams }: { searchParam
   const d = await loadPayoutRecon({ from: sp.from ?? def.from, to: sp.to ?? def.to });
   const byId = new Map(d.payouts.map((p) => [p._id, p]));
   const depById = new Map(d.deposits.map((x) => [x.id, x]));
-  const team = (n: number) => `Team ${n}`;
+  const team = (n: number) => `Account ${n}`;
 
   const PayoutRows = ({ ids }: { ids: string[] }) => (
     <>
@@ -68,12 +68,12 @@ export default async function ScanpayPayoutsPage({ searchParams }: { searchParam
       <section className="portal-grid-4">
         <StatPill label={`Payouts (${d.payouts.length})`} value={fmt$(d.totals.payouts)} />
         <StatPill label={`Reached the bank (${d.result.matched.reduce((n, m) => n + m.payoutIds.length, 0)})`} value={<span className="money-pos">{fmt$(d.totals.matched)}</span>} />
-        <StatPill label={`Missing (${d.result.missing.length})`} value={<span className={d.result.missing.length ? "money-neg" : ""}>{fmt$(d.totals.missing)}</span>} />
+        <StatPill label={`Not found (${d.result.missing.length})`} value={<span className={d.result.missing.length ? "money-neg" : ""}>{fmt$(d.totals.missing)}</span>} />
         <StatPill label={`Not arrived yet (${d.result.pending.length})`} value={fmt$(d.totals.pending)} />
       </section>
 
       <div className="muted small" style={{ margin: "4px 0 10px" }}>
-        Bank data through <b>{d.bankThrough ? fmtDate(d.bankThrough) : "—"}</b>
+        Bank data covers <b>{d.bankFrom ? fmtDate(d.bankFrom) : "—"}</b> → <b>{d.bankThrough ? fmtDate(d.bankThrough) : "—"}</b>
         {d.lastBankSync ? <> · last bank sync {fmtDateTime(d.lastBankSync)}</> : null}
         {" "}· a payout counts as missing {GRACE_DAYS} days after its expected date. Sync the bank on Connections to check the newest payouts.
       </div>
@@ -89,7 +89,33 @@ export default async function ScanpayPayoutsPage({ searchParams }: { searchParam
         <Link href="/portal/banking/scanpay-payouts" className="portal-btn">Clear</Link>
       </FilterBar>
 
-      <CardShell title={`Missing — paid out by ScanPay, not found in the bank (${d.result.missing.length})`} subtitle="No deposit for this amount within the expected window">
+      <CardShell title="By ScanPay account and month" subtitle="A whole stretch of 'not found' for one account usually means that account paid out to a bank account the CRM isn't connected to">
+        {d.byMonth.length === 0 ? <Empty message="No payouts in this range." /> : (
+          <table className="portal-table">
+            <thead><tr><th>Month</th><th>Account</th><th className="right">Payouts</th><th className="right">In the bank</th><th className="right">Not found</th><th className="right">Waiting</th></tr></thead>
+            <tbody>
+              {d.byMonth.map((r) => (
+                <tr key={`${r.month}-${r.team}`}>
+                  <td>{r.month}</td>
+                  <td>{team(r.team)}</td>
+                  <td className="right">{r.payouts}</td>
+                  <td className="right">{r.inBank} · {fmt$(r.inBankAmt)}</td>
+                  <td className="right"><span className={r.notFound ? "money-neg" : ""}>{r.notFound} · {fmt$(r.notFoundAmt)}</span></td>
+                  <td className="right">{r.waiting}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </CardShell>
+
+      {d.beforeBank.length > 0 && (
+        <div className="muted small" style={{ margin: "8px 0" }}>
+          {d.beforeBank.length} payout{d.beforeBank.length === 1 ? "" : "s"} ({fmt$(d.totals.beforeBank)}) were expected before the bank data starts, so they can&apos;t be checked.
+        </div>
+      )}
+
+      <CardShell title={`Not found in the bank (${d.result.missing.length})`} subtitle="Paid out by ScanPay, but no deposit for this amount within the expected window in any connected account">
         {d.result.missing.length === 0 ? <Empty message="Every finished payout in this range reached the bank." /> : (
           <table className="portal-table"><PayoutHead /><tbody><PayoutRows ids={d.result.missing.map((p) => p.id)} /></tbody></table>
         )}
