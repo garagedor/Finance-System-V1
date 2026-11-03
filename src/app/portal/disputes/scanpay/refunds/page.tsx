@@ -220,6 +220,9 @@ export default async function ScanpayRefundInboxPage({ searchParams }: { searchP
                         suggestedLabel={best?.address ?? null}
                         originalAmount={r.originalAmount}
                         paymentDate={r.paymentDate}
+                        refundAmount={r.refundAmount}
+                        refundDate={r.refundDate}
+                        fromPayout={r.refundAmountSource === "payout"}
                         chargedAt={r.chargedAt ?? null}
                       />
                     </td>

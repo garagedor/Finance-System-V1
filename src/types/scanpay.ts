@@ -114,9 +114,9 @@ export interface ScanpayComputedShare {
 }
 
 // ── Refunds ─────────────────────────────────────────────────────────────────
-// Source: GET /connect/v1/payments?status=REFUNDED. ScanPay's API does NOT
-// expose the refunded amount or refund date — only that the payment was
-// refunded — so those are entered by a human at confirm time.
+// Source: GET /connect/v1/payments?status=REFUNDED (+ refunded invoices). The
+// refunded amount and date come from ScanPay PAYOUT lines (lib/scanpay/payouts);
+// before that existed a person entered them at confirm time.
 
 export interface ScanpayRefundRaw {
   id: string;              // payment id "SP..."
@@ -151,9 +151,19 @@ export interface ScanpayRefundRecord {
   paymentDate: string | null;  // createdAt
   paymentMethod: string;
 
-  // Human-entered at confirm (API can't give these):
+  // Refunded amount/date. Filled from ScanPay payouts when known
+  // (refundAmountSource "payout", lib/scanpay/payouts) — otherwise entered by
+  // a person at confirm. A person's value is never overwritten.
   refundAmount: number | null;
   refundDate: string | null;
+  refundAmountSource?: "payout" | null;
+  /** What ScanPay's payouts say was refunded on this payment. */
+  payoutRefund?: {
+    amount: number; date: string | null; firstDate: string | null;
+    refundIds: string[]; paymentId: string; at: string;
+  } | null;
+  /** A person entered an amount that differs from ScanPay's payout. */
+  refundAmountMismatch?: boolean;
 
   // Matching
   matchStatus: ScanpayMatchStatus;

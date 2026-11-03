@@ -227,7 +227,9 @@ function RefundCard({ r, en, coverage }: { r: ScanpayRefundRecord; en?: JobEnric
             <Pill>AM · {AM(en)}</Pill>
             {en?.jobStatus && <Pill tone={/closed|x close/i.test(en.jobStatus) ? "ok" : "warn"}>{en.jobStatus}</Pill>}
             {/partial/i.test(r.raw?.status ?? "") && <Pill tone="warn">partial refund</Pill>}
-            {r.source === "invoice" && <Pill tone="warn">refund on invoice · check amount in ScanPay</Pill>}
+            {r.source === "invoice" && r.refundAmount == null && <Pill tone="warn">refund on invoice · check amount in ScanPay</Pill>}
+            {r.refundAmountSource === "payout" && <Pill tone="ok">amount from ScanPay payout</Pill>}
+            {r.refundAmountMismatch && r.payoutRefund && <Pill tone="warn">ScanPay payout says {fmt$(r.payoutRefund.amount)}</Pill>}
             {!r.matchedJobId && <Pill tone="warn">pick a job</Pill>}
           </div>
           <Shares cs={r.computedShare} />
@@ -249,7 +251,7 @@ function RefundCard({ r, en, coverage }: { r: ScanpayRefundRecord; en?: JobEnric
             <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
               <Coverage coverage={coverage} en={en}
                 endpoint={`/api/portal/scanpay/refunds/${encodeURIComponent(r._id)}`} />
-              <ScanpayRefundRowActions id={r._id} matchStatus={r.matchStatus} suggestedJobId={r.matchedJobId} suggestedLabel={r.candidates?.[0]?.address ?? null} originalAmount={r.originalAmount} paymentDate={r.paymentDate} chargedAt={r.chargedAt ?? null} />
+              <ScanpayRefundRowActions id={r._id} matchStatus={r.matchStatus} suggestedJobId={r.matchedJobId} suggestedLabel={r.candidates?.[0]?.address ?? null} originalAmount={r.originalAmount} paymentDate={r.paymentDate} chargedAt={r.chargedAt ?? null} refundAmount={r.refundAmount} refundDate={r.refundDate} fromPayout={r.refundAmountSource === "payout"} />
             </div>
           </div>
         </div>

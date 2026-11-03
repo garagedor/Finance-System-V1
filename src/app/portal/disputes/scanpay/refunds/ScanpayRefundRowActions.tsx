@@ -11,6 +11,7 @@ const dayOf = (iso: string | null) => (iso ? new Date(iso).toISOString().slice(0
 
 export default function ScanpayRefundRowActions({
   id, matchStatus, suggestedJobId, suggestedLabel, originalAmount, paymentDate, chargedAt,
+  refundAmount = null, refundDate = null, fromPayout = false,
 }: {
   id: string;
   matchStatus: string;
@@ -19,6 +20,11 @@ export default function ScanpayRefundRowActions({
   originalAmount: number;
   paymentDate: string | null;
   chargedAt: string | null;
+  /** Already known (ScanPay payout, or entered before) — pre-fills the form. */
+  refundAmount?: number | null;
+  refundDate?: string | null;
+  /** The known amount/date came from ScanPay's payout lines. */
+  fromPayout?: boolean;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -27,8 +33,8 @@ export default function ScanpayRefundRowActions({
 
   const [jobId, setJobId] = useState<string | null>(suggestedJobId);
   const [jobLabel, setJobLabel] = useState<string | null>(suggestedLabel);
-  const [amount, setAmount] = useState(String(originalAmount || ""));
-  const [date, setDate] = useState(dayOf(paymentDate));
+  const [amount, setAmount] = useState(String(refundAmount ?? originalAmount ?? ""));
+  const [date, setDate] = useState(dayOf(refundDate ?? paymentDate));
 
   const [picking, setPicking] = useState(false);
   const [q, setQ] = useState("");
@@ -168,12 +174,14 @@ export default function ScanpayRefundRowActions({
               <div>
                 <label className="portal-label">Refunded amount <span style={{ color: "var(--ds-crit-text)" }}>*</span></label>
                 <input type="number" step="0.01" min="0" className="portal-input" value={amount} onChange={(e) => setAmount(e.target.value)} />
-                <div className="muted small" style={{ marginTop: 2 }}>Originally paid {money(originalAmount)} — edit for partial refunds.</div>
+                <div className="muted small" style={{ marginTop: 2 }}>
+                  {fromPayout ? <>From ScanPay&apos;s payout · originally paid {money(originalAmount)}</> : <>Originally paid {money(originalAmount)} — edit for partial refunds.</>}
+                </div>
               </div>
               <div>
                 <label className="portal-label">Refund date <span style={{ color: "var(--ds-crit-text)" }}>*</span></label>
                 <input type="date" className="portal-input" value={date} onChange={(e) => setDate(e.target.value)} />
-                <div className="muted small" style={{ marginTop: 2 }}>ScanPay doesn&apos;t supply this — set the actual date.</div>
+                <div className="muted small" style={{ marginTop: 2 }}>{fromPayout && refundDate ? "From ScanPay's payout." : "Set the actual refund date."}</div>
               </div>
             </div>
 

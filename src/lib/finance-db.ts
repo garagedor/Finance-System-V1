@@ -115,6 +115,8 @@ export const FINANCE_COLLECTIONS = {
   scanpayRefund:    "finance_scanpay_refund",      // raw ScanPay refunds inbox (amount/date entered by human)
   scanpayWebhookLog:"finance_scanpay_webhook_log", // raw ScanPay webhook events (audit + payload discovery)
   scanpayMember:    "finance_scanpay_member",      // ScanPay memberId → user name ("Created by"), seeded from dashboard exports
+  scanpayPayout:    "finance_scanpay_payout",      // ScanPay payouts (what reaches the bank), lib/scanpay/payouts
+  scanpayPayoutLine:"finance_scanpay_payout_line", // every line inside a payout: payment, fee, refund, dispute adjustment
   // ─── App settings (global singletons) ───
   reportFilenameSettings: "finance_report_filename_settings", // editable download-filename patterns per report
   // ─── RBAC + audit ───
@@ -166,6 +168,12 @@ export async function ensureFinanceIndexes(): Promise<void> {
       db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ matchStatus: 1, paymentDate: -1 }),
       db.collection(FINANCE_COLLECTIONS.scanpayRefund).createIndex({ invoiceNumber: 1 }),
       db.collection(FINANCE_COLLECTIONS.scanpayWebhookLog).createIndex({ received_at: -1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayPayout).createIndex({ expectedBy: -1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayPayout).createIndex({ team: 1, expectedBy: -1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayPayoutLine).createIndex({ payoutId: 1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayPayoutLine).createIndex({ relatedPaymentId: 1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayPayoutLine).createIndex({ type: 1, dateIso: -1 }),
+      db.collection(FINANCE_COLLECTIONS.scanpayPayoutLine).createIndex({ invoiceNumber: 1 }, { sparse: true }),
       db.collection(FINANCE_COLLECTIONS.refund).createIndex({ date: -1 }),
       db.collection(FINANCE_COLLECTIONS.equipment).createIndex({ date: -1 }),
       db.collection(FINANCE_COLLECTIONS.bankTxn).createIndex({ posted_date: -1 }),

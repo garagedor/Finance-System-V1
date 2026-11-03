@@ -8,6 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { scanpayConfigured } from "@/lib/scanpay/client";
 import { syncNewScanpayDisputes } from "@/lib/scanpay/sync";
 import { syncNewScanpayRefunds, syncRefundedInvoices } from "@/lib/scanpay/refund-sync";
+import { syncScanpayPayouts, applyPayoutRefunds } from "@/lib/scanpay/payouts";
 import { resyncJobMirrors } from "@/lib/job-mirror";
 import { alertReportDrift } from "@/lib/report-drift";
 
@@ -48,13 +49,23 @@ export async function GET(req: NextRequest) {
     // Partial refunds only show on the invoice. Daily, after the rest, paced and
     // time-boxed (lib/scanpay/client fetchRefundedInvoices). Never on inbox
     // load — that sync runs every time the page opens.
+    // Payouts (what reaches the bank) and the refund amounts inside them.
+    // Paced and time-boxed; a finished payout is read once, ever.
+    let payouts: unknown = null;
+    try {
+      const sync = await syncScanpayPayouts({ sinceDays: 10, budgetMs: 30_000 });
+      const refundAmounts = await applyPayoutRefunds({ addMissing: true, budgetMs: 10_000 });
+      payouts = { ...sync, refundAmounts };
+    } catch (e) {
+      payouts = { error: e instanceof Error ? e.message : "payout sync failed" };
+    }
     let invoiceRefunds: unknown = null;
     try {
       invoiceRefunds = await syncRefundedInvoices({ sinceDays: 120, budgetMs: 200_000 });
     } catch (e) {
       invoiceRefunds = { error: e instanceof Error ? e.message : "invoice refund scan failed" };
     }
-    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, drift, disputes, refunds, invoiceRefunds });
+    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, drift, disputes, refunds, payouts, invoiceRefunds });
   } catch (e) {
     return NextResponse.json({ ok: false, mirrors, drift, error: e instanceof Error ? e.message : "sync failed" }, { status: 200 });
   }
