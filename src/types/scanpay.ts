@@ -20,7 +20,10 @@ export interface ScanpayDisputeRaw {
   paymentMethodDetail: string;
   collectedBy: string;
   createdBy: string;
-  technicians: string[];
+  /** Older rows only — ScanPay now sends jobAssignees / jobCreatedBy. */
+  technicians?: string[];
+  jobAssignees?: string[];
+  jobCreatedBy?: string;
   jobId: string;             // ScanPay's own job id ("JOB-17461") — NOT the CRM _id
   jobTitle: string;
   serviceAddress: string;

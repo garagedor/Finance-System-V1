@@ -133,7 +133,12 @@ export async function upsertScanpayRefund(
     return { action: "preserved", matched: "preserved" };
   }
 
-  const { candidates, best } = await matchRefund(raw);
+  // Who the customer is helps the fallback match — one invoice lookup, once,
+  // when the refund first arrives; afterwards it is on the record.
+  const customer = existing
+    ? { customerName: existing.customerName ?? null, customerPhone: existing.customerPhone ?? null, createdBy: existing.createdBy ?? null }
+    : await refundCustomer(raw.invoiceId);
+  const { candidates, best } = await matchRefund(raw, { customerName: customer?.customerName, createdBy: customer?.createdBy });
   const matched = best?.method === "invoice" ? "invoice" : "none";
 
   let computedShare: ScanpayComputedShare | null = null;
@@ -155,8 +160,6 @@ export async function upsertScanpayRefund(
   };
 
   if (!existing) {
-    // Who the customer is — one invoice lookup, once, when the refund arrives.
-    const customer = await refundCustomer(raw.invoiceId);
     await c.insertOne({ _id: raw.id, ...c0, ...(customer ?? {}), source, refundAmount: null, refundDate: null, ...matchFields, postedRecordId: null, ledgerEntryId: null, synced_at: now });
     return { action: "created", matched };
   }

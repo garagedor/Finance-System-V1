@@ -79,6 +79,8 @@ test("I7. refund cards show and search the ScanPay customer", () => {
 test("I8. the customer lookup runs once, when a refund is first inserted", () => {
   const SYNC = read("lib", "scanpay", "refund-sync.ts");
   assert.equal((SYNC.match(/refundCustomer\(/g) ?? []).length, 1, "never on every inbox-load sync");
-  const at = SYNC.indexOf("refundCustomer(raw.invoiceId)");
-  assert.ok(at > SYNC.indexOf("if (!existing) {", SYNC.indexOf("const { candidates, best }")), "inside the insert branch");
+  // Only for a refund not in the inbox yet (an existing one reuses what is
+  // stored); it runs before matching so the customer name can help the match.
+  assert.match(SYNC, /existing\s*\?\s*\{[^}]*customerName: existing\.customerName[^}]*\}\s*:\s*await refundCustomer\(raw\.invoiceId\)/, "new refunds only");
+  assert.ok(SYNC.indexOf("refundCustomer(raw.invoiceId)") < SYNC.indexOf("matchRefund(raw,"), "before matching");
 });

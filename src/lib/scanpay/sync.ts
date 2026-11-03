@@ -42,7 +42,7 @@ function toRecordCore(raw: ScanpayDisputeRaw, now: string) {
     customerName: raw.customerName,
     customerPhone: raw.customerPhone,
     serviceAddress: raw.serviceAddress,
-    technicians: Array.isArray(raw.technicians) ? raw.technicians : [],
+    technicians: Array.isArray(raw.technicians) && raw.technicians.length ? raw.technicians : Array.isArray(raw.jobAssignees) ? raw.jobAssignees : [],
     scanpayJobId: raw.jobId,
     teamId: raw.teamId ?? null,
     teamName: raw.teamName ?? null,
