@@ -5,6 +5,7 @@ const TABS: Array<{ key: string; label: string; href: string }> = [
   { key: "synced",      label: "Bank txns",       href: "/portal/banking/synced" },
   { key: "reconcile",   label: "Reconciliation",  href: "/portal/banking/reconcile" },
   { key: "settlements", label: "Settlements",     href: "/portal/banking/settlements" },
+  { key: "scanpay-payouts", label: "ScanPay payouts", href: "/portal/banking/scanpay-payouts" },
 ];
 
 export default function BankingTabs({ active }: { active: string }) {
