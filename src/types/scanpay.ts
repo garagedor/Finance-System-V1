@@ -159,7 +159,7 @@ export interface ScanpayRefundRecord {
   // a person at confirm. A person's value is never overwritten.
   refundAmount: number | null;
   refundDate: string | null;
-  refundAmountSource?: "payout" | null;
+  refundAmountSource?: "payout" | "webhook" | null;
   /** What ScanPay's payouts say was refunded on this payment. */
   payoutRefund?: {
     amount: number; date: string | null; firstDate: string | null;

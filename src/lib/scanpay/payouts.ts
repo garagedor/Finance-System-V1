@@ -1,12 +1,12 @@
 import "server-only";
 import { coll, getDb, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
-import { scanpayKeys } from "./client";
+import { scanpayKeys, fetchScanpayPayment } from "./client";
 import { upsertScanpayRefund } from "./refund-sync";
 import {
   invoiceOfCollectedLine, payoutDate, payoutTotals, refundsByPayment, toPayoutQueryDate,
   type PayoutTotals, type ScanpayPayoutLineRaw,
 } from "./payout-lines";
-import type { ScanpayRefundRaw, ScanpayRefundRecord } from "@/types/scanpay";
+import type { ScanpayRefundRecord } from "@/types/scanpay";
 
 // ScanPay payouts → the CRM.
 //
@@ -170,17 +170,6 @@ export interface PayoutRefundSummary {
   notFound: number;        // ScanPay payment could not be read
 }
 
-async function fetchPayment(paymentId: string): Promise<ScanpayRefundRaw | null> {
-  for (const key of scanpayKeys()) {
-    try {
-      const body = await get<{ data?: ScanpayRefundRaw }>(key, `/connect/v1/payments/${encodeURIComponent(paymentId)}`);
-      if (body.data?.id) return body.data;
-    } catch {
-      /* not this team — try the next token */
-    }
-  }
-  return null;
-}
 
 /**
  * Write refund amounts/dates from payout lines into the refund inbox.
@@ -213,7 +202,7 @@ export async function applyPayoutRefunds(opts: { addMissing?: boolean; budgetMs?
     if (!rec && invoiceNumber) rec = await R.findOne({ invoiceNumber, source: "invoice" } as never);
 
     if (!rec && opts.addMissing && Date.now() < deadline) {
-      const raw = await fetchPayment(ref.paymentId);
+      const raw = await fetchScanpayPayment(ref.paymentId);
       if (!raw) { out.notFound++; continue; }
       const res = await upsertScanpayRefund(raw, "payment");
       if (res.action === "created") out.added++;
@@ -223,7 +212,9 @@ export async function applyPayoutRefunds(opts: { addMissing?: boolean; budgetMs?
     if (!rec) continue;
 
     const payout = { amount: ref.amount, date: ref.lastDate, firstDate: ref.firstDate, refundIds: ref.refundIds, paymentId: ref.paymentId, at: now };
-    if (rec.refundAmount == null) {
+    // Fill when empty, or when the only value so far came from a webhook
+    // (ScanPay's payout is the settled figure). A person's value is kept.
+    if (rec.refundAmount == null || rec.refundAmountSource === "webhook") {
       await R.updateOne({ _id: rec._id }, {
         $set: { refundAmount: ref.amount, refundDate: rec.refundDate ?? ref.lastDate, refundAmountSource: "payout", payoutRefund: payout, updated_at: now },
       } as never);

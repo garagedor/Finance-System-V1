@@ -7,14 +7,15 @@
 // we can see real payloads) → best-effort process disputes/refunds by reusing
 // the sync upsert logic → always ack 200 (so ScanPay doesn't retry-storm).
 //
-// ScanPay's exact payload shape isn't documented; we probe common shapes
-// (the object itself, or an { data } / { dispute } / { payment } envelope).
-// Once real events are logged we can tighten the mapping.
+// ScanPay's events are { eventName, eventData } (dispute.created,
+// payment.refunded, payment.complete — lib/scanpay/webhook-events). Older
+// test payloads (a dispute/payment object, or an envelope) are still probed.
 
 import { NextRequest, NextResponse } from "next/server";
 import { coll, ensureFinanceIndexes, FINANCE_COLLECTIONS, newId } from "@/lib/finance-db";
 import { upsertScanpayDispute } from "@/lib/scanpay/sync";
 import { upsertScanpayRefund } from "@/lib/scanpay/refund-sync";
+import { handleScanpayEvent, isScanpayEvent } from "@/lib/scanpay/webhook-events";
 import type { ScanpayDisputeRaw, ScanpayRefundRaw } from "@/types/scanpay";
 
 export const dynamic = "force-dynamic";
@@ -58,19 +59,25 @@ export async function POST(req: NextRequest) {
   await ensureFinanceIndexes();
   const log = coll<{ _id: string; received_at: string; [k: string]: unknown }>(FINANCE_COLLECTIONS.scanpayWebhookLog);
 
-  let kind: "dispute" | "refund" | "unrecognized" = "unrecognized";
+  let kind: "dispute" | "refund" | "payment" | "unrecognized" = "unrecognized";
   let result: unknown = null;
   let error: string | null = null;
 
   try {
-    const disp = pickDispute(body);
-    const refund = disp ? null : pickRefund(body);
-    if (disp) {
-      kind = "dispute";
-      result = await upsertScanpayDispute(disp);
-    } else if (refund) {
-      kind = "refund";
-      result = await upsertScanpayRefund(refund);
+    if (isScanpayEvent(body as unknown)) {
+      const handled = await handleScanpayEvent(body as never);
+      kind = handled.kind;
+      result = handled.result;
+    } else {
+      const disp = pickDispute(body);
+      const refund = disp ? null : pickRefund(body);
+      if (disp) {
+        kind = "dispute";
+        result = await upsertScanpayDispute(disp);
+      } else if (refund) {
+        kind = "refund";
+        result = await upsertScanpayRefund(refund);
+      }
     }
   } catch (e) {
     error = e instanceof Error ? e.message : "processing failed";
@@ -80,7 +87,7 @@ export async function POST(req: NextRequest) {
     _id: newId("wh"),
     received_at: new Date().toISOString(),
     kind,
-    event: body.type ?? body.event ?? null,
+    event: (body as Record<string, unknown>).eventName ?? (body as Record<string, unknown>).type ?? (body as Record<string, unknown>).event ?? null,
     processed: kind !== "unrecognized" && !error,
     result,
     error,

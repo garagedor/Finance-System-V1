@@ -171,6 +171,22 @@ export async function fetchScanpayInvoice(invoiceId: string): Promise<ScanpayInv
   return null;
 }
 
+// One payment by its receipt id ("SP…"). Payment ids are per team, so each
+// team token is tried in turn; null if none of them has it.
+export async function fetchScanpayPayment(paymentId: string): Promise<ScanpayRefundRaw | null> {
+  for (const key of scanpayKeys()) {
+    const res = await fetch(`${BASE}/connect/v1/payments/${encodeURIComponent(paymentId)}`, {
+      headers: { Authorization: `Bearer ${key}`, Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const data = ((await res.json()) as { data?: ScanpayRefundRaw }).data;
+      if (data?.id) return data;
+    }
+  }
+  return null;
+}
+
 // ── Pure parsing helpers (safe to import anywhere) ──────────────────────────
 
 export function parseAmount(raw: string): number {
