@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { readSession, hasPermission } from "@/lib/rbac";
+import { isStatsXlsxOwner } from "@/lib/stats-owner";
 import { loadPayoutRecon } from "@/lib/scanpay/payout-recon";
 import { GRACE_DAYS } from "@/lib/scanpay/payout-bank-match";
 import type { ScanpayPayoutRecord } from "@/lib/scanpay/payouts";
@@ -61,7 +62,12 @@ export default async function ScanpayPayoutsPage({ searchParams }: { searchParam
         kicker="System · Banking"
         title="ScanPay payouts"
         subtitle="Every ScanPay payout, matched to its deposit in the bank"
-        actions={<SyncPayoutsButton />}
+        actions={
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {isStatsXlsxOwner(s) && <Link href="/portal/scanpay-actions" className="portal-btn">ScanPay actions →</Link>}
+            <SyncPayoutsButton />
+          </div>
+        }
       />
       <BankingTabs active="scanpay-payouts" />
 

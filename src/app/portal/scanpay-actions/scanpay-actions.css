@@ -1,0 +1,49 @@
+/* ScanPay actions page. Design tokens only (src/styles/design-system.css). */
+.spa { display: flex; flex-direction: column; gap: 14px; }
+.spa-search { display: flex; gap: 8px; }
+.spa-search .portal-input { flex: 1; min-width: 0; }
+.spa-flash { padding: 10px 12px; border-radius: var(--ds-radius-2); background: var(--ds-ok-wash); color: var(--ds-ok-text); border: 1px solid var(--ds-ok-line); font-size: 13px; }
+
+.spa-results { display: flex; flex-direction: column; border: 1px solid var(--ds-line); border-radius: var(--ds-radius-3); overflow: hidden; background: var(--ds-surface-1); }
+.spa-result { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 14px; border: 0; border-bottom: 1px solid var(--ds-line); background: transparent; color: var(--ds-ink); cursor: pointer; }
+.spa-result:last-child { border-bottom: 0; }
+.spa-result:hover { background: var(--ds-surface-2); }
+.spa-result-main { font-weight: 600; font-size: 14px; }
+.spa-result-sub { font-size: 12px; color: var(--ds-ink-2); }
+
+.spa-job { display: flex; flex-direction: column; gap: 14px; }
+.spa-job-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.spa-job-title { font-size: 17px; font-weight: 700; }
+.spa-job-sub { font-size: 12.5px; color: var(--ds-ink-2); margin-top: 3px; }
+.spa-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.spa-card { background: var(--ds-surface-1); border: 1px solid var(--ds-line); border-radius: var(--ds-radius-3); padding: 14px 16px; overflow-x: auto; }
+.spa-card h3 { margin: 0 0 10px; font-size: 14px; }
+.spa-dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0 0 12px; font-size: 13px; }
+.spa-dl dt { color: var(--ds-ink-2); }
+.spa-dl dd { margin: 0; }
+.spa-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.spa-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.spa-table th, .spa-table td { padding: 7px 8px; border-bottom: 1px solid var(--ds-line); text-align: left; white-space: nowrap; }
+.spa-table th { color: var(--ds-ink-2); font-weight: 600; }
+.spa-table .r { text-align: right; }
+.spa .mono { font-family: ui-monospace, SF Mono, Menlo, monospace; }
+.spa-ok { color: var(--ds-ok-text); }
+.spa-bad { color: var(--ds-crit-text); }
+
+.spa-danger-btn { background: var(--ds-crit-soft); color: var(--ds-crit-text); border: 1px solid var(--ds-crit-line); border-radius: var(--ds-radius-1); padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.spa-danger-btn:disabled { opacity: 0.45; cursor: default; }
+
+.spa-overlay { position: fixed; inset: 0; z-index: 9999; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.spa-modal { width: min(520px, 100%); max-height: calc(100vh - 32px); overflow-y: auto; background: var(--ds-surface-1); color: var(--ds-ink); border: 1px solid var(--ds-line-strong); border-radius: var(--ds-radius-3); box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35); padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+.spa-modal h3 { margin: 0 0 4px; font-size: 16px; }
+.spa-modal p { margin: 0; }
+.spa-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 520px) { .spa-two { grid-template-columns: 1fr; } }
+.spa-check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-top: 4px; }
+.spa-confirm { padding: 12px; border-radius: var(--ds-radius-2); background: var(--ds-surface-2); border: 1px solid var(--ds-line); font-size: 13px; }
+.spa-confirm ul { margin: 8px 0 0; padding-left: 18px; }
+.spa-confirm-danger { background: var(--ds-crit-soft); border-color: var(--ds-crit-line); }
+.spa-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.spa-danger-go { background: var(--ds-crit); color: var(--ds-on-crit, #fff); border: 0; border-radius: var(--ds-radius-2); padding: 9px 16px; font-weight: 700; cursor: pointer; }
+.spa-danger-go:disabled { opacity: 0.5; cursor: default; }
