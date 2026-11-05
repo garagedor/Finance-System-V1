@@ -118,6 +118,7 @@ export const FINANCE_COLLECTIONS = {
   scanpayPayout:    "finance_scanpay_payout",      // ScanPay payouts (what reaches the bank), lib/scanpay/payouts
   scanpayPayoutLine:"finance_scanpay_payout_line", // every line inside a payout: payment, fee, refund, dispute adjustment
   scanpayAction:    "finance_scanpay_action",      // every WRITE the CRM sends to ScanPay (invoice, link, mark paid, refund) — audit + lock
+  scanpayLinkSuggestion:"finance_scanpay_link_suggestion", // invoice → job links the daily auto-link wasn't sure about
   // ─── App settings (global singletons) ───
   reportFilenameSettings: "finance_report_filename_settings", // editable download-filename patterns per report
   // ─── RBAC + audit ───
@@ -178,6 +179,7 @@ export async function ensureFinanceIndexes(): Promise<void> {
       db.collection(FINANCE_COLLECTIONS.scanpayAction).createIndex({ created_at: -1 }),
       db.collection(FINANCE_COLLECTIONS.scanpayAction).createIndex({ lockKey: 1, status: 1, created_at: -1 }),
       db.collection(FINANCE_COLLECTIONS.scanpayAction).createIndex({ jobId: 1 }, { sparse: true }),
+      db.collection(FINANCE_COLLECTIONS.scanpayLinkSuggestion).createIndex({ status: 1, "invoice.createdAt": -1 }),
       db.collection(FINANCE_COLLECTIONS.refund).createIndex({ date: -1 }),
       db.collection(FINANCE_COLLECTIONS.equipment).createIndex({ date: -1 }),
       db.collection(FINANCE_COLLECTIONS.bankTxn).createIndex({ posted_date: -1 }),
