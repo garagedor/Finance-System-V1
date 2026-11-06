@@ -16,6 +16,7 @@ import {
 } from "@/lib/scanpay/writes";
 import { MARK_PAID_METHODS, isRefundableStatus, memberName, pickMember, refundable, type MarkPaidMethod } from "@/lib/scanpay/write-helpers";
 import { scanpayKeys } from "@/lib/scanpay/client";
+import { teamLabeler } from "@/lib/scanpay/team-names-server";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -56,6 +57,7 @@ export async function GET(req: NextRequest) {
     if (!job) return NextResponse.json({ error: "Unknown job" }, { status: 404 });
     try {
       const team = (await teamForLocation(job.location)) ?? 1;
+      const label = await teamLabeler();
       const members = await teamMembers(team);
       const pick = pickMember(members, job.tech);
       const invoiceNumber = String(job.invoiceNumber ?? "").trim();
@@ -70,7 +72,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({
         job: { ...job, _id: String(job._id) },
         defaults: {
-          team, accounts: scanpayKeys().map((_, i) => i + 1),
+          team, accounts: scanpayKeys().map((_, i) => i + 1), accountNames: Object.fromEntries(scanpayKeys().map((_, i) => [i + 1, label(i + 1)])),
           member: pick ? { memberId: pick.member.memberId, name: memberName(pick.member), why: pick.why } : null,
           members: members.filter((m) => !m.status || m.status === "ACTIVE").map((m) => ({ memberId: m.memberId, name: memberName(m), role: m.role })),
         },

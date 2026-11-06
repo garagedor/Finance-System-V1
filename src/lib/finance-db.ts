@@ -119,6 +119,7 @@ export const FINANCE_COLLECTIONS = {
   scanpayPayoutLine:"finance_scanpay_payout_line", // every line inside a payout: payment, fee, refund, dispute adjustment
   scanpayAction:    "finance_scanpay_action",      // every WRITE the CRM sends to ScanPay (invoice, link, mark paid, refund) — audit + lock
   scanpayLinkSuggestion:"finance_scanpay_link_suggestion", // invoice → job links the daily auto-link wasn't sure about
+  scanpayTeam:      "finance_scanpay_team",        // API key position → ScanPay team id (names: lib/scanpay/team-names)
   // ─── App settings (global singletons) ───
   reportFilenameSettings: "finance_report_filename_settings", // editable download-filename patterns per report
   // ─── RBAC + audit ───

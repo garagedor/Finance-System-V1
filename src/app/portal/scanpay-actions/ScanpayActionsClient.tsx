@@ -10,7 +10,7 @@ type Member = { memberId: string; name: string; role?: string };
 type Action = { _id: string; action: string; status: string; invoiceNumber: string | null; paymentId: string | null; amount: number | null; memberName: string | null; actor: string; error: string | null; created_at: string };
 type Detail = {
   job: Job;
-  defaults: { team: number; accounts: number[]; member: { memberId: string; name: string; why: string } | null; members: Member[] };
+  defaults: { team: number; accounts: number[]; accountNames: Record<number, string>; member: { memberId: string; name: string; why: string } | null; members: Member[] };
   invoice: Invoice | null;
   payments: Payment[];
   actions: Action[];
@@ -104,7 +104,7 @@ export default function ScanpayActionsClient() {
               {detail.invoice ? (
                 <dl className="spa-dl">
                   <dt>Invoice</dt><dd className="mono">{detail.invoice.invoiceNumber}</dd>
-                  <dt>Account</dt><dd>Account {detail.invoice.team}</dd>
+                  <dt>ScanPay account</dt><dd>{detail.defaults.accountNames[detail.invoice.team] ?? `Account ${detail.invoice.team}`}</dd>
                   <dt>Amount</dt><dd>{money(detail.invoice.amount)}</dd>
                   <dt>Status</dt><dd>{detail.invoice.isPaid ? "Paid" : detail.invoice.status || "Unpaid"}</dd>
                 </dl>
@@ -236,7 +236,7 @@ function CreateInvoice({ d, onClose, onDone }: { d: Detail; onClose: () => void;
     return (
       <>
         <h3>Invoice {result.invoiceNumber} created</h3>
-        <p className="small">Account {result.team} · created as {result.memberName}{result.linkedToJob ? " · linked to this job" : " · the job already had another invoice, so it wasn't relinked"}</p>
+        <p className="small">{d.defaults.accountNames[result.team] ?? `Account ${result.team}`} · created as {result.memberName}{result.linkedToJob ? " · linked to this job" : " · the job already had another invoice, so it wasn't relinked"}</p>
         {result.checkoutUrl && <p><a href={result.checkoutUrl} target="_blank" rel="noreferrer">Open the payment page</a> — send this link to the customer, or show it as a QR code.</p>}
         {result.deepLink && <p><a href={result.deepLink}>Open in the ScanPay app</a> (on the tech&apos;s phone) to take the payment.</p>}
         <div className="spa-modal-foot"><button type="button" className="portal-btn portal-btn-primary" onClick={() => onDone(`Invoice ${result.invoiceNumber} created.`)}>Done</button></div>
@@ -259,7 +259,7 @@ function CreateInvoice({ d, onClose, onDone }: { d: Detail; onClose: () => void;
             <div>
               <label className="portal-label">ScanPay account</label>
               <select className="portal-input" value={team} onChange={(e) => setTeam(Number(e.target.value))}>
-                {d.defaults.accounts.map((t) => <option key={t} value={t}>Account {t}{t === d.defaults.team ? " (this location)" : ""}</option>)}
+                {d.defaults.accounts.map((t) => <option key={t} value={t}>{d.defaults.accountNames[t] ?? `Account ${t}`}{t === d.defaults.team ? " (this location)" : ""}</option>)}
               </select>
             </div>
             <div>
@@ -276,7 +276,7 @@ function CreateInvoice({ d, onClose, onDone }: { d: Detail; onClose: () => void;
       ) : (
         <>
           <div className="spa-confirm">
-            <div>This will create a customer and an invoice in <b>ScanPay account {team}</b>:</div>
+            <div>This will create a customer and an invoice in ScanPay account <b>{d.defaults.accountNames[team] ?? team}</b>:</div>
             <ul>
               <li>Customer: <b>{d.job.clientName || "—"}</b>{d.job.address ? ` · ${d.job.address}` : ""}</li>
               <li>Amount: <b>{money(amt)}</b>{tip ? " + optional tip" : ""}</li>
@@ -303,7 +303,7 @@ function LinkInvoice({ d, onClose, onDone }: { d: Detail; onClose: () => void; o
       <label className="portal-label">Invoice number</label>
       <input className="portal-input mono" placeholder="IN-…" value={inv} onChange={(e) => setInv(e.target.value)} />
       <Footer busy={busy} err={err} onClose={onClose} label="Link invoice" disabled={!/^IN-/i.test(inv.trim())}
-        onGo={() => go({ action: "link-invoice", jobId: d.job._id, invoiceNumber: inv.trim(), replace }, (r) => `Linked ${r.invoiceNumber} (account ${r.team}).`)} />
+        onGo={() => go({ action: "link-invoice", jobId: d.job._id, invoiceNumber: inv.trim(), replace }, (r) => `Linked ${r.invoiceNumber} (${d.defaults.accountNames[r.team] ?? `account ${r.team}`}).`)} />
     </>
   );
 }

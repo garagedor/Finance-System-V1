@@ -5,6 +5,7 @@ import { AUTO_LINK_ACTOR, type LinkSuggestionRecord } from "@/lib/scanpay/invoic
 import { fmt$, fmtDate, fmtDateTime } from "../../format";
 import { PageHeader, StatPill, CardShell, Empty } from "../../_components/page-helpers";
 import BankingTabs from "../BankingTabs";
+import { teamLabeler } from "@/lib/scanpay/team-names-server";
 import { SuggestionActions, RunAutoLinkButton } from "./InvoiceLinkActions";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,7 @@ export default async function InvoiceLinksPage({ searchParams }: { searchParams:
   if (!s || !(s.type === "admin" || hasPermission(s, "finance:banking:view"))) {
     return <div className="portal-page"><div className="portal-alert portal-alert-error">Restricted.</div></div>;
   }
+  const team = await teamLabeler();
   const canDecide = s.type === "admin" || hasPermission(s, "finance:banking:reconcile");
   const sp = await searchParams;
   await ensureFinanceIndexes();
@@ -76,7 +78,7 @@ export default async function InvoiceLinksPage({ searchParams }: { searchParams:
             <tbody>
               {g.rows.map((r) => (
                 <tr key={r._id}>
-                  <td className="mono">{r._id}<div className="muted small">Account {r.team}{r.status !== "open" ? ` · ${r.status}` : ""}</div></td>
+                  <td className="mono">{r._id}<div className="muted small">{team(r.team)}{r.status !== "open" ? ` · ${r.status}` : ""}</div></td>
                   <td>{fmtDate(r.invoice.createdAt)}</td>
                   <td>{r.invoice.customerName ?? "—"}{r.invoice.customerPhone ? <div className="muted small">{r.invoice.customerPhone}</div> : null}</td>
                   <td>{r.invoice.member ?? "—"}</td>

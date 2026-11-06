@@ -7,6 +7,7 @@ import type { ScanpayPayoutRecord } from "@/lib/scanpay/payouts";
 import { fmt$, fmtDate, fmtDateTime, lastNDays } from "../../format";
 import { PageHeader, StatPill, FilterBar, FilterField, CardShell, Empty } from "../../_components/page-helpers";
 import BankingTabs from "../BankingTabs";
+import { teamLabeler } from "@/lib/scanpay/team-names-server";
 import SyncPayoutsButton from "./SyncPayoutsButton";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,7 @@ export default async function ScanpayPayoutsPage({ searchParams }: { searchParam
   const d = await loadPayoutRecon({ from: sp.from ?? def.from, to: sp.to ?? def.to });
   const byId = new Map(d.payouts.map((p) => [p._id, p]));
   const depById = new Map(d.deposits.map((x) => [x.id, x]));
-  const team = (n: number) => `Account ${n}`;
+  const team = await teamLabeler();
 
   const PayoutRows = ({ ids }: { ids: string[] }) => (
     <>
@@ -50,7 +51,7 @@ export default async function ScanpayPayoutsPage({ searchParams }: { searchParam
   const PayoutHead = () => (
     <thead>
       <tr>
-        <th>Expected</th><th>Payout</th><th>Account</th><th>Status</th>
+        <th>Expected</th><th>Payout</th><th>ScanPay account</th><th>Status</th>
         <th className="right">Payments</th><th className="right">Fees</th><th className="right">Refunds &amp; disputes</th><th className="right">Payout</th>
       </tr>
     </thead>
@@ -98,7 +99,7 @@ export default async function ScanpayPayoutsPage({ searchParams }: { searchParam
       <CardShell title="By ScanPay account and month" subtitle="A whole stretch of 'not found' for one account usually means that account paid out to a bank account the CRM isn't connected to">
         {d.byMonth.length === 0 ? <Empty message="No payouts in this range." /> : (
           <table className="portal-table">
-            <thead><tr><th>Month</th><th>Account</th><th className="right">Payouts</th><th className="right">In the bank</th><th className="right">Not found</th><th className="right">Waiting</th></tr></thead>
+            <thead><tr><th>Month</th><th>ScanPay account</th><th className="right">Payouts</th><th className="right">In the bank</th><th className="right">Not found</th><th className="right">Waiting</th></tr></thead>
             <tbody>
               {d.byMonth.map((r) => (
                 <tr key={`${r.month}-${r.team}`}>

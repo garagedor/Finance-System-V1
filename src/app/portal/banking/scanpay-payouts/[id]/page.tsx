@@ -5,6 +5,7 @@ import type { ScanpayPayoutLineRecord, ScanpayPayoutRecord } from "@/lib/scanpay
 import { fmt$, fmtDate } from "../../../format";
 import { PageHeader, StatPill, CardShell, Empty } from "../../../_components/page-helpers";
 import BankingTabs from "../../BankingTabs";
+import { teamLabeler } from "@/lib/scanpay/team-names-server";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
     return <div className="portal-page"><div className="portal-alert portal-alert-error">Restricted.</div></div>;
   }
   const { id } = await params;
+  const team = await teamLabeler();
   const payoutId = decodeURIComponent(id);
   await ensureFinanceIndexes();
   const payout = await coll<ScanpayPayoutRecord>(FINANCE_COLLECTIONS.scanpayPayout).findOne({ _id: payoutId } as never);
@@ -52,7 +54,7 @@ export default async function PayoutDetailPage({ params }: { params: Promise<{ i
 
   return (
     <div className="portal-page">
-      <PageHeader kicker="System · Banking · ScanPay payouts" title={payoutId} subtitle={payout ? `Team ${payout.team} · expected ${fmtDate(payout.expectedBy)} · ${payout.status}` : "Not synced yet"} />
+      <PageHeader kicker="System · Banking · ScanPay payouts" title={payoutId} subtitle={payout ? `${team(payout.team)} · expected ${fmtDate(payout.expectedBy)} · ${payout.status}` : "Not synced yet"} />
       <BankingTabs active="scanpay-payouts" />
       <div style={{ margin: "6px 0 12px" }}><Link href="/portal/banking/scanpay-payouts" className="portal-btn">← All payouts</Link></div>
 

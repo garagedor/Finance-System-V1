@@ -1,6 +1,7 @@
 import "server-only";
 import { coll, getDb, ensureFinanceIndexes, FINANCE_COLLECTIONS } from "@/lib/finance-db";
 import { scanpayKeys, fetchScanpayPayment } from "./client";
+import { refreshTeamIds } from "./team-names-server";
 import { upsertScanpayRefund } from "./refund-sync";
 import {
   invoiceOfCollectedLine, payoutDate, payoutTotals, refundsByPayment, toPayoutQueryDate,
@@ -115,6 +116,7 @@ export async function syncScanpayPayouts(opts: { sinceDays: number; budgetMs: nu
   const deadline = Date.now() + opts.budgetMs;
   const since = new Date(Date.now() - opts.sinceDays * 86_400_000).toISOString().slice(0, 10);
   const keys = scanpayKeys();
+  await refreshTeamIds().catch(() => null); // which team each key is (names in the UI)
   const out: PayoutSyncSummary = { teams: keys.length, payouts: 0, detailsFetched: 0, unbalanced: [], complete: true };
 
   for (const [i, key] of keys.entries()) {
