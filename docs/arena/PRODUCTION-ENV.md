@@ -19,7 +19,7 @@ Preview deployments).
 | Variable | Production value / guidance | Secret? |
 |---|---|---|
 | `ARENA_MONGODB_DB` | Name of the Arena database, e.g. `arena_prod`. Must differ from the CRM database (`MONGODB_DB`, and never `ag`); enforced in `env.ts`. | no |
-| `ARENA_MONGODB_URI` | *Recommended.* Connection string of the dedicated Arena Atlas user (below). When unset the CRM app connection (`MONGODB_URI`) is used. | **yes** |
+| `ARENA_MONGODB_URI` | **Required when deployed.** Connection string of the dedicated Arena Atlas user (below). On Vercel (production *and* preview) or with `NODE_ENV=production`, the Arena refuses to run without it, and refuses it when it is the CRM app's own user — there is no fallback to the CRM's write-capable connection (`env.ts` `arenaMongoUri`; technician API → `503 arena_disabled`, Control Center → 503). Only the local dev stack (`ARENA_DEV_STACK=1`, loopback MongoDB, not on Vercel) shares `MONGODB_URI`. | **yes** |
 | `ARENA_OWNER_USER_ID` | The owner's CRM `users._id`. Only this account can initialise Arena settings. | no |
 | `ARENA_TECH_ENABLED` | **Unset (off) by default.** Set to `1` only at launch, after everything below is in place. | no |
 | `ARENA_WB_SUPABASE_URL` | `https://<production WB ref>.supabase.co`. | no |
@@ -29,7 +29,7 @@ Preview deployments).
 | `ARENA_PASS_PRIVATE_KEY` | Fresh RSA-2048 PKCS#8 key (PEM or base64 of it), generated for production only. | **yes** |
 | `ARENA_PASS_TTL_SECONDS` | Unset (= **300**). Values above 300 are refused when deployed. | no |
 | `ARENA_TECH_ALLOWED_ORIGINS` | The real app origins only: `capacitor://localhost` (iOS app) and the https web origin of the Weekly Balance app. No `http://`, no localhost/127.0.0.1, no `*` (all refused when deployed). | no |
-| `CRON_SECRET` | Already used by the CRM's crons; the Arena freeze safety net runs inside `/api/scanpay/cron-sync` behind it. Must be set (the existing routes only check it *when* set). | **yes** |
+| `CRON_SECRET` | Already used by the CRM's crons; the Arena freeze safety net runs inside `/api/scanpay/cron-sync` behind it. Must be set (the existing routes only check it *when* set). `/api/arena/health` and `/api/arena/monitor` **require** it (≥ 16 characters; unset = every cron call refused). | **yes** |
 
 ### Must NEVER be set in production (refused when deployed)
 
@@ -43,15 +43,57 @@ Preview deployments).
 1. **`lbs_arena_app`** (used via `ARENA_MONGODB_URI`)
    - `readWrite` on the Arena database only (`ARENA_MONGODB_DB`; it creates its own indexes).
    - `find` only, on exactly these CRM collections in the CRM database:
-     `Job` (job source: tech, date, status, location, profit fields, hashed contact for duplicate keys),
-     `TechNameMapping` (`supabaseUserId`, `supabaseFullName`, `crmTechNames`),
-     `Technician` (`_id`, `location`).
+     `Job` (job source, live recompute every refresh — an aggregation over the collection: tech, date, status, location, profit fields, hashed contact for duplicate keys; also by-id lookups for late edits),
+     `TechNameMapping` (`supabaseUserId`, `supabaseFullName`, `crmTechNames`; read on every technician request),
+     `Technician` (`_id`, `location`),
+     `users` (`name` only — the Control Center overview, `admin/overview`; without it that one admin panel fails).
+     Nothing else: the Arena does not read `Location`, `Provider` or any finance collection.
    - Implement as a custom role, e.g.
-     `{ role: "arenaApp", privileges: [ {resource:{db:"<arena db>", collection:""}, actions:[readWrite actions]}, {resource:{db:"ag", collection:"Job"}, actions:["find"]}, {resource:{db:"ag", collection:"TechNameMapping"}, actions:["find"]}, {resource:{db:"ag", collection:"Technician"}, actions:["find"]} ] }`.
+     `{ role: "arenaApp", privileges: [ {resource:{db:"<arena db>", collection:""}, actions:[readWrite actions]}, {resource:{db:"ag", collection:"Job"}, actions:["find"]}, {resource:{db:"ag", collection:"TechNameMapping"}, actions:["find"]}, {resource:{db:"ag", collection:"Technician"}, actions:["find"]}, {resource:{db:"ag", collection:"users"}, actions:["find"]} ] }`.
    - With this user the Arena cannot write CRM data even by mistake.
-2. The CRM app user (`lbs_crm_app`) needs **no** Arena change. Until
-   `ARENA_MONGODB_URI` is set, Arena collections are written through it; that is
-   the only reason it would need rights on the Arena database.
+2. The CRM app user (`lbs_crm_app`) needs **no** Arena change and no rights on the
+   Arena database: when deployed, the Arena never uses it.
+
+## Live updates: monitoring and keep-warm
+
+The live standings are recomputed on read: when a technician request (or the
+Control Center) finds the week's live snapshot older than `rules.display.refreshSeconds`,
+one caller recomputes the whole week from the CRM (single-flight lease) and the
+rest are served the cached snapshot. A failed recompute keeps serving the last
+snapshot (the app then shows "Reconnecting — data may be out of date") and is
+recorded in `arena_live_health`.
+
+- `GET /api/arena/health` — read-only, never recomputes. Auth: `x-cron-secret: <CRON_SECRET>`
+  (or `Authorization: Bearer <CRON_SECRET>`), **or** a CRM session with `arena:console:view`.
+  Reports the live snapshot age, last compute time and duration, last error and
+  consecutive failures; `healthy=false` when the live snapshot is older than
+  3 × `refreshSeconds` or the last recompute failed. `?strict=1` answers 503 when unhealthy.
+- `GET /api/arena/monitor` — cron secret only. Freezes a finished week if due and
+  refreshes the live snapshot when it is stale, so freshness and stall detection do
+  not depend on technicians being connected. Answers the health report (503 when unhealthy).
+
+Both are exempt from the portal-session middleware by exact path and authenticate
+in-route (fail closed).
+
+**Proposed Vercel cron (NOT applied — `vercel.json` is unchanged on this branch):**
+
+```json
+{ "path": "/api/arena/monitor", "schedule": "* * * * *" }
+```
+
+Vercel sends `Authorization: Bearer $CRON_SECRET` on cron calls. **Per-minute crons need
+the Vercel Pro plan** (Hobby allows one run a day) — owner/infra decision. Without the
+cron the Arena still works; the snapshot is simply refreshed only while someone has
+the app open, and the daily `/api/scanpay/cron-sync` freeze safety net is unchanged.
+An external uptime monitor can call `/api/arena/health?strict=1` with the
+`x-cron-secret` header instead of (or as well as) the cron.
+
+Load per refresh: one aggregation over `Job` (the week + Most Improved baseline
+weeks), `TechNameMapping` + `Technician` reads, and the Weekly Balance account check
+(reused for 2 minutes in the live phase; freeze/review/approval always re-check).
+Measured on a synthetic 40-technician week (1,000 jobs/week, 5,000 in the window,
+35,000 in the collection) on a local MongoDB: ~320 ms per recompute; ~1.4 s when the
+account answers are re-checked (150 ms per verifier call, 6 in parallel).
 
 ## Weekly Balance side (production, after staging sign-off)
 
