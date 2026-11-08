@@ -90,6 +90,13 @@ export async function arenaContexts(): Promise<ArenaContexts> {
   return buildArenaContexts(arenaDb, await getCrmDb());
 }
 
+/**
+ * Live refreshes reuse a Weekly Balance account answer for this long (one
+ * verifier call per competitor per 2 minutes instead of per refresh). Live
+ * standings are provisional; freeze/review/approval always re-check.
+ */
+export const LIVE_ACCOUNT_REUSE_MS = 120_000;
+
 /** Wire the stores for an Arena database and a (read-only) CRM database. */
 export function buildArenaContexts(
   arenaDb: Db,
@@ -114,6 +121,7 @@ export function buildArenaContexts(
     cache: arenaDb.collection(ARENA_COLLECTIONS.accountStatus) as never as StoreCollection<AccountCacheDoc>,
     now,
     log: (m: string) => console.warn(m),
+    liveReuseMs: LIVE_ACCOUNT_REUSE_MS,
   };
   const check = (ids: string[], mode: AccountMode) => checkAccounts(accountDeps, ids, mode);
   partial.lifecycle = {

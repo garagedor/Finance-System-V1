@@ -38,6 +38,13 @@ export interface AccountCheckDeps {
   cache: StoreCollection<AccountCacheDoc> | null;
   now: () => Date;
   log?: (msg: string) => void;
+  /**
+   * LIVE mode only: reuse an account answer checked less than this long ago
+   * instead of calling the verifier again (a live refresh every few seconds
+   * would otherwise call it once per competitor per refresh). Freeze, review
+   * and approval ("fresh") always ask the verifier. Unset = always ask.
+   */
+  liveReuseMs?: number;
 }
 
 /** How the Weekly Balance answer maps to an account state. */
@@ -73,6 +80,13 @@ export async function checkAccounts(deps: AccountCheckDeps, ids: readonly string
           out[id] = await fallback(deps, id, mode);
           failed++;
           return;
+        }
+        if (mode === "live" && deps.liveReuseMs && deps.cache) {
+          const last = await deps.cache.findOne({ _id: id }).catch(() => null);
+          if (last && deps.now().getTime() - Date.parse(last.checkedAt) < deps.liveReuseMs) {
+            out[id] = { state: last.state, checkedAt: last.checkedAt };
+            return;
+          }
         }
         try {
           const state = classifyAccount(await deps.verifier.verify(id));

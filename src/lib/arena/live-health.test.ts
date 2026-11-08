@@ -175,3 +175,30 @@ test("ops routes: monitor is cron-secret only; health is cron secret OR an admin
   const src = readFileSync(join(ROOT, "src", "app", "api", "arena", "health", "route.ts"), "utf8");
   assert.match(src, /if \(!cronSecretOk\(req\.headers\)\) \{\s*const s = await requirePermission\("arena:console:view" as Permission\);\s*if \(s instanceof NextResponse\) return s;\s*\}/);
 });
+
+// ── live account-check reuse ───────────────────────────────────────────────
+
+test("live mode reuses a recent account answer; fresh mode (freeze/review/approval) always asks", async () => {
+  const { checkAccounts } = await import("./accounts.ts");
+  const { MemoryCollection } = await import("./testing/memory-collection.ts");
+  let t = new Date("2026-11-09T15:00:00Z");
+  let calls = 0;
+  let status = { active: true, approved: true, role: "technician" };
+  const deps = {
+    verifier: { verify: async () => { calls++; return status; } },
+    cache: new MemoryCollection() as never, now: () => t, liveReuseMs: 120_000,
+  };
+  assert.equal((await checkAccounts(deps, ["a"], "live")).a.state, "eligible");
+  assert.equal(calls, 1);
+  status = { active: false, approved: true, role: "technician" };
+  t = new Date(t.getTime() + 119_000);
+  assert.equal((await checkAccounts(deps, ["a"], "live")).a.state, "eligible", "within the reuse window");
+  assert.equal(calls, 1);
+  assert.equal((await checkAccounts(deps, ["a"], "fresh")).a.state, "inactive", "fresh always asks");
+  assert.equal(calls, 2);
+  t = new Date(t.getTime() + 121_000);
+  assert.equal((await checkAccounts(deps, ["a"], "live")).a.state, "inactive");
+  assert.equal(calls, 3);
+  const { LIVE_ACCOUNT_REUSE_MS } = await import("./admin-service.ts");
+  assert.equal(LIVE_ACCOUNT_REUSE_MS, 120_000);
+});
