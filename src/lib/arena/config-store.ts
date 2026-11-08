@@ -81,7 +81,7 @@ export interface CompetitionDoc {
   /** Set only by the dev-stack "freeze now" action; lets a demo week be reviewed early. */
   devEarlyClose?: boolean;
   /**
-   * LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR PAYOUTS. Set by the OWNER when
+   * LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR CASH PAYOUTS. Set by the OWNER when
    * creating or activating the week (audited), never cleared. A beta week
    * computes, freezes and goes through review exactly like any other, but it can
    * NEVER be approved as official (lifecycle.approveResults refuses), so no

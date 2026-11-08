@@ -140,7 +140,7 @@ export interface MeResponse {
     reviewOpensAt: string;       // ISO
     dataAsOf: string;            // ISO of the snapshot the numbers come from
     /** ADDED (additive, apiVersion 1; absent from older servers = false).
-     *  LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR PAYOUTS: real data, never
+     *  LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR CASH PAYOUTS: real data, never
      *  approved as official, prizes are projected only, no result_approved event
      *  and no celebration of any kind. */
     beta?: boolean;

@@ -1,5 +1,5 @@
 // LIVE BETA week mode (owner request 2026-11-09): a real-data test week labelled
-// "LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR PAYOUTS". It computes, freezes
+// "LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR CASH PAYOUTS". It computes, freezes
 // and goes through review exactly like any week, but can NEVER be approved as
 // official: approval is refused with a clear message, no result record or
 // approval row is written, and no `result_approved` event (the only celebration
@@ -21,7 +21,7 @@ import { MemoryCollection } from "./testing/memory-collection.ts";
 
 const [ANN] = PEOPLE;
 const TUE_NOON = "2026-11-03T17:00:00.000Z";
-const LABEL = "LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR PAYOUTS";
+const LABEL = "LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR CASH PAYOUTS";
 
 const weekJobs = () => [
   ...jobs(6, "Ann", "Closed", 1000), ...jobs(4, "Ann", "Estimate", 0),

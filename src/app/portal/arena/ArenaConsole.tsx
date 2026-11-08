@@ -258,7 +258,7 @@ function Weeks({ data, who, setError, onEdit, done }: {
                   <td>
                     <span className={statusPill(c.status)}>{STATUS_LABEL[c.status] ?? c.status}</span>
                     {c.beta && <span className="pill pill-pending" style={{ marginLeft: 6 }} title={BETA_LABEL} data-testid="arena-week-beta">BETA</span>}
-                    {c.beta && <div className="muted small">Test week · no official winners or payouts</div>}
+                    {c.beta && <div className="muted small">Test week · no official winners or cash payouts</div>}
                   </td>
                   <td>v{c.ruleVersionN}{c.lockedAt && <div className="muted small">locked {when(c.lockedAt)}</div>}</td>
                   <td>{who(c.createdBy)}<div className="muted small">{when(c.createdAt)}</div></td>

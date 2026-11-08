@@ -182,7 +182,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
         <div className="portal-alert portal-alert-warn" role="status" data-testid="arena-results-beta">
           <div>
             <b>{BETA_LABEL}</b>
-            <div className="small">Real CRM data, computed, frozen and reviewed like any week — but it can never be approved as official. Every prize shown is projected (beta, no payout). Technicians see the same banner and get no celebrations.</div>
+            <div className="small">Real CRM data, computed, frozen and reviewed like any week — but it can never be approved as official. Every prize shown is projected (beta, no cash payout). Technicians see the same banner and get no celebrations.</div>
           </div>
         </div>
       )}
@@ -258,7 +258,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
         </details>
       )}
       {d.snapshot && !d.approved && (
-        <div className="muted small">{d.snapshot.eligibleCount} met all gates · {dollars(d.snapshot.awardedCents)} {beta ? "projected (beta, no payout)" : "would be awarded"} · {dollars(d.snapshot.unallocatedCents)} unallocated
+        <div className="muted small">{d.snapshot.eligibleCount} met all gates · {dollars(d.snapshot.awardedCents)} {beta ? "projected (beta, no cash payout)" : "would be awarded"} · {dollars(d.snapshot.unallocatedCents)} unallocated
           {d.snapshot.kind === "live" && " · account checks are provisional while the week runs; the final check is at freeze, review and approval"}</div>
       )}
       {excluded.length > 0 && (
@@ -271,7 +271,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
       )}
       <div style={{ overflowX: "auto" }}>
         <table className="portal-table">
-          <thead><tr><th>#</th><th>Technician</th><th>Location</th>{v1 && <><th title="100 × closing rate ÷ target (capped)">C</th><th title="100 × AVG ticket ÷ target (capped)">A</th><th>Limiting</th></>}<th>{v1 ? "Final (min)" : "Score"}</th><th title={assignedBasis ? "Every assigned job in the week, any status, minus approved exclusions" : "Jobs with a qualifying status, minus approved exclusions"}>{assignedBasis ? "Assigned jobs (counted)" : "Qual. jobs"}</th><th>Closing</th><th>AVG ticket</th><th>Gates</th><th>Account</th><th>{beta ? "Projected prize (beta, no payout)" : "Prize"}</th></tr></thead>
+          <thead><tr><th>#</th><th>Technician</th><th>Location</th>{v1 && <><th title="100 × closing rate ÷ target (capped)">C</th><th title="100 × AVG ticket ÷ target (capped)">A</th><th>Limiting</th></>}<th>{v1 ? "Final (min)" : "Score"}</th><th title={assignedBasis ? "Every assigned job in the week, any status, minus approved exclusions" : "Jobs with a qualifying status, minus approved exclusions"}>{assignedBasis ? "Assigned jobs (counted)" : "Qual. jobs"}</th><th>Closing</th><th>AVG ticket</th><th>Gates</th><th>Account</th><th>{beta ? "Projected prize (beta, no cash payout)" : "Prize"}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.competitorId}>
