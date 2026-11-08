@@ -33,6 +33,8 @@ export const ARENA_COLLECTIONS = {
   rateLimit: "arena_rate_limit",
   /** Pilot allowlist: current technician-access state per competitor (history in arena_audit). */
   techAccess: "arena_tech_access",
+  /** Live-recompute monitoring: last compute time/duration/error per competition (/api/arena/health). */
+  liveHealth: "arena_live_health",
 } as const;
 
 /** Lifecycle collections (lifecycle.ts). Results, approvals and non-live snapshots are insert-only. */
@@ -45,6 +47,7 @@ export function lifecycleCollections(db: Db): LifecycleCollections {
     events: c(ARENA_COLLECTIONS.techEvents),
     claims: c(ARENA_COLLECTIONS.claims),
     lateCorrections: c(ARENA_COLLECTIONS.lateCorrections),
+    health: c(ARENA_COLLECTIONS.liveHealth),
   };
 }
 

@@ -201,6 +201,20 @@ export interface LifecycleCollections {
   events: StoreCollection<TechEventDoc>;
   claims: StoreCollection<ClaimDoc>;
   lateCorrections: StoreCollection<LateCorrectionDoc>;
+  /** Live-recompute monitoring (one doc per competition). Optional: absent = not recorded. */
+  health?: StoreCollection<LiveHealthDoc>;
+}
+
+/** Monitoring record of the live recompute of one competition (arena_live_health). */
+export interface LiveHealthDoc {
+  _id: string; // competition id
+  lastAttemptAt: string;
+  lastComputeAt: string | null; // last SUCCESSFUL recompute
+  lastDurationMs: number | null; // of the last successful recompute
+  lastErrorAt: string | null;
+  lastError: string | null;
+  /** Recomputes failed in a row (0 after a success). */
+  failures: number;
 }
 
 export interface LifecycleContext {
@@ -359,8 +373,26 @@ export async function liveSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv:
   if (c.status !== "active" && c.status !== "suspended") return cur;
   const release = await tryClaim(ctx, `live:${c._id}`);
   if (!release) return cur ?? null;
+  const started = Date.now();
+  const attemptAt = iso(ctx);
   try {
-    const { result } = await ctx.compute(c.weekStart, rv, "live");
+    let result: CompetitionResult;
+    try {
+      ({ result } = await ctx.compute(c.weekStart, rv, "live"));
+    } catch (e) {
+      // Keep serving the last snapshot (its computedAt ages, so the app shows
+      // "reconnecting / may be out of date"); record the failure for /api/arena/health.
+      const prev = await ctx.lc.health?.findOne({ _id: c._id });
+      await recordHealth(ctx, c._id, {
+        lastAttemptAt: attemptAt, lastErrorAt: attemptAt,
+        lastError: (e instanceof Error ? e.message : String(e)).slice(0, MAX_ERROR_CHARS), failures: (prev?.failures ?? 0) + 1,
+      });
+      if (cur) {
+        console.error("[arena] live recompute failed; serving the previous snapshot:", e instanceof Error ? e.message : e);
+        return cur;
+      }
+      throw e;
+    }
     const at = iso(ctx);
     const doc: SnapshotDoc = {
       _id: liveId(c._id), competitionId: c._id, weekStart: c.weekStart, kind: "live", n: (cur?.n ?? 0) + 1,
@@ -369,10 +401,106 @@ export async function liveSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv:
     if (cur) await ctx.lc.snapshots.updateOne({ _id: doc._id }, { $set: doc });
     else await ctx.lc.snapshots.insertOne(doc);
     await writeEvents(ctx, c._id, at, cur ? diffEvents(cur.result, result, at) : phaseEvents(result, "live", at));
+    await recordHealth(ctx, c._id, { lastAttemptAt: attemptAt, lastComputeAt: at, lastDurationMs: Date.now() - started, failures: 0 });
     return doc;
   } finally {
     await release();
   }
+}
+
+/** Length cap for a stored recompute error message (monitoring text, not a rule). */
+const MAX_ERROR_CHARS = 480;
+
+/** Upsert the monitoring record (never throws: monitoring must not break serving). */
+async function recordHealth(ctx: LifecycleContext, id: string, patch: Partial<LiveHealthDoc>): Promise<void> {
+  const h = ctx.lc.health;
+  if (!h) return;
+  try {
+    if ((await h.updateOne({ _id: id }, { $set: patch })).matchedCount === 1) return;
+    const base: LiveHealthDoc = {
+      _id: id, lastAttemptAt: patch.lastAttemptAt ?? iso(ctx), lastComputeAt: null, lastDurationMs: null, lastErrorAt: null, lastError: null, failures: 0,
+    };
+    try {
+      await h.insertOne({ ...base, ...patch });
+    } catch {
+      await h.updateOne({ _id: id }, { $set: patch }); // inserted concurrently
+    }
+  } catch (e) {
+    console.warn("[arena] could not record live health:", e instanceof Error ? e.message : e);
+  }
+}
+
+/** What /api/arena/health reports: read-only, never triggers a recompute. */
+export interface LiveHealthReport {
+  at: string;
+  healthy: boolean;
+  problems: string[];
+  competition: { id: string; weekStart: string; status: string; phase: CompetitionPhase; refreshSeconds: number; beta: boolean } | null;
+  live: { computedAt: string; ageSeconds: number; n: number; ruleVersionCurrent: boolean } | null;
+  lastAttemptAt: string | null;
+  lastComputeAt: string | null;
+  lastDurationMs: number | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
+  consecutiveFailures: number;
+}
+
+/** A live snapshot older than this many refresh intervals counts as stale (same rule as the app). */
+export const STALE_REFRESH_MULTIPLE = 3;
+
+export async function liveHealth(ctx: LifecycleContext): Promise<LiveHealthReport> {
+  const t = now(ctx);
+  const cur = await currentCompetition(ctx);
+  const base: LiveHealthReport = {
+    at: t.toISOString(), healthy: true, problems: [], competition: null, live: null,
+    lastAttemptAt: null, lastComputeAt: null, lastDurationMs: null, lastErrorAt: null, lastError: null, consecutiveFailures: 0,
+  };
+  if (!cur) return base;
+  const { c, rv, w } = cur;
+  const phase = phaseOf(c, w, t);
+  const refreshSeconds = rv.rules.display.refreshSeconds;
+  base.competition = { id: c._id, weekStart: c.weekStart, status: c.status, phase, refreshSeconds, beta: isBeta(c) };
+  const [snap, h] = await Promise.all([ctx.lc.snapshots.findOne({ _id: liveId(c._id) }), ctx.lc.health?.findOne({ _id: c._id }) ?? null]);
+  if (snap) {
+    base.live = {
+      computedAt: snap.computedAt, ageSeconds: Math.round((t.getTime() - Date.parse(snap.computedAt)) / 1000), n: snap.n,
+      ruleVersionCurrent: snap.ruleVersionId === rv._id,
+    };
+  }
+  if (h) {
+    Object.assign(base, {
+      lastAttemptAt: h.lastAttemptAt, lastComputeAt: h.lastComputeAt, lastDurationMs: h.lastDurationMs,
+      lastErrorAt: h.lastErrorAt, lastError: h.lastError, consecutiveFailures: h.failures,
+    });
+  }
+  if (phase === "live" && c.status === "active") {
+    if (!base.live) base.problems.push("no live snapshot yet");
+    else if (base.live.ageSeconds > STALE_REFRESH_MULTIPLE * refreshSeconds)
+      base.problems.push(`live snapshot is ${base.live.ageSeconds}s old (stale after ${STALE_REFRESH_MULTIPLE * refreshSeconds}s)`);
+    if (h && h.failures > 0) base.problems.push(`last ${h.failures} recompute(s) failed`);
+  }
+  base.healthy = base.problems.length === 0;
+  return base;
+}
+
+/**
+ * Keep-warm / monitor step (cron): freeze a finished week if due, then refresh
+ * the current live snapshot even when no technician is connected, so freshness
+ * and stall detection do not depend on clients.
+ */
+export async function keepLiveWarm(ctx: LifecycleContext): Promise<LiveHealthReport> {
+  const cur = await currentCompetition(ctx);
+  if (cur) {
+    const c = await freezeIfDue(ctx, cur.c);
+    if (c.status === "active" && phaseOf(c, cur.w, now(ctx)) === "live") {
+      try {
+        await liveSnapshot(ctx, c, await ruleVersionOf(ctx, c));
+      } catch {
+        /* recorded in the health document; reported below */
+      }
+    }
+  }
+  return liveHealth(ctx);
 }
 
 // ── freeze ─────────────────────────────────────────────────────────────────

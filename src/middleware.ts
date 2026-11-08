@@ -110,6 +110,14 @@ const ARENA_PASS_ROUTES = new Set([
     '/api/arena/tech/events',
 ]);
 
+// Arena operations endpoints called by a scheduler without a CRM session. EXACT
+// paths. Each authenticates in-route and fails CLOSED: the cron secret, or (health
+// only) an admin session checked by the route (src/lib/arena/ops-auth.ts).
+const ARENA_OPS_ROUTES = new Set([
+    '/api/arena/health',
+    '/api/arena/monitor',
+]);
+
 export async function middleware(request: NextRequest) {
     if (request.nextUrl.pathname.startsWith(WAREHOUSE_PREFIX)) {
         return handleWarehouse(request);
@@ -144,6 +152,9 @@ export async function middleware(request: NextRequest) {
     // Each of these handlers authenticates in-route and fails CLOSED (see
     // src/lib/arena/tech/http.ts; pinned by arena-tech-middleware.test.ts).
     if (ARENA_PASS_ROUTES.has(request.nextUrl.pathname)) {
+        return NextResponse.next();
+    }
+    if (ARENA_OPS_ROUTES.has(request.nextUrl.pathname)) {
         return NextResponse.next();
     }
 

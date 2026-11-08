@@ -27,6 +27,8 @@ function handlers(src: string): Record<string, string> {
   return out;
 }
 
+// Operations endpoints (scheduler, no session): exact paths, cron secret / admin session in-route (live-health.test.ts).
+const OPS_PATHS = ["/api/arena/health", "/api/arena/monitor"];
 const TECH_PATHS = ["/api/arena/auth/exchange", "/api/arena/tech/me", "/api/arena/tech/leaderboard", "/api/arena/tech/history", "/api/arena/tech/events"];
 const techRoutes = [...walk(join(ARENA, "tech")), ...walk(join(ARENA, "auth"))].filter((f) => f.endsWith("route.ts"));
 
@@ -62,6 +64,10 @@ test("the middleware exemption is an exact-path set, not a prefix", () => {
   assert.deepEqual([...set[1].matchAll(/'([^']+)'/g)].map((m) => m[1]).sort(), [...TECH_PATHS].sort());
   assert.match(mw, /ARENA_PASS_ROUTES\.has\(request\.nextUrl\.pathname\)/);
   assert.doesNotMatch(mw, /'\/api\/arena[^']*'\s*\]/, "no /api/arena prefix in the exempt-prefix list");
+  const ops = /const ARENA_OPS_ROUTES = new Set\(\[([\s\S]*?)\]\)/.exec(mw);
+  assert.ok(ops, "ARENA_OPS_ROUTES missing");
+  assert.deepEqual([...ops[1].matchAll(/'([^']+)'/g)].map((m) => m[1]).sort(), [...OPS_PATHS].sort());
+  assert.match(mw, /ARENA_OPS_ROUTES\.has\(request\.nextUrl\.pathname\)/);
 });
 
 async function anonymous(path: string) {
@@ -77,6 +83,10 @@ test("the five technician paths pass the middleware without a CRM session", asyn
   for (const p of TECH_PATHS) assert.notEqual((await anonymous(p)).status, 401, p);
 });
 
+test("the two ops paths pass the middleware (they authenticate in-route)", async () => {
+  for (const p of OPS_PATHS) assert.notEqual((await anonymous(p)).status, 401, p);
+});
+
 test("NO other /api route becomes reachable without a CRM session", async () => {
   const all = walk(API_ROOT)
     .filter((f) => f.endsWith("route.ts"))
@@ -84,7 +94,7 @@ test("NO other /api route becomes reachable without a CRM session", async () => 
   assert.ok(all.length > 50);
   let checked = 0;
   for (const p of all) {
-    if (TECH_PATHS.includes(p) || PRE_EXISTING.some((e) => p.startsWith(e))) continue;
+    if (TECH_PATHS.includes(p) || OPS_PATHS.includes(p) || PRE_EXISTING.some((e) => p.startsWith(e))) continue;
     assert.equal((await anonymous(p)).status, 401, `${p} must still require a session`);
     checked++;
   }
@@ -93,6 +103,7 @@ test("NO other /api route becomes reachable without a CRM session", async () => 
     "/api/arena/tech", "/api/arena/tech/", "/api/arena/tech/me/", "/api/arena/tech/me/x", "/api/arena/tech/meX",
     "/api/arena/techx/me", "/api/arena/auth", "/api/arena/auth/exchange/x", "/api/arena/auth/exchange2",
     "/api/arena/admin/overview", "/api/arena/admin/competitions/arena_2026-10-26/approve", "/api/arena", "/api/arena/tech/../admin/overview",
+    "/api/arena/health/", "/api/arena/health/x", "/api/arena/healthz", "/api/arena/monitor/x", "/api/arena/monitorx",
   ];
   for (const p of lookalikes) assert.equal((await anonymous(p)).status, 401, `${p} must still require a session`);
 });

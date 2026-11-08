@@ -40,10 +40,13 @@ export async function fixture(opts: { now?: string; devStack?: boolean; people?:
   const lc = {
     snapshots: new MemoryCollection(), results: new MemoryCollection(), approvals: new MemoryCollection(),
     events: new MemoryCollection(), claims: new MemoryCollection(), lateCorrections: new MemoryCollection(),
+    health: new MemoryCollection(),
   };
   const data = {
     jobs: [] as ArenaJob[],
     computeCalls: 0,
+    /** When set, the next computes throw this (a CRM outage). */
+    computeError: null as Error | null,
     /** Weekly Balance accounts by id (default: every PEOPLE entry active + approved). */
     accounts: new Map<string, AccountStatus>(people.map((p) => [p.id, { active: true, approved: true, role: "technician" }])),
     /** Ids whose verification fails (true = the whole verifier is down). */
@@ -75,6 +78,7 @@ export async function fixture(opts: { now?: string; devStack?: boolean; people?:
     devStack: opts.devStack ?? false,
     compute: async (weekStart, rv, mode) => {
       data.computeCalls += 1;
+      if (data.computeError) throw data.computeError;
       const map = competitors();
       const accounts = await checkAccounts(accountDeps, map.competitors.map((c) => c.id), mode);
       const result = computeCompetition({ rules: rv.rules, rulesHash: rv.rulesHash, weekStart, competitors: map, jobs: data.jobs, accounts });

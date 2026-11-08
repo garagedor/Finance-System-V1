@@ -12,7 +12,7 @@ import type { ArenaRules } from "./types";
 import { currentSettings, type StoreCollection, type StoreContext } from "./config-store";
 import type { ReviewContext } from "./review";
 import { reviewDecisions, syncDetected } from "./review";
-import { ArenaEnvError, arenaDbName, crmDbName } from "./env";
+import { arenaDbName, arenaMongoUri, crmDbName } from "./env";
 import { arenaStores, ensureArenaIndexes, lifecycleCollections, loadMappings, loadTechnicians } from "./mongo-store";
 import type { LifecycleContext } from "./lifecycle";
 import type { RuleVersionDoc } from "./config-store";
@@ -56,17 +56,18 @@ export function accountVerifierFromEnv(env: NodeJS.ProcessEnv = process.env): Te
 export const isDevStack = (env: NodeJS.ProcessEnv = process.env) => env.ARENA_DEV_STACK === "1";
 
 /**
- * Optional dedicated Atlas user for the Arena (ARENA_MONGODB_URI): readWrite on
- * the Arena database only, and read-only `find` on the three CRM collections the
- * Arena reads (Job, TechNameMapping, Technician). When it is set, ALL Arena
- * database access goes through it, so the Arena cannot write CRM data even by
- * mistake. Unset: the CRM app's connection is used (docs/arena/PRODUCTION-ENV.md).
+ * Dedicated Atlas user for the Arena (ARENA_MONGODB_URI): readWrite on the Arena
+ * database only, and read-only `find` on the CRM collections the Arena reads
+ * (Job, TechNameMapping, Technician; `users` for the admin overview). When it is
+ * set, ALL Arena database access goes through it, so the Arena cannot write CRM
+ * data even by mistake. REQUIRED in production/preview (env.ts arenaMongoUri:
+ * fail closed, never a fallback to the CRM app's connection); in development
+ * the CRM app's connection is shared (docs/arena/PRODUCTION-ENV.md).
  */
 let dedicated: Promise<MongoClient> | null = null;
 function dedicatedArenaClient(env: NodeJS.ProcessEnv = process.env): Promise<MongoClient> | null {
-  const uri = (env.ARENA_MONGODB_URI ?? "").trim();
+  const uri = arenaMongoUri(env);
   if (!uri) return null;
-  if (!/^mongodb(\+srv)?:\/\/\S+$/.test(uri)) throw new ArenaEnvError("ARENA_MONGODB_URI is not a MongoDB connection string");
   dedicated ??= MongoClient.connect(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 8000, retryWrites: true, appName: "lbs-arena" }).catch((e) => {
     dedicated = null;
     throw e;
@@ -82,6 +83,7 @@ export async function arenaContexts(): Promise<ArenaContexts> {
     await ensureArenaIndexes(arenaDb);
     return buildArenaContexts(arenaDb, client.db(crmDbName()));
   }
+  // Development only: arenaMongoUri() has already refused production without a dedicated user.
   const client = await getMongoClient();
   const arenaDb = client.db(arenaDbName());
   await ensureArenaIndexes(arenaDb);
