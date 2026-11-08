@@ -1,4 +1,5 @@
 // Small client helpers shared by the Arena admin screens.
+export { BETA_LABEL } from "@/lib/arena/beta";
 
 export class ApiError extends Error {
   constructor(message: string, readonly problems: string[] = []) {

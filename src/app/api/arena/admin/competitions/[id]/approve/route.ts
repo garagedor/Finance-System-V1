@@ -1,7 +1,8 @@
 // POST { snapshotId, note? }: approve a reviewed week's winners. OWNER ONLY —
 // enforced inside approveResults() against the settings owner and approver
 // list, not by the permission alone. Writes one immutable result record; it
-// creates no payout or ledger entry.
+// creates no payout or ledger entry. A LIVE BETA week is always refused (409,
+// with the reason) and nothing is written but the refusal's audit row.
 import { arenaRoute, body, str } from "../../../_lib";
 import { approveResults } from "@/lib/arena/lifecycle";
 

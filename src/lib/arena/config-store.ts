@@ -15,6 +15,7 @@
 import type { ArenaRules, ArenaSettings } from "./types";
 import { ArenaConfigError, assertValidRules, cloneRules, rulesHash, validateSettings } from "./config";
 import { isMonday, weekWindow, addDays } from "./week";
+import { BETA_LABEL } from "./beta";
 
 export type Filter = Record<string, unknown>;
 export interface StoreCollection<T> {
@@ -79,7 +80,20 @@ export interface CompetitionDoc {
   approvedAt?: string | null;
   /** Set only by the dev-stack "freeze now" action; lets a demo week be reviewed early. */
   devEarlyClose?: boolean;
+  /**
+   * LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR PAYOUTS. Set by the OWNER when
+   * creating or activating the week (audited), never cleared. A beta week
+   * computes, freezes and goes through review exactly like any other, but it can
+   * NEVER be approved as official (lifecycle.approveResults refuses), so no
+   * result record, no `result_approved` event and no celebration ever exist for
+   * it; its prizes are projections only. ABSENT = an ordinary week.
+   */
+  beta?: boolean;
 }
+
+/** The label every surface shows for a beta week. */
+export { BETA_LABEL };
+export const isBeta = (c: Pick<CompetitionDoc, "beta">): boolean => c.beta === true;
 export interface NoticeDoc {
   _id: string;
   competitionId: string;
@@ -241,7 +255,12 @@ export async function createCompetition(
   weekStart: string,
   from: { template: string } | { copyPreviousWeek: true } | { rules: ArenaRules },
   by: string,
+  opts: { beta?: boolean } = {},
 ): Promise<CompetitionDoc> {
+  if (opts.beta) {
+    const s = await currentSettings(ctx);
+    if (by !== s.ownerUserId) throw new ArenaAuthorizationError("only the owner can create a LIVE BETA week");
+  }
   if (!isMonday(weekStart)) throw new ArenaConfigError([`a competition week must start on a Monday (${weekStart})`]);
   const id = competitionId(weekStart);
   if (await ctx.store.competitions.findOne({ _id: id })) throw new ArenaStateError(`a competition already exists for ${weekStart}`);
@@ -277,9 +296,11 @@ export async function createCompetition(
     createdBy: by,
     createdAt: at,
     updatedAt: at,
+    ...(opts.beta ? { beta: true } : {}),
   };
   await ctx.store.competitions.insertOne(doc);
-  await writeAudit(ctx, { action: "competition.create", target: id, by, reason: null, before: null, after: { ruleVersionId: rv._id, source } });
+  await writeAudit(ctx, { action: "competition.create", target: id, by, reason: null, before: null, after: { ruleVersionId: rv._id, source, ...(opts.beta ? { beta: true } : {}) } });
+  if (opts.beta) await writeAudit(ctx, { action: "competition.beta", target: id, by, reason: BETA_LABEL, before: { beta: false }, after: { beta: true, at: "create" } });
   return doc;
 }
 
@@ -326,7 +347,7 @@ export async function scheduleCompetition(ctx: StoreContext, id: string, by: str
  * the competition week (competition timezone). Re-validates against the
  * current budget ceiling.
  */
-export async function activateCompetition(ctx: StoreContext, id: string, by: string): Promise<void> {
+export async function activateCompetition(ctx: StoreContext, id: string, by: string, opts: { beta?: boolean } = {}): Promise<void> {
   const s = await currentSettings(ctx);
   if (by !== s.ownerUserId) throw new ArenaAuthorizationError("only the owner can start a competition");
   const c = await getCompetition(ctx, id);
@@ -336,8 +357,14 @@ export async function activateCompetition(ctx: StoreContext, id: string, by: str
   const w = weekWindow(c.weekStart, rv.rules.timezone, rv.rules.review);
   if (ctx.now() < w.startsAt) throw new ArenaStateError("a competition cannot start before Monday 00:00 of its week");
   const at = ctx.now().toISOString();
-  await setCompetition(ctx, c, { status: "active", lockedAt: at });
-  await writeAudit(ctx, { action: "competition.activate", target: id, by, reason: null, before: c.status, after: { status: "active", rulesHash: rv.rulesHash } });
+  // A beta flag is only ever added (by the owner, checked above), never removed.
+  const makeBeta = opts.beta === true && !isBeta(c);
+  await setCompetition(ctx, c, { status: "active", lockedAt: at, ...(makeBeta ? { beta: true } : {}) });
+  await writeAudit(ctx, {
+    action: "competition.activate", target: id, by, reason: null, before: c.status,
+    after: { status: "active", rulesHash: rv.rulesHash, ...(isBeta(c) || makeBeta ? { beta: true } : {}) },
+  });
+  if (makeBeta) await writeAudit(ctx, { action: "competition.beta", target: id, by, reason: BETA_LABEL, before: { beta: false }, after: { beta: true, at: "activate" } });
 }
 
 /**

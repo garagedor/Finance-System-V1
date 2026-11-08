@@ -11,7 +11,7 @@ import { ApiError, api, dollars, lastCompletedMonday, weekLabel } from "./arena-
 import type { PreviewSummary } from "@/lib/arena/admin-service";
 
 const TIE_LABEL: Record<TieBreakKey, string> = {
-  closingRate: "Higher closing rate", avgTicket: "Higher AVG ticket", qualifyingJobs: "More qualifying jobs", closedJobs: "More closed jobs",
+  closingRate: "Higher closing rate", avgTicket: "Higher AVG ticket", qualifyingJobs: "More counted jobs (job minimum basis)", closedJobs: "More closed jobs",
 };
 const ALL_TIES: TieBreakKey[] = ["closingRate", "avgTicket", "qualifyingJobs", "closedJobs"];
 
@@ -52,6 +52,9 @@ export default function RulesEditor({
 }) {
   const [r, setR] = useState<ArenaRules>(() => structuredClone(initial));
   const v1 = r.scoring.methodology === "BALANCED_PERFORMANCE_V1";
+  // Job count basis (versioned): absent = "qualifying"; "assigned" = every job assigned in the week.
+  const assignedBasis = r.eligibility.jobCountBasis === "assigned";
+  const jobsWord = assignedBasis ? "assigned" : "qualifying";
   const [reason, setReason] = useState("");
   const [problems, setProblems] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -85,17 +88,30 @@ export default function RulesEditor({
       </div>
       {extra}
 
-      <section>
-        <div className="portal-section-label">Eligibility · all three required</div>
+      <section data-testid="arena-rules-minimums">
+        <div className="portal-section-label">Eligibility minimums · all three required to hold a prize</div>
+        <label style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 520, marginBottom: 8 }}>
+          <span className="portal-label">The job minimum counts</span>
+          <select className="portal-input" value={assignedBasis ? "assigned" : "qualifying"} aria-label="Job count basis" data-testid="arena-job-basis"
+            onChange={(e) => set((x) => {
+              // "qualifying" is the absent default: removing the field keeps older rule fingerprints identical.
+              if (e.target.value === "assigned") x.eligibility.jobCountBasis = "assigned";
+              else delete x.eligibility.jobCountBasis;
+            })}>
+            <option value="assigned">Every assigned job, any status (the CRM Closing Rate denominator)</option>
+            <option value="qualifying">Qualifying statuses only (see the list below)</option>
+          </select>
+        </label>
         <div className="portal-grid-3">
-          <Num label="Minimum qualifying jobs" value={r.eligibility.minQualifyingJobs} onChange={(v) => set((x) => { x.eligibility.minQualifyingJobs = Math.round(Number(v)); })} />
+          <Num label={`Minimum ${jobsWord} jobs`} value={r.eligibility.minQualifyingJobs} onChange={(v) => set((x) => { x.eligibility.minQualifyingJobs = Math.round(Number(v)); })}
+            hint={assignedBasis ? "Every job with this technician and a date in the week. Only approved exclusions (confirmed duplicates, admin exclusions with a reason) deduct." : undefined} />
           <Num label="Minimum AVG ticket" prefix="$" step="0.01" value={r.eligibility.minAvgTicketCents / 100} onChange={(v) => set((x) => { x.eligibility.minAvgTicketCents = toCents(v); })} />
           <Num label="Minimum closing rate" suffix="%" step="0.01" value={r.eligibility.minClosingRateBp / 100} onChange={(v) => set((x) => { x.eligibility.minClosingRateBp = toBp(v); })} />
         </div>
       </section>
 
       <section>
-        <div className="portal-section-label">Score</div>
+        <div className="portal-section-label">Score targets · separate from the eligibility minimums</div>
         <label style={{ display: "flex", flexDirection: "column", gap: 4, maxWidth: 420, marginBottom: 8 }}>
           <span className="portal-label">Scoring methodology</span>
           <select className="portal-input" value={v1 ? "BALANCED_PERFORMANCE_V1" : "WEIGHTED_V0"} aria-label="Scoring methodology"
@@ -156,7 +172,7 @@ export default function RulesEditor({
             <Num label="Amount" prefix="$" step="0.01" value={r.mostImproved.amountCents / 100} onChange={(v) => set((x) => { x.mostImproved.amountCents = toCents(v); })} />
             <Num label="Baseline weeks" value={r.mostImproved.baselineWeeks} onChange={(v) => set((x) => { x.mostImproved.baselineWeeks = Math.round(Number(v)); })} />
             <Num label="Valid baseline weeks needed" value={r.mostImproved.minValidWeeks} onChange={(v) => set((x) => { x.mostImproved.minValidWeeks = Math.round(Number(v)); })} />
-            <Num label="Qualifying jobs for a valid week" value={r.mostImproved.minQualifyingJobsPerWeek} onChange={(v) => set((x) => { x.mostImproved.minQualifyingJobsPerWeek = Math.round(Number(v)); })} />
+            <Num label={`${assignedBasis ? "Assigned" : "Qualifying"} jobs for a valid week`} value={r.mostImproved.minQualifyingJobsPerWeek} onChange={(v) => set((x) => { x.mostImproved.minQualifyingJobsPerWeek = Math.round(Number(v)); })} />
             <Num label="Must improve by more than" suffix="pts" step="0.1" value={r.mostImproved.minImprovement} onChange={(v) => set((x) => { x.mostImproved.minImprovement = Number(v); })} />
           </div>
         )}
@@ -178,7 +194,11 @@ export default function RulesEditor({
             </label>
           ))}
         </div>
-        <p className="muted small" style={{ margin: "6px 0 0" }}>This changes only the qualifying-job count. Closing rate and AVG ticket always use every assigned job.</p>
+        <p className="muted small" style={{ margin: "6px 0 0" }}>
+          {assignedBasis
+            ? "Not used by the job minimum while it counts every assigned job. Closing rate and AVG ticket always use every assigned job."
+            : "This changes only the qualifying-job count. Closing rate and AVG ticket always use every assigned job."}
+        </p>
       </section>
 
       <section>

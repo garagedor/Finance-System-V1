@@ -33,14 +33,15 @@ import { DECISIONS_SCHEMA, validateDecisions, type ShadowDecisions } from "./lib
 
 const REPO = path.resolve(import.meta.dirname, "../..");
 const HOST = "mongodb://127.0.0.1:27031";
-// ARENA_REHEARSAL_DB_PREFIX picks the throwaway databases (default arena_wtshadow; e.g. arena_int_r1 for an integration run).
+// ARENA_REHEARSAL_DB_PREFIX picks the throwaway databases (default arena_wtshadow; e.g. arena_int_r1 for an integration run,
+// arena_beta_reh for the LIVE BETA branch).
 const PFX = process.env.ARENA_REHEARSAL_DB_PREFIX ?? "arena_wtshadow";
-if (!/^arena_(wtshadow|int_[a-z0-9]+)$/.test(PFX)) throw new Error(`refusing database prefix ${PFX} (arena_wtshadow or arena_int_<name>)`);
+if (!/^arena_(wtshadow|int_[a-z0-9]+|beta_[a-z0-9]+)$/.test(PFX)) throw new Error(`refusing database prefix ${PFX} (arena_wtshadow, arena_int_<name> or arena_beta_<name>)`);
 const CRM_DB = `${PFX}_crm`;
 const ARENA_DB = `${PFX}_arena`;
 const RO_USER = `${PFX}_ro`;
 const RO_ROLE = PFX === "arena_wtshadow" ? "arenaWtShadowRead" : `${PFX.replace(/_/g, "")}Read`;
-for (const n of [CRM_DB, ARENA_DB]) if (!/^arena_(wtshadow|int_[a-z0-9]+)_[a-z]+$/.test(n)) throw new Error(`refusing database ${n}`);
+for (const n of [CRM_DB, ARENA_DB]) if (!/^arena_(wtshadow|int_[a-z0-9]+|beta_[a-z0-9]+)_[a-z]+$/.test(n)) throw new Error(`refusing database ${n}`);
 const ROOT = path.resolve(process.argv[2] ?? "");
 if (!process.argv[2]) throw new Error("usage: shadow-rehearsal.e2e.ts <outRoot>");
 if (ROOT.startsWith(REPO)) throw new Error("outRoot must be outside the repository");
@@ -53,6 +54,7 @@ const W1 = "2026-10-05", W2 = "2026-10-12";
 // The rules every official command names with --template (no default since the 2026-11 prize change).
 const TEMPLATE = process.env.ARENA_REHEARSAL_TEMPLATE ?? "balanced-p2-2026-11";
 const APPROVED_FP: Record<string, string> = {
+  "balanced-p3-2026-11": "eb7a73cd8fc841c8dc1b28e54ddeb36ae0593dc08c8b96a84da8f9a7e56e5a1f",
   "balanced-p2-2026-11": "6ae3d1278fef64bf9e23bdc21bab865c91abae2a71c22efbd5443f7bc38a0d0c",
   "balanced-v1": "c122c43bae974c7aa73fc960b19ca921adf646c82b89d67f9eee3fdb21c7d2b4",
 };

@@ -288,9 +288,9 @@ await runGuarded(async () => {
     out(`Decisions: ${decisionsNote}. Week ${new Date(at) >= ww.closesAt ? "ENDED (this run is after Sunday 23:59:59 ET)" : "still running"} · input ${hashes.input.slice(0, 12)}… · result ${hashes.result.slice(0, 12)}…`);
     out();
     out(`## 1. Standings — Balanced Performance (V1, primary)${plan ? " · with the decisions file applied" : ""}`);
-    out(`Gates: ${v1.eligibility.minQualifyingJobs} qualifying jobs · AVG ≥ ${cents(v1.eligibility.minAvgTicketCents)} · CR ≥ ${v1.eligibility.minClosingRateBp / 100}%. Qualified: ${a.gateCounts.allThree} of ${a.results.length}. Paid ${cents(a.awardedCents)} of ${cents(v1.prizes.budgetCents)}.`);
+    out(`Gates: ${v1.eligibility.minQualifyingJobs} ${v1.eligibility.jobCountBasis === "assigned" ? "assigned" : "qualifying"} jobs · AVG ≥ ${cents(v1.eligibility.minAvgTicketCents)} · CR ≥ ${v1.eligibility.minClosingRateBp / 100}%. Qualified: ${a.gateCounts.allThree} of ${a.results.length}. Paid ${cents(a.awardedCents)} of ${cents(v1.prizes.budgetCents)}.`);
     out();
-    out(`| Rank | Technician | Location | Assigned | Closed | Closing Rate | AVG TICKET | Qualifying | C | A | Score | Limiting | Gates | Prize |`);
+    out(`| Rank | Technician | Location | Assigned | Closed | Closing Rate | AVG TICKET | ${v1.eligibility.jobCountBasis === "assigned" ? "Counted (assigned − exclusions)" : "Qualifying"} | C | A | Score | Limiting | Gates | Prize |`);
     out(`|---|---|---|---|---|---|---|---|---|---|---|---|---|---|`);
     for (const r of a.results)
       out(`| ${r.rank} | ${r.displayName} | ${r.location} | ${r.assignedJobs} | ${r.closedJobs} | ${pct(r.closingRate)} | ${usd(r.avgTicket)} | ${r.qualifyingJobs} | ${r.closingScore.toFixed(2)} | ${r.avgScore.toFixed(2)} | ${r.score.toFixed(2)} | ${lim(r.limitingMetric)} | ${[r.gates.jobs.met ? "" : "jobs", r.gates.avgTicket.met ? "" : "AVG", r.gates.closingRate.met ? "" : "CR"].filter(Boolean).join("+") || "all met"} | ${r.prizeCents ? `${r.prizePosition ? `#${r.prizePosition}` : "Most Improved"} ${cents(r.prizeCents)}` : "—"} |`);

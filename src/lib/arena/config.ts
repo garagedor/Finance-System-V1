@@ -8,7 +8,7 @@
  */
 import { createHash } from "node:crypto";
 import type { ArenaRules, ArenaSettings, TieBreakKey } from "./types";
-import { SCORING_METHODOLOGIES } from "./types";
+import { JOB_COUNT_BASES, SCORING_METHODOLOGIES } from "./types";
 import { isValidTimezone } from "./week";
 
 export const TIE_BREAK_KEYS: readonly TieBreakKey[] = ["closingRate", "avgTicket", "qualifyingJobs", "closedJobs"];
@@ -68,6 +68,20 @@ export const SEED_BALANCED_PERFORMANCE_P2: ArenaRules = {
   mostImproved: { ...SEED_BALANCED_PERFORMANCE.mostImproved, amountCents: 25_000 },
 };
 
+/**
+ * "Balanced Performance · Assigned jobs · Prizes 2026-11" (owner rule 2026-11-09):
+ * identical to SEED_BALANCED_PERFORMANCE_P2 — same methodology, targets, caps,
+ * minimums, prizes ($550 / $400 / $300 + Most Improved $250, $1,500), review
+ * window — EXCEPT that the job minimum (10) and the Most Improved per-week
+ * minimum (5) count EVERY job assigned in the week, any status
+ * (`eligibility.jobCountBasis: "assigned"`): the CRM's official denominator.
+ * A NEW versioned template: P2 and every older version are unchanged.
+ */
+export const SEED_BALANCED_PERFORMANCE_P3: ArenaRules = {
+  ...SEED_BALANCED_PERFORMANCE_P2,
+  eligibility: { ...SEED_BALANCED_PERFORMANCE_P2.eligibility, jobCountBasis: "assigned" },
+};
+
 /** Code seeds the official tooling can name explicitly (`--template <id>`). */
 export interface ArenaRulesSeed {
   id: string;
@@ -77,6 +91,7 @@ export interface ArenaRulesSeed {
   rules: ArenaRules;
 }
 export const ARENA_RULE_SEEDS: readonly ArenaRulesSeed[] = [
+  { id: "balanced-p3-2026-11", label: "Balanced Performance · Assigned jobs · Prizes 2026-11", code: "SEED_BALANCED_PERFORMANCE_P3", rules: SEED_BALANCED_PERFORMANCE_P3 },
   { id: "balanced-p2-2026-11", label: "Balanced Performance · Prizes 2026-11", code: "SEED_BALANCED_PERFORMANCE_P2", rules: SEED_BALANCED_PERFORMANCE_P2 },
   { id: "balanced-v1", label: "Balanced Performance · Prizes 2026-10 (6 places, superseded)", code: "SEED_BALANCED_PERFORMANCE", rules: SEED_BALANCED_PERFORMANCE },
 ];
@@ -114,7 +129,10 @@ export function validateRules(
   if (!isValidTimezone(rules.timezone)) p.push(`unknown timezone "${rules.timezone}"`);
 
   const e = rules.eligibility;
-  if (!isInt(e.minQualifyingJobs) || e.minQualifyingJobs < 0) p.push("minimum qualifying jobs must be a whole number ≥ 0");
+  if (e.jobCountBasis !== undefined && !JOB_COUNT_BASES.includes(e.jobCountBasis))
+    p.push(`unknown job count basis "${String(e.jobCountBasis)}" (assigned or qualifying)`);
+  const jobsWord = e.jobCountBasis === "assigned" ? "assigned" : "qualifying";
+  if (!isInt(e.minQualifyingJobs) || e.minQualifyingJobs < 0) p.push(`minimum ${jobsWord} jobs must be a whole number ≥ 0`);
   if (!isInt(e.minAvgTicketCents) || e.minAvgTicketCents < 0) p.push("minimum AVG TICKET must be ≥ $0.00 (whole cents)");
   if (!isInt(e.minClosingRateBp) || e.minClosingRateBp < 0 || e.minClosingRateBp > 10_000)
     p.push("minimum Closing Rate must be between 0% and 100% (0.01% steps)");

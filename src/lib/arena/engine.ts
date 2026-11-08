@@ -12,11 +12,13 @@
  * unchanged:
  *   Closing Rate = Closed jobs / ALL assigned jobs in the week
  *   AVG TICKET   = Σ profit of non-X-close jobs / ALL assigned jobs
- * The qualifying-job count is a separate Arena metric; admin exclusions and
- * confirmed duplicates reduce it and nothing else.
+ * The job count used by the eligibility minimum is a separate Arena metric
+ * (rules.eligibility.jobCountBasis: qualifying statuses, or every assigned
+ * job); admin exclusions and confirmed duplicates reduce it and nothing else.
  */
 import type {
   AccountInput,
+  JobCountBasis,
   AccountState,
   ArenaJob,
   ArenaRules,
@@ -52,14 +54,29 @@ interface Tally {
 
 const emptyTally = (): Tally => ({ assigned: 0, closed: 0, xClose: 0, qualifying: 0, excluded: 0, profitMicro: 0, jobIds: [] });
 
+/** Does a job of this status count toward the job minimum? */
+type CountsToward = (status: string) => boolean;
+
+export const jobCountBasisOf = (rules: ArenaRules): JobCountBasis => rules.eligibility.jobCountBasis ?? "qualifying";
+
+/** The word for the counted jobs in every user-facing text ("10 assigned jobs" / "10 qualifying jobs"). */
+export const jobCountWord = (rules: ArenaRules): "assigned" | "qualifying" => jobCountBasisOf(rules);
+
+/** The job-minimum predicate of the rules: every status under "assigned", the qualifying statuses otherwise. */
+export function countsTowardJobMinimum(rules: ArenaRules): CountsToward {
+  if (jobCountBasisOf(rules) === "assigned") return () => true;
+  const qualifying = new Set(rules.qualifying.statuses);
+  return (status) => qualifying.has(status);
+}
+
 /** Add one job to a tally using the official CRM definitions. */
-function addJob(t: Tally, job: ArenaJob, qualifying: ReadonlySet<string>, excluded: boolean): void {
+function addJob(t: Tally, job: ArenaJob, counts: CountsToward, excluded: boolean): void {
   t.assigned += 1;
   t.jobIds.push(job.id);
   if (job.status === "Closed") t.closed += 1;
   if (job.status === "X close") t.xClose += 1;
   else t.profitMicro += toMicro(job.profit);
-  if (qualifying.has(job.status)) {
+  if (counts(job.status)) {
     if (excluded) t.excluded += 1;
     else t.qualifying += 1;
   }
@@ -68,7 +85,7 @@ function addJob(t: Tally, job: ArenaJob, qualifying: ReadonlySet<string>, exclud
 /** Official KPIs for any set of jobs (used for parity checks too). */
 export function officialKpis(jobs: ArenaJob[]): { assigned: number; closed: number; profitMicro: number; closingRate: number; avgTicket: number } {
   const t = emptyTally();
-  for (const j of jobs) addJob(t, j, new Set(), false);
+  for (const j of jobs) addJob(t, j, () => false, false);
   return {
     assigned: t.assigned,
     closed: t.closed,
@@ -235,7 +252,7 @@ export interface ComputeInput {
 
 export function computeCompetition(input: ComputeInput): CompetitionResult {
   const { rules, weekStart, competitors } = input;
-  const qualifying = new Set(rules.qualifying.statuses);
+  const qualifying = countsTowardJobMinimum(rules);
   const excludedIds = new Set(
     (input.exclusions ?? []).filter((x) => !x.revokedAt).map((x) => x.jobId),
   );

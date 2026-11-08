@@ -331,6 +331,8 @@ const CONTRACT_KEYS = new Set([
   "weeks", "myRank", "myScore", "winners", "mostImprovedWinner",
   // events
   "cursor", "events", "from", "to", "gate",
+  // ADDED 2026-11-09 (additive, apiVersion 1): RulesView.jobCountBasis, competition.beta / LeaderboardResponse.beta
+  "jobCountBasis", "beta",
 ]);
 function keysOf(v: unknown, out = new Set<string>()): Set<string> {
   if (Array.isArray(v)) v.forEach((x) => keysOf(x, out));

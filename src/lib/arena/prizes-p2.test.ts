@@ -38,7 +38,8 @@ test("P2 seed validates at the $1,500 ceiling and pays exactly $1,500 at most", 
 });
 
 test("code seeds: explicit ids, the old one still selectable", () => {
-  assert.deepEqual(ARENA_RULE_SEEDS.map((s) => s.id), ["balanced-p2-2026-11", "balanced-v1"]);
+  // P3 (assigned-job basis, 2026-11-09) is listed first as the newest seed; see assigned-basis.test.ts.
+  assert.deepEqual(ARENA_RULE_SEEDS.map((s) => s.id), ["balanced-p3-2026-11", "balanced-p2-2026-11", "balanced-v1"]);
   assert.equal(ruleSeed("balanced-p2-2026-11")!.rules, SEED_BALANCED_PERFORMANCE_P2);
   assert.equal(ruleSeed("balanced-p2-2026-11")!.label, "Balanced Performance · Prizes 2026-11");
   assert.equal(ruleSeed("balanced-v1")!.rules, SEED_BALANCED_PERFORMANCE);
@@ -128,7 +129,7 @@ test("technician views follow the rules: 3 places + MI, pool $1,500, #4–#6 sho
 // ── official shadow tooling: rules are always named explicitly ─────────────
 test("shadow tooling: --template is required; code seeds resolve; an ambiguous local template is refused", async () => {
   const { resolveShadowRules, rulesSummary } = await import("../../../scripts/arena/lib-shadow.ts");
-  await assert.rejects(resolveShadowRules(null, async () => null, "arena_x"), /--template <id> is required: "balanced-p2-2026-11"/);
+  await assert.rejects(resolveShadowRules(null, async () => null, "arena_x"), /--template <id> is required: "balanced-p3-2026-11" .*"balanced-p2-2026-11"/);
   const p2 = await resolveShadowRules("balanced-p2-2026-11", async () => null, "arena_x");
   assert.equal(rulesHash(p2.rules), P2_FP);
   assert.equal(p2.source, "seed");

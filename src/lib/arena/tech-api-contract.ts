@@ -49,10 +49,18 @@ export type ScoringMethodologyView = "WEIGHTED_V0" | "BALANCED_PERFORMANCE_V1";
 /** BALANCED_PERFORMANCE_V1: which normalized metric score sets the final score. */
 export type LimitingMetricView = "closingRate" | "avgTicket" | "both";
 
+/** What the job minimum counts. "assigned" = every job assigned in the week, any
+ *  status (the CRM's Closing Rate denominator); "qualifying" = qualifying statuses only. */
+export type JobCountBasisView = "assigned" | "qualifying";
+
 export interface RulesView {
   /** ADDED (additive, apiVersion 1): absent from older servers = WEIGHTED_V0. */
   methodology: ScoringMethodologyView;
+  /** ADDED (additive, apiVersion 1): absent from older servers = "qualifying".
+   *  Every "N jobs" text says "assigned jobs" when this is "assigned". */
+  jobCountBasis?: JobCountBasisView;
   timezone: string;
+  /** The job minimum (counted on jobCountBasis). */
   minQualifyingJobs: number;
   minAvgTicketCents: number;
   minClosingRateBp: number;
@@ -86,6 +94,7 @@ export interface LeaderboardRow {
   /** Shown only when rules.display.showIneligibleMetrics or the row is eligible. */
   closingRateBp: number | null;
   avgTicketCents: number | null;
+  /** Jobs counted toward the minimum on rules.jobCountBasis (after approved exclusions). */
   qualifyingJobs: number | null;
   /** Potential (live) or awarded (approved) prize for this rank. */
   prizeCents: number;
@@ -101,6 +110,7 @@ export interface MyStanding {
   avgTicketCents: number;
   assignedJobs: number;
   closedJobs: number;
+  /** Jobs counted toward the minimum on rules.jobCountBasis (after approved exclusions). */
   qualifyingJobs: number;
   closingIndex: number;
   avgIndex: number;
@@ -109,7 +119,7 @@ export interface MyStanding {
   avgScore: number;
   limitingMetric: LimitingMetricView | null;
   potentialPrizeCents: number;  // 0 unless eligible and in a prize position
-  /** Plain-language next steps, computed server-side (e.g. "2 more qualifying jobs"). */
+  /** Plain-language next steps, computed server-side (e.g. "2 more assigned jobs" / "2 more qualifying jobs"). */
   nextSteps: { kind: "jobs" | "closes" | "avg_ticket" | "rank" | "raise_score"; text: string; amount: number }[];
   pointsToNextRank: number | null;
   mostImproved: { baselineScore: number; improvement: number; validWeeks: number } | null;
@@ -129,6 +139,11 @@ export interface MeResponse {
     endsAt: string;              // ISO instant of the week end (countdown)
     reviewOpensAt: string;       // ISO
     dataAsOf: string;            // ISO of the snapshot the numbers come from
+    /** ADDED (additive, apiVersion 1; absent from older servers = false).
+     *  LIVE BETA — TEST WEEK — NO OFFICIAL WINNERS OR PAYOUTS: real data, never
+     *  approved as official, prizes are projected only, no result_approved event
+     *  and no celebration of any kind. */
+    beta?: boolean;
   } | null;                      // null = no competition this week
   rules: RulesView | null;
   standing: MyStanding | null;   // null = not participating this week
@@ -146,6 +161,8 @@ export interface LeaderboardResponse {
   phase: CompetitionPhase;
   view: "national" | "eligible";
   dataAsOf: string;
+  /** ADDED (additive, apiVersion 1; absent = false): a LIVE BETA test week; prizeCents are projected only. */
+  beta?: boolean;
   rows: LeaderboardRow[];
   eligibleCount: number;
   participantCount: number;

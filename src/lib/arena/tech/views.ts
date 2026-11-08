@@ -5,7 +5,7 @@
  * data or anything added to internal types later can never leak by accident.
  */
 import type { ArenaRules } from "../types";
-import { methodologyOf, SCORE_SCALE } from "../engine";
+import { jobCountBasisOf, methodologyOf, SCORE_SCALE } from "../engine";
 import type { ApprovedStanding, ResultDoc } from "../lifecycle";
 import type {
   CompetitionPhase, GateView, HistoryResponse, LeaderboardRow, MyStanding, RulesView,
@@ -38,6 +38,7 @@ export function rulesView(rules: ArenaRules): RulesView {
   const v1 = methodologyOf(rules) === "BALANCED_PERFORMANCE_V1";
   return {
     methodology: methodologyOf(rules),
+    jobCountBasis: jobCountBasisOf(rules),
     timezone: rules.timezone,
     minQualifyingJobs: rules.eligibility.minQualifyingJobs,
     minAvgTicketCents: rules.eligibility.minAvgTicketCents,
@@ -134,7 +135,7 @@ export function myStanding(
   const nextSteps: MyStanding["nextSteps"] = [];
   if (!s.gates.jobs) {
     const n = e.minQualifyingJobs - s.qualifyingJobs;
-    nextSteps.push({ kind: "jobs", amount: n, text: `${plural(n, "more qualifying job")} to meet the ${e.minQualifyingJobs}-job minimum` });
+    nextSteps.push({ kind: "jobs", amount: n, text: `${plural(n, `more ${jobCountBasisOf(rules)} job`)} to meet the ${e.minQualifyingJobs}-job minimum` });
   }
   if (!s.gates.closingRate) {
     const k = closesNeeded(s.closedJobs, s.assignedJobs, e.minClosingRateBp);

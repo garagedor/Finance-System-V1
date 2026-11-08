@@ -12,6 +12,21 @@
 export type ScoringMethodology = "WEIGHTED_V0" | "BALANCED_PERFORMANCE_V1";
 export const SCORING_METHODOLOGIES: readonly ScoringMethodology[] = ["WEIGHTED_V0", "BALANCED_PERFORMANCE_V1"];
 
+/**
+ * What the eligibility job minimum (and the Most Improved per-week minimum) counts.
+ * Versioned: ABSENT = "qualifying" (every rule version written before the field
+ * existed, reproducible bit for bit, identical fingerprints).
+ *   qualifying  jobs whose status is in `qualifying.statuses`
+ *   assigned    EVERY job assigned to the technician in the week, any status —
+ *               the CRM's official Closing Rate / AVG TICKET denominator
+ *               (owner rule 2026-11-09)
+ * Either way, separately approved Arena exclusions (confirmed duplicates, admin
+ * job exclusions with a reason) are the only deductions, and they change the job
+ * count only — never Closing Rate or AVG TICKET.
+ */
+export type JobCountBasis = "assigned" | "qualifying";
+export const JOB_COUNT_BASES: readonly JobCountBasis[] = ["assigned", "qualifying"];
+
 /** Tie-break keys an admin may order. Score is always the primary key and the
  *  competitor id is always the final stable key — neither is configurable. */
 export type TieBreakKey = "closingRate" | "avgTicket" | "qualifyingJobs" | "closedJobs";
@@ -21,10 +36,13 @@ export interface ArenaRules {
   /** IANA zone the Monday–Sunday week is anchored to (locked per competition). */
   timezone: string;
   eligibility: {
+    /** The job minimum; what it counts is set by `jobCountBasis`. */
     minQualifyingJobs: number;
     minAvgTicketCents: number;
     /** 4000 = 40.00% */
     minClosingRateBp: number;
+    /** ABSENT = "qualifying" (see JobCountBasis). */
+    jobCountBasis?: JobCountBasis;
   };
   scoring: {
     /**
@@ -52,7 +70,8 @@ export interface ArenaRules {
     baselineWeeks: number;
     /** Minimum weeks in the window that must be valid. */
     minValidWeeks: number;
-    /** A baseline week is valid when it has at least this many qualifying jobs. */
+    /** A baseline week is valid when it has at least this many counted jobs
+     *  (on the rules' `eligibility.jobCountBasis`). */
     minQualifyingJobsPerWeek: number;
     /** Score points the improvement must strictly exceed. */
     minImprovement: number;
@@ -202,6 +221,8 @@ export interface CompetitorResult {
   assignedJobs: number;
   closedJobs: number;
   xCloseJobs: number;
+  /** Jobs counted toward the job minimum on the rules' jobCountBasis, after
+   *  approved exclusions (= assigned − exclusions under "assigned"). */
   qualifyingJobs: number;
   excludedFromQualifying: number;
   /** Σ profit of non-X-close jobs, micro-dollars (exact). */

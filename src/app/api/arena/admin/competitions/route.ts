@@ -1,4 +1,6 @@
 // POST: create a week's competition from a template, the previous week, or explicit rules.
+// { beta: true } creates a LIVE BETA test week (owner only, enforced in the store):
+// it can never be approved as official.
 import { arenaRoute, body, str, BadRequest } from "../_lib";
 import { createCompetition } from "@/lib/arena/config-store";
 import type { ArenaRules } from "@/lib/arena/types";
@@ -16,6 +18,7 @@ export async function POST(req: Request) {
       : from.rules && typeof from.rules === "object" ? { rules: from.rules as ArenaRules }
       : null;
     if (!source) throw new BadRequest("choose a template, the previous week, or rules to start from");
-    return createCompetition(ctx.config, weekStart, source, session.userId);
+    if (b.beta !== undefined && typeof b.beta !== "boolean") throw new BadRequest("beta must be true or false");
+    return createCompetition(ctx.config, weekStart, source, session.userId, { beta: b.beta === true });
   });
 }

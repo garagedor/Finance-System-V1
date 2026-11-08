@@ -47,6 +47,10 @@ export async function GET(_req: Request, p: P) {
     return {
       competition: c,
       methodology: rv.rules.scoring.methodology ?? "WEIGHTED_V0",
+      // What the job minimum counts (absent in older rule versions = qualifying).
+      jobCountBasis: rv.rules.eligibility.jobCountBasis ?? "qualifying",
+      // LIVE BETA test week: never approvable; prizes are projections only.
+      beta: c.beta === true,
       phase: phaseOf(c, w, now),
       window: { closesAt: w.closesAt, approvalOpensAt: w.approvalOpensAt },
       approvalOpen: now >= w.approvalOpensAt || (c.devEarlyClose === true && lc.devStack),

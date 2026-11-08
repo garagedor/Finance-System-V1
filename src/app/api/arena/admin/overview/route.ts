@@ -39,6 +39,8 @@ export async function GET() {
       seedBalancedRules: SEED_BALANCED_PERFORMANCE,
       // Owner decision 2026-11-02: 3 cash places + Most Improved, $1,500. Same id as the shadow tooling's code seed.
       seedBalancedP2: (({ id, label, rules }) => ({ templateId: id, name: label, rules }))(ruleSeed("balanced-p2-2026-11")!),
+      // Owner rule 2026-11-09: P2 prizes, job minimum counts EVERY assigned job. Same id as the shadow tooling's code seed.
+      seedBalancedP3: (({ id, label, rules }) => ({ templateId: id, name: label, rules }))(ruleSeed("balanced-p3-2026-11")!),
       userNames: Object.fromEntries(users.map((u) => [String(u._id), String(u.name ?? "")])),
     };
   });

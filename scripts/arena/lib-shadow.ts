@@ -446,14 +446,15 @@ const usd = (c: number) => `$${(c / 100).toLocaleString("en-US", { minimumFracti
 
 export function rulesSummary(r: ArenaRules): string[] {
   const mi = r.mostImproved;
+  const assigned = r.eligibility.jobCountBasis === "assigned";
   return [
     `methodology ${r.scoring.methodology ?? "WEIGHTED_V0 (field absent)"} · timezone ${r.timezone}`,
-    `minimums: ${r.eligibility.minQualifyingJobs} qualifying jobs · AVG TICKET ≥ ${usd(r.eligibility.minAvgTicketCents)} · Closing Rate ≥ ${r.eligibility.minClosingRateBp / 100}%`,
+    `minimums: ${r.eligibility.minQualifyingJobs} ${assigned ? "assigned jobs (every status; jobCountBasis assigned)" : "qualifying jobs"} · AVG TICKET ≥ ${usd(r.eligibility.minAvgTicketCents)} · Closing Rate ≥ ${r.eligibility.minClosingRateBp / 100}%`,
     `targets: Closing Rate ${r.scoring.closingRate.targetBp / 100}% (cap ${r.scoring.closingRate.cap}) · AVG TICKET ${usd(r.scoring.avgTicket.targetCents)} (cap ${r.scoring.avgTicket.cap})` +
       ((r.scoring.methodology ?? "WEIGHTED_V0") === "WEIGHTED_V0" ? ` · weights ${r.scoring.closingRate.weight}/${r.scoring.avgTicket.weight}` : ""),
     `prizes: ${r.prizes.positionsCents.map((c, i) => `#${i + 1} ${usd(c)}`).join(" · ")} · budget ${usd(r.prizes.budgetCents)}`,
-    `Most Improved: ${mi.enabled ? `${usd(mi.amountCents)}; baseline ${mi.baselineWeeks} weeks, ≥ ${mi.minValidWeeks} valid, ≥ ${mi.minQualifyingJobsPerWeek} qualifying jobs per baseline week, improvement > ${mi.minImprovement}` : "off"}`,
-    `qualifying statuses: ${r.qualifying.statuses.join(", ")}`,
+    `Most Improved: ${mi.enabled ? `${usd(mi.amountCents)}; baseline ${mi.baselineWeeks} weeks, ≥ ${mi.minValidWeeks} valid, ≥ ${mi.minQualifyingJobsPerWeek} ${assigned ? "assigned" : "qualifying"} jobs per baseline week, improvement > ${mi.minImprovement}` : "off"}`,
+    `qualifying statuses: ${r.qualifying.statuses.join(", ")}${assigned ? " (not used by the job minimum under jobCountBasis assigned)" : ""}`,
     r.scoring.methodology === "BALANCED_PERFORMANCE_V1"
       ? "tie-break (fixed for BALANCED_PERFORMANCE_V1): unrounded final score → higher metric score → more assigned jobs → competitor id"
       : `tie-break: ${r.tieBreak.join(" → ")}`,

@@ -3,7 +3,7 @@
 // CRM entries, provisional-vs-review diff) and the owner's approval. Every
 // action is re-checked server-side; approval is owner-only there.
 import { useCallback, useEffect, useState } from "react";
-import { api, dollars, STATUS_LABEL, statusPill, weekLabel, when } from "./arena-ui";
+import { api, BETA_LABEL, dollars, STATUS_LABEL, statusPill, weekLabel, when } from "./arena-ui";
 
 interface Row {
   competitorId: string; displayName: string; location: string; rank: number; score: number; eligible: boolean;
@@ -85,8 +85,12 @@ function LateChanges({ r, title, sides = ["Freeze job set", "Corrected CRM"] }: 
 }
 
 interface Results {
-  competition: { _id: string; weekStart: string; status: string; devEarlyClose?: boolean };
+  competition: { _id: string; weekStart: string; status: string; devEarlyClose?: boolean; beta?: boolean };
   methodology?: "WEIGHTED_V0" | "BALANCED_PERFORMANCE_V1";
+  /** Absent on older servers = qualifying. */
+  jobCountBasis?: "assigned" | "qualifying";
+  /** LIVE BETA test week (absent = false). */
+  beta?: boolean;
   phase: string;
   window: { closesAt: string; approvalOpensAt: string };
   approvalOpen: boolean;
@@ -143,12 +147,15 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
   const excluded = rows.filter((r) => r.eligible && r.account && r.account.state !== "eligible");
   const live = !d.approved && d.snapshot?.kind === "live";
   const v1 = d.methodology === "BALANCED_PERFORMANCE_V1";
+  const beta = d.beta === true || d.competition.beta === true;
+  const assignedBasis = d.jobCountBasis === "assigned";
   return (
     <div className="portal-card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <div>
           <b>Results — {weekLabel(d.competition.weekStart)}</b>{" "}
           <span className={statusPill(st)}>{STATUS_LABEL[st] ?? st}</span>
+          {beta && <span className="pill pill-pending" style={{ marginLeft: 6 }} data-testid="arena-results-beta-pill">BETA</span>}
           <div className="muted small">
             Week closes {when(d.window.closesAt)} · approval opens {when(d.window.approvalOpensAt)}
             {d.competition.devEarlyClose && " · frozen early (dev demo)"}
@@ -163,14 +170,24 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
           {canEdit && st === "provisional" && <button className="portal-btn portal-btn-primary" disabled={busy} onClick={() => act("open_review")}>Open review</button>}
           {canEdit && st === "in_review" && <button className="portal-btn" disabled={busy} onClick={() => act("reconcile")}>Re-check CRM data</button>}
           {canEdit && st === "approved" && <button className="portal-btn" disabled={busy} onClick={() => act("late_check")} title="Re-read the CRM and log any change since approval. The approved result never changes.">Check CRM for late corrections</button>}
-          {canEdit && d.isOwner && st === "in_review" &&
+          {canEdit && d.isOwner && st === "in_review" && beta &&
+            <button className="portal-btn" disabled title="A LIVE BETA test week can never be approved as official" data-testid="arena-approve-beta-disabled">Approve winners (not available in LIVE BETA)</button>}
+          {canEdit && d.isOwner && st === "in_review" && !beta &&
             <button className="portal-btn portal-btn-primary" disabled={busy || !d.approvalOpen || d.blockers.length > 0} onClick={approve}
               title={!d.approvalOpen ? "Approval opens after the review window" : d.blockers.join("; ")}>Approve winners</button>}
           <button className="portal-btn" onClick={onClose}>Close</button>
         </div>
       </div>
+      {beta && (
+        <div className="portal-alert portal-alert-warn" role="status" data-testid="arena-results-beta">
+          <div>
+            <b>{BETA_LABEL}</b>
+            <div className="small">Real CRM data, computed, frozen and reviewed like any week — but it can never be approved as official. Every prize shown is projected (beta, no payout). Technicians see the same banner and get no celebrations.</div>
+          </div>
+        </div>
+      )}
       {error && <div className="portal-alert portal-alert-error" role="alert">{error}</div>}
-      {st === "in_review" && !d.isOwner && <div className="muted small">Only the owner can approve winners.</div>}
+      {st === "in_review" && !d.isOwner && !beta && <div className="muted small">Only the owner can approve winners.</div>}
       {(() => {
         // The late-change blocker has its own panel (with the owner's choice) below.
         const lateBlock = !!d.lateChanges?.impact.material && !d.lateDecision;
@@ -241,7 +258,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
         </details>
       )}
       {d.snapshot && !d.approved && (
-        <div className="muted small">{d.snapshot.eligibleCount} met all gates · {dollars(d.snapshot.awardedCents)} would be awarded · {dollars(d.snapshot.unallocatedCents)} unallocated
+        <div className="muted small">{d.snapshot.eligibleCount} met all gates · {dollars(d.snapshot.awardedCents)} {beta ? "projected (beta, no payout)" : "would be awarded"} · {dollars(d.snapshot.unallocatedCents)} unallocated
           {d.snapshot.kind === "live" && " · account checks are provisional while the week runs; the final check is at freeze, review and approval"}</div>
       )}
       {excluded.length > 0 && (
@@ -254,7 +271,7 @@ export default function ResultsPanel({ id, canEdit, who, onClose, onChanged }: {
       )}
       <div style={{ overflowX: "auto" }}>
         <table className="portal-table">
-          <thead><tr><th>#</th><th>Technician</th><th>Location</th>{v1 && <><th title="100 × closing rate ÷ target (capped)">C</th><th title="100 × AVG ticket ÷ target (capped)">A</th><th>Limiting</th></>}<th>{v1 ? "Final (min)" : "Score"}</th><th>Qual. jobs</th><th>Closing</th><th>AVG ticket</th><th>Gates</th><th>Account</th><th>Prize</th></tr></thead>
+          <thead><tr><th>#</th><th>Technician</th><th>Location</th>{v1 && <><th title="100 × closing rate ÷ target (capped)">C</th><th title="100 × AVG ticket ÷ target (capped)">A</th><th>Limiting</th></>}<th>{v1 ? "Final (min)" : "Score"}</th><th title={assignedBasis ? "Every assigned job in the week, any status, minus approved exclusions" : "Jobs with a qualifying status, minus approved exclusions"}>{assignedBasis ? "Assigned jobs (counted)" : "Qual. jobs"}</th><th>Closing</th><th>AVG ticket</th><th>Gates</th><th>Account</th><th>{beta ? "Projected prize (beta, no payout)" : "Prize"}</th></tr></thead>
           <tbody>
             {rows.map((r) => (
               <tr key={r.competitorId}>

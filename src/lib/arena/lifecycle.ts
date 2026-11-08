@@ -39,6 +39,8 @@ import {
   ArenaAuthorizationError,
   ArenaStateError,
   assertMayApprove,
+  BETA_LABEL,
+  isBeta,
   currentSettings,
   type CompetitionDoc,
   type RuleVersionDoc,
@@ -629,6 +631,9 @@ export const resultContentHash = (doc: Omit<ResultDoc, "contentHash">) =>
  * still what the snapshot recorded (checked again now; see accounts.ts). Writes one immutable result record; a second approval is
  * refused by the unique id. Creates NO payout or ledger entry.
  */
+/** Why a LIVE BETA week can never be approved. */
+export const BETA_REFUSAL = `${BETA_LABEL}: a beta week can never be approved as official. There are no official winners and nothing is paid; its prizes are projections only.`;
+
 export async function approveResults(
   ctx: LifecycleContext,
   id: string,
@@ -640,6 +645,11 @@ export async function approveResults(
   await assertMayApprove(ctx.config, by);
   const c = await getCompetitionDoc(ctx, id);
   if (c.status === "approved") throw new ArenaStateError("these results are already approved and can never change");
+  if (isBeta(c)) {
+    // LIVE BETA: never official. No result record, no approval, no result_approved event.
+    await audit(ctx, "competition.approve.refused", id, by, BETA_REFUSAL, input.snapshotId, null);
+    throw new ArenaStateError(BETA_REFUSAL);
+  }
   if (c.status !== "in_review") throw new ArenaStateError(`only a week in review can be approved (is ${c.status})`);
   const rv = await ruleVersionOf(ctx, c);
   const w = windowOf(c, rv);

@@ -11,7 +11,7 @@ import type { CompetitionDoc, SettingsDoc, TemplateDoc, AuditDoc } from "@/lib/a
 import type { Readiness } from "@/lib/arena/review";
 import RulesEditor from "./RulesEditor";
 import ResultsPanel from "./ResultsPanel";
-import { api, dollars, nextMonday, STATUS_LABEL, statusPill, weekLabel, when } from "./arena-ui";
+import { api, BETA_LABEL, dollars, nextMonday, STATUS_LABEL, statusPill, weekLabel, when } from "./arena-ui";
 
 interface Overview {
   me: { userId: string; name: string; isOwner: boolean; mayInitialise: boolean; canEditRules: boolean; canReview: boolean };
@@ -24,6 +24,8 @@ interface Overview {
   seedBalancedRules: ArenaRules;
   /** "Balanced Performance · Prizes 2026-11" (3 places + Most Improved); absent on older servers. */
   seedBalancedP2?: { templateId: string; name: string; rules: ArenaRules };
+  /** "Balanced Performance · Assigned jobs · Prizes 2026-11" (P2 + job minimum on every assigned job); absent on older servers. */
+  seedBalancedP3?: { templateId: string; name: string; rules: ArenaRules };
 }
 type Tab = "weeks" | "templates" | "names" | "settings" | "audit";
 type Editing =
@@ -147,7 +149,7 @@ export default function ArenaConsole() {
                   <td><b>{t.name}</b><div className="muted small">{t.templateId}</div></td>
                   <td>v{t.version}</td>
                   <td>{t.rules.prizes.positionsCents.map(dollars).join(" / ")}{t.rules.mostImproved.enabled ? ` + MI ${dollars(t.rules.mostImproved.amountCents)}` : ""}</td>
-                  <td>{t.rules.eligibility.minQualifyingJobs} jobs · {dollars(t.rules.eligibility.minAvgTicketCents)} · {(t.rules.eligibility.minClosingRateBp / 100).toFixed(0)}%</td>
+                  <td>{t.rules.eligibility.minQualifyingJobs} {t.rules.eligibility.jobCountBasis === "assigned" ? "assigned" : "qualifying"} jobs · {dollars(t.rules.eligibility.minAvgTicketCents)} · {(t.rules.eligibility.minClosingRateBp / 100).toFixed(0)}%</td>
                   <td>{who(t.by)}<div className="muted small">{when(t.at)}</div></td>
                   <td>{data.me.canEditRules && <button className="portal-btn" onClick={() => setEditing({ kind: "template", templateId: t.templateId, name: t.name, rules: t.rules, isNew: false })}>Edit</button>}</td>
                 </tr>
@@ -170,6 +172,11 @@ export default function ArenaConsole() {
                   New template: {data.seedBalancedP2.name}
                 </button>
               )}
+              {data.seedBalancedP3 && !data.templates.some((t) => t.templateId === data.seedBalancedP3!.templateId) && (
+                <button className="portal-btn" style={{ marginLeft: 8 }} data-testid="arena-new-template-p3" onClick={() => setEditing({ kind: "template", templateId: data.seedBalancedP3!.templateId, name: data.seedBalancedP3!.name, rules: structuredClone(data.seedBalancedP3!.rules), isNew: true })}>
+                  New template: {data.seedBalancedP3.name}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -188,17 +195,19 @@ function Weeks({ data, who, setError, onEdit, done }: {
   const [weekStart, setWeekStart] = useState(nextMonday());
   const [resultsFor, setResultsFor] = useState<string | null>(null);
   const [source, setSource] = useState<string>(data.templates[0]?.templateId ?? "");
+  const [asBeta, setAsBeta] = useState(false);
   const run = async (fn: () => Promise<unknown>, msg: string) => {
     try { await fn(); await done(msg); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
-  const act = (id: string, action: string, needsReason: boolean) => run(async () => {
+  const act = (id: string, action: string, needsReason: boolean, beta = false) => run(async () => {
     let reason: string | undefined;
     if (needsReason) {
       reason = window.prompt(`Reason for ${action === "cancel" ? "cancelling" : "suspending"} this week`) ?? "";
       if (!reason.trim()) throw new Error("A reason is required");
     }
-    await api(`/api/arena/admin/competitions/${id}/action`, { method: "POST", body: { action, reason } });
-  }, `Week ${action === "activate" ? "started" : action === "schedule" ? "scheduled" : action === "suspend" ? "suspended" : "cancelled"}.`);
+    if (beta && !window.confirm(`Start this week as ${BETA_LABEL}?\n\nIt runs on real CRM data but can never be approved as official. This cannot be undone.`)) throw new Error("Not started");
+    await api(`/api/arena/admin/competitions/${id}/action`, { method: "POST", body: { action, reason, ...(beta ? { beta: true } : {}) } });
+  }, `Week ${action === "activate" ? (beta ? "started as LIVE BETA" : "started") : action === "schedule" ? "scheduled" : action === "suspend" ? "suspended" : "cancelled"}.`);
   const openRules = async (c: CompetitionDoc, amend: boolean) => {
     try {
       const d = await api<{ ruleVersion: { rules: ArenaRules } }>(`/api/arena/admin/competitions/${c._id}`);
@@ -221,9 +230,15 @@ function Weeks({ data, who, setError, onEdit, done }: {
               <option value="__previous">A copy of the week before</option>
             </select>
           </label>
+          {data.me.isOwner && (
+            <label style={{ display: "flex", gap: 6, alignItems: "center" }} title="Owner only. Real data, never approvable as official, prizes projected only.">
+              <input type="checkbox" checked={asBeta} onChange={(e) => setAsBeta(e.target.checked)} data-testid="arena-create-beta" />
+              LIVE BETA test week
+            </label>
+          )}
           <button className="portal-btn portal-btn-primary" disabled={!source} onClick={() => run(
-            () => api("/api/arena/admin/competitions", { method: "POST", body: { weekStart, from: source === "__previous" ? { copyPreviousWeek: true } : { template: source } } }),
-            `Draft created for the week of ${weekLabel(weekStart)}.`,
+            () => api("/api/arena/admin/competitions", { method: "POST", body: { weekStart, from: source === "__previous" ? { copyPreviousWeek: true } : { template: source }, ...(asBeta ? { beta: true } : {}) } }),
+            `${asBeta ? "LIVE BETA draft" : "Draft"} created for the week of ${weekLabel(weekStart)}.`,
           )}>Create week</button>
           {data.templates.length === 0 && <span className="muted small">Save a template first.</span>}
         </div>
@@ -240,7 +255,11 @@ function Weeks({ data, who, setError, onEdit, done }: {
               return (
                 <tr key={c._id}>
                   <td><b>{weekLabel(c.weekStart)}</b><div className="muted small">{c.weekStart}</div></td>
-                  <td><span className={statusPill(c.status)}>{STATUS_LABEL[c.status] ?? c.status}</span></td>
+                  <td>
+                    <span className={statusPill(c.status)}>{STATUS_LABEL[c.status] ?? c.status}</span>
+                    {c.beta && <span className="pill pill-pending" style={{ marginLeft: 6 }} title={BETA_LABEL} data-testid="arena-week-beta">BETA</span>}
+                    {c.beta && <div className="muted small">Test week · no official winners or payouts</div>}
+                  </td>
                   <td>v{c.ruleVersionN}{c.lockedAt && <div className="muted small">locked {when(c.lockedAt)}</div>}</td>
                   <td>{who(c.createdBy)}<div className="muted small">{when(c.createdAt)}</div></td>
                   <td>
@@ -249,7 +268,8 @@ function Weeks({ data, who, setError, onEdit, done }: {
                         <button className="portal-btn" onClick={() => setResultsFor(c._id)}>{c.status === "in_review" ? "Review" : "Results"}</button>}
                       {edit && (c.status === "draft" || c.status === "scheduled") && <button className="portal-btn" onClick={() => openRules(c, false)}>Edit rules</button>}
                       {edit && c.status === "draft" && <button className="portal-btn" onClick={() => act(c._id, "schedule", false)}>Schedule</button>}
-                      {edit && owner && c.status === "scheduled" && <button className="portal-btn portal-btn-primary" onClick={() => act(c._id, "activate", false)}>Start week</button>}
+                      {edit && owner && c.status === "scheduled" && <button className="portal-btn portal-btn-primary" onClick={() => act(c._id, "activate", false)}>{c.beta ? "Start LIVE BETA week" : "Start week"}</button>}
+                      {edit && owner && c.status === "scheduled" && !c.beta && <button className="portal-btn" onClick={() => act(c._id, "activate", false, true)}>Start as LIVE BETA</button>}
                       {edit && owner && (c.status === "active" || c.status === "suspended") && <button className="portal-btn" onClick={() => openRules(c, true)}>Change rules</button>}
                       {edit && owner && c.status === "active" && <button className="portal-btn" onClick={() => act(c._id, "suspend", true)}>Suspend</button>}
                       {edit && (c.status === "draft" || c.status === "scheduled" || (owner && c.status !== "approved" && c.status !== "cancelled")) &&
@@ -263,7 +283,7 @@ function Weeks({ data, who, setError, onEdit, done }: {
           </tbody>
         </table>
       </div>
-      <p className="muted small" style={{ margin: 0 }}>Admins prepare and schedule weeks. Only the owner starts, changes, suspends or cancels a running week, and only the owner approves results.</p>
+      <p className="muted small" style={{ margin: 0 }}>Admins prepare and schedule weeks. Only the owner starts, changes, suspends or cancels a running week, and only the owner approves results. A BETA week ({BETA_LABEL}) can never be approved.</p>
     </div>
   );
 }
