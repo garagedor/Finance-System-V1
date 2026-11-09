@@ -28,6 +28,8 @@ Preview deployments).
 | `ARENA_WB_VERIFIER_SECRET` | Dedicated shared secret for `arena-verify` (≥ 32 chars, random, e.g. `openssl rand -base64 36`). The WB function stores only its SHA-256 (`ARENA_VERIFY_KEY_SHA256`). Rotate both together. | **yes** |
 | `ARENA_PASS_PRIVATE_KEY` | Fresh RSA-2048 PKCS#8 key (PEM or base64 of it), generated for production only. | **yes** |
 | `ARENA_PASS_TTL_SECONDS` | Unset (= **300**). Values above 300 are refused when deployed. | no |
+| `ARENA_ROW_ID_SECRET` | **Required when `ARENA_TECH_ENABLED=1`.** HMAC key for the anonymous leaderboard row ids technicians see instead of account ids (≥ 32 chars, random, e.g. `openssl rand -base64 36`; production-only value, never reused from dev). Missing/short → technician API off (fail closed). Not the pass key (key separation). | **yes** |
+| `ARENA_MONITOR_PING_URL` | **Optional.** Dead-man's-switch ping URL of an external monitor (e.g. a Healthchecks.io check `https://hc-ping.com/<uuid>`). Server-only; never in browser/app code. Unset = no pinging. See "External monitor" below. | **yes** (the URL is a capability) |
 | `ARENA_TECH_ALLOWED_ORIGINS` | The real app origins only: `capacitor://localhost` (iOS app) and the https web origin of the Weekly Balance app. No `http://`, no localhost/127.0.0.1, no `*` (all refused when deployed). | no |
 | `CRON_SECRET` | Already used by the CRM's crons; the Arena freeze safety net runs inside `/api/scanpay/cron-sync` behind it. Must be set (the existing routes only check it *when* set). `/api/arena/health` and `/api/arena/monitor` **require** it (≥ 16 characters; unset = every cron call refused). | **yes** |
 
@@ -88,6 +90,25 @@ the app open, and the daily `/api/scanpay/cron-sync` freeze safety net is unchan
 An external uptime monitor can call `/api/arena/health?strict=1` with the
 `x-cron-secret` header instead of (or as well as) the cron.
 
+### External monitor (dead-man's switch) — `ARENA_MONITOR_PING_URL`
+
+Recommended: an independent service that alerts when pings STOP (e.g. Healthchecks.io;
+**no account has been created** — owner decision). Design, implemented in
+`src/lib/arena/monitor-ping.ts` and called by `/api/arena/monitor` after every run:
+
+- healthy run (the live snapshot is fresh and the last recompute succeeded, or there is
+  no live week to keep fresh) → `GET <url>` (success);
+- a failed run (unhealthy report, or the run itself errored) adds to a run of consecutive
+  failures; from the **3rd** failed run in a row → `GET <url>/fail` on every failing run
+  (idempotent at the service; a lost ping is re-sent the next minute);
+- the next healthy run → `GET <url>` again (recovery) and the run resets;
+- if the deployment or the cron stops entirely, pings stop and the service alerts by itself.
+
+Never throws, 5 s timeout, logs only fixed text (never the URL). `https` only. The
+failure run is kept in `arena_live_health` (`_id: "monitor:ping"`; an in-process counter
+when the database itself is unreachable). Suggested check: period 1 min, grace 3–5 min.
+Tests: `src/lib/arena/monitor-ping.test.ts` (fake HTTP server, including the real route).
+
 Load per refresh: one aggregation over `Job` (the week + Most Improved baseline
 weeks), `TechNameMapping` + `Technician` reads, and the Weekly Balance account check
 (reused for 2 minutes in the live phase; freeze/review/approval always re-check).
@@ -112,7 +133,7 @@ account answers are re-checked (150 ms per verifier call, 6 in parallel).
 
 1. Atlas user + `ARENA_MONGODB_URI`, `ARENA_MONGODB_DB`, `ARENA_OWNER_USER_ID`.
 2. WB function + secret (above); `ARENA_WB_SUPABASE_URL`, `ARENA_WB_VERIFIER_SECRET`.
-3. `ARENA_PASS_PRIVATE_KEY` (fresh), `ARENA_TECH_ALLOWED_ORIGINS` (real origins).
+3. `ARENA_PASS_PRIVATE_KEY` (fresh), `ARENA_ROW_ID_SECRET` (fresh), `ARENA_TECH_ALLOWED_ORIGINS` (real origins).
 4. Confirm `CRON_SECRET` is set.
 5. Deploy with `ARENA_TECH_ENABLED` unset; check the server log has no
    "unsafe technician configuration" line (a request to `/api/arena/auth/exchange`
