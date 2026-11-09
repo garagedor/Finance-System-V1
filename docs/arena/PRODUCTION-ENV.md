@@ -45,11 +45,11 @@ Preview deployments).
    - `find` only, on exactly these CRM collections in the CRM database:
      `Job` (job source, live recompute every refresh — an aggregation over the collection: tech, date, status, location, profit fields, hashed contact for duplicate keys; also by-id lookups for late edits),
      `TechNameMapping` (`supabaseUserId`, `supabaseFullName`, `crmTechNames`; read on every technician request),
-     `Technician` (`_id`, `location`),
-     `users` (`name` only — the Control Center overview, `admin/overview`; without it that one admin panel fails).
-     Nothing else: the Arena does not read `Location`, `Provider` or any finance collection.
+     `Technician` (`_id`, `location`).
+     Nothing else: the Arena does NOT read the CRM `users` collection (removed 2026-11-09 — collection-level `find`
+     would expose whole CRM user records), `Location`, `Provider` or any finance collection.
    - Implement as a custom role, e.g.
-     `{ role: "arenaApp", privileges: [ {resource:{db:"<arena db>", collection:""}, actions:[readWrite actions]}, {resource:{db:"ag", collection:"Job"}, actions:["find"]}, {resource:{db:"ag", collection:"TechNameMapping"}, actions:["find"]}, {resource:{db:"ag", collection:"Technician"}, actions:["find"]}, {resource:{db:"ag", collection:"users"}, actions:["find"]} ] }`.
+     `{ role: "arenaApp", privileges: [ {resource:{db:"<arena db>", collection:""}, actions:[readWrite actions]}, {resource:{db:"ag", collection:"Job"}, actions:["find"]}, {resource:{db:"ag", collection:"TechNameMapping"}, actions:["find"]}, {resource:{db:"ag", collection:"Technician"}, actions:["find"]} ] }`.
    - With this user the Arena cannot write CRM data even by mistake.
 2. The CRM app user (`lbs_crm_app`) needs **no** Arena change and no rights on the
    Arena database: when deployed, the Arena never uses it.

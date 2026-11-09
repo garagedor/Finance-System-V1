@@ -10,13 +10,11 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   return arenaRoute("arena:console:view", async ({ session, ctx }) => {
     const db = ctx.arenaDb;
-    const [settings, competitions, templates, ready, users] = await Promise.all([
+    const [settings, competitions, templates, ready] = await Promise.all([
       db.collection(ARENA_COLLECTIONS.settings).findOne({ current: true }),
       db.collection(ARENA_COLLECTIONS.competitions).find({}).sort({ weekStart: -1 }).limit(60).toArray(),
       db.collection(ARENA_COLLECTIONS.templates).find({ current: true }).sort({ name: 1 }).toArray(),
       readiness(ctx.review),
-      // Read-only: CRM login names, so the screens can show people instead of ids.
-      ctx.crmDb.collection("users").find({}, { projection: { name: 1 } }).toArray(),
     ]);
     const owner = (settings?.ownerUserId as string | undefined) ?? null;
     return {
@@ -41,7 +39,9 @@ export async function GET() {
       seedBalancedP2: (({ id, label, rules }) => ({ templateId: id, name: label, rules }))(ruleSeed("balanced-p2-2026-11")!),
       // Owner rule 2026-11-09: P2 prizes, job minimum counts EVERY assigned job. Same id as the shadow tooling's code seed.
       seedBalancedP3: (({ id, label, rules }) => ({ templateId: id, name: label, rules }))(ruleSeed("balanced-p3-2026-11")!),
-      userNames: Object.fromEntries(users.map((u) => [String(u._id), String(u.name ?? "")])),
+      // Least privilege (2026-11-09): the Arena no longer reads the CRM's `users` collection
+      // (collection-level `find` would expose whole CRM user records). Only the caller's own name is known.
+      userNames: { [session.userId]: session.name ? `${session.name} (you)` : "you" },
     };
   });
 }
