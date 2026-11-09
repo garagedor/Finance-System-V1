@@ -1,0 +1,299 @@
+/**
+ * Server glue for the Admin Control Center: builds store contexts, runs a
+ * preview of rules against real (read-only) CRM weeks, and scans CRM weeks for
+ * review cases. API routes stay thin and call these.
+ */
+import "server-only";
+import { MongoClient, type Db } from "mongodb";
+import { getMongoClient } from "@/lib/mongo";
+import { getDb as getCrmDb, newId } from "@/lib/finance-db";
+import { KNOWN_STATUSES } from "@/lib/status-canonical";
+import type { ArenaRules } from "./types";
+import { currentSettings, type StoreCollection, type StoreContext } from "./config-store";
+import type { ReviewContext } from "./review";
+import { reviewDecisions, syncDetected } from "./review";
+import { arenaDbName, arenaMongoUri, crmDbName } from "./env";
+import { arenaStores, ensureArenaIndexes, lifecycleCollections, loadMappings, loadTechnicians } from "./mongo-store";
+import type { LifecycleContext } from "./lifecycle";
+import type { RuleVersionDoc } from "./config-store";
+import type { CompetitionResult } from "./types";
+import { loadJobs, lookupJobs, readJobSource, PRODUCTION_JOB_COLLECTION } from "./job-source";
+import { buildSource, type SourceIdentity, type SourceSnapshot } from "./source-snapshot";
+import { buildCompetitorMap } from "./identity";
+import { computeCompetition } from "./engine";
+import { rulesHash } from "./config";
+import { addDays, isMonday, previousWeekStarts, weekStartOf } from "./week";
+import { detectCases } from "./detect";
+import { checkAccounts, type AccountCacheDoc, type AccountMode } from "./accounts";
+import type { AccountInput } from "./types";
+import { readTechConfig } from "./tech/config";
+import { verifierFromEnv, type TechnicianVerifier } from "./tech/verifier";
+import { ARENA_COLLECTIONS } from "./mongo-store";
+
+export interface ArenaContexts {
+  arenaDb: Db;
+  crmDb: Db;
+  config: StoreContext;
+  review: ReviewContext;
+  lifecycle: LifecycleContext;
+}
+
+/**
+ * The Weekly Balance account verifier for account eligibility, or null when it
+ * is not configured here (then every account is `unverified` and approval is
+ * blocked — fail closed, never a disqualification).
+ */
+export function accountVerifierFromEnv(env: NodeJS.ProcessEnv = process.env): TechnicianVerifier | null {
+  try {
+    return verifierFromEnv(readTechConfig(env).wb.url, env);
+  } catch (e) {
+    console.warn("[arena] account verifier not configured:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+/** The local dev stack marker. Never set in a deployed environment. */
+export const isDevStack = (env: NodeJS.ProcessEnv = process.env) => env.ARENA_DEV_STACK === "1";
+
+/**
+ * Dedicated Atlas user for the Arena (ARENA_MONGODB_URI): readWrite on the Arena
+ * database only, and read-only `find` on the CRM collections the Arena reads
+ * (Job, TechNameMapping, Technician; `users` for the admin overview). When it is
+ * set, ALL Arena database access goes through it, so the Arena cannot write CRM
+ * data even by mistake. REQUIRED in production/preview (env.ts arenaMongoUri:
+ * fail closed, never a fallback to the CRM app's connection); in development
+ * the CRM app's connection is shared (docs/arena/PRODUCTION-ENV.md).
+ */
+let dedicated: Promise<MongoClient> | null = null;
+function dedicatedArenaClient(env: NodeJS.ProcessEnv = process.env): Promise<MongoClient> | null {
+  const uri = arenaMongoUri(env);
+  if (!uri) return null;
+  dedicated ??= MongoClient.connect(uri, { maxPoolSize: 5, serverSelectionTimeoutMS: 8000, retryWrites: true, appName: "lbs-arena" }).catch((e) => {
+    dedicated = null;
+    throw e;
+  });
+  return dedicated;
+}
+
+export async function arenaContexts(): Promise<ArenaContexts> {
+  const own = dedicatedArenaClient();
+  if (own) {
+    const client = await own;
+    const arenaDb = client.db(arenaDbName());
+    await ensureArenaIndexes(arenaDb);
+    return buildArenaContexts(arenaDb, client.db(crmDbName()));
+  }
+  // Development only: arenaMongoUri() has already refused production without a dedicated user.
+  const client = await getMongoClient();
+  const arenaDb = client.db(arenaDbName());
+  await ensureArenaIndexes(arenaDb);
+  return buildArenaContexts(arenaDb, await getCrmDb());
+}
+
+/**
+ * Live refreshes reuse a Weekly Balance account answer for this long (one
+ * verifier call per competitor per 2 minutes instead of per refresh). Live
+ * standings are provisional; freeze/review/approval always re-check.
+ */
+export const LIVE_ACCOUNT_REUSE_MS = 120_000;
+
+/** Wire the stores for an Arena database and a (read-only) CRM database. */
+export function buildArenaContexts(
+  arenaDb: Db,
+  crmDb: Db,
+  now: () => Date = () => new Date(),
+  verifier: TechnicianVerifier | null = accountVerifierFromEnv(),
+): ArenaContexts {
+  const stores = arenaStores(arenaDb);
+  const config: StoreContext = { store: stores.config, knownStatuses: KNOWN_STATUSES, now, newId };
+  let verified: Promise<ReadonlySet<string>> | null = null;
+  const review: ReviewContext = {
+    store: stores.review,
+    ownerUserId: async () => (await currentSettings(config)).ownerUserId,
+    verifiedCompetitorIds: () =>
+      (verified ??= loadMappings(crmDb).then((m) => new Set(m.map((x) => x.supabaseUserId).filter(Boolean)))),
+    now,
+    newId,
+  };
+  const partial = { arenaDb, crmDb, config, review } as ArenaContexts;
+  const accountDeps = {
+    verifier,
+    cache: arenaDb.collection(ARENA_COLLECTIONS.accountStatus) as never as StoreCollection<AccountCacheDoc>,
+    now,
+    log: (m: string) => console.warn(m),
+    liveReuseMs: LIVE_ACCOUNT_REUSE_MS,
+  };
+  const check = (ids: string[], mode: AccountMode) => checkAccounts(accountDeps, ids, mode);
+  partial.lifecycle = {
+    config,
+    lc: lifecycleCollections(arenaDb),
+    compute: async (weekStart: string, rv: RuleVersionDoc, mode: AccountMode) => {
+      const { r, source } = await runEngine(partial, rv.rules, rv.rulesHash, weekStart, (ids) => check(ids, mode));
+      return { result: r, source };
+    },
+    lookupJobs: (ids: string[]) => lookupJobs(crmDb, ids),
+    checkAccounts: check,
+    devStack: isDevStack(),
+  };
+  return partial;
+}
+
+/** Last fully completed Monday-start week (America/New_York). */
+export function lastCompletedWeek(now = new Date()): string {
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(now);
+  return addDays(weekStartOf(today), -7);
+}
+
+export interface PreviewSummary {
+  weekStart: string;
+  rulesHash: string;
+  participants: number;
+  eligible: number;
+  prizes: { position: number; name: string; location: string; score: number; closingScore: number; avgScore: number; limitingMetric: string | null; cents: number }[];
+  mostImproved: { name: string; improvement: number; cents: number } | null;
+  paidCents: number;
+  budgetCents: number;
+  unallocatedCents: number;
+  blockingDuplicates: number;
+  unmappedNamesWithJobs: { crmName: string; jobs: number }[];
+  /** Ineligible competitors who out-scored the last prize holder. */
+  keptOut: { name: string; score: number; missing: string[] }[];
+}
+
+/**
+ * Run the real engine with these rules on a past week's real CRM jobs, using
+ * every review decision in force. Read-only: nothing is saved.
+ */
+type AccountLookup = (ids: string[]) => Promise<Record<string, AccountInput>>;
+
+/** Who the CRM is read as: the database user name only (never a password or the URI). */
+export function crmSourceIdentity(crmDb: Db, env: NodeJS.ProcessEnv = process.env): SourceIdentity {
+  const uri = (env.ARENA_MONGODB_URI ?? "").trim() || (env.MONGODB_URI ?? "").trim();
+  const m = /^mongodb(?:\+srv)?:\/\/([^:@/]+)(?::[^@]*)?@/.exec(uri);
+  let user: string | null = null;
+  try {
+    user = m ? decodeURIComponent(m[1]) : null;
+  } catch {
+    user = null;
+  }
+  return { system: "crm", database: crmDb.databaseName, collection: PRODUCTION_JOB_COLLECTION, user, via: "admin-service" };
+}
+
+async function runEngine(ctx: ArenaContexts, rules: ArenaRules, hash: string, weekStart: string, accountsFor?: AccountLookup) {
+  const weeks = rules.mostImproved.enabled ? previousWeekStarts(weekStart, rules.mostImproved.baselineWeeks) : [];
+  const from = weeks.length ? weeks[weeks.length - 1] : weekStart;
+  const window = { from: [from, weekStart].sort()[0], toExclusive: addDays(weekStart, 7) };
+  const readAt = ctx.config.now().toISOString();
+  const [read, mappings, technicians, decisions] = await Promise.all([
+    readJobSource(ctx.crmDb, window.from, window.toExclusive),
+    loadMappings(ctx.crmDb),
+    loadTechnicians(ctx.crmDb),
+    reviewDecisions(ctx.review),
+  ]);
+  const jobs = read.jobs;
+  const competitors = buildCompetitorMap({
+    mappings,
+    technicians,
+    crmNamesInUse: [...new Set(jobs.map((j) => j.tech))],
+    overrides: decisions.overrides,
+    displayNames: decisions.displayNames,
+  });
+  // No lookup: performance only — every account `unverified`, which never
+  // moves a prize. Preview/live/freeze/review/approval all pass a real lookup.
+  const accounts = accountsFor ? await accountsFor(competitors.competitors.map((c) => c.id)) : {};
+  const r = computeCompetition({
+    rules,
+    rulesHash: hash,
+    weekStart,
+    competitors,
+    jobs,
+    exclusions: decisions.exclusions,
+    dismissedDuplicateGroups: decisions.dismissedDuplicateGroups,
+    accounts,
+  });
+  const source: SourceSnapshot = buildSource({
+    readAt, identity: crmSourceIdentity(ctx.crmDb), window, jobs, updateTimestamps: read.updateTimestamps, competitors,
+    exclusions: decisions.exclusions, dismissedDuplicateGroups: decisions.dismissedDuplicateGroups, accounts,
+  });
+  return { r, competitors, jobs, source };
+}
+
+/** The official result of one week under one rule version (CRM read-only). */
+export async function computeWeek(
+  ctx: ArenaContexts, rules: ArenaRules, hash: string, weekStart: string, accountsFor?: AccountLookup,
+): Promise<CompetitionResult> {
+  return (await runEngine(ctx, rules, hash, weekStart, accountsFor)).r;
+}
+
+export async function previewRules(ctx: ArenaContexts, rules: ArenaRules, weekStart: string): Promise<PreviewSummary> {
+  if (!isMonday(weekStart)) throw new Error("preview week must start on a Monday");
+  // Account eligibility as in the live phase (best effort, last known on failure),
+  // so the preview pays the same people the live/review result would.
+  const { r, competitors, jobs } = await runEngine(ctx, rules, rulesHash(rules), weekStart, (ids) => ctx.lifecycle.checkAccounts(ids, "live"));
+  const winners = r.results.filter((x) => x.prizePosition !== null).sort((a, b) => a.prizePosition! - b.prizePosition!);
+  const lastScore = winners.length ? winners[winners.length - 1].score : Infinity;
+  const mi = r.results.find((x) => x.wonMostImproved);
+  const weekJobs = jobs.filter((j) => j.date >= weekStart && j.date < addDays(weekStart, 7));
+  return {
+    weekStart,
+    rulesHash: r.rulesHash,
+    participants: r.results.length,
+    eligible: r.eligibleCount,
+    prizes: winners.map((x) => ({
+      position: x.prizePosition!, name: x.displayName, location: x.location, score: x.score,
+      closingScore: x.closingScore, avgScore: x.avgScore, limitingMetric: x.limitingMetric, cents: x.prizeCents,
+    })),
+    mostImproved: mi ? { name: mi.displayName, improvement: mi.mostImproved?.improvement ?? 0, cents: rules.mostImproved.amountCents } : null,
+    paidCents: r.awardedCents,
+    budgetCents: rules.prizes.budgetCents,
+    unallocatedCents: r.unallocatedCents,
+    blockingDuplicates: r.duplicateGroups.filter((g) => g.mayAffectPrizes).length,
+    unmappedNamesWithJobs: competitors.issues
+      .filter((i) => i.blocking)
+      .map((i) => ({ crmName: i.crmName, jobs: weekJobs.filter((j) => j.tech === i.crmName).length }))
+      .filter((x) => x.jobs > 0),
+    keptOut: r.results
+      .filter((x) => !x.eligible && x.score > lastScore)
+      .map((x) => ({
+        name: x.displayName,
+        score: x.score,
+        missing: [!x.gates.jobs.met && "jobs", !x.gates.avgTicket.met && "AVG ticket", !x.gates.closingRate.met && "closing rate"].filter(
+          (m): m is string => !!m,
+        ),
+      })),
+  };
+}
+
+/**
+ * Scan CRM weeks for review cases (read-only on the CRM side; writes only the
+ * Arena review collections). Decisions already in force are respected.
+ */
+export async function scanForReview(
+  ctx: ArenaContexts,
+  rules: ArenaRules,
+  firstWeek: string,
+  weeksCount: number,
+  by: string,
+): Promise<{ added: number; refreshed: number; weeks: string[] }> {
+  if (!isMonday(firstWeek)) throw new Error("the scan must start on a Monday");
+  const n = Math.max(1, Math.min(26, Math.floor(weeksCount)));
+  const end = addDays(firstWeek, 7 * n);
+  const [jobs, mappings, technicians, decisions] = await Promise.all([
+    loadJobs(ctx.crmDb, firstWeek, end),
+    loadMappings(ctx.crmDb),
+    loadTechnicians(ctx.crmDb),
+    reviewDecisions(ctx.review),
+  ]);
+  const weeks = Array.from({ length: n }, (_, i) => addDays(firstWeek, 7 * i));
+  const found = detectCases({
+    weeks: weeks.map((w) => ({ weekStart: w, jobs: jobs.filter((j) => j.date >= w && j.date < addDays(w, 7)) })),
+    mappings,
+    technicians,
+    rules,
+    overrides: decisions.overrides,
+    displayNames: decisions.displayNames,
+    exclusions: decisions.exclusions,
+  });
+  const res = await syncDetected(ctx.review, found, by);
+  return { ...res, weeks };
+}

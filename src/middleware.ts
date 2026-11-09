@@ -101,6 +101,24 @@ function handleWarehouse(request: NextRequest) {
     return NextResponse.next({ request: { headers } });
 }
 
+// Exact technician-API paths authenticated by the Arena pass instead of the CRM session.
+const ARENA_PASS_ROUTES = new Set([
+    '/api/arena/auth/exchange',
+    '/api/arena/tech/me',
+    '/api/arena/tech/leaderboard',
+    '/api/arena/tech/history',
+    '/api/arena/tech/events',
+    '/api/arena/tech/live',
+]);
+
+// Arena operations endpoints called by a scheduler without a CRM session. EXACT
+// paths. Each authenticates in-route and fails CLOSED: the cron secret, or (health
+// only) an admin session checked by the route (src/lib/arena/ops-auth.ts).
+const ARENA_OPS_ROUTES = new Set([
+    '/api/arena/health',
+    '/api/arena/monitor',
+]);
+
 export async function middleware(request: NextRequest) {
     if (request.nextUrl.pathname.startsWith(WAREHOUSE_PREFIX)) {
         return handleWarehouse(request);
@@ -126,6 +144,18 @@ export async function middleware(request: NextRequest) {
     // match the '/api/ai-jobs/ingest' or '/api/ai-jobs/jobs' prefixes.
     const exemptRoutes = ['/api/login', '/api/logout', '/api/scanpay/webhook', '/api/scanpay/cron-sync', '/api/cron/job-mirror-resync', '/api/ai-jobs/ingest', '/api/ai-jobs/jobs', '/api/internal/auth/session-state'];
     if (exemptRoutes.some(route => request.nextUrl.pathname.startsWith(route))) {
+        return NextResponse.next();
+    }
+
+    // 317 Live Arena technician API: reached with an Arena pass (Authorization
+    // header), never a CRM session. EXACT paths only — no prefix — so no other
+    // /api route (not even another /api/arena/* path) loses the session gate.
+    // Each of these handlers authenticates in-route and fails CLOSED (see
+    // src/lib/arena/tech/http.ts; pinned by arena-tech-middleware.test.ts).
+    if (ARENA_PASS_ROUTES.has(request.nextUrl.pathname)) {
+        return NextResponse.next();
+    }
+    if (ARENA_OPS_ROUTES.has(request.nextUrl.pathname)) {
         return NextResponse.next();
     }
 

@@ -98,7 +98,7 @@ test("existing CRM, Finance and System permissions are unchanged in count", () =
   assert.ok(byModule("crm") > 0);
   assert.ok(byModule("finance") > 0);
   assert.equal(
-    byModule("system") + byModule("crm") + byModule("finance") + byModule("wh"),
+    byModule("system") + byModule("crm") + byModule("finance") + byModule("wh") + byModule("arena"),
     PERMISSION_CATALOG.length,
     "every permission belongs to a known module",
   );

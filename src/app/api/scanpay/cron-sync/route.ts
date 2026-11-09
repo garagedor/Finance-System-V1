@@ -11,6 +11,7 @@ import { syncNewScanpayRefunds, syncRefundedInvoices } from "@/lib/scanpay/refun
 import { syncScanpayPayouts, applyPayoutRefunds } from "@/lib/scanpay/payouts";
 import { resyncJobMirrors } from "@/lib/job-mirror";
 import { alertReportDrift } from "@/lib/report-drift";
+import { arenaCronStep } from "@/lib/arena/cron";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -38,8 +39,12 @@ export async function GET(req: NextRequest) {
     drift = { error: e instanceof Error ? e.message : "drift check failed" };
   }
 
+  // 317 Live Arena safety net: freeze any week whose Sunday has ended even if
+  // nobody opened it (idempotent; isolated — never affects the steps above/below).
+  const arena = await arenaCronStep();
+
   if (!scanpayConfigured()) {
-    return NextResponse.json({ ok: true, mirrors, drift, scanpay: "not configured" }, { status: 200 });
+    return NextResponse.json({ ok: true, mirrors, drift, arena, scanpay: "not configured" }, { status: 200 });
   }
   try {
     const [disputes, refunds] = await Promise.all([
@@ -65,8 +70,8 @@ export async function GET(req: NextRequest) {
     } catch (e) {
       invoiceRefunds = { error: e instanceof Error ? e.message : "invoice refund scan failed" };
     }
-    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, drift, disputes, refunds, payouts, invoiceRefunds });
+    return NextResponse.json({ ok: true, at: new Date().toISOString(), mirrors, drift, arena, disputes, refunds, payouts, invoiceRefunds });
   } catch (e) {
-    return NextResponse.json({ ok: false, mirrors, drift, error: e instanceof Error ? e.message : "sync failed" }, { status: 200 });
+    return NextResponse.json({ ok: false, mirrors, drift, arena, error: e instanceof Error ? e.message : "sync failed" }, { status: 200 });
   }
 }

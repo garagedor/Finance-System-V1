@@ -458,7 +458,7 @@ function EditUserModal({
     } finally { setBusy(false); }
   };
 
-  const moduleOrder = ['system', 'crm', 'finance', 'wh'] as const;
+  const moduleOrder = ['system', 'crm', 'finance', 'wh', 'arena'] as const;
 
   return (
     <ModalShell title={`Edit — ${target.name}`} onClose={onClose} wide>
