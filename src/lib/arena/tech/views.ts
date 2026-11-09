@@ -71,6 +71,10 @@ const shownPrize = (s: ApprovedStanding, rules: ArenaRules, phase: CompetitionPh
  * false, no prize, and none of their metrics — the reason (pending, inactive,
  * unmapped…) never leaves the server, and they never appear in the
  * prize-eligible view.
+ *
+ * ROW PRIVACY: `competitorId` on a row is the anonymous, competition-specific
+ * row id from `rowId` (row-id.ts), never the Weekly Balance account id — not
+ * even on the caller's own row. `isMe` is decided here on the real ids.
  */
 export function leaderboardRows(
   rows: ApprovedStanding[],
@@ -78,6 +82,7 @@ export function leaderboardRows(
   phase: CompetitionPhase,
   me: string,
   view: "national" | "eligible",
+  rowId: (competitorId: string) => string,
 ): LeaderboardRow[] {
   return rows
     .filter((s) => view === "national" || prizeEligibleOf(s))
@@ -87,7 +92,7 @@ export function leaderboardRows(
       const show = !accountExcluded(s) && (pe || rules.display.showIneligibleMetrics);
       return {
         rank: s.rank,
-        competitorId: s.competitorId,
+        competitorId: rowId(s.competitorId),
         displayName: s.displayName,
         location: s.location,
         score: r2(s.score),

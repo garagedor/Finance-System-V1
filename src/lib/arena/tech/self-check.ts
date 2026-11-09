@@ -33,6 +33,7 @@ export function techEnvProblems(env: NodeJS.ProcessEnv): string[] {
     if (verifier === "wb" && (env.ARENA_WB_VERIFIER_SECRET ?? "").trim().length < 32)
       p.push("ARENA_TECH_ENABLED=1 needs ARENA_WB_VERIFIER_SECRET (≥ 32 characters)");
     if (!(env.ARENA_PASS_PRIVATE_KEY ?? "").trim()) p.push("ARENA_TECH_ENABLED=1 needs ARENA_PASS_PRIVATE_KEY");
+    if ((env.ARENA_ROW_ID_SECRET ?? "").trim().length < 32) p.push("ARENA_TECH_ENABLED=1 needs ARENA_ROW_ID_SECRET (≥ 32 characters)");
     if (!(env.ARENA_TECH_ALLOWED_ORIGINS ?? "").trim()) p.push("ARENA_TECH_ENABLED=1 needs ARENA_TECH_ALLOWED_ORIGINS");
     if (!(env.ARENA_MONGODB_DB ?? "").trim()) p.push("ARENA_TECH_ENABLED=1 needs ARENA_MONGODB_DB");
   }

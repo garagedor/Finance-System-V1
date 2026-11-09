@@ -1,7 +1,7 @@
 /* Technician API structure and the middleware exemption:
    1. every technician route handler is the pass guard (or the exchange / CORS preflight);
    2. the technician glue never reads cookies or the CRM session;
-   3. the middleware exempts EXACTLY the five technician paths — every other /api
+   3. the middleware exempts EXACTLY the six technician paths — every other /api
       route still answers 401 to an anonymous request. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -29,10 +29,10 @@ function handlers(src: string): Record<string, string> {
 
 // Operations endpoints (scheduler, no session): exact paths, cron secret / admin session in-route (live-health.test.ts).
 const OPS_PATHS = ["/api/arena/health", "/api/arena/monitor"];
-const TECH_PATHS = ["/api/arena/auth/exchange", "/api/arena/tech/me", "/api/arena/tech/leaderboard", "/api/arena/tech/history", "/api/arena/tech/events"];
+const TECH_PATHS = ["/api/arena/auth/exchange", "/api/arena/tech/me", "/api/arena/tech/leaderboard", "/api/arena/tech/history", "/api/arena/tech/events", "/api/arena/tech/live"];
 const techRoutes = [...walk(join(ARENA, "tech")), ...walk(join(ARENA, "auth"))].filter((f) => f.endsWith("route.ts"));
 
-test("the technician routes are exactly the five contract endpoints", () => {
+test("the technician routes are exactly the six contract endpoints", () => {
   const paths = techRoutes.map((f) => "/api/" + relative(API_ROOT, f).split(sep).slice(0, -1).join("/")).sort();
   assert.deepEqual(paths, [...TECH_PATHS].sort());
 });

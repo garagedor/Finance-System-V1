@@ -10,6 +10,7 @@ const PROD = {
   VERCEL: "1", VERCEL_ENV: "production", NODE_ENV: "production",
   ARENA_TECH_ENABLED: "1", ARENA_WB_SUPABASE_URL: URL_, ARENA_WB_VERIFIER_SECRET: "x".repeat(48),
   ARENA_PASS_PRIVATE_KEY: "pem", ARENA_TECH_ALLOWED_ORIGINS: "capacitor://localhost,https://app.example.com", ARENA_MONGODB_DB: "arena_prod",
+  ARENA_ROW_ID_SECRET: "r".repeat(40),
 } as NodeJS.ProcessEnv;
 
 test("the documented production shape is safe", () => {
@@ -31,6 +32,8 @@ const BAD: [string, Partial<NodeJS.ProcessEnv>, RegExp][] = [
   ["missing verifier secret", { ARENA_WB_VERIFIER_SECRET: "" }, /ARENA_WB_VERIFIER_SECRET/],
   ["short verifier secret", { ARENA_WB_VERIFIER_SECRET: "short" }, /ARENA_WB_VERIFIER_SECRET/],
   ["missing pass key", { ARENA_PASS_PRIVATE_KEY: "" }, /ARENA_PASS_PRIVATE_KEY/],
+  ["missing row id secret", { ARENA_ROW_ID_SECRET: "" }, /ARENA_ROW_ID_SECRET/],
+  ["short row id secret", { ARENA_ROW_ID_SECRET: "short" }, /ARENA_ROW_ID_SECRET/],
   ["missing origins", { ARENA_TECH_ALLOWED_ORIGINS: "" }, /ARENA_TECH_ALLOWED_ORIGINS/],
   ["missing arena db", { ARENA_MONGODB_DB: "" }, /ARENA_MONGODB_DB/],
   ["retired service-role key present", { ARENA_WB_VERIFIER_KEY: "eyJ..." }, /retired/],
@@ -45,7 +48,7 @@ for (const [name, over, re] of BAD) {
 
 test("the local dev stack (not deployed) may use ARENA_DEV_STACK and local origins", () => {
   const dev = { NODE_ENV: "production", ARENA_DEV_STACK: "1", ARENA_TECH_ENABLED: "1", ARENA_WB_SUPABASE_URL: URL_, ARENA_WB_VERIFIER_SECRET: "x".repeat(40),
-    ARENA_PASS_PRIVATE_KEY: "pem", ARENA_TECH_ALLOWED_ORIGINS: "http://127.0.0.1:5173,capacitor://localhost", ARENA_MONGODB_DB: "arena_dev" } as NodeJS.ProcessEnv;
+    ARENA_PASS_PRIVATE_KEY: "pem", ARENA_TECH_ALLOWED_ORIGINS: "http://127.0.0.1:5173,capacitor://localhost", ARENA_MONGODB_DB: "arena_dev", ARENA_ROW_ID_SECRET: "r".repeat(40) } as NodeJS.ProcessEnv;
   assert.equal(isDeployed(dev), false);
   assert.deepEqual(techEnvProblems(dev), []);
 });

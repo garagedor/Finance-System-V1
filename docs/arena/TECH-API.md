@@ -13,6 +13,7 @@ there. Contract: `src/lib/arena/tech-api-contract.ts` (version 1).
 | GET | `/api/arena/tech/leaderboard?view=national\|eligible&week=YYYY-MM-DD` | pass | `LeaderboardResponse` |
 | GET | `/api/arena/tech/history?limit=1..52` (default 12) | pass | `HistoryResponse` (approved weeks only) |
 | GET | `/api/arena/tech/events?since=<cursor>` | pass | `EventsResponse` |
+| GET | `/api/arena/tech/live?view=national\|eligible&since=<cursor>` | pass | `LiveResponse` = `{ apiVersion, me, events, leaderboard \| null }` |
 | OPTIONS | all of the above | none | CORS preflight |
 
 Errors: `{ error, code }` with `code` from the contract.
@@ -35,6 +36,24 @@ Behaviour notes for the app:
   a draft/scheduled week is `404`.
 - `/me.standing` is `null` when the technician is not taking part this week;
   `rank: null` means taking part but no jobs yet.
+- **`/live` (one request per refresh cycle, added 2026-11-09).** The app polls ONE
+  endpoint every `rules.refreshSeconds`: `/me` + `/events` (+ the current week's
+  `/leaderboard` when `view` is given, i.e. while the board tab is open) in one body,
+  from ONE pass check and ONE Weekly Balance account check (the three separate
+  endpoints cost three). `since` works exactly as on `/events`; `leaderboard` is `null`
+  without `view` or without a competition. Same builders as the separate endpoints, one
+  lifecycle read (all three parts describe the same snapshot; the live recompute stays
+  single-flight, at most once per refresh interval). The separate endpoints stay for
+  older clients. The exchange advertises it: `ExchangeResponse.capabilities.live = true`
+  (absent on older servers → clients keep the separate endpoints). History stays on demand.
+- **Leaderboard row ids are anonymous (added 2026-11-09).** `LeaderboardRow.competitorId`
+  is `"r_" + base64url(HMAC-SHA256(ARENA_ROW_ID_SECRET, competitionId + ":" + accountId))[0..16 bytes]`
+  — stable within one competition week (use it as a React key / animation key),
+  different in another week, not reversible without the server-only secret, and never a
+  Weekly Balance account id (not even on the caller's own row). Highlight "me" with
+  `isMe`. No technician-facing body (me, leaderboard, history, events, live, errors)
+  carries another person's account id; `/me.competitor.id` and the exchange carry the
+  caller's own. Admin / Control Center APIs keep real ids.
 
 ## Contract change (additive, version not bumped)
 
@@ -81,8 +100,8 @@ CRM session in middleware — the pass is not a session cookie).
 
 ## Middleware
 
-`src/middleware.ts` exempts exactly five paths (a `Set`, not a prefix):
-`/api/arena/auth/exchange`, `/api/arena/tech/{me,leaderboard,history,events}`.
+`src/middleware.ts` exempts exactly six paths (a `Set`, not a prefix):
+`/api/arena/auth/exchange`, `/api/arena/tech/{me,leaderboard,history,events,live}`.
 `src/lib/arena/arena-tech-routes.test.ts` calls the real middleware for every
 `/api` route in the repo plus look-alike paths (`/api/arena/tech/me/x`,
 `/api/arena/techx/me`, `/api/arena/admin/*`, …) and asserts 401 without a session.
@@ -126,6 +145,7 @@ Admin API added: `GET /api/arena/admin/competitions/[id]/results`,
 | `ARENA_WB_DENY_REFS` | Optional comma list of refs that must never be used. |
 | `ARENA_PASS_PRIVATE_KEY` | RSA private key, PKCS#8 PEM or base64 of the PEM. Public key is derived. |
 | `ARENA_PASS_TTL_SECONDS` | Pass lifetime, default **300**, allowed 60–900. |
+| `ARENA_ROW_ID_SECRET` | HMAC secret for anonymous leaderboard row ids (≥ 32 chars, random; `tech/row-id.ts`). Required when `ARENA_TECH_ENABLED=1`; missing/short → the technician API is off (fail closed, never raw ids). Rotating it re-keys every row id (harmless: ids are per week anyway). |
 | `ARENA_TECH_ALLOWED_ORIGINS` | Comma list for CORS (dev: `http://127.0.0.1:5173,http://localhost:5173,capacitor://localhost`). A request with any other `Origin` is refused. Credentials are never allowed. |
 | `ARENA_VERIFIER` | `wb` (default: the Weekly Balance `arena-verify` Edge Function, see VERIFIER.md) or `fake-dev`. |
 | `ARENA_WB_VERIFIER_SECRET` | Dedicated secret for `arena-verify` (≥ 32 chars). Never the service-role key. |
@@ -171,7 +191,9 @@ is spread from internal records. Tests walk every key of every response and fail
 field not in the contract, on job ids, CRM short names, profit sums, phones, addresses,
 invoices, and Supabase identifiers. Other competitors appear only as leaderboard rows
 (display name, location, rank, score, gates met, prize; metrics only if the rules show
-ineligible metrics or the row is eligible). History shows only winners and the caller.
+ineligible metrics or the row is eligible), identified by an anonymous per-week row id
+(`tech/row-id.test.ts`, `tech/live-routes.test.ts` scan every body, errors included, for
+any UUID other than the caller's own). History shows only winners and the caller.
 
 ## Security properties (summary)
 

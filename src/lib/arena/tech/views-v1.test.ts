@@ -43,7 +43,7 @@ test("rules view: methodology, both caps, weights hidden (null) under V1; V0 unc
 
 test("leaderboard rows: C, A and the limiting metric; final = min(C, A)", () => {
   const s = standings(V1(), [...person("Ann", 20, 9, 15000 / 9), ...person("Bo", 10, 5, 1000)], ["Ann", "Bo"]);
-  const rows = leaderboardRows(s, V1(), "live", "u_Bo", "national");
+  const rows = leaderboardRows(s, V1(), "live", "u_Bo", "national", (id) => id);
   const ann = rows.find((r) => r.competitorId === "u_Ann")!;
   assert.deepEqual([ann.closingScore, ann.avgScore, ann.score, ann.limitingMetric], [90, 150, 90, "closingRate"]);
   const bo = rows.find((r) => r.competitorId === "u_Bo")!;
@@ -55,7 +55,7 @@ test("hidden metrics hide the metric scores too", () => {
   const r = V1();
   r.eligibility.minQualifyingJobs = 50;
   r.display.showIneligibleMetrics = false;
-  const rows = leaderboardRows(standings(r, person("Ann", 10, 5, 1000), ["Ann"]), r, "live", "u_x", "national");
+  const rows = leaderboardRows(standings(r, person("Ann", 10, 5, 1000), ["Ann"]), r, "live", "u_x", "national", (id) => id);
   assert.deepEqual([rows[0].closingScore, rows[0].avgScore, rows[0].limitingMetric], [null, null, null]);
 });
 

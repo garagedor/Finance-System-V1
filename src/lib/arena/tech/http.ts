@@ -24,6 +24,7 @@ import { ARENA_COLLECTIONS } from "../mongo-store";
 import { authorizePass, exchange, type AccessDeps } from "./access";
 import { isAllowlisted, type TechAccessCollection } from "./allowlist";
 import { findCompetitor, TechBadRequest, TechNotFound, type TechCtx } from "./service";
+import { rowIdSecretFromEnv } from "./row-id";
 
 const MINUTE_MS = 60_000;
 const IP_PER_MINUTE = 60;
@@ -60,8 +61,9 @@ const originRefused = (req: Request, cfg: TechConfig | null) => {
 };
 
 async function deps(cfg: TechConfig): Promise<{ deps: AccessDeps; ctx: TechCtx }> {
+  const rowIdSecret = rowIdSecretFromEnv(); // missing/short → ArenaTechConfigError → 503 (fail closed)
   const a = await arenaContexts();
-  const ctx: TechCtx = { lifecycle: a.lifecycle, review: a.review, crmDb: a.crmDb };
+  const ctx: TechCtx = { lifecycle: a.lifecycle, review: a.review, crmDb: a.crmDb, rowIdSecret };
   const keys = remoteJwks(cfg.wb.jwksUrl);
   // Shared across instances: counters live in the Arena database (rate-limit.ts).
   const rl = a.arenaDb.collection(ARENA_COLLECTIONS.rateLimit) as never as RateLimitCollection;

@@ -65,7 +65,9 @@ const competition = {
   dataAsOf,
 };
 const board = (view: "national" | "eligible") => {
-  const rs = leaderboardRows(rows, rules, phase, "", view);
+  // OWNER-only local presentation (never served to technicians): rows keep the real ids so
+  // `pending` (keyed by competitor id) still matches them. The technician API anonymizes.
+  const rs = leaderboardRows(rows, rules, phase, "", view, (id) => id);
   const ranked = view === "eligible" ? rs.map((r, i) => ({ ...r, rank: i + 1 })) : rs;
   return {
     apiVersion: 1, weekStart: week, phase, view, dataAsOf, rows: ranked,

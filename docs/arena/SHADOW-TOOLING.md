@@ -133,7 +133,7 @@ exit 0 when nothing fails, 1 otherwise. `--out` and `--shadow-dir` default to
 | F4 | local Arena state | `ARENA_SHADOW_LOCAL_URI` not 127.0.0.1-only, `ARENA_SHADOW_DB` not `arena_*`, or not reachable |
 | F5 | rules | prints the rules that will be used (methodology, minimums, targets/caps, prizes, budget, Most Improved, qualifying statuses, tie-break, review window) and the SHA-256 of their canonical JSON; FAIL when `<shadow-dir>/approved-rules.sha256` is absent ("owner has not confirmed rules yet" — INFO with `--print-only`), holds no hash, or differs |
 | F6 | `<shadow-dir>/decisions.json` | absent, not JSON, or not valid against the schema below |
-| F7 | technician access OFF | `ARENA_TECH_ENABLED`, `ARENA_WB_*`, `ARENA_VERIFIER`, `ARENA_PASS_*`, `WB_*`, `*SUPABASE*`, `*WEEKLY_BALANCE*` set in the environment; anything listening on a non-loopback address (0.0.0.0, ::, *, a LAN IP) on the Arena ports (default 3000, 3999, 5173; from `ss -ltnp`). Dev servers on 127.0.0.1 are fine |
+| F7 | technician access OFF | `ARENA_TECH_ENABLED`, `ARENA_WB_*`, `ARENA_VERIFIER`, `ARENA_PASS_*`, `ARENA_ROW_ID_SECRET`, `WB_*`, `*SUPABASE*`, `*WEEKLY_BALANCE*` set in the environment; anything listening on a non-loopback address (0.0.0.0, ::, *, a LAN IP) on the Arena ports (default 3000, 3999, 5173; from `ss -ltnp`). Dev servers on 127.0.0.1 are fine |
 | F8 | output folder | missing, not mode 700, or inside any git work tree |
 | F9 | disk and clock | < 1 GB free; clock more than 2 min off the `Date` header of https://www.google.com (fallback cloudflare). Offline → SKIP with a note |
 

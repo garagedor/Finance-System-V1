@@ -108,6 +108,7 @@ const ARENA_PASS_ROUTES = new Set([
     '/api/arena/tech/leaderboard',
     '/api/arena/tech/history',
     '/api/arena/tech/events',
+    '/api/arena/tech/live',
 ]);
 
 // Arena operations endpoints called by a scheduler without a CRM session. EXACT

@@ -11,12 +11,14 @@ import { issuePass, passKeysFromEnv, type PassKeys } from "./pass.ts";
 import { MemoryRateLimiter } from "./rate-limit.ts";
 import { readTechConfig, parseWbUrl, PASS_TTL_DEFAULT_SECONDS, PRODUCTION_WB_REF_SHA256, ArenaTechConfigError } from "./config.ts";
 import { closesNeeded, decodeCursor, encodeCursor } from "./views.ts";
-import { techEvents, techHistory, techLeaderboard, techMe, findCompetitor, type TechCtx } from "./service.ts";
+import { techEvents, techHistory, techLeaderboard, techLive, techMe, findCompetitor, type TechCtx } from "./service.ts";
 import { approveResults, freezeCompetition, openReview, reviewSnapshot } from "../lifecycle.ts";
 import { MemoryCollection } from "../testing/memory-collection.ts";
 import { fixture, jobs, ADMIN, OWNER, PEOPLE } from "../testing/lifecycle-fixture.ts";
 import { rulesFor, updateDraftRules } from "../config-store.ts";
 import { cloneRules } from "../config.ts";
+import { anonymousRowId } from "./row-id.ts";
+const ROW_SECRET = "tech-test-row-id-secret-0123456789abc";
 
 const ISS = "https://abcdefghijklmnopqrst.supabase.co/auth/v1";
 const [ANN, BO, CY] = PEOPLE;
@@ -86,6 +88,7 @@ test("exchange: a valid Weekly Balance token yields a 5-minute RS256 pass for th
   assert.equal(claims.exp! - claims.iat!, 300);
   assert.equal(JSON.parse(Buffer.from(body.pass.split(".")[0], "base64url").toString()).alg, "RS256");
   assert.deepEqual(Object.keys(claims).sort(), ["aud", "exp", "iat", "iss", "jti", "sub"], "the pass carries nothing else");
+  assert.deepEqual((out.body as { capabilities?: unknown }).capabilities, { live: true }, "the server offers GET /tech/live");
 });
 
 test("exchange rejects bad signature, expiry, wrong iss/aud, alg none, HS256 confusion, garbage", async () => {
@@ -222,7 +225,7 @@ test("config: technician API is off unless ARENA_TECH_ENABLED=1; pass lifetime d
   assert.equal(c.enabled, false);
   assert.equal(c.passTtlSeconds, 300);
   assert.equal(c.wb.issuer, ISS);
-  const complete = { ARENA_WB_VERIFIER_SECRET: "s".repeat(40), ARENA_PASS_PRIVATE_KEY: "pem", ARENA_TECH_ALLOWED_ORIGINS: "capacitor://localhost", ARENA_MONGODB_DB: "arena" };
+  const complete = { ARENA_WB_VERIFIER_SECRET: "s".repeat(40), ARENA_ROW_ID_SECRET: "r".repeat(40), ARENA_PASS_PRIVATE_KEY: "pem", ARENA_TECH_ALLOWED_ORIGINS: "capacitor://localhost", ARENA_MONGODB_DB: "arena" };
   assert.equal(readTechConfig({ ...base, ...complete, ARENA_TECH_ENABLED: "1", ARENA_PASS_TTL_SECONDS: "600" }).passTtlSeconds, 600);
   assert.throws(() => readTechConfig({ ...base, ARENA_PASS_TTL_SECONDS: "86400" }), ArenaTechConfigError);
   assert.throws(() => readTechConfig({ ...base, ARENA_WB_SUPABASE_URL: "http://abcdefghijklmnopqrst.supabase.co" }), ArenaTechConfigError);
@@ -311,7 +314,7 @@ async function techWorld() {
     ownerUserId: async () => OWNER, verifiedCompetitorIds: async () => new Set(PEOPLE.map((p) => p.id)),
     now: () => f.ctx.config.now(), newId: (p: string) => `${p}_x`,
   };
-  const ctx: TechCtx = { lifecycle: f.ctx, review: review as never, crmDb: fakeCrm(mappings) };
+  const ctx: TechCtx = { lifecycle: f.ctx, review: review as never, crmDb: fakeCrm(mappings), rowIdSecret: ROW_SECRET };
   return { ...f, id, ctx, mappings };
 }
 
@@ -333,6 +336,8 @@ const CONTRACT_KEYS = new Set([
   "cursor", "events", "from", "to", "gate",
   // ADDED 2026-11-09 (additive, apiVersion 1): RulesView.jobCountBasis, competition.beta / LeaderboardResponse.beta
   "jobCountBasis", "beta",
+  // ADDED 2026-11-09 (additive, apiVersion 1): GET /api/arena/tech/live (LiveResponse)
+  "me", "leaderboard",
 ]);
 function keysOf(v: unknown, out = new Set<string>()): Set<string> {
   if (Array.isArray(v)) v.forEach((x) => keysOf(x, out));
@@ -372,6 +377,8 @@ test("data minimization: /me, /leaderboard, /history and /events expose only con
 
   const ev = await techEvents(w.ctx, ANN.id, null);
   assertMinimal("events", ev, ids);
+  assertMinimal("live", await techLive(w.ctx, ANN.id, "national", ev.cursor), ids);
+  assertMinimal("live (no board)", await techLive(w.ctx, ANN.id, null, null), ids);
 
   // approve the week, then history
   w.setNow("2026-11-02T06:00:00Z");
@@ -404,11 +411,11 @@ test("ineligible metrics are hidden when the rules say so; potential prizes hidd
   const cs = await import("../config-store.ts");
   await cs.scheduleCompetition(f.config, c._id, ADMIN);
   await cs.activateCompetition(f.config, c._id, OWNER);
-  const ctx: TechCtx = { lifecycle: f.ctx, review: { store: { cases: new MemoryCollection() } } as never, crmDb: fakeCrm([]) };
+  const ctx: TechCtx = { lifecycle: f.ctx, review: { store: { cases: new MemoryCollection() } } as never, crmDb: fakeCrm([]), rowIdSecret: ROW_SECRET };
   const lb = await techLeaderboard(ctx, ANN.id, "national", null);
-  const cyRow = lb.rows.find((r) => r.competitorId === CY.id)!;
+  const cyRow = lb.rows.find((r) => r.competitorId === anonymousRowId(ROW_SECRET, c._id, CY.id))!;
   assert.deepEqual([cyRow.closingRateBp, cyRow.avgTicketCents, cyRow.qualifyingJobs], [null, null, null]);
-  assert.equal(lb.rows.find((r) => r.competitorId === ANN.id)!.prizeCents, 0);
+  assert.equal(lb.rows.find((r) => r.isMe)!.prizeCents, 0);
 });
 
 test("findCompetitor: unmapped and rule-excluded people are not competitors", async () => {

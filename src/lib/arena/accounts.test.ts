@@ -11,6 +11,7 @@ import { ArenaStateError, amendActiveRules, rulesFor } from "./config-store.ts";
 import { accountApprovalProblems, checkAccounts, classifyAccount } from "./accounts.ts";
 import { leaderboardRows, myStanding } from "./tech/views.ts";
 import { techLeaderboard } from "./tech/service.ts";
+import { anonymousRowId } from "./tech/row-id.ts";
 import { cloneRules } from "./config.ts";
 import { fixture, jobs, ADMIN, OWNER, PEOPLE } from "./testing/lifecycle-fixture.ts";
 import { MemoryCollection } from "./testing/memory-collection.ts";
@@ -153,9 +154,10 @@ test("approved weeks are immutable: a later account change never recalculates th
   const stored = (await f.lc.results.findOne({ _id: f.id }))!;
   assert.deepEqual(stored, doc);
   const computeBefore = f.data.computeCalls;
-  const lb = await techLeaderboard({ lifecycle: f.ctx, review: null as never, crmDb: null as never }, CY.id, "national", null);
+  const SECRET = "test-row-id-secret-0123456789abcdef";
+  const lb = await techLeaderboard({ lifecycle: f.ctx, review: null as never, crmDb: null as never, rowIdSecret: SECRET }, CY.id, "national", null);
   assert.equal(f.data.computeCalls, computeBefore, "an approved week is served from the record, not recomputed");
-  assert.deepEqual(lb.rows.filter((r) => r.prizeCents > 0).map((r) => r.competitorId), [ANN.id, BO.id]);
+  assert.deepEqual(lb.rows.filter((r) => r.prizeCents > 0).map((r) => r.competitorId), [ANN.id, BO.id].map((id) => anonymousRowId(SECRET, f.id, id)), "rows carry anonymous row ids");
 });
 
 test("live: the same rule applies provisionally; a failed check falls back to the last known answer", async () => {
@@ -207,7 +209,7 @@ test("technicians never see another competitor's account status", async () => {
   rv.rules.display.showIneligibleMetrics = true;
   const { toStanding } = await import("./lifecycle.ts");
   const standings = snap.result.results.map(toStanding);
-  const national = leaderboardRows(standings, rv.rules, "in_review", BO.id, "national");
+  const national = leaderboardRows(standings, rv.rules, "in_review", BO.id, "national", (id) => id);
   const ann = national.find((r) => r.competitorId === ANN.id)!;
   assert.equal(ann.rank, 1);
   assert.equal(ann.eligible, false, "shown only as not prize-eligible");
@@ -217,7 +219,7 @@ test("technicians never see another competitor's account status", async () => {
   assert.equal(ann.qualifyingJobs, null);
   const text = JSON.stringify(national);
   for (const w of ["inactive", "pending", "unmapped", "account", "verif"]) assert.ok(!text.includes(w), `no "${w}" in technician rows`);
-  const eligibleView = leaderboardRows(standings, rv.rules, "in_review", BO.id, "eligible");
+  const eligibleView = leaderboardRows(standings, rv.rules, "in_review", BO.id, "eligible", (id) => id);
   assert.ok(!eligibleView.some((r) => r.competitorId === ANN.id));
   // Bo's own dashboard: holds the 1st prize the excluded Ann would have taken
   const mine = myStanding(standings.find((s) => s.competitorId === BO.id)!, standings, rv.rules, "in_review");

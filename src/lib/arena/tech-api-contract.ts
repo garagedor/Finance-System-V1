@@ -10,7 +10,8 @@
  *    CRM session. The pass identifies ONE competitor; nothing else.
  *  - No customer data, job ids, addresses, phones, invoice numbers, CRM names,
  *    commission or payout data. Other competitors appear only as public
- *    leaderboard rows (display name, location, rank, score, gates met, prize).
+ *    leaderboard rows (display name, location, rank, score, gates met, prize),
+ *    identified by an anonymous per-week row id — never by their account id.
  *  - Money is integer cents, rates are basis points (4000 = 40.00%), scores are
  *    plain numbers rounded to 2 decimals server-side.
  *  - Celebrations are driven ONLY by `result_approved` events.
@@ -29,6 +30,9 @@ export interface ExchangeResponse {
   expiresAt: string;       // ISO
   competitorId: string;
   displayName: string;
+  /** ADDED (additive, apiVersion 1; absent from older servers = none):
+   *  live = GET /api/arena/tech/live is served (one request per refresh cycle). */
+  capabilities?: { live: boolean };
 }
 export type ExchangeError =
   | "invalid_token" | "account_inactive" | "not_a_competitor" | "arena_disabled" | "rate_limited";
@@ -79,7 +83,11 @@ export interface RulesView {
 
 export interface LeaderboardRow {
   rank: number;
-  competitorId: string;        // opaque; lets the app highlight "me"
+  /** Opaque ANONYMOUS row id: "r_" + 22 base64url chars, HMAC of (competition, person)
+   *  under a server-only secret. Stable within one competition week (use it as a key),
+   *  different across weeks, never a Weekly Balance account id — not even on the caller's
+   *  own row. Highlight "me" with `isMe`. (Older servers sent the account id here.) */
+  competitorId: string;
   displayName: string;
   location: string;
   score: number;
@@ -198,6 +206,20 @@ export interface EventsResponse {
   apiVersion: number;
   cursor: string;
   events: ArenaEvent[];
+}
+
+/** GET /api/arena/tech/live?view=national|eligible&since=<cursor>
+ *  ADDED (additive, apiVersion 1; offered when ExchangeResponse.capabilities.live).
+ *  ONE authenticated request per refresh cycle: the same bodies as /me and /events
+ *  (+ the current week's /leaderboard when `view` is given) from one pass check and
+ *  ONE Weekly Balance account check. Omit `view` when the board is not on screen.
+ *  `since` works exactly as on /events (omit on the first poll). History stays on demand. */
+export interface LiveResponse {
+  apiVersion: number;
+  me: MeResponse;
+  events: EventsResponse;
+  /** null when `view` was not given, or there is no competition right now. */
+  leaderboard: LeaderboardResponse | null;
 }
 
 export interface ArenaErrorBody { error: string; code: ExchangeError | "unauthorized" | "forbidden" | "not_found" | "bad_request" }

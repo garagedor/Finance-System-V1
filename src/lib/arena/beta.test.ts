@@ -156,6 +156,7 @@ const techCtx = (f: Awaited<ReturnType<typeof betaWeek>>): TechCtx => ({
     now: () => f.ctx.config.now(), newId: (p: string) => `${p}_x`,
   } as never,
   crmDb: fakeCrm(),
+  rowIdSecret: "beta-test-row-id-secret-0123456789",
 });
 
 test("technician API: competition.beta / leaderboard beta are true; never an award, a history week or a result_approved", async () => {

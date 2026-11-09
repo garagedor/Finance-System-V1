@@ -509,7 +509,7 @@ export function writePrivate(dir: string, file: string, content: string) {
 // ── technician access OFF ──────────────────────────────────────────────────
 
 /** Environment variables that would switch technician access on or connect Weekly Balance / Supabase. */
-const TECH_OR_WB_ENV = /^(ARENA_TECH_ENABLED|ARENA_TECH_.*|ARENA_WB_.*|ARENA_VERIFIER|ARENA_FAKE_VERIFIER_FILE|ARENA_PASS_.*|WB_.*|.*WEEKLY_BALANCE.*|.*SUPABASE.*)$/i;
+const TECH_OR_WB_ENV = /^(ARENA_TECH_ENABLED|ARENA_TECH_.*|ARENA_ROW_ID_SECRET|ARENA_WB_.*|ARENA_VERIFIER|ARENA_FAKE_VERIFIER_FILE|ARENA_PASS_.*|WB_.*|.*WEEKLY_BALANCE.*|.*SUPABASE.*)$/i;
 export const techAccessEnvVars = (env: NodeJS.ProcessEnv) => Object.keys(env).filter((k) => TECH_OR_WB_ENV.test(k) && env[k] !== undefined).sort();
 
 export interface Listener { address: string; port: number; process: string | null }

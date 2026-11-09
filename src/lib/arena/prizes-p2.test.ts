@@ -121,7 +121,7 @@ test("technician views follow the rules: 3 places + MI, pool $1,500, #4–#6 sho
   assert.equal(v.mostImprovedCents, 25_000);
   assert.equal(prizePoolCents(rules), 150_000);
   const r = run(rules);
-  const rows = leaderboardRows(r.results.map(toStanding), rules, "approved", "u_E", "national");
+  const rows = leaderboardRows(r.results.map(toStanding), rules, "approved", "u_E", "national", (id) => id);
   assert.deepEqual(rows.map((x) => [x.rank, x.prizeCents]), [[1, 55_000], [2, 40_000], [3, 30_000], [4, 25_000], [5, 0], [6, 0], [7, 0], [8, 0]]);
   assert.ok(rows.slice(4, 6).every((x) => x.eligible && x.score > 0), "#5–#6 stay visible and eligible, just unpaid");
 });

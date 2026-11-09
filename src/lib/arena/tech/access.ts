@@ -108,7 +108,7 @@ export async function exchange(deps: AccessDeps, authorization: string | null, i
   const who = await accountAndMapping(deps, userId);
   if ("status" in who) return who;
   const { pass, expiresAt } = await issuePass(deps.passKeys, who.competitorId, deps.passTtlSeconds, deps.now?.());
-  return { status: 200, body: { pass, expiresAt, competitorId: who.competitorId, displayName: who.displayName } };
+  return { status: 200, body: { pass, expiresAt, competitorId: who.competitorId, displayName: who.displayName, capabilities: { live: true } } };
 }
 
 export async function authorizePass(

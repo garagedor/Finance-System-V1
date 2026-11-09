@@ -92,6 +92,7 @@ before(async () => {
     ARENA_WB_SUPABASE_URL: WB,
     ARENA_PASS_PRIVATE_KEY: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
     ARENA_TECH_ALLOWED_ORIGINS: "capacitor://localhost",
+    ARENA_ROW_ID_SECRET: "pilot-routes-row-id-secret-0123456789",
     ARENA_VERIFIER: "fake-dev",
     ARENA_FAKE_VERIFIER_FILE: verifierFile,
     ARENA_MONGODB_URI: uri,

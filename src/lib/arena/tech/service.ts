@@ -17,13 +17,14 @@ import { loadMappingFor, loadMappings, loadTechnicians } from "../mongo-store";
 import { rosterNames } from "../identity";
 import { reviewDecisions, type ReviewContext } from "../review";
 import type {
-  ArenaEvent, CompetitionPhase, EventsResponse, HistoryResponse, LeaderboardResponse, MeResponse,
+  ArenaEvent, CompetitionPhase, EventsResponse, HistoryResponse, LeaderboardResponse, LiveResponse, MeResponse,
 } from "../tech-api-contract";
 import { ARENA_TECH_API_VERSION } from "../tech-api-contract";
 import {
   decodeCursor, encodeCursor, historyWeeks, leaderboardRows, myStanding, prizeEligibleOf, prizePoolCents, rulesView,
 } from "./views";
 import type { Lookup } from "./access";
+import { rowIdsFor } from "./row-id";
 
 export class TechNotFound extends Error {}
 export class TechBadRequest extends Error {}
@@ -32,6 +33,8 @@ export interface TechCtx {
   lifecycle: LifecycleContext;
   review: ReviewContext;
   crmDb: Db;
+  /** Server-only HMAC secret for anonymous leaderboard row ids (row-id.ts; ARENA_ROW_ID_SECRET). */
+  rowIdSecret: string;
 }
 
 interface Display {
@@ -116,7 +119,10 @@ export async function findCompetitor(ctx: TechCtx, supabaseUserId: string): Prom
 }
 
 export async function techMe(ctx: TechCtx, me: string): Promise<MeResponse> {
-  const d = await current(ctx);
+  return meFrom(ctx, me, await current(ctx));
+}
+
+async function meFrom(ctx: TechCtx, me: string, d: Display | null): Promise<MeResponse> {
   const serverTime = ctx.lifecycle.config.now().toISOString();
   const found = await findCompetitor(ctx, me);
   const mine = d?.rows.find((r) => r.competitorId === me) ?? null;
@@ -151,9 +157,30 @@ export async function techMe(ctx: TechCtx, me: string): Promise<MeResponse> {
   };
 }
 
-export async function techLeaderboard(ctx: TechCtx, me: string, view: string | null, week: string | null): Promise<LeaderboardResponse> {
+function boardView(view: string | null): "national" | "eligible" {
   const v = view ?? "national";
   if (v !== "national" && v !== "eligible") throw new TechBadRequest("view must be national or eligible");
+  return v;
+}
+
+/** One week's board. Rows carry anonymous, competition-specific row ids (never account ids). */
+function boardFrom(ctx: TechCtx, d: Display, me: string, v: "national" | "eligible"): LeaderboardResponse {
+  return {
+    apiVersion: ARENA_TECH_API_VERSION,
+    weekStart: d.c.weekStart,
+    phase: d.phase,
+    view: v,
+    dataAsOf: d.dataAsOf,
+    beta: d.c.beta === true,
+    rows: leaderboardRows(d.rows, d.rv.rules, d.phase, me, v, rowIdsFor(ctx.rowIdSecret, d.c._id)),
+    eligibleCount: d.rows.filter(prizeEligibleOf).length,
+    participantCount: d.rows.length,
+    prizePoolCents: prizePoolCents(d.rv.rules),
+  };
+}
+
+export async function techLeaderboard(ctx: TechCtx, me: string, view: string | null, week: string | null): Promise<LeaderboardResponse> {
+  const v = boardView(view);
   let d: Display | null;
   if (week) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(week) || !isMonday(week)) throw new TechBadRequest("week must be a Monday (YYYY-MM-DD)");
@@ -162,18 +189,7 @@ export async function techLeaderboard(ctx: TechCtx, me: string, view: string | n
     d = await display(ctx, c);
   } else d = await current(ctx);
   if (!d) throw new TechNotFound("no competition right now");
-  return {
-    apiVersion: ARENA_TECH_API_VERSION,
-    weekStart: d.c.weekStart,
-    phase: d.phase,
-    view: v,
-    dataAsOf: d.dataAsOf,
-    beta: d.c.beta === true,
-    rows: leaderboardRows(d.rows, d.rv.rules, d.phase, me, v),
-    eligibleCount: d.rows.filter(prizeEligibleOf).length,
-    participantCount: d.rows.length,
-    prizePoolCents: prizePoolCents(d.rv.rules),
-  };
+  return boardFrom(ctx, d, me, v);
 }
 
 const HISTORY_DEFAULT = 12;
@@ -217,6 +233,10 @@ async function recentWin(ctx: TechCtx, me: string): Promise<ArenaEvent | null> {
  */
 export async function techEvents(ctx: TechCtx, me: string, since: string | null): Promise<EventsResponse> {
   await current(ctx); // freeze-if-due + live refresh generate events
+  return eventsFor(ctx, me, since);
+}
+
+async function eventsFor(ctx: TechCtx, me: string, since: string | null): Promise<EventsResponse> {
   const ev = ctx.lifecycle.lc.events;
   if (since === null) {
     const last = await ev.findOne({ competitorId: me }, { sort: { key: -1 } });
@@ -232,4 +252,24 @@ export async function techEvents(ctx: TechCtx, me: string, since: string | null)
   const docs = (await ev.find({ competitorId: me, key: { $gt: key } }).sort({ key: 1 }).toArray()).slice(0, EVENTS_PAGE);
   const events: ArenaEvent[] = docs.map((d) => d.event);
   return { apiVersion: ARENA_TECH_API_VERSION, cursor: encodeCursor(docs.length ? docs[docs.length - 1].key : key), events };
+}
+
+/**
+ * GET /api/arena/tech/live — ONE request per refresh cycle (contract LiveResponse).
+ * The caller's pass and Weekly Balance account were checked ONCE for this
+ * request (http.ts techRoute); this builds `me` + `events` (+ the current
+ * week's leaderboard when `view` is given) from ONE lifecycle read, so the
+ * three parts describe the same snapshot. Bodies are exactly the ones the
+ * separate endpoints return (same builders, same data minimization). The live
+ * recompute stays single-flight and at most once per refresh interval
+ * (lifecycle.liveSnapshot).
+ */
+export async function techLive(ctx: TechCtx, me: string, view: string | null, since: string | null): Promise<LiveResponse> {
+  const v = view === null || view === "" ? null : boardView(view);
+  if (since !== null && !decodeCursor(since)) throw new TechBadRequest("invalid cursor");
+  const d = await current(ctx); // freeze-if-due + live refresh (generates events) — once
+  const meBody = await meFrom(ctx, me, d);
+  const leaderboard = v && d ? boardFrom(ctx, d, me, v) : null;
+  const events = await eventsFor(ctx, me, since);
+  return { apiVersion: ARENA_TECH_API_VERSION, me: meBody, events, leaderboard };
 }

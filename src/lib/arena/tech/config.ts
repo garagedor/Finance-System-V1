@@ -7,6 +7,7 @@
  *   ARENA_WB_DENY_REFS            optional comma list of refs that must never be used here
  *   ARENA_PASS_PRIVATE_KEY        RS256 private key (PKCS#8 PEM, or base64 of the PEM)
  *   ARENA_PASS_TTL_SECONDS        pass lifetime, default 300 (5 min), max 900
+ *   ARENA_ROW_ID_SECRET           HMAC secret for anonymous leaderboard row ids (≥ 32 chars; row-id.ts)
  *   ARENA_TECH_ALLOWED_ORIGINS    comma list of browser origins allowed by CORS
  *   ARENA_VERIFIER                "wb" (default: the arena-verify Edge Function) | "fake-dev" (dev stack only)
  *   ARENA_WB_VERIFIER_SECRET      dedicated secret for the arena-verify Edge Function (≥ 32 chars)
