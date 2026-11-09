@@ -53,9 +53,14 @@ test("a missed run is caught by the next day's run", async () => {
   assert.deepEqual((await freezeDueCompetitions(f.ctx)).frozen, [f.id]);
 });
 
-test("wired into the EXISTING daily cron only (no new cron), behind its CRON_SECRET check, isolated", () => {
+test("wired into the EXISTING daily cron, behind its CRON_SECRET check, isolated", () => {
+  // Release RC: main now carries more CRM crons (bank-sync, invoice-links) and the
+  // release adds the Arena monitor cron. Pin what matters: the daily ScanPay cron
+  // is still there, and the ONLY Arena cron is /api/arena/monitor (once).
   const vercel = JSON.parse(readFileSync("vercel.json", "utf8"));
-  assert.deepEqual(vercel.crons.map((c: { path: string }) => c.path).sort(), ["/api/portal/ai/brief/run", "/api/scanpay/cron-sync"]);
+  const paths: string[] = vercel.crons.map((c: { path: string }) => c.path);
+  assert.ok(paths.includes("/api/scanpay/cron-sync"), "daily ScanPay cron present");
+  assert.deepEqual(paths.filter((p) => p.startsWith("/api/arena/")), ["/api/arena/monitor"]);
   const route = readFileSync("src/app/api/scanpay/cron-sync/route.ts", "utf8");
   assert.ok(route.indexOf("CRON_SECRET") < route.indexOf("arenaCronStep()"), "after the auth check");
   const step = readFileSync("src/lib/arena/cron.ts", "utf8");
