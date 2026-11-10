@@ -25,6 +25,7 @@ test("no business constants outside the seed template (config.ts)", () => {
     "job-source.ts": [/slice\(-10\)/], // US phone digits, for duplicate grouping
     "review.ts": [/2 to 40 characters/], // display-name length, not a competition rule
     "source-snapshot.ts": [/\/ 100\)/], // cents → dollars in change labels
+    "participation.ts": [/const MAX_REASON = 500;/, /const MAX_ID = 200;/], // text-length limits (same reason cap as the allowlist)
     "config.ts": [/.*/], // the seed lives here
   };
   for (const f of runtimeFiles) {

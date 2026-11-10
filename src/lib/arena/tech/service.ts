@@ -135,7 +135,11 @@ async function meFrom(ctx: TechCtx, me: string, d: Display | null): Promise<MeRe
   const notices = (await ctx.lifecycle.config.store.notices.find({ competitionId: d.c._id }).sort({ at: -1 }).toArray()).map((n) => ({
     kind: n.kind, message: n.message, at: n.at,
   }));
-  const participating = d.phase !== "upcoming" && d.phase !== "cancelled" && (!!mine || found.ok);
+  // Manage Technicians: an owner-excluded person keeps app access (that is the
+  // allowlist / Weekly Balance account) but is "not participating": no standing.
+  // Weeks already frozen show their stored snapshot until the owner re-checks it.
+  const excluded = !mine && found.ok && (await ctx.lifecycle.notParticipating?.())?.includes(me) === true;
+  const participating = d.phase !== "upcoming" && d.phase !== "cancelled" && (!!mine || (found.ok && !excluded));
   return {
     apiVersion: ARENA_TECH_API_VERSION,
     serverTime,

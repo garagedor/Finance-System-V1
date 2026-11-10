@@ -13,7 +13,7 @@ import { currentSettings, type StoreCollection, type StoreContext } from "./conf
 import type { ReviewContext } from "./review";
 import { reviewDecisions, syncDetected } from "./review";
 import { arenaDbName, arenaMongoUri, crmDbName } from "./env";
-import { arenaStores, ensureArenaIndexes, lifecycleCollections, loadMappings, loadTechnicians } from "./mongo-store";
+import { arenaStores, ensureArenaIndexes, lifecycleCollections, loadMappings, loadNotParticipating, loadTechnicians } from "./mongo-store";
 import type { LifecycleContext } from "./lifecycle";
 import type { RuleVersionDoc } from "./config-store";
 import type { CompetitionResult } from "./types";
@@ -134,6 +134,7 @@ export function buildArenaContexts(
     lookupJobs: (ids: string[]) => lookupJobs(crmDb, ids),
     checkAccounts: check,
     devStack: isDevStack(),
+    notParticipating: () => loadNotParticipating(arenaDb),
   };
   return partial;
 }
@@ -184,19 +185,23 @@ async function runEngine(ctx: ArenaContexts, rules: ArenaRules, hash: string, we
   const from = weeks.length ? weeks[weeks.length - 1] : weekStart;
   const window = { from: [from, weekStart].sort()[0], toExclusive: addDays(weekStart, 7) };
   const readAt = ctx.config.now().toISOString();
-  const [read, mappings, technicians, decisions] = await Promise.all([
+  const [read, mappings, technicians, decisions, notParticipating] = await Promise.all([
     readJobSource(ctx.crmDb, window.from, window.toExclusive),
     loadMappings(ctx.crmDb),
     loadTechnicians(ctx.crmDb),
     reviewDecisions(ctx.review),
+    loadNotParticipating(ctx.arenaDb),
   ]);
   const jobs = read.jobs;
+  // The one place live, monitor, freeze, review re-checks and previews build
+  // their competitor map: owner exclusions (Manage Technicians) apply to all.
   const competitors = buildCompetitorMap({
     mappings,
     technicians,
     crmNamesInUse: [...new Set(jobs.map((j) => j.tech))],
     overrides: decisions.overrides,
     displayNames: decisions.displayNames,
+    notParticipating,
   });
   // No lookup: performance only — every account `unverified`, which never
   // moves a prize. Preview/live/freeze/review/approval all pass a real lookup.
@@ -278,11 +283,12 @@ export async function scanForReview(
   if (!isMonday(firstWeek)) throw new Error("the scan must start on a Monday");
   const n = Math.max(1, Math.min(26, Math.floor(weeksCount)));
   const end = addDays(firstWeek, 7 * n);
-  const [jobs, mappings, technicians, decisions] = await Promise.all([
+  const [jobs, mappings, technicians, decisions, notParticipating] = await Promise.all([
     loadJobs(ctx.crmDb, firstWeek, end),
     loadMappings(ctx.crmDb),
     loadTechnicians(ctx.crmDb),
     reviewDecisions(ctx.review),
+    loadNotParticipating(ctx.arenaDb),
   ]);
   const weeks = Array.from({ length: n }, (_, i) => addDays(firstWeek, 7 * i));
   const found = detectCases({
@@ -293,6 +299,7 @@ export async function scanForReview(
     overrides: decisions.overrides,
     displayNames: decisions.displayNames,
     exclusions: decisions.exclusions,
+    notParticipating,
   });
   const res = await syncDetected(ctx.review, found, by);
   return { ...res, weeks };

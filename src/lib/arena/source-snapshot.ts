@@ -40,6 +40,8 @@ export interface SerializedCompetitorMap {
   issues: CompetitorMap["issues"];
   nameFormat?: CompetitorMap["nameFormat"];
   publicNames?: [string, NonNullable<CompetitorMap["publicNames"]> extends Map<string, infer V> ? V : never][];
+  /** Owner-excluded competitor ids (absent when none: older sources hash as before). */
+  notParticipating?: string[];
 }
 
 export interface SourceSnapshot {
@@ -82,6 +84,7 @@ export function serializeCompetitorMap(m: CompetitorMap): SerializedCompetitorMa
     issues: m.issues,
     ...(m.nameFormat ? { nameFormat: m.nameFormat } : {}),
     ...(m.publicNames ? { publicNames: [...m.publicNames.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)) } : {}),
+    ...(m.notParticipating?.length ? { notParticipating: [...m.notParticipating].sort() } : {}),
   }) as SerializedCompetitorMap;
 }
 
@@ -92,6 +95,7 @@ export function deserializeCompetitorMap(s: SerializedCompetitorMap): Competitor
     issues: s.issues,
     ...(s.nameFormat ? { nameFormat: s.nameFormat } : {}),
     ...(s.publicNames ? { publicNames: new Map(s.publicNames) } : {}),
+    ...(s.notParticipating?.length ? { notParticipating: [...s.notParticipating] } : {}),
   } as CompetitorMap;
 }
 

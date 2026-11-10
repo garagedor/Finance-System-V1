@@ -10,6 +10,7 @@ import type { ReviewStore } from "./review";
 import type { MappingRecord, TechnicianRecord } from "./identity";
 import type { LifecycleCollections } from "./lifecycle";
 import { RATE_LIMIT_TTL_INDEX } from "./tech/rate-limit";
+import { excludedCompetitorIds, type ParticipationCollection } from "./participation";
 
 export const ARENA_COLLECTIONS = {
   settings: "arena_settings",
@@ -35,6 +36,8 @@ export const ARENA_COLLECTIONS = {
   techAccess: "arena_tech_access",
   /** Live-recompute monitoring: last compute time/duration/error per competition (/api/arena/health). */
   liveHealth: "arena_live_health",
+  /** Manage Technicians: owner-controlled participation per competitor (history in arena_audit). */
+  participation: "arena_participation",
 } as const;
 
 /** Lifecycle collections (lifecycle.ts). Results, approvals and non-live snapshots are insert-only. */
@@ -90,12 +93,23 @@ export function ensureArenaIndexes(db: Db): Promise<void> {
       db.collection(ARENA_COLLECTIONS.techEvents).createIndex({ competitorId: 1, key: 1 }),
       db.collection(ARENA_COLLECTIONS.lateCorrections).createIndex({ competitionId: 1, detectedAt: -1 }),
       db.collection(ARENA_COLLECTIONS.rateLimit).createIndex(RATE_LIMIT_TTL_INDEX.key, RATE_LIMIT_TTL_INDEX.options),
+      db.collection(ARENA_COLLECTIONS.participation).createIndex({ status: 1 }),
+      db.collection(ARENA_COLLECTIONS.participation).createIndex({ at: -1 }),
     ]);
   })().catch((e) => {
     indexed = null;
     throw e;
   });
   return indexed;
+}
+
+/** Manage Technicians collection (Arena database only). */
+export const participationCollection = (arenaDb: Db) =>
+  arenaDb.collection(ARENA_COLLECTIONS.participation) as never as ParticipationCollection;
+
+/** Competitor ids the owner excluded from the Arena (Arena database; sorted). */
+export function loadNotParticipating(arenaDb: Db): Promise<string[]> {
+  return excludedCompetitorIds(participationCollection(arenaDb));
 }
 
 /** Read-only: verified people (one TechNameMapping record each). */

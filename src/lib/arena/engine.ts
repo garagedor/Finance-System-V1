@@ -257,6 +257,10 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
     (input.exclusions ?? []).filter((x) => !x.revokedAt).map((x) => x.jobId),
   );
   const people = new Map(competitors.competitors.map((c) => [c.id, c]));
+  // Owner-excluded people (Manage Technicians): their jobs are a decided
+  // exclusion — not scored, not ranked, and never "unattributed".
+  const notParticipating = new Set(competitors.notParticipating ?? []);
+  const excludedJobs = new Map<string, number>();
   const baselineWeeks = rules.mostImproved.enabled ? previousWeekStarts(weekStart, rules.mostImproved.baselineWeeks) : [];
 
   const current = new Map<string, Tally>();
@@ -272,6 +276,10 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
     const id = competitors.byCrmName.get(job.tech);
     const isCurrent = inWeek(job.date, weekStart);
     if (isCurrent) weekJobs.push(job);
+    if (id && !people.has(id) && notParticipating.has(id)) {
+      if (isCurrent) excludedJobs.set(id, (excludedJobs.get(id) ?? 0) + 1);
+      continue;
+    }
     if (!id || !people.has(id)) {
       if (isCurrent) unattributed.set(job.tech, (unattributed.get(job.tech) ?? 0) + 1);
       continue;
@@ -370,6 +378,9 @@ export function computeCompetition(input: ComputeInput): CompetitionResult {
       .map(([crmName, jobs]) => ({ crmName, jobs }))
       .sort((a, b) => b.jobs - a.jobs || (a.crmName < b.crmName ? -1 : 1)),
     ...(input.competitors.nameFormat ? { displayNameFormat: input.competitors.nameFormat } : {}),
+    ...(excludedJobs.size
+      ? { notParticipating: [...excludedJobs.entries()].map(([competitorId, jobs]) => ({ competitorId, jobs })).sort((a, b) => (a.competitorId < b.competitorId ? -1 : 1)) }
+      : {}),
   };
 }
 

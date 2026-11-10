@@ -38,7 +38,7 @@ import { detectCases } from "../../src/lib/arena/detect.ts";
 import { reviewDecisions, type ReviewCaseDoc } from "../../src/lib/arena/review.ts";
 import { canonicalJson } from "../../src/lib/arena/config.ts";
 import { archiveRun, asCaseDocs, planDecisions, projectDecisions, readDecisionsFile, resolveShadowRules, runStamp, type DecisionPlan, type ShadowDecisions } from "./lib-shadow.ts";
-import { ARENA_COLLECTIONS, arenaStores, loadMappings, loadTechnicians } from "../../src/lib/arena/mongo-store.ts";
+import { ARENA_COLLECTIONS, arenaStores, loadMappings, loadNotParticipating, loadTechnicians } from "../../src/lib/arena/mongo-store.ts";
 import { addDays, isMonday, previousWeekStarts, weekWindow } from "../../src/lib/arena/week.ts";
 import type { ArenaJob, ArenaRules, CompetitionResult } from "../../src/lib/arena/types.ts";
 import type { DisplayNameCaseData, DuplicateCaseData, IdentityCaseData } from "../../src/lib/arena/review.ts";
@@ -128,11 +128,13 @@ await runGuarded(async () => {
     const [jobs, mappings, technicians] = await Promise.all([loadJobs(crm.db, from, end), loadMappings(crm.db), loadTechnicians(crm.db)]);
     const weekJobs = jobs.filter((j) => j.date >= week && j.date < end);
     const inForce = await reviewDecisions({ store: arenaStores(arena).review } as never);
+    // Owner exclusions (Manage Technicians) recorded in the local Arena database.
+    const notParticipating = await loadNotParticipating(arena);
 
     // 3b) review queue for this week (same detector as the Control Center) and the owner's decisions file
     const cases = detectCases({
       weeks: [{ weekStart: week, jobs: weekJobs }], mappings, technicians, rules: v1,
-      overrides: inForce.overrides, displayNames: inForce.displayNames, exclusions: inForce.exclusions,
+      overrides: inForce.overrides, displayNames: inForce.displayNames, exclusions: inForce.exclusions, notParticipating,
     });
     const decisionsFile = args.decisions ?? (fs.existsSync(path.join(args.out, "decisions.json")) ? path.join(args.out, "decisions.json") : null);
     let fileDecisions: ShadowDecisions | null = null;
@@ -151,6 +153,7 @@ await runGuarded(async () => {
     }
     const competitors = buildCompetitorMap({
       mappings, technicians, crmNamesInUse: [...new Set(jobs.map((j) => j.tech))], overrides: decisions.overrides, displayNames: decisions.displayNames,
+      notParticipating,
     });
     const run = (r: ArenaRules): CompetitionResult =>
       computeCompetition({

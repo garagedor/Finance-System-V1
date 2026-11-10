@@ -78,6 +78,10 @@ export interface SnapshotDoc {
   lateChanges?: LateChangeReport;
   /** Reconciled only: the owner's explicit choice about material late changes. */
   lateDecision?: LateDecision | null;
+  /** Live only: token of the last invalidation (an input outside the CRM changed: Manage Technicians). */
+  invalidation?: string;
+  /** Live only: the invalidation token already known when the recompute that produced this snapshot started. */
+  invalidationSeen?: string | null;
 }
 
 export type LateChoice = "keep_freeze" | "accept_correction";
@@ -229,6 +233,12 @@ export interface LifecycleContext {
   checkAccounts: (ids: string[], mode: AccountMode) => Promise<Record<string, AccountInput>>;
   /** True only on the local dev stack (ARENA_DEV_STACK=1). */
   devStack: boolean;
+  /**
+   * Competitor ids the owner currently excludes (Manage Technicians,
+   * arena_participation). Optional: absent = nobody is excluded. Used to refuse
+   * approving a snapshot computed under a different participation list.
+   */
+  notParticipating?: () => Promise<string[]>;
 }
 
 const CLAIM_LEASE_MS = 30_000;
@@ -368,6 +378,7 @@ export async function liveSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv:
   const fresh =
     cur &&
     cur.ruleVersionId === rv._id &&
+    !liveInvalidated(cur) &&
     now(ctx).getTime() - Date.parse(cur.computedAt) < rv.rules.display.refreshSeconds * SECOND_MS;
   if (fresh) return cur;
   if (c.status !== "active" && c.status !== "suspended") return cur;
@@ -397,6 +408,7 @@ export async function liveSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv:
     const doc: SnapshotDoc = {
       _id: liveId(c._id), competitionId: c._id, weekStart: c.weekStart, kind: "live", n: (cur?.n ?? 0) + 1,
       computedAt: at, ruleVersionId: rv._id, rulesHash: rv.rulesHash, result,
+      ...(cur?.invalidation ? { invalidationSeen: cur.invalidation } : {}),
     };
     if (cur) await ctx.lc.snapshots.updateOne({ _id: doc._id }, { $set: doc });
     else await ctx.lc.snapshots.insertOne(doc);
@@ -406,6 +418,30 @@ export async function liveSnapshot(ctx: LifecycleContext, c: CompetitionDoc, rv:
   } finally {
     await release();
   }
+}
+
+/**
+ * Was this live snapshot invalidated after its recompute started? The token
+ * seen at the start is stored with the result, so an invalidation that lands
+ * DURING a recompute still forces the next one (conservative: never stale).
+ */
+const liveInvalidated = (s: SnapshotDoc) => !!s.invalidation && s.invalidation !== s.invalidationSeen;
+
+/**
+ * Force the next read of every running week to recompute its live snapshot
+ * (Manage Technicians: a participation change must never leave a stale
+ * snapshot on screen). Marks only; frozen, reviewed and approved snapshots are
+ * never touched. Returns the competition ids marked.
+ */
+export async function invalidateLiveSnapshots(ctx: LifecycleContext): Promise<string[]> {
+  const invalidation = ctx.config.newId("ainv");
+  const running = await ctx.config.store.competitions.find({ status: { $in: ["active", "suspended"] } }).sort({ weekStart: 1 }).toArray();
+  const marked: string[] = [];
+  for (const c of running) {
+    const r = await ctx.lc.snapshots.updateOne({ _id: liveId(c._id) }, { $set: { invalidation } });
+    if (r.matchedCount === 1) marked.push(c._id);
+  }
+  return marked;
 }
 
 /** Length cap for a stored recompute error message (monitoring text, not a rule). */
@@ -732,6 +768,25 @@ export function lateChangeBlockers(snap: SnapshotDoc): string[] {
   return p;
 }
 
+/**
+ * Manage Technicians: a snapshot is approvable only under the participation
+ * list it was computed with, as far as it matters for that week — a person
+ * excluded since then who is ranked in it, or a person re-included since then
+ * who had jobs in the week. Never applied silently: the owner re-checks (a new
+ * reconciled snapshot under the current list) or reverts the change.
+ */
+export function participationBlockers(result: CompetitionResult, excludedNow: readonly string[]): string[] {
+  const now = new Set(excludedNow);
+  const nowExcludedButRanked = result.results.filter((r) => now.has(r.competitorId)).map((r) => r.displayName);
+  const reincluded = (result.notParticipating ?? []).filter((x) => !now.has(x.competitorId)).map((x) => x.competitorId);
+  const p: string[] = [];
+  if (nowExcludedButRanked.length)
+    p.push(`${nowExcludedButRanked.length} technician(s) were excluded from the Arena after this snapshot (${nowExcludedButRanked.join(", ")}); re-check CRM data to apply the current participation list before approving`);
+  if (reincluded.length)
+    p.push(`${reincluded.length} technician(s) were re-included in the Arena after this snapshot; re-check CRM data to apply the current participation list before approving`);
+  return p;
+}
+
 /** Everything that blocks approving this snapshot (duplicates, accounts, late CRM changes). */
 export const snapshotBlockers = (snap: SnapshotDoc) => [...approvalBlockers(snap.result), ...lateChangeBlockers(snap)];
 
@@ -789,7 +844,7 @@ export async function approveResults(
     throw new ArenaStateError("the results changed since you opened them; reload and review again");
   if (snap.ruleVersionId !== rv._id) throw new ArenaStateError("the rules changed after this snapshot; re-check first");
   assertValidRules(rv.rules, { knownStatuses: ctx.config.knownStatuses, ceilingCents: s.budgetCeilingCents });
-  const blockers = snapshotBlockers(snap);
+  const blockers = [...snapshotBlockers(snap), ...(ctx.notParticipating ? participationBlockers(snap.result, await ctx.notParticipating()) : [])];
   if (blockers.length) throw new ArenaStateError(blockers.join("; "));
   // Account eligibility is checked again NOW: the owner approves exactly the
   // account standings that were reviewed, or nothing.

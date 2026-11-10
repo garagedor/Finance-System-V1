@@ -4,7 +4,7 @@
 // read-triggered live refresh / freeze-if-due technicians cause).
 import { arenaRoute, BadRequest } from "../../../_lib";
 import {
-  approvalBlockers, freezeIfDue, liveSnapshot, phaseOf, reviewDiff, reviewSnapshot, ruleVersionOf, snapshotBlockers, windowOf,
+  approvalBlockers, freezeIfDue, liveSnapshot, participationBlockers, phaseOf, reviewDiff, reviewSnapshot, ruleVersionOf, snapshotBlockers, windowOf,
 } from "@/lib/arena/lifecycle";
 import { currentSettings } from "@/lib/arena/config-store";
 import { ACCOUNT_REASON } from "@/lib/arena/accounts";
@@ -57,7 +57,13 @@ export async function GET(_req: Request, p: P) {
       devStack: lc.devStack,
       isOwner: settings.ownerUserId === session.userId,
       snapshot: strip(shown),
-      blockers: shown ? (shown.kind === "live" ? approvalBlockers(shown.result) : snapshotBlockers(shown)) : [],
+      blockers: shown
+        ? shown.kind === "live"
+          ? approvalBlockers(shown.result)
+          : [...snapshotBlockers(shown), ...participationBlockers(shown.result, (await lc.notParticipating?.()) ?? [])]
+        : [],
+      // Owner-excluded people with jobs in the week (Manage Technicians): not ranked.
+      notParticipating: shown?.result.notParticipating ?? [],
       // Late CRM edits since the freeze (review), and the owner's choice when they change prizes.
       lateChanges: shown?.lateChanges ?? null,
       lateDecision: shown?.lateDecision ?? null,

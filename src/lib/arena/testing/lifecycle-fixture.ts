@@ -13,6 +13,7 @@ import { VerifierUnavailableError, type AccountStatus, type TechnicianVerifier }
 import { memoryStore, MemoryCollection } from "./memory-collection";
 import { buildSource, type JobLookup } from "../source-snapshot";
 import { addDays } from "../week";
+import { excludedCompetitorIds, type ParticipationDoc } from "../participation";
 
 export const OWNER = "owner-1";
 export const ADMIN = "admin-2";
@@ -65,12 +66,15 @@ export async function fixture(opts: { now?: string; devStack?: boolean; people?:
     },
   };
   const accountCache = new MemoryCollection<AccountCacheDoc>();
+  /** Manage Technicians (arena_participation), read like admin-service does on every compute. */
+  const participation = new MemoryCollection<ParticipationDoc>();
   const accountDeps = { verifier, cache: accountCache, now: () => t };
-  const competitors = () =>
+  const competitors = async () =>
     buildCompetitorMap({
       mappings: people.map((p) => ({ supabaseUserId: p.id, supabaseFullName: p.name, crmTechNames: [p.crm] })),
       technicians: people.map((p) => ({ _id: p.crm, location: p.location })),
       crmNamesInUse: [...new Set(data.jobs.map((j) => j.tech))],
+      notParticipating: await excludedCompetitorIds(participation),
     });
   const ctx: LifecycleContext = {
     config,
@@ -79,7 +83,7 @@ export async function fixture(opts: { now?: string; devStack?: boolean; people?:
     compute: async (weekStart, rv, mode) => {
       data.computeCalls += 1;
       if (data.computeError) throw data.computeError;
-      const map = competitors();
+      const map = await competitors();
       const accounts = await checkAccounts(accountDeps, map.competitors.map((c) => c.id), mode);
       const result = computeCompetition({ rules: rv.rules, rulesHash: rv.rulesHash, weekStart, competitors: map, jobs: data.jobs, accounts });
       const source = buildSource({
@@ -91,6 +95,7 @@ export async function fixture(opts: { now?: string; devStack?: boolean; people?:
     },
     lookupJobs: async (ids) => Object.fromEntries(ids.map((id) => [id, data.lookup.get(id) ?? "deleted"])),
     checkAccounts: (ids, mode) => checkAccounts(accountDeps, ids, mode),
+    notParticipating: () => excludedCompetitorIds(participation),
   };
   await initSettings(config, { budgetCeilingCents: 150_000, ownerUserId: OWNER, approverUserIds: [OWNER] }, OWNER);
   await saveTemplate(config, { templateId: "standard", name: "Standard Week", rules: SEED_STANDARD_WEEK }, OWNER);
@@ -100,6 +105,7 @@ export async function fixture(opts: { now?: string; devStack?: boolean; people?:
     data,
     config,
     accountCache,
+    participation,
     setNow: (iso: string) => (t = new Date(iso)),
     /** Create, schedule and start the WEEK competition (as the owner). */
     async startWeek(week = WEEK, template = "standard") {

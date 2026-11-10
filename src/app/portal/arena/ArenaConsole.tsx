@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ArenaRules } from "@/lib/arena/types";
 import type { CompetitionDoc, SettingsDoc, TemplateDoc, AuditDoc } from "@/lib/arena/config-store";
 import type { Readiness } from "@/lib/arena/review";
+import type { ParticipationRow } from "@/lib/arena/participation";
 import RulesEditor from "./RulesEditor";
 import ResultsPanel from "./ResultsPanel";
 import { api, BETA_LABEL, dollars, nextMonday, STATUS_LABEL, statusPill, weekLabel, when } from "./arena-ui";
@@ -27,7 +28,7 @@ interface Overview {
   /** "Balanced Performance · Assigned jobs · Prizes 2026-11" (P2 + job minimum on every assigned job); absent on older servers. */
   seedBalancedP3?: { templateId: string; name: string; rules: ArenaRules };
 }
-type Tab = "weeks" | "templates" | "names" | "settings" | "audit";
+type Tab = "weeks" | "templates" | "technicians" | "names" | "settings" | "audit";
 type Editing =
   | { kind: "week"; id: string; rules: ArenaRules; amend: boolean }
   | { kind: "template"; templateId: string; name: string; rules: ArenaRules; isNew: boolean };
@@ -133,7 +134,7 @@ export default function ArenaConsole() {
       {error && <div className="portal-alert portal-alert-error" role="alert">{error}</div>}
 
       <div className="portal-range-pills" role="tablist" aria-label="Arena sections">
-        {([["weeks", "Weeks"], ["templates", "Templates"], ["names", "Display names"], ["settings", "Owner settings"], ["audit", "Audit log"]] as const).map(([k, label]) => (
+        {([["weeks", "Weeks"], ["templates", "Templates"], ["technicians", "Manage technicians"], ["names", "Display names"], ["settings", "Owner settings"], ["audit", "Audit log"]] as const).map(([k, label]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={`portal-range-pill${tab === k ? " active" : ""}`} onClick={() => setTab(k)}>{label}</button>
         ))}
       </div>
@@ -182,6 +183,7 @@ export default function ArenaConsole() {
         </div>
       )}
       {tab === "settings" && <Settings data={data} who={who} done={done} />}
+      {tab === "technicians" && <ManageTechnicians who={who} />}
       {tab === "names" && <Names />}
       {tab === "audit" && <Audit who={who} />}
     </div>
@@ -431,6 +433,179 @@ function Names() {
                 </tr>
               ))}
               {rows.length === 0 && <tr><td colSpan={5} className="muted">No verified people yet.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const ACCOUNT_LABEL: Record<string, string> = {
+  eligible: "Active", pending: "Pending approval", inactive: "Inactive", unmapped: "No account", not_competing_role: "Role can't compete",
+};
+
+interface ParticipationAudit { _id: string; action: string; target: string; by: string; at: string; reason: string | null }
+interface WeekEffect { competitionId: string; weekStart: string; status: string; effect: string }
+
+/** Manage Technicians: the owner-controlled Arena participation list. */
+function ManageTechnicians({ who }: { who: (id: string) => string }) {
+  const [data, setData] = useState<{ isOwner: boolean; rows: ParticipationRow[]; excludedCount: number; audit: ParticipationAudit[] } | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [showUnmapped, setShowUnmapped] = useState(true);
+  const [acting, setActing] = useState<{ row: ParticipationRow; to: "excluded" | "included" } | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ name: string; to: string; effects: WeekEffect[] } | null>(null);
+  const load = useCallback(async () => {
+    try { setData(await api("/api/arena/admin/participation")); setErr(null); }
+    catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+  if (!data) return err ? <div className="portal-alert portal-alert-error" role="alert">{err}</div> : <div className="muted">Loading…</div>;
+
+  const nameOf = (r: ParticipationRow) => r.displayName ?? r.fullName ?? r.crmNames[0] ?? r.key;
+  const needle = q.trim().toLowerCase();
+  const rows = data.rows.filter((r) =>
+    (showUnmapped || r.status !== "not_mapped") &&
+    (!needle || [r.displayName, r.fullName, r.competitorId, ...r.crmNames, ...r.locations].some((x) => x && x.toLowerCase().includes(needle))));
+  const unmapped = data.rows.filter((r) => r.status === "not_mapped").length;
+  const review = data.rows.filter((r) => r.reviewNeeded).length;
+
+  const submit = async () => {
+    if (!acting) return;
+    setBusy(true);
+    try {
+      const out = await api<{ changed: boolean; effects: WeekEffect[] }>("/api/arena/admin/participation", {
+        method: "POST", body: { competitorId: acting.row.competitorId, status: acting.to, reason },
+      });
+      setResult({ name: nameOf(acting.row), to: acting.to, effects: out.effects });
+      setActing(null); setReason("");
+      await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }} data-testid="manage-technicians">
+      <div className="portal-card" style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <p className="small" style={{ margin: 0 }}>
+          <b>Who takes part in the Arena.</b> Everyone with a verified Weekly Balance identity takes part unless the owner excludes them here.
+          An excluded technician is left out of the live leaderboard, rankings, prizes, projections and Most Improved. Their CRM jobs and
+          financial records are never changed, and their jobs are not flagged as unmapped names.
+        </p>
+        <p className="small" style={{ margin: 0 }}>
+          <b>Weeks:</b> a running week is recomputed at once. A frozen week keeps its snapshot; opening the review re-checks it with the current
+          list. A week in review keeps its snapshot, and approval is refused until you <i>Re-check CRM data</i>. Approved weeks are never changed.
+        </p>
+        <p className="small" style={{ margin: 0 }}>
+          <b>This is not app access.</b> An excluded technician who can still sign in sees &ldquo;You&apos;re not competing this week&rdquo;.
+          To remove access, deactivate them in Weekly Balance or revoke them on the pilot allowlist.
+        </p>
+        <p className="muted small" style={{ margin: 0 }}>
+          CRM status: the CRM has no reliable active/inactive field for technicians (a Technician record holds only its name, profit %, past
+          rates and location), so nothing is suggested automatically. The Area Manager is not shown: it lives in the CRM Location collection,
+          which the Arena is not allowed to read. The Weekly Balance account column is the Arena&apos;s last check, for information.
+        </p>
+      </div>
+      {result && (
+        <div className="portal-alert portal-alert-info" role="status">
+          <div>
+            <div>{result.name} is now <b>{result.to === "excluded" ? "excluded from" : "included in"}</b> the Arena.</div>
+            {result.effects.length > 0 && <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>{result.effects.map((e) => <li key={e.competitionId}>{weekLabel(e.weekStart)} ({STATUS_LABEL[e.status] ?? e.status}): {e.effect}</li>)}</ul>}
+          </div>
+        </div>
+      )}
+      {err && <div className="portal-alert portal-alert-error" role="alert">{err}</div>}
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+        <input className="portal-input" style={{ maxWidth: 280 }} placeholder="Search name, id, CRM name, location" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search technicians" />
+        <label className="small" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input type="checkbox" checked={showUnmapped} onChange={(e) => setShowUnmapped(e.target.checked)} /> Show CRM technicians that are not mapped ({unmapped})
+        </label>
+        <span className="muted small">{data.excludedCount} excluded · {review} need review</span>
+      </div>
+      {!data.isOwner && <p className="muted small" style={{ margin: 0 }}>Only the owner can include or exclude technicians.</p>}
+      <div className="portal-card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table className="portal-table">
+            <thead><tr>
+              <th>Technician</th><th>Stable ids</th><th>Area / location</th>
+              <th title="The CRM has no reliable active/inactive field for technicians">CRM status</th>
+              <th title="Weekly Balance account, last check by the Arena; app access = pilot allowlist">Account · app access</th>
+              <th>Arena participation</th><th />
+            </tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.key} data-testid={`mt-row-${r.key}`}>
+                  <td>
+                    <b>{nameOf(r)}</b>
+                    {r.fullName && r.fullName !== r.displayName && <div className="muted small">{r.fullName}</div>}
+                    <div className="small">CRM: {r.crmNames.join(", ") || "—"}</div>
+                    {r.flags.length > 0 && <ul className="small" style={{ margin: "4px 0 0", paddingLeft: 16 }}>{r.flags.map((f) => <li key={f}>{f}</li>)}</ul>}
+                  </td>
+                  <td className="small">
+                    <div>Competitor: {r.competitorId ? <code>{r.competitorId}</code> : <span className="muted">none (not mapped)</span>}</div>
+                    <div>CRM Technician: {r.crmTechnicianIds.length ? r.crmTechnicianIds.map((x) => <code key={x} style={{ marginRight: 6 }}>{x}</code>) : <span className="muted">no record</span>}</div>
+                  </td>
+                  <td className="small">{r.locations.join(", ") || "—"}<div className="muted small">Area Manager: not available</div></td>
+                  <td className="small muted">No CRM field</td>
+                  <td className="small">
+                    {r.account ? `${ACCOUNT_LABEL[r.account.state] ?? r.account.state} · ${when(r.account.checkedAt)}` : <span className="muted">not checked</span>}
+                    <div>{r.competitorId ? (r.appAccess === true ? "App access: allowed" : "App access: not on allowlist") : ""}</div>
+                  </td>
+                  <td>
+                    {r.status === "excluded" && <span className="pill pill-unpaid">Excluded</span>}
+                    {r.status === "included" && <span className="pill pill-paid">Included</span>}
+                    {r.status === "not_mapped" && <span className="pill pill-draft">Not mapped</span>}
+                    {r.reviewNeeded && <div style={{ marginTop: 4 }}><span className="pill pill-pending">Review needed</span></div>}
+                    {r.decision && <div className="muted small" style={{ marginTop: 4 }}>{who(r.decision.by)} · {when(r.decision.at)}<br />&ldquo;{r.decision.reason}&rdquo;</div>}
+                  </td>
+                  <td>
+                    {data.isOwner && r.canChange && r.competitorId && (
+                      r.status === "excluded"
+                        ? <button className="portal-btn" onClick={() => { setActing({ row: r, to: "included" }); setReason(""); }}>Re-include</button>
+                        : <button className="portal-btn" onClick={() => { setActing({ row: r, to: "excluded" }); setReason(""); }}>Exclude</button>
+                    )}
+                    {r.status === "not_mapped" && <Link className="small" href="/portal/arena/review">Review queue</Link>}
+                  </td>
+                </tr>
+              ))}
+              {rows.length === 0 && <tr><td colSpan={7} className="muted">No technicians match.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {acting && (
+        <div className="portal-card" role="dialog" aria-label="Change participation" style={{ display: "flex", flexDirection: "column", gap: 8, maxWidth: 640 }}>
+          <b>{acting.to === "excluded" ? "Exclude" : "Re-include"} {nameOf(acting.row)}</b>
+          <span className="small">
+            {acting.to === "excluded"
+              ? "They leave the live standings, rankings, prizes, projections and Most Improved. Their CRM jobs are not changed, and their app access is not changed."
+              : "They take part again from the next computation of every running week."}
+          </span>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span className="portal-label">Reason (required)</span>
+            <input className="portal-input" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} aria-label="Reason" />
+          </label>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="portal-btn portal-btn-primary" disabled={!reason.trim() || busy} onClick={submit}>
+              {acting.to === "excluded" ? "Exclude from the Arena" : "Re-include in the Arena"}
+            </button>
+            <button className="portal-btn" onClick={() => setActing(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+      <div className="portal-card" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "10px 12px" }}><b>Participation changes</b></div>
+        <div style={{ overflowX: "auto" }}>
+          <table className="portal-table">
+            <thead><tr><th>When</th><th>What</th><th>Competitor</th><th>Who</th><th>Reason</th></tr></thead>
+            <tbody>
+              {data.audit.map((a) => (
+                <tr key={a._id}><td style={{ whiteSpace: "nowrap" }}>{when(a.at)}</td><td>{a.action === "participation.exclude" ? "Excluded" : "Re-included"}</td><td className="small">{a.target.replace("participation:", "")}</td><td>{who(a.by)}</td><td>{a.reason ?? "—"}</td></tr>
+              ))}
+              {data.audit.length === 0 && <tr><td colSpan={5} className="muted">No changes yet. Everyone takes part.</td></tr>}
             </tbody>
           </table>
         </div>

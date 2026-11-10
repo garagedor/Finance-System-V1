@@ -73,7 +73,7 @@ import { buildCompetitorMap } from "../../src/lib/arena/identity.ts";
 import { loadJobs, lookupJobs, readJobSource } from "../../src/lib/arena/job-source.ts";
 import { detectCases } from "../../src/lib/arena/detect.ts";
 import { caseId, resolveCase, reviewDecisions, syncDetected, type ReviewCaseDoc, type ReviewContext } from "../../src/lib/arena/review.ts";
-import { ARENA_COLLECTIONS, arenaStores, lifecycleCollections, loadMappings, loadTechnicians } from "../../src/lib/arena/mongo-store.ts";
+import { ARENA_COLLECTIONS, arenaStores, lifecycleCollections, loadMappings, loadNotParticipating, loadTechnicians } from "../../src/lib/arena/mongo-store.ts";
 import { addDays, isMonday, previousWeekStarts, weekWindow } from "../../src/lib/arena/week.ts";
 import { KNOWN_STATUSES } from "../../src/lib/status-canonical.ts";
 import type { AccountState, ArenaRules, CompetitionResult } from "../../src/lib/arena/types.ts";
@@ -225,11 +225,12 @@ await runGuarded(async () => {
       const from = weeks.length ? weeks[weeks.length - 1] : weekStart;
       const window = { from: [from, weekStart].sort()[0], toExclusive: addDays(weekStart, 7) };
       const readAt = new Date().toISOString(); // the REAL read time, even on a simulated lifecycle clock
-      const [read, mappings, technicians, d] = await Promise.all([
+      const [read, mappings, technicians, d, notParticipating] = await Promise.all([
         readJobSource(crmDb, window.from, window.toExclusive), loadMappings(crmDb), loadTechnicians(crmDb), reviewDecisions(review),
+        loadNotParticipating(arena),
       ]);
       const jobs = read.jobs;
-      const competitors = buildCompetitorMap({ mappings, technicians, crmNamesInUse: [...new Set(jobs.map((j) => j.tech))], overrides: d.overrides, displayNames: d.displayNames });
+      const competitors = buildCompetitorMap({ mappings, technicians, crmNamesInUse: [...new Set(jobs.map((j) => j.tech))], overrides: d.overrides, displayNames: d.displayNames, notParticipating });
       const accounts = acc.lookup(competitors.competitors.map((c) => c.id));
       const result = computeCompetition({
         rules: rv.rules, rulesHash: rv.rulesHash, weekStart, competitors, jobs, exclusions: d.exclusions,
@@ -244,6 +245,7 @@ await runGuarded(async () => {
     };
     const lctx: LifecycleContext = {
       config, lc, compute, checkAccounts: async (ids) => acc.lookup(ids), devStack: false, lookupJobs: (ids) => lookupJobs(crmDb, ids),
+      notParticipating: () => loadNotParticipating(arena),
     };
 
     // Decisions → review cases for this week (detect, record, plan). Conflicts refuse before anything changes.
@@ -253,6 +255,7 @@ await runGuarded(async () => {
     const found = detectCases({
       weeks: [{ weekStart: args.week, jobs: weekJobs }], mappings: mappingsNow, technicians, rules,
       overrides: before.overrides, displayNames: before.displayNames, exclusions: before.exclusions,
+      notParticipating: await loadNotParticipating(arena),
     });
     await syncDetected(review, found, ACTOR);
     const foundIds = new Set(found.map((f) => caseId(f.kind, f.key)));

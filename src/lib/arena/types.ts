@@ -182,6 +182,15 @@ export interface CompetitorMap {
   nameFormat?: import("./display-name").DisplayNameFormat;
   /** Public name of every verified person (empty under FULL_NAME_V0). */
   publicNames?: Map<string, import("./display-name").PublicName>;
+  /**
+   * Verified people the owner EXCLUDED from the Arena (Manage Technicians,
+   * arena_participation), sorted. Their CRM names stay attributed to them in
+   * `byCrmName` (so their jobs are a decided exclusion, never "unmapped"), but
+   * they are not in `competitors`: no result, rank, prize, projection or Most
+   * Improved. Absent when nobody is excluded (maps and snapshots made before
+   * the feature are unchanged, bit for bit).
+   */
+  notParticipating?: string[];
 }
 
 /**
@@ -281,4 +290,9 @@ export interface CompetitionResult {
   unattributed: { crmName: string; jobs: number }[];
   /** How displayName was built; absent on results computed before 2026-10-31 (= FULL_NAME_V0). */
   displayNameFormat?: import("./display-name").DisplayNameFormat;
+  /**
+   * Owner-excluded people (Manage Technicians) who had jobs in the week: not
+   * ranked, never "unattributed". Absent when there are none (older results unchanged).
+   */
+  notParticipating?: { competitorId: string; jobs: number }[];
 }

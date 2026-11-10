@@ -44,6 +44,15 @@ export function buildCompetitorMap(input: {
    * carry the format they were computed with; they are never rewritten).
    */
   nameFormat?: DisplayNameFormat;
+  /**
+   * Competitor ids the owner excluded from the Arena (arena_participation).
+   * THE central participation filter: every computation (live, monitor,
+   * freeze, review re-check, preview, scan, shadow) builds its map here. Their
+   * names stay attributed (a decided exclusion, never an unmapped-name case);
+   * they are left out of `competitors` and listed in `notParticipating`.
+   * Matched by competitor id only, never by name.
+   */
+  notParticipating?: readonly string[];
 }): CompetitorMap {
   const issues: IdentityIssue[] = [];
   const byCrmName = new Map<string, string>();
@@ -110,7 +119,9 @@ export function buildCompetitorMap(input: {
   const namesOf = new Map<string, string[]>();
   for (const [name, id] of byCrmName) (namesOf.get(id) ?? namesOf.set(id, []).get(id)!).push(name);
 
+  const excluded = new Set((input.notParticipating ?? []).filter((id) => people.has(id)));
   const competitors: Competitor[] = [...namesOf.entries()]
+    .filter(([id]) => !excluded.has(id))
     .map(([id, names]) => {
       names.sort();
       const m = people.get(id);
@@ -128,7 +139,9 @@ export function buildCompetitorMap(input: {
     .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 
   issues.sort((a, b) => (a.crmName < b.crmName ? -1 : 1));
-  return { competitors, byCrmName, issues, nameFormat, publicNames };
+  const map: CompetitorMap = { competitors, byCrmName, issues, nameFormat, publicNames };
+  if (excluded.size) map.notParticipating = [...excluded].sort();
+  return map;
 }
 
 /**

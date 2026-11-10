@@ -20,6 +20,12 @@ export interface DetectInput {
   overrides: IdentityOverride[];
   displayNames: Record<string, string>;
   exclusions: JobExclusion[];
+  /**
+   * Competitor ids the owner excluded from the Arena (Manage Technicians). Their
+   * names stay attributed, so their jobs raise no identity case, and no
+   * duplicate or display-name case is opened for them: a decided exclusion.
+   */
+  notParticipating?: readonly string[];
 }
 
 const fold = (s: string) => s.trim().toLowerCase();
@@ -51,7 +57,9 @@ export function detectCases(input: DetectInput): DetectedCase[] {
       crmNamesInUse: names,
       overrides: input.overrides,
       displayNames: input.displayNames,
+      notParticipating: input.notParticipating,
     });
+    const notParticipating = new Set(map.notParticipating ?? []);
 
     // identity: every blocking issue, aggregated across weeks by CRM name
     for (const issue of map.issues) {
@@ -91,6 +99,7 @@ export function detectCases(input: DetectInput): DetectedCase[] {
     const byId = new Map(w.jobs.map((j) => [j.id, j]));
     const nameOf = new Map(map.competitors.map((c) => [c.id, c.displayName]));
     for (const g of groups) {
+      if (g.competitorId && notParticipating.has(g.competitorId)) continue; // not in the Arena: nothing to decide
       const jobs = g.jobIds.map((id) => byId.get(id)!).filter(Boolean);
       const data: DuplicateCaseData = {
         weekStart: w.weekStart,
